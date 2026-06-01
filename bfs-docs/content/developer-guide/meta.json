@@ -1,0 +1,12 @@
+{
+  "title": "Entwicklerhandbuch",
+  "pages": [
+    "index",
+    "backend",
+    "web-app",
+    "android-pos",
+    "cloud-infra",
+    "ci-cd",
+    "debugging"
+  ]
+}

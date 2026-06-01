@@ -1,0 +1,9 @@
+GRANT USAGE ON SCHEMA public TO app_runtime, app_readonly;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_readonly;
+
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_readonly;
+
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app_runtime, app_readonly;

@@ -1,0 +1,133 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/bfs-web-app"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/web-app"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      web-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "npm"
+    directory: "/bfs-docs"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "documentation"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docs-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "gomod"
+    directory: "/bfs-backend"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/backend"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      go-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "terraform"
+    directory: "/bfs-cloud/envs/staging"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/cloud"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      terraform-all:
+        patterns:
+          - "*"
+  - package-ecosystem: "terraform"
+    directory: "/bfs-cloud/envs/production"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/cloud"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      terraform-all:
+        patterns:
+          - "*"
+  - package-ecosystem: "gradle"
+    directory: "/bfs-android-app"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/android-app"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      android-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * fri%2"
+      timezone: "Europe/Zurich"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "area/ci"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions-all:
+        patterns:
+          - "*"

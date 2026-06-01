@@ -1,0 +1,210 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@font-face {
+  font-family: "Lovelo Black";
+  src: url("/assets/fonts/Lovelo-Black.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+/*
+  ---break---
+*/
+@theme inline {
+  /* Custom screens */
+  --breakpoint-xs: 490px;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-button: 7px;
+  --radius-modal: 11px;
+  --radius-pill: 9999px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-success: var(--success);
+  --color-success-hover: var(--success-hover);
+  --color-success-foreground: var(--success-foreground);
+  --color-selected: var(--selected);
+  --color-selected-hover: var(--selected-hover);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-family-primary: "Lovelo Black", ui-sans-serif, system-ui, sans-serif;
+  --font-family-secondary: var(--font-golos-text), ui-sans-serif, system-ui, sans-serif;
+}
+/*
+  ---break---
+*/
+:root {
+  --radius: 0.4375rem;
+  --background: #e9e7e6;
+  --foreground: #000000;
+  --card: #fdfdfd;
+  --card-foreground: #000000;
+  --popover: #fdfdfd;
+  --popover-foreground: #000000;
+  --primary: #f87778;
+  --primary-foreground: #fdfdfd;
+  --primary-hover: #f66969;
+  --secondary: #fdfdfd;
+  --secondary-foreground: #000000;
+  --secondary-hover: #f3f3f3;
+  --muted: #fdfdfd;
+  --muted-foreground: #7b7b7b;
+  --accent: #fdfdfd;
+  --accent-foreground: #000000;
+  --accent-hover: #f3f3f3;
+  --destructive: #fc6666;
+  --destructive-hover: #f85454;
+  --success: #4caf50;
+  --success-hover: #43a047;
+  --success-foreground: #fdfdfd;
+  --selected: #353535;
+  --selected-hover: #2e2e2e;
+  --border: #d7d7d7;
+  --input: #fdfdfd;
+  --ring: #f87778;
+  --chart-1: #f87778;
+  --chart-2: #fc6666;
+  --chart-3: #d7d7d7;
+  --chart-4: #7b7b7b;
+  --chart-5: #000000;
+  --sidebar: #fdfdfd;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #353535;
+  --sidebar-primary-foreground: #fdfdfd;
+  --sidebar-accent: #f87778;
+  --sidebar-accent-foreground: #fdfdfd;
+  --sidebar-border: #d7d7d7;
+  --sidebar-ring: #f87778;
+}
+/*
+  ---break---
+*/
+.dark {
+  --background: #e9e7e6;
+  --foreground: #000000;
+  --card: #fdfdfd;
+  --card-foreground: #000000;
+  --popover: #fdfdfd;
+  --popover-foreground: #000000;
+  --primary: #f87778;
+  --primary-foreground: #fdfdfd;
+  --primary-hover: #f66969;
+  --secondary: #fdfdfd;
+  --secondary-foreground: #000000;
+  --secondary-hover: #f3f3f3;
+  --muted: #fdfdfd;
+  --muted-foreground: #7b7b7b;
+  --accent: #fdfdfd;
+  --accent-foreground: #000000;
+  --accent-hover: #f3f3f3;
+  --destructive: #fc6666;
+  --destructive-hover: #f85454;
+  --success: #4caf50;
+  --success-hover: #43a047;
+  --success-foreground: #fdfdfd;
+  --selected: #353535;
+  --selected-hover: #2e2e2e;
+  --border: #d7d7d7;
+  --input: #fdfdfd;
+  --ring: #f87778;
+  --chart-1: #f87778;
+  --chart-2: #fc6666;
+  --chart-3: #d7d7d7;
+  --chart-4: #7b7b7b;
+  --chart-5: #000000;
+  --sidebar: #fdfdfd;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #353535;
+  --sidebar-primary-foreground: #fdfdfd;
+  --sidebar-accent: #f87778;
+  --sidebar-accent-foreground: #fdfdfd;
+  --sidebar-border: #d7d7d7;
+  --sidebar-ring: #f87778;
+}
+/*
+  ---break---
+*/
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-family-secondary);
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-family-primary);
+  }
+}
+
+@layer utilities {
+  .font-primary {
+    font-family: var(--font-family-primary);
+  }
+  .font-secondary {
+    font-family: var(--font-family-secondary);
+  }
+}

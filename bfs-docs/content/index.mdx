@@ -1,0 +1,49 @@
+---
+title: Start
+description: Dokumentation des BlessThun Food Systems für Betreiber und Entwickler
+---
+
+# BlessThun Food System
+
+Das BlessThun Food System (BFS) ist eine Plattform für Food-Bestellungen und Point-of-Sale. Kunden bestellen online und bezahlen per TWINT. Admins verwalten Produkte, Bestellungen, Geräte und Ausgabestationen über ein zentrales Dashboard.
+
+---
+
+# Für Betreiber & Admins
+
+Du verwaltest das System und möchtest wissen, wie das Dashboard funktioniert?
+
+- [Schnellstart](/schnellstart) - Erste Schritte als Admin.
+- [Admin-Handbuch](/admin-handbuch) - Alle Funktionen des Dashboards im Detail.
+- [Zahlungen](/zahlungen) - Payrexx und TWINT einrichten.
+- [Benutzerhandbuch](/benutzerhandbuch) - Anleitungen für Kunden und POS-Personal.
+
+---
+
+# Für Entwickler
+
+Du arbeitest am Code und brauchst technische Details?
+
+- [Entwicklerhandbuch](/entwicklerhandbuch) - Architektur, lokale Entwicklung, Komponenten.
+- [API-Referenz](/api-referenz) - REST Endpoints und Contracts.
+- [Infrastruktur](/infrastruktur) - Azure-Ressourcen, Runbooks, Kosten.
+- [Bereitstellung](/bereitstellung) - CI/CD und Deployment-Prozess.
+
+---
+
+# Systemkomponenten
+
+| Komponente  | Technologie           | Beschreibung                          |
+| ----------- | --------------------- | ------------------------------------- |
+| Web App     | Next.js 15 / React 19 | Shop, Admin-Dashboard, POS-Oberfläche |
+| Backend     | Go (Chi)              | REST API, Zahlungen, Auth-Validierung |
+| Android POS | Android WebView       | Kartenzahlung (SumUp), Belegdruck     |
+| Cloud       | Terraform / Azure     | Container Apps, Key Vault, Monitoring |
+
+---
+
+# Systemfluss
+
+- Bestellung: Kunde wählt Produkte → Checkout → Payrexx-Zahlung (TWINT) → Webhook bestätigt → Bestellung auf `paid`.
+- POS: Warenkorb → Zahlung (Bar/Karte/TWINT) → Beleg drucken → Optional: Abhol-QR.
+- Authentifizierung: E-Mail-OTP oder Google-Login via Better Auth. Sessions sind 90 Tage gültig.

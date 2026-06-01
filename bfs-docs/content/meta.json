@@ -1,0 +1,16 @@
+{
+  "title": "Dokumentation",
+  "pages": [
+    "index",
+    "schnellstart",
+    "benutzerhandbuch",
+    "admin-handbuch",
+    "zahlungen",
+    "bereitstellung",
+    "entwicklerhandbuch",
+    "infrastruktur",
+    "api-referenz",
+    "daten-datenschutz",
+    "anhang"
+  ]
+}

@@ -1,0 +1,221 @@
+set dotenv-filename := ".env.local"
+
+BIN := justfile_directory() / "bin"
+
+# Default
+default:
+    @just --list
+
+# ── Private ──
+
+[private]
+_go-tool bin pkg:
+    #!/usr/bin/env bash
+    [[ -x "{{BIN}}/{{bin}}" ]] && exit 0
+    mkdir -p "{{BIN}}" && GOBIN="{{BIN}}" go install "{{pkg}}"
+
+# ── Setup ──
+
+# Install all dev tools
+[group('setup')]
+tools: (_go-tool "golangci-lint" "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.5.0") (_go-tool "swag" "github.com/swaggo/swag/cmd/swag@v1.16.6") (_go-tool "air" "github.com/air-verse/air@v1.63.0")
+    @# Install Atlas CLI if not present
+    @command -v atlas >/dev/null 2>&1 || (echo "Installing Atlas CLI..." && curl -sSf https://atlasgo.sh | sh)
+
+# ── Dev ──
+
+# Start API server with live-reload
+[group('dev')]
+dev: (_go-tool "air" "github.com/air-verse/air@v1.63.0")
+    "{{BIN}}/air" -c .air.toml
+
+# Start services (pass --profile dev for pgAdmin)
+[group('dev')]
+up *args:
+    docker compose up -d {{args}}
+
+# Stop services (pass --volumes for DATA LOSS)
+[group('dev')]
+down *args:
+    docker compose --profile dev down --remove-orphans {{args}}
+
+# Clean build artifacts
+[group('dev')]
+clean:
+    rm -rf tmp/ build-errors.log docs/
+
+# ── Lint ──
+
+# Run linters (pass --fix to auto-fix)
+[group('lint')]
+lint *args: (_go-tool "golangci-lint" "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.5.0")
+    GOTOOLCHAIN=auto GOWORK=off "{{BIN}}/golangci-lint" run {{args}} --timeout=3m --max-issues-per-linter=0 --max-same-issues=0 ./...
+
+# Format code
+[group('lint')]
+fmt:
+    go fmt ./...
+
+# Tidy go.mod
+[group('lint')]
+tidy:
+    GOWORK=off go mod tidy
+
+# Verify go.mod is tidy (CI)
+[group('lint')]
+tidy-check: tidy
+    git diff --exit-code -- go.mod go.sum
+
+# ── Generate ──
+
+# Run all code generators
+[group('generate')]
+generate: generate-ent generate-api
+
+# Generate Ent ORM code
+[group('generate')]
+generate-ent:
+    mkdir -p ./internal/generated/ent
+    echo "package ent" > ./internal/generated/ent/ent.go
+    go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --target ./internal/generated/ent ./internal/schema
+
+# Generate API types from OpenAPI
+[group('generate')]
+generate-api:
+    npx @redocly/cli bundle openapi/openapi.yaml -o openapi/bundled.yaml
+    oapi-codegen -config oapi-codegen.yaml openapi/bundled.yaml
+
+# Generate Swagger docs
+[group('generate')]
+swag: (_go-tool "swag" "github.com/swaggo/swag/cmd/swag@v1.16.6")
+    "{{BIN}}/swag" init -g cmd/backend/main.go --parseInternal --parseDependency --generatedTime=false
+
+# ── Test ──
+
+# Run unit tests (override path: just test ./...)
+[group('test')]
+test *args='./internal/...':
+    go test -v -race {{args}}
+
+# Run integration tests
+[group('test')]
+test-integration:
+    go test -v -race -count=1 -timeout=5m ./test/integration/...
+
+# ── Database ──
+
+# Apply pending Atlas migrations
+[group('db')]
+migrate *args:
+    atlas migrate apply --dir "file://db/migrations" --url "$DATABASE_URL" {{args}}
+
+# Generate a new migration from Ent schema diff
+[group('db')]
+migrate-diff name:
+    atlas migrate diff {{name}} --env local
+
+# Validate migration files and compute checksum
+[group('db')]
+migrate-hash:
+    atlas migrate hash --dir "file://db/migrations"
+
+# Show migration status
+[group('db')]
+migrate-status:
+    atlas migrate status --dir "file://db/migrations" --url "$DATABASE_URL"
+
+# Lint migrations for common issues
+[group('db')]
+migrate-lint:
+    atlas migrate lint --env local --latest 1
+
+# Drop all objects (DATA LOSS)
+[confirm("⚠️  This will DROP ALL OBJECTS. Continue?")]
+[group('db')]
+migrate-clean:
+    atlas schema clean --url "$DATABASE_URL"
+
+# Provision database roles and grants (idempotent)
+[group('db')]
+provision:
+    ./db/provisioning/provision.sh
+
+# Generate and set random passwords for database roles
+[group('db')]
+set-passwords:
+    ./db/provisioning/set-passwords.sh
+
+# Seed dev data
+[group('db')]
+seed:
+    #!/usr/bin/env bash
+    for f in db/seed/*.sql; do echo "  $f..."; psql "$DATABASE_URL" -f "$f"; done
+
+# ── Load test ──
+
+# Seed loadtest users, sessions, and device bindings into $DATABASE_URL.
+# Pass station_device_id (required for station scenario) and optionally pos_device_id.
+[group('loadtest')]
+loadtest-seed station_device_id='NULL' pos_device_id='NULL':
+    psql "$DATABASE_URL" \
+        -v station_device_id={{station_device_id}} \
+        -v pos_device_id={{pos_device_id}} \
+        -f loadtest/seed.sql
+
+# Bump inventory for simple products so a full baseline run can't deplete stock.
+# Re-run any time stock is low; each run adds +50k per product.
+[group('loadtest')]
+loadtest-stock:
+    psql "$DATABASE_URL" -f loadtest/stock.sql
+
+# Remove all loadtest_* rows from $DATABASE_URL
+[group('loadtest')]
+loadtest-cleanup:
+    psql "$DATABASE_URL" -f loadtest/cleanup.sql
+
+# Run the API load test. Required: BASE_URL. Optional: PROFILE (smoke|baseline|stress).
+[group('loadtest')]
+loadtest:
+    #!/usr/bin/env bash
+    set -e
+    if [[ -z "${BASE_URL:-}" ]]; then echo "BASE_URL env var required"; exit 1; fi
+    k6 run -e BASE_URL="$BASE_URL" -e PROFILE="${PROFILE:-smoke}" loadtest/k6.js
+
+# Run the browser load test. Required: WEB_URL. Optional: PROFILE (smoke|baseline|stress).
+[group('loadtest')]
+loadtest-browser:
+    #!/usr/bin/env bash
+    set -e
+    if [[ -z "${WEB_URL:-}" ]]; then echo "WEB_URL env var required"; exit 1; fi
+    k6 run -e WEB_URL="$WEB_URL" -e PROFILE="${PROFILE:-smoke}" loadtest/browser.js
+
+# Run API + browser load tests in parallel. Requires BASE_URL and WEB_URL.
+# Output goes to loadtest/results/{api,browser}-<timestamp>.json for later diffing.
+[group('loadtest')]
+loadtest-full:
+    #!/usr/bin/env bash
+    set -e
+    if [[ -z "${BASE_URL:-}" || -z "${WEB_URL:-}" ]]; then
+      echo "Both BASE_URL and WEB_URL env vars required"; exit 1
+    fi
+    PROFILE="${PROFILE:-baseline}"
+    TS=$(date +%Y%m%d-%H%M%S)
+    mkdir -p loadtest/results
+    echo "▶ Starting API load (BASE_URL=$BASE_URL, PROFILE=$PROFILE)..."
+    k6 run \
+      -e BASE_URL="$BASE_URL" -e PROFILE="$PROFILE" \
+      --summary-export "loadtest/results/api-$TS.json" \
+      loadtest/k6.js &
+    API_PID=$!
+    echo "▶ Starting browser load (WEB_URL=$WEB_URL, PROFILE=$PROFILE)..."
+    k6 run \
+      -e WEB_URL="$WEB_URL" -e PROFILE="$PROFILE" \
+      --summary-export "loadtest/results/browser-$TS.json" \
+      loadtest/browser.js &
+    BROWSER_PID=$!
+    API_STATUS=0; BROWSER_STATUS=0
+    wait $API_PID || API_STATUS=$?
+    wait $BROWSER_PID || BROWSER_STATUS=$?
+    echo "API exit=$API_STATUS, browser exit=$BROWSER_STATUS"
+    echo "Results: loadtest/results/api-$TS.json  loadtest/results/browser-$TS.json"
+    exit $(( API_STATUS | BROWSER_STATUS ))
