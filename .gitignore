@@ -1,16 +1,33 @@
-# Mac
+# dependencies / build
+node_modules/
+.next/
+.source/
+dist/
+build/
+**/build/
+.gradle/
+storybook-static/
+coverage/
+test-results/
+playwright-report/
+
+# go
+bin/
+tmp/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# secrets (managed via Doppler — never commit)
+**/secrets/
+*.pem
+.env
+.env.*
+!.env.example
+
+# os / editor
 .DS_Store
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-CLAUDE.md
-.claude/
-.agents/
-.codex/
-
-# Personal / internal notes (never commit)
-NOTES.local.md
-**/NOTES.local.md
+*.log
+.idea/
