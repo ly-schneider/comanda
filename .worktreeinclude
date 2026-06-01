@@ -1,0 +1,6 @@
+# Untracked files copied into each git worktree spawned by Claude Code subagents.
+# Keep secrets out of git but available to worktree builds.
+.env
+.env.local
+**/.env
+**/.env.local
