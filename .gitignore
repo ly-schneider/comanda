@@ -31,3 +31,8 @@ tmp/
 .DS_Store
 *.log
 .idea/
+
+# claude code local/runtime (keep agents/, settings.json, hooks/ tracked)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
