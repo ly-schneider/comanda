@@ -1,0 +1,50 @@
+---
+title: Web App (Next.js)
+description: Struktur, Security-Middleware, POS-Seite & Bridge, Checkout, Admin und Analytics
+---
+
+# Struktur
+
+- App Router unter `comanda-web/app` mit Layouts und Pages; `/app/layout.tsx` bindet Analytics-Consent und Auth Provider ein.
+- Middleware `middleware.ts`:
+  - Leichtgewichtiges Request-Logging; schützt `/profile` und `/admin` via Session-Cookie.
+  - Setzt Security-Header.
+  - Setzt CSRF-Cookie (Double-Submit) für gleich-origin API.
+
+# API Proxy
+
+- `lib/api.ts` nutzt gleich-origin `/api` und leitet an das Backend (`NEXT_PUBLIC_API_BASE_URL`).
+- Setzt automatisch `X-CSRF` bei mutierenden Requests im Browser.
+
+# Auth (Better Auth)
+
+- Better Auth Client in `lib/auth-client.ts` mit Plugins:
+  - `emailOTPClient()`: E-Mail OTP Login.
+  - `adminClient()`: Admin-Rollen und Berechtigungen.
+- Google OIDC als Social Login Provider.
+- Session-Cookies (`better-auth.session_token`) werden automatisch verwaltet.
+- Auth-Endpunkte unter `/api/auth/[...path]` (Better Auth Route Handler).
+
+# POS Page & Bridge
+
+- Web-POS erkennt `window.PosBridge` Funktionen:
+  - `print(json)`: druckt Beleg; hört auf `comanda:print:result` (Erfolg/Fehler).
+  - `payWithCard(payload)`: startet SumUp; hört auf `comanda:sumup:result`.
+- Bei erfolgreicher Karte: Order erstellen, Zahlung anhängen, Pickup-QR holen, Beleg im Hintergrund drucken.
+
+# Checkout Flow (Payrexx)
+
+- Gateway erstellen via POST /v1/orders/:orderId/payment.
+- Nutzer wird zur Payrexx-Zahlungsseite weitergeleitet (TWINT und weitere Methoden).
+- Return-Seite pollt GET /v1/payments/:paymentId für den aktuellen Status.
+- Payrexx Webhook finalisiert die Bestellung im Backend.
+
+# Admin UI
+
+- Features: Users, Products, Categories, Stations, Menus, Devices; Orders CSV Export.
+- Nutzt Authorized-Fetch Hooks; CSRF für Admin-Mutationen durch Backend-Middleware erzwungen.
+
+# Analytics
+
+- Google Measurement ID via `NEXT_PUBLIC_GA_MEASUREMENT_ID`.
+- Einfaches Cookie-Gate (`ga_consent`) steuert Scripts und `ga-consent-changed` Events.

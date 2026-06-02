@@ -1,0 +1,27 @@
+---
+title: Sicherheit & Zugriffskontrolle
+description: K3s RBAC, Least Privilege, Doppler Zugriff und App-Auth
+---
+
+# K3s RBAC
+
+- Service Accounts pro Namespace; GitHub OIDC für Deployments.
+- ArgoCD hat eigene RBAC für Manifest-Aplikation.
+- Pod Security Policies / Network Policies bei Bedarf.
+
+# Doppler / Secrets Management
+
+- Doppler Projekte pro Umgebung (z. B. `comanda-staging`): speichert Secrets für Backend und Frontend.
+- Secret-Namen u. a.: `database-url`, `better-auth-url`, `better-auth-secret`, `payrexx-instance`, `payrexx-api-secret`, `payrexx-webhook-secret`, `station-qr-secret`, `google-client-id`, `google-client-secret`, `plunk-api-key`, `security-trusted-origins`, `public-base-url`, `next-public-api-base-url`, `backend-internal-url`.
+- Apps referenzieren KV-Secrets über Container Apps `key_vault_secrets` oder `key_vault_secret_refs`.
+
+# Application Security
+
+- Backend Auth: Better Auth Sessions; das Backend validiert Session-Tokens aus Cookies oder Bearer-Headern direkt gegen die PostgreSQL-Datenbank.
+- Auth Flows: E-Mail OTP und Google OIDC via Better Auth; CSRF Double-Submit Cookie für Admin-Writes.
+- Web Security: Middleware setzt Security Headers; HSTS in Prod; CORS für Trusted Origins.
+
+# Least Privilege
+
+- Breite Contributor-Rollen vermeiden; gezielt Data-Plane/Identity-Rollen vergeben.
+- Zugriff auf KV und Datenbank minimieren; Operationen via Runbooks und CI/CD-Variablen.

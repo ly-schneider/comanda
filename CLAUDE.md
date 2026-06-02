@@ -22,16 +22,16 @@ bfs-docs/      → comanda-docs/       Fumadocs.
 
 ## The build: 8 phases, one Linear ticket each (epic LEY-308)
 
-| Phase | Ticket | Scope | Depends on |
-|-------|--------|-------|------------|
-| **P0** | LEY-309 | Repo bootstrap & de-brand (rename `bfs-*`→`comanda-*`, strip Azure, neutral placeholders) | — |
-| **P1** | LEY-310 | Tenancy data layer: `tenant` table, `tenant_id`+RLS everywhere, 2 DB roles, Ent tx-per-request + interceptor | P0 |
-| **P2** | LEY-311 | Tenant resolution (host-based) + Better Auth org plugin, per-tenant customers, dynamic trustedOrigins | P1 |
-| **P3** | LEY-312 | BYO branding: per-tenant settings, R2 logo, replace hardcoded brand, neutral seed | P1, P2 |
-| **P4** | LEY-313 | BYO Payrexx: per-tenant creds (AES-256-GCM), per-tenant client, scoped webhooks, `PaymentProvider` iface | P1, P3 |
-| **P5** | LEY-314 | Infra on Hetzner: gitops manifests, Scaleway DB, Doppler, ArgoCD, CI→GHCR SHA tags | P0, P1 |
-| **P6** | LEY-315 | BYO custom domains: HTTP-01 issuer, verification flow, API-driven dynamic Ingress controller | P2, P5 |
-| **P7** | LEY-316 | Onboarding & platform admin (Leys-provisioned; billing/self-serve deferred) | P2,P3,P4,P6 |
+| Phase  | Ticket  | Scope                                                                                                        | Depends on  |
+| ------ | ------- | ------------------------------------------------------------------------------------------------------------ | ----------- |
+| **P0** | LEY-309 | Repo bootstrap & de-brand (rename `bfs-*`→`comanda-*`, strip Azure, neutral placeholders)                    | —           |
+| **P1** | LEY-310 | Tenancy data layer: `tenant` table, `tenant_id`+RLS everywhere, 2 DB roles, Ent tx-per-request + interceptor | P0          |
+| **P2** | LEY-311 | Tenant resolution (host-based) + Better Auth org plugin, per-tenant customers, dynamic trustedOrigins        | P1          |
+| **P3** | LEY-312 | BYO branding: per-tenant settings, R2 logo, replace hardcoded brand, neutral seed                            | P1, P2      |
+| **P4** | LEY-313 | BYO Payrexx: per-tenant creds (AES-256-GCM), per-tenant client, scoped webhooks, `PaymentProvider` iface     | P1, P3      |
+| **P5** | LEY-314 | Infra on Hetzner: gitops manifests, Scaleway DB, Doppler, ArgoCD, CI→GHCR SHA tags                           | P0, P1      |
+| **P6** | LEY-315 | BYO custom domains: HTTP-01 issuer, verification flow, API-driven dynamic Ingress controller                 | P2, P5      |
+| **P7** | LEY-316 | Onboarding & platform admin (Leys-provisioned; billing/self-serve deferred)                                  | P2,P3,P4,P6 |
 
 Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can begin; after **P1**, **P2 ∥ P5**; P3→P4 chain off P2.
 

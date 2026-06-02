@@ -48,8 +48,8 @@ runs:
         file: ${{ inputs.dockerfile }}
         push: true
         tags: |
-          ghcr.io/ly-schneider/bless2n-food-system/${{ inputs.image-name }}:${{ inputs.image-tag }}
-          ghcr.io/ly-schneider/bless2n-food-system/${{ inputs.image-name }}:${{ inputs.env-tag }}
+          ghcr.io/ly-schneider/comanda/${{ inputs.image-name }}:${{ inputs.image-tag }}
+          ghcr.io/ly-schneider/comanda/${{ inputs.image-name }}:${{ inputs.env-tag }}
         build-args: ${{ inputs.build-args }}
         cache-from: type=gha,scope=${{ inputs.image-name }}
         cache-to: type=gha,scope=${{ inputs.image-name }},mode=max

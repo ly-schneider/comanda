@@ -1,13 +1,13 @@
-# BlessThun Food System
+# Comanda
 
-A full-stack food ordering platform built for live event food stations in Thun, Switzerland. Handles the complete lifecycle from customer ordering and TWINT payment processing to kitchen fulfillment, inventory tracking, and POS terminal operations.
+A full-stack food ordering and event management platform. Handles the complete lifecycle from customer ordering and payment processing to kitchen fulfillment, inventory tracking, and POS terminal operations.
 
 ## Architecture
 
 ```
                     ┌──────────────────────────────────────┐
-                    │          Azure Container Apps        │
-                    │        (auto-scale, scale-to-zero)   │
+                    │      Hetzner K3s on Arm64 SSD        │
+                    │    (gitops/ArgoCD, scale-to-zero)    │
                     └──────────┬──────────────┬────────────┘
                                │              │
                     ┌──────────▼───┐    ┌─────▼────────────┐
@@ -21,7 +21,7 @@ A full-stack food ordering platform built for live event food stations in Thun, 
              │             │                   │           │
       ┌──────▼─────────┐ ┌─▼──────┐  ┌─────────▼───┐  ┌────▼────────┐
       │ Better Auth    │ │ Sentry │  │ PostgreSQL  │  │   Payrexx   │
-      │ (Sessions,     │ │        │  │   (NeonDB)  │  │   (TWINT)   │
+      │ (Sessions,     │ │        │  │  (Scaleway) │  │ (TWINT/more)│
       │  Google OAuth) │ │        │  │             │  │             │
       └────────────────┘ └────────┘  └─────────────┘  └─────────────┘
 ```
@@ -39,23 +39,22 @@ A full-stack food ordering platform built for live event food stations in Thun, 
 
 | Component | Stack |
 |-----------|-------|
-| **Backend** | Go 1.25, Chi, PostgreSQL, Ent ORM, Atlas Migrations, Uber FX |
+| **Backend** | Go 1.25, Chi, PostgreSQL, Ent ORM, Atlas Migrations, Uber FX, RLS |
 | **Web App** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI |
 | **Android** | Kotlin, Jetpack Compose, SumUp SDK, ZXing, Thermal Printer |
-| **Infrastructure** | Terraform, Azure Container Apps, NeonDB, Key Vault, Blob Storage |
+| **Infrastructure** | Hetzner K3s, ArgoCD gitops, Scaleway DB, Traefik, cert-manager |
 | **Auth** | Better Auth (sessions + Google OAuth), JWKS validation, RBAC |
-| **Payments** | Payrexx (TWINT), SumUp (card terminal) |
-| **CI/CD** | GitHub Actions, trunk-based development, immutable image promotion |
-| **Observability** | Sentry, OpenTelemetry, Uber Zap, Azure Log Analytics |
+| **Payments** | Payrexx (TWINT + more), SumUp (card terminal) |
+| **CI/CD** | GitHub Actions → GHCR, trunk-based development, immutable SHA tags |
+| **Observability** | Sentry, OpenTelemetry, Uber Zap, Doppler secrets |
 
 ## Repository Structure
 
 ```
-bfs-backend/          Go HTTP API — Clean Architecture, Payrexx payments, RBAC
-bfs-web-app/          Next.js web app — ordering, admin, POS, station interfaces
-bfs-android-app/      Android POS terminal — SumUp payments, thermal printing
-bfs-cloud/            Terraform IaC — Azure Container Apps, auto-scaling
-bfs-docs/             Documentation site — Fumadocs, admin handbook, dev guide
+comanda-backend/      Go HTTP API — Clean Architecture, Payrexx payments, RLS
+comanda-web/          Next.js web app — ordering, admin, POS, station interfaces
+comanda-android/      Android POS terminal — SumUp payments, thermal printing
+comanda-docs/         Documentation site — Fumadocs, admin handbook, dev guide
 ```
 
 ## Quick Start
@@ -71,7 +70,7 @@ bfs-docs/             Documentation site — Fumadocs, admin handbook, dev guide
 
 ```bash
 # Terminal 1 — Backend
-cd bfs-backend
+cd comanda-backend
 cp .env.example .env
 just up
 just migrate
@@ -79,48 +78,48 @@ just seed
 just dev              # API at http://localhost:8080
 
 # Terminal 2 — Web App
-cd bfs-web-app
+cd comanda-web
 pnpm install
 pnpm dev              # App at http://localhost:3000
 ```
 
 ## Deployment
 
-The project uses a **semantic-release, immutable-tag release pipeline** driven by [Conventional Commits](https://www.conventionalcommits.org/):
+The project uses a **semantic-release, immutable-SHA release pipeline** driven by [Conventional Commits](https://www.conventionalcommits.org/):
 
-1. **Push to `main`** runs CI. On success, `semantic-release` analyses commits since the last tag, computes the next semver, creates a git tag (`vX.Y.Z`) + GitHub release, then staging is built and deployed — Docker images are tagged with that version, migrations run, infrastructure updated via Terraform Cloud
-2. **Manually dispatch `Deploy Prod`** with a tag (`vX.Y.Z`) to promote the exact staging image to production via `crane tag` (no rebuild, byte-for-byte identical)
-3. **Rollback** = dispatch `Deploy Prod` with any previous tag — images are immutable in GHCR
+1. **Push to `main`** runs CI. On success, `semantic-release` analyses commits since the last tag, computes the next semver, creates a git tag (`vX.Y.Z`) + GitHub release, then images are built and pushed to GHCR with immutable SHA tags and semver tags
+2. **ArgoCD** watches the gitops repo (`hetzner`) and syncs image references to K3s (deployed in P5)
+3. **Rollback** = update the gitops repo to reference a previous image SHA — images are immutable in GHCR
 
-Versions come from commit messages: `feat:` → minor, `fix:` → patch, `feat!:` / `BREAKING CHANGE:` → major. Commits that don't match produce no release; force a staging build by dispatching `Deploy Staging` with `force=true`.
+Versions come from commit messages: `feat:` → minor, `fix:` → patch, `feat!:` / `BREAKING CHANGE:` → major. Commits that don't match produce no release.
 
 ### Environments
 
-| Environment | Trigger | Scaling |
-|-------------|---------|---------|
-| **Staging** | Push to `main` with releasable commits | 0-20 replicas, lower thresholds |
-| **Production** | Manual `Deploy Prod` dispatch with `vX.Y.Z` | 0-20 replicas, tuned thresholds |
+| Environment | Deployment | Scaling |
+|-------------|------------|---------|
+| **Staging** | On semver tag (automatic) | K3s managed, idle → minimal |
+| **Production** | Manual gitops commit (promote SHA tag) | K3s managed, idle → minimal |
 
-Both environments support **scale-to-zero** for cost efficiency.
+Both environments run on **Hetzner K3s with scale-to-zero**.
 
 ## Key Engineering Decisions
 
 - **Better Auth over custom auth**: Session-based authentication managed in Next.js, backend validates via JWKS — clean separation of concerns
 - **Payrexx for Swiss payments**: Native TWINT support with HMAC-verified webhooks
 - **Atlas + Ent for migrations**: Declarative schema in Go, versioned SQL migrations, CI linting
-- **Immutable releases**: Production always deploys the exact same image digest that ran in staging
+- **Immutable releases**: Production always references the exact same image SHA that ran in staging
 - **Clean Architecture in Go**: Strict layer separation with Uber FX dependency injection
-- **Scale-to-zero Container Apps**: Zero cost when idle, automatic burst scaling under load
+- **RLS for tenant isolation**: PostgreSQL Row-Level Security as the security boundary (per P1 design)
+- **K3s + ArgoCD on Hetzner**: Cost-effective, gitops-driven, scale-to-zero via K3s cluster autoscaling
 
 ## Project Documentation
 
 Detailed READMEs are available in each sub-project:
 
-- [`bfs-backend/README.md`](bfs-backend/README.md) — API architecture, development setup, testing
-- [`bfs-web-app/README.md`](bfs-web-app/README.md) — Frontend architecture, routes, component system
-- [`bfs-android-app/README.md`](bfs-android-app/README.md) — Android POS, build variants, hardware integration
-- [`bfs-cloud/README.md`](bfs-cloud/README.md) — Infrastructure modules, scaling, deployment phases
-- [`bfs-docs/README.md`](bfs-docs/README.md) — Documentation site setup and content structure
+- [`comanda-backend/README.md`](comanda-backend/README.md) — API architecture, development setup, testing
+- [`comanda-web/README.md`](comanda-web/README.md) — Frontend architecture, routes, component system
+- [`comanda-android/README.md`](comanda-android/README.md) — Android POS, build variants, hardware integration
+- [`comanda-docs/README.md`](comanda-docs/README.md) — Documentation site setup and content structure
 ## License
 
 This project is source-available. All rights reserved. See [LICENSE](LICENSE) for details.
