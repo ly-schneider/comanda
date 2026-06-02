@@ -20,11 +20,16 @@ func (Settings) Annotations() []schema.Annotation {
 	}
 }
 
+func (Settings) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Settings) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			MaxLen(50).
-			Default("default").
 			Immutable(),
 		field.Enum("pos_mode").
 			Values("QR_CODE", "JETON", "HYBRID").

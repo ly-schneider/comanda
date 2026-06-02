@@ -21,6 +21,12 @@ func (InventoryLedger) Annotations() []schema.Annotation {
 	}
 }
 
+func (InventoryLedger) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (InventoryLedger) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

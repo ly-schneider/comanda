@@ -31,12 +31,23 @@ func (r *settingsRepo) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
+// settingsID returns the per-tenant settings row id. Settings is a singleton
+// per tenant; its primary key is the tenant's UUID string so it never collides
+// across tenants while RLS still scopes visibility by tenant_id.
+func (r *settingsRepo) settingsID(ctx context.Context) string {
+	if id, ok := TenantIDFromContext(ctx); ok {
+		return id.String()
+	}
+	return "default"
+}
+
 func (r *settingsRepo) Get(ctx context.Context) (*ent.Settings, error) {
-	e, err := r.ec(ctx).Settings.Get(ctx, "default")
+	id := r.settingsID(ctx)
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
 	if err != nil {
 		if translateError(err) == ErrNotFound {
 			return &ent.Settings{
-				ID:                    "default",
+				ID:                    id,
 				PosMode:               settings.PosModeQR_CODE,
 				SystemEnabled:         true,
 				Club100MaxRedemptions: 2,
@@ -48,14 +59,15 @@ func (r *settingsRepo) Get(ctx context.Context) (*ent.Settings, error) {
 }
 
 func (r *settingsRepo) GetWithProducts(ctx context.Context) (*ent.Settings, error) {
+	id := r.settingsID(ctx)
 	e, err := r.ec(ctx).Settings.Query().
-		Where(settings.IDEQ("default")).
+		Where(settings.IDEQ(id)).
 		WithClub100FreeProducts().
 		Only(ctx)
 	if err != nil {
 		if translateError(err) == ErrNotFound {
 			return &ent.Settings{
-				ID:                    "default",
+				ID:                    id,
 				PosMode:               settings.PosModeQR_CODE,
 				SystemEnabled:         true,
 				Club100MaxRedemptions: 2,
@@ -67,9 +79,14 @@ func (r *settingsRepo) GetWithProducts(ctx context.Context) (*ent.Settings, erro
 }
 
 func (r *settingsRepo) Upsert(ctx context.Context, mode settings.PosMode) error {
-	err := r.ec(ctx).Settings.Create().
-		SetID("default").
-		SetPosMode(mode).
+	id := r.settingsID(ctx)
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetPosMode(mode)
+	if tenantID, ok := TenantIDFromContext(ctx); ok {
+		create = create.SetTenantID(tenantID)
+	}
+	err := create.
 		OnConflictColumns(settings.FieldID).
 		SetPosMode(mode).
 		Exec(ctx)
@@ -78,10 +95,16 @@ func (r *settingsRepo) Upsert(ctx context.Context, mode settings.PosMode) error 
 
 func (r *settingsRepo) UpdateClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions int) error {
 	client := r.ec(ctx)
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
 
-	err := client.Settings.Create().
-		SetID("default").
-		SetClub100MaxRedemptions(maxRedemptions).
+	create := client.Settings.Create().
+		SetID(id).
+		SetClub100MaxRedemptions(maxRedemptions)
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+	err := create.
 		OnConflictColumns(settings.FieldID).
 		SetClub100MaxRedemptions(maxRedemptions).
 		Exec(ctx)
@@ -90,18 +113,20 @@ func (r *settingsRepo) UpdateClub100Settings(ctx context.Context, freeProductIDs
 	}
 
 	_, err = client.Club100FreeProduct.Delete().
-		Where(club100freeproduct.SettingsIDEQ("default")).
+		Where(club100freeproduct.SettingsIDEQ(id)).
 		Exec(ctx)
 	if err != nil {
 		return translateError(err)
 	}
 
 	for _, productID := range freeProductIDs {
-		err = client.Club100FreeProduct.Create().
-			SetSettingsID("default").
-			SetProductID(productID).
-			Exec(ctx)
-		if err != nil {
+		fpCreate := client.Club100FreeProduct.Create().
+			SetSettingsID(id).
+			SetProductID(productID)
+		if hasTenant {
+			fpCreate = fpCreate.SetTenantID(tenantID)
+		}
+		if err := fpCreate.Exec(ctx); err != nil {
 			return translateError(err)
 		}
 	}

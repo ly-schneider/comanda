@@ -15,6 +15,23 @@ import (
 // txClientKey is the context key for an ent.Client scoped to a transaction.
 type txClientKey struct{}
 
+// tenantIDKey is the context key for the request's resolved tenant ID. It is
+// set by the tenant-tx middleware alongside the GUC so repositories that need
+// the tenant value (e.g. the per-tenant settings singleton) can read it
+// without importing the auth package (which would form an import cycle).
+type tenantIDKey struct{}
+
+// ContextWithTenantID returns a child context carrying the given tenant ID.
+func ContextWithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
+	return context.WithValue(ctx, tenantIDKey{}, tenantID)
+}
+
+// TenantIDFromContext returns the tenant ID stored in ctx, if any.
+func TenantIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(tenantIDKey{}).(uuid.UUID)
+	return id, ok
+}
+
 // ContextWithClient returns a child context carrying the given ent.Client.
 // Use this to propagate a transactional client through repository calls.
 func ContextWithClient(ctx context.Context, client *ent.Client) context.Context {

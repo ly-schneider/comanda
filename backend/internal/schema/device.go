@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
 )
 
@@ -18,6 +19,12 @@ type Device struct {
 func (Device) Annotations() []schema.Annotation {
 	return []schema.Annotation{
 		entsql.Annotation{Table: "device"},
+	}
+}
+
+func (Device) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
 	}
 }
 
@@ -39,8 +46,7 @@ func (Device) Fields() []ent.Field {
 			Nillable(),
 		field.String("device_key").
 			MaxLen(100).
-			NotEmpty().
-			Unique(),
+			NotEmpty(),
 		field.Enum("type").
 			Values("POS", "STATION").
 			StorageKey("type"),
@@ -83,5 +89,11 @@ func (Device) Edges() []ent.Edge {
 			Through("device_products", DeviceProduct.Type),
 		edge.To("order_payments", OrderPayment.Type),
 		edge.To("inventory_ledger_entries", InventoryLedger.Type),
+	}
+}
+
+func (Device) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "device_key").Unique(),
 	}
 }

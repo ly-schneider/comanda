@@ -20,6 +20,12 @@ func (VolunteerCampaignProduct) Annotations() []schema.Annotation {
 	}
 }
 
+func (VolunteerCampaignProduct) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (VolunteerCampaignProduct) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("campaign_id", uuid.UUID{}),

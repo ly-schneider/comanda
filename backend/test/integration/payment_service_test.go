@@ -75,6 +75,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 
 	t.Run("PrepareAndCreateOrder with user ID", func(t *testing.T) {
 		userID := uuid.Must(uuid.NewV7()).String()
+		require.NoError(t, repos.Client.User.Create().SetID(userID).Exec(ctx))
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{ProductID: cola.ID.String(), Quantity: 1},

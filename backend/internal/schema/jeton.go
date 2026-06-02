@@ -21,6 +21,12 @@ func (Jeton) Annotations() []schema.Annotation {
 	}
 }
 
+func (Jeton) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Jeton) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

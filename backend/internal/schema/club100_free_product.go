@@ -20,6 +20,12 @@ func (Club100FreeProduct) Annotations() []schema.Annotation {
 	}
 }
 
+func (Club100FreeProduct) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Club100FreeProduct) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("settings_id").MaxLen(50),

@@ -21,6 +21,12 @@ func (AdminInvite) Annotations() []schema.Annotation {
 	}
 }
 
+func (AdminInvite) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (AdminInvite) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

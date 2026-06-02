@@ -21,6 +21,12 @@ func (Order) Annotations() []schema.Annotation {
 	}
 }
 
+func (Order) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Order) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

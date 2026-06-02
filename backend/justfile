@@ -77,7 +77,7 @@ generate: generate-ent generate-api
 generate-ent:
     mkdir -p ./internal/generated/ent
     echo "package ent" > ./internal/generated/ent/ent.go
-    go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --target ./internal/generated/ent ./internal/schema
+    go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --feature intercept --feature privacy --target ./internal/generated/ent ./internal/schema
 
 # Generate API types from OpenAPI
 [group('generate')]
@@ -97,7 +97,9 @@ swag: (_go-tool "swag" "github.com/swaggo/swag/cmd/swag@v1.16.6")
 test *args='./internal/...':
     go test -v -race {{args}}
 
-# Run integration tests
+# Run integration tests. Needs POSTGRES_TEST_DSN (privileged); RLS tests
+# additionally need POSTGRES_TEST_DSN_APP (the comanda_app role). Run
+# `just bootstrap-rls` against the test DB once so the app role + RLS exist.
 [group('test')]
 test-integration:
     go test -v -race -count=1 -timeout=5m ./test/integration/...
@@ -108,6 +110,12 @@ test-integration:
 [group('db')]
 migrate *args:
     atlas migrate apply --dir "file://db/migrations" --url "$DATABASE_URL" {{args}}
+
+# Bootstrap the two RLS roles (comanda_privileged owner + comanda_app). Run once
+# per environment, by the DB owner/superuser, AFTER migrations create the tables.
+[group('db')]
+bootstrap-rls:
+    psql "$DATABASE_URL" -f db/provisioning/bootstrap-rls-roles.sql
 
 # Generate a new migration from Ent schema diff
 [group('db')]

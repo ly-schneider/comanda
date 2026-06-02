@@ -21,6 +21,12 @@ func (OrderPayment) Annotations() []schema.Annotation {
 	}
 }
 
+func (OrderPayment) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (OrderPayment) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

@@ -6,17 +6,23 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/device"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
 	"backend/internal/generated/ent/product"
+	"backend/internal/generated/ent/tenant"
+	"backend/internal/generated/ent/user"
 	pgRepo "backend/internal/repository"
 	"backend/internal/service"
 
@@ -25,6 +31,13 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+// DefaultTestTenantID is the tenant every functional integration test runs
+// under. The functional suites use the privileged pool (RLS bypassed by
+// ownership); a fixed-default tenant guard stamps tenant_id on writes and
+// filters reads so they exercise the multi-tenant code paths without each test
+// having to thread a tenant through.
+var DefaultTestTenantID = uuid.MustParse("00000000-0000-7000-8000-0000000000ff")
 
 // TestDB wraps an Ent client and raw sql.DB for integration tests.
 type TestDB struct {
@@ -63,16 +76,88 @@ func NewTestDB(t *testing.T) *TestDB {
 
 	// Create the app schema and run Ent auto-migration
 	tdb.setupSchema(t)
+	tdb.seedDefaultTenant(t)
+
+	// Stamp every write with the default test tenant so functional suites
+	// satisfy the tenant_id NOT NULL columns. Functional DBs only ever hold the
+	// default tenant's data, so reads need no extra filtering.
+	client.Use(defaultTenantHook)
 
 	return tdb
 }
 
+var migrateOnce sync.Once
+var migrateErr error
+
+// setupSchema applies the Atlas migration directory (not Ent's Schema.Create)
+// so the test schema matches production exactly: ON DELETE rules, the
+// per-tenant unique constraints, and — critically — the RLS policies. Applied
+// once per test process against POSTGRES_TEST_DSN (privileged).
 func (tdb *TestDB) setupSchema(t *testing.T) {
 	t.Helper()
 
-	if err := tdb.Client.Schema.Create(context.Background()); err != nil {
-		t.Fatalf("failed to run Ent schema migration: %v", err)
+	migrateOnce.Do(func() {
+		dir := migrationsDir(t)
+		dsn := os.Getenv("POSTGRES_TEST_DSN")
+		out, err := exec.Command(
+			"atlas", "migrate", "apply",
+			"--dir", "file://"+dir,
+			"--url", dsn,
+		).CombinedOutput()
+		if err != nil {
+			migrateErr = fmt.Errorf("atlas migrate apply: %v\n%s", err, out)
+		}
+	})
+	if migrateErr != nil {
+		t.Fatalf("failed to apply Atlas migrations: %v", migrateErr)
 	}
+}
+
+func migrationsDir(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	return filepath.Join(wd, "..", "..", "db", "migrations")
+}
+
+func (tdb *TestDB) seedDefaultTenant(t *testing.T) {
+	t.Helper()
+
+	ctx := context.Background()
+	exists, err := tdb.Client.Tenant.Query().Where(tenant.IDEQ(DefaultTestTenantID)).Exist(ctx)
+	if err != nil {
+		t.Fatalf("failed to check default tenant: %v", err)
+	}
+	if exists {
+		return
+	}
+	if err := tdb.Client.Tenant.Create().
+		SetID(DefaultTestTenantID).
+		SetSlug("test-default").
+		SetName("Test Default Tenant").
+		Exec(ctx); err != nil {
+		t.Fatalf("failed to seed default tenant: %v", err)
+	}
+}
+
+// defaultTenantHook stamps DefaultTestTenantID on writes to scoped entities.
+func defaultTenantHook(next ent.Mutator) ent.Mutator {
+	return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+		if !enttenant.IsScoped(m.Type()) {
+			return next.Mutate(ctx, m)
+		}
+		if tm, ok := m.(interface {
+			SetTenantID(uuid.UUID)
+			TenantID() (uuid.UUID, bool)
+		}); ok {
+			if _, set := tm.TenantID(); !set {
+				tm.SetTenantID(DefaultTestTenantID)
+			}
+		}
+		return next.Mutate(ctx, m)
+	})
 }
 
 // Cleanup truncates all tables for a fresh test state.
@@ -122,6 +207,7 @@ func (tdb *TestDB) Close() {
 
 // Repositories holds all repository instances for tests.
 type Repositories struct {
+	Client            *ent.Client
 	Category          pgRepo.CategoryRepository
 	Product           *pgRepo.ProductRepository
 	Jeton             pgRepo.JetonRepository
@@ -142,6 +228,7 @@ type Repositories struct {
 // NewRepositories creates all repository instances from an Ent client.
 func NewRepositories(client *ent.Client) *Repositories {
 	return &Repositories{
+		Client:            client,
 		Category:          pgRepo.NewCategoryRepository(client),
 		Product:           pgRepo.NewProductRepository(client),
 		Jeton:             pgRepo.NewJetonRepository(client),
@@ -221,13 +308,29 @@ func (f *Fixtures) CreateOrder(totalCents int64, status order.Status, origin ord
 	return ord
 }
 
-// CreateOrderWithCustomer creates an order with a customer ID.
+// CreateOrderWithCustomer creates an order with a customer ID, ensuring the
+// referenced (global) user row exists so the FK holds.
 func (f *Fixtures) CreateOrderWithCustomer(totalCents int64, status order.Status, origin order.Origin, customerID string) *ent.Order {
+	f.ensureUser(customerID)
 	ord, err := f.repos.Order.Create(f.ctx, totalCents, status, origin, &customerID, nil, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create order: %v", err))
 	}
 	return ord
+}
+
+// ensureUser idempotently creates a global user row for FK satisfaction.
+func (f *Fixtures) ensureUser(id string) {
+	exists, err := f.repos.Client.User.Query().Where(user.IDEQ(id)).Exist(f.ctx)
+	if err != nil {
+		panic(fmt.Sprintf("failed to check user: %v", err))
+	}
+	if exists {
+		return
+	}
+	if err := f.repos.Client.User.Create().SetID(id).Exec(f.ctx); err != nil {
+		panic(fmt.Sprintf("failed to create user: %v", err))
+	}
 }
 
 // CreateOrderLine creates a test order line.

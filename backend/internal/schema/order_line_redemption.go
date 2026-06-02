@@ -21,6 +21,12 @@ func (OrderLineRedemption) Annotations() []schema.Annotation {
 	}
 }
 
+func (OrderLineRedemption) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (OrderLineRedemption) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

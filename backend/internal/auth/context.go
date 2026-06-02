@@ -17,6 +17,7 @@ const (
 	AuthTypeKey    contextKey = "authType"
 	DeviceIDKey    contextKey = "deviceID"
 	DeviceTypeKey  contextKey = "deviceType"
+	TenantIDKey    contextKey = "tenantID"
 )
 
 type AuthType string
@@ -32,6 +33,28 @@ const (
 	DeviceTypePOS     DeviceType = "pos"
 	DeviceTypeStation DeviceType = "station"
 )
+
+// GetTenantID returns the resolved tenant ID from ctx. The tenant-tx
+// middleware sets this before binding the request to a tenant-scoped pgx
+// transaction.
+func GetTenantID(ctx context.Context) (uuid.UUID, bool) {
+	tenantID, ok := ctx.Value(TenantIDKey).(uuid.UUID)
+	return tenantID, ok
+}
+
+// RequireTenantID panics if the tenant ID is not in context. Only safe after
+// the tenant resolver middleware has run.
+func RequireTenantID(ctx context.Context) uuid.UUID {
+	tenantID, ok := GetTenantID(ctx)
+	if !ok {
+		panic("auth: tenant ID not found in context - ensure tenant middleware is applied")
+	}
+	return tenantID
+}
+
+func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
+	return context.WithValue(ctx, TenantIDKey, tenantID)
+}
 
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(UserIDKey).(string)

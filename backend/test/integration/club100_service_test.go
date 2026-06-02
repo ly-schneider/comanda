@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/order"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -41,6 +42,11 @@ func TestClub100Service_GetPeopleWithRedemptions_NoNPlusOne(t *testing.T) {
 	repos := NewRepositories(tdb.Client)
 	require.NoError(t, repos.Settings.UpdateClub100Settings(ctx, nil, 2))
 
+	fixtures := NewFixtures(repos)
+	newOrderID := func() uuid.UUID {
+		return fixtures.CreateOrder(0, order.StatusPaid, order.OriginPos).ID
+	}
+
 	people := []service.ElvantoPerson{
 		{ID: "p1", FirstName: "Alice", LastName: "A"},
 		{ID: "p2", FirstName: "Bob", LastName: "B"},
@@ -50,10 +56,10 @@ func TestClub100Service_GetPeopleWithRedemptions_NoNPlusOne(t *testing.T) {
 	}
 
 	for _, p := range people {
-		_, err := repos.Club100Redemption.Create(ctx, p.ID, p.FirstName+" "+p.LastName, uuid.New(), 1)
+		_, err := repos.Club100Redemption.Create(ctx, p.ID, p.FirstName+" "+p.LastName, newOrderID(), 1)
 		require.NoError(t, err)
 	}
-	_, err := repos.Club100Redemption.Create(ctx, "p1", "Alice A", uuid.New(), 1)
+	_, err := repos.Club100Redemption.Create(ctx, "p1", "Alice A", newOrderID(), 1)
 	require.NoError(t, err)
 
 	counter := &countingDriver{Driver: entsql.OpenDB(dialect.Postgres, tdb.DB)}

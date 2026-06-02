@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/order"
@@ -474,7 +475,7 @@ func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID uui
 			zap.String("orderId", ord.ID.String()),
 			zap.String("to", email),
 		)
-		go s.sendReceipt(ord.ID, email, ord.TotalCents, now, "TWINT")
+		go s.sendReceipt(ctx, ord.ID, email, ord.TotalCents, now, "TWINT")
 	} else {
 		s.logger.Info("no contact email, skipping receipt",
 			zap.String("orderId", ord.ID.String()),
@@ -507,7 +508,7 @@ func (s *paymentService) MarkOrderPaidDev(ctx context.Context, orderID uuid.UUID
 			zap.String("orderId", ord.ID.String()),
 			zap.String("to", email),
 		)
-		go s.sendReceipt(ord.ID, email, ord.TotalCents, time.Now(), "TWINT (Dev)")
+		go s.sendReceipt(ctx, ord.ID, email, ord.TotalCents, time.Now(), "TWINT (Dev)")
 	}
 
 	return nil
@@ -581,9 +582,20 @@ func (s *paymentService) GetPayrexxGateway(ctx context.Context, gatewayID int) (
 	return s.payrexxClient.GetGateway(ctx, gatewayID)
 }
 
-func (s *paymentService) sendReceipt(orderID uuid.UUID, to string, totalCents int64, paidAt time.Time, method string) {
+func (s *paymentService) sendReceipt(reqCtx context.Context, orderID uuid.UUID, to string, totalCents int64, paidAt time.Time, method string) {
+	if s.emailService == nil {
+		return
+	}
+
+	// The receipt is sent on a detached background context, so re-attach the
+	// request's tenant: the RLS-bound app client returns zero rows / denies
+	// scoped reads without a tenant.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if tenantID, ok := repository.TenantIDFromContext(reqCtx); ok {
+		ctx = repository.ContextWithTenantID(ctx, tenantID)
+		ctx = enttenant.WithTenant(ctx, tenantID)
+	}
 
 	lines, err := s.orderLineRepo.GetByOrderID(ctx, orderID)
 	if err != nil {

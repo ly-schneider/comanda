@@ -40,13 +40,15 @@ type AndroidConfig struct {
 }
 
 type AppConfig struct {
-	AppEnv        string
-	AppPort       string
-	PublicBaseURL string
+	AppEnv              string
+	AppPort             string
+	PublicBaseURL       string
+	BootstrapTenantSlug string
 }
 
 type PostgresConfig struct {
 	DSN             string
+	AppDSN          string
 	MaxConns        int
 	MinConns        int
 	MaxConnLifetime time.Duration
@@ -104,12 +106,14 @@ func Load() Config {
 
 	cfg := Config{
 		App: AppConfig{
-			AppEnv:        getEnv("APP_ENV"),
-			AppPort:       getEnv("APP_PORT"),
-			PublicBaseURL: getEnv("PUBLIC_BASE_URL"),
+			AppEnv:              getEnv("APP_ENV"),
+			AppPort:             getEnv("APP_PORT"),
+			PublicBaseURL:       getEnv("PUBLIC_BASE_URL"),
+			BootstrapTenantSlug: getEnvOptional("BOOTSTRAP_TENANT_SLUG"),
 		},
 		Postgres: PostgresConfig{
 			DSN:             getEnvOptional("DATABASE_URL"),
+			AppDSN:          getEnvOptional("DATABASE_URL_APP"),
 			MaxConns:        75,
 			MinConns:        2,
 			MaxConnLifetime: 1 * time.Hour,

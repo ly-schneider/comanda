@@ -22,6 +22,12 @@ func (VolunteerRedemption) Annotations() []schema.Annotation {
 	}
 }
 
+func (VolunteerRedemption) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (VolunteerRedemption) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

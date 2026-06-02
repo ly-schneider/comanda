@@ -21,6 +21,12 @@ func (Idempotency) Annotations() []schema.Annotation {
 	}
 }
 
+func (Idempotency) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Idempotency) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).
@@ -47,7 +53,7 @@ func (Idempotency) Edges() []ent.Edge {
 
 func (Idempotency) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("scope", "key").Unique(),
+		index.Fields("tenant_id", "scope", "key").Unique(),
 		index.Fields("expires_at"),
 	}
 }

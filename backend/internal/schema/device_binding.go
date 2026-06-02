@@ -20,6 +20,12 @@ func (DeviceBinding) Annotations() []schema.Annotation {
 	}
 }
 
+func (DeviceBinding) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (DeviceBinding) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

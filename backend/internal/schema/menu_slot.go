@@ -19,6 +19,12 @@ func (MenuSlot) Annotations() []schema.Annotation {
 	}
 }
 
+func (MenuSlot) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (MenuSlot) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

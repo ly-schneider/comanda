@@ -21,6 +21,12 @@ func (Club100Redemption) Annotations() []schema.Annotation {
 	}
 }
 
+func (Club100Redemption) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Club100Redemption) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).

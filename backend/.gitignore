@@ -121,7 +121,9 @@ secrets/
 
 # bin
 *bin/
-backend
+# Compiled server binary (built as `-o backend ./cmd/backend`); anchored to the
+# module root so it does not also ignore the cmd/backend source directory.
+/backend
 
 # docs
 docs/

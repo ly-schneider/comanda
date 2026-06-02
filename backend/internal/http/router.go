@@ -20,13 +20,19 @@ func NewRouter(
 	deviceAuthMw *auth.DeviceAuthMiddleware,
 	securityMw *middleware.SecurityMiddleware,
 	systemMw *middleware.SystemDisableMiddleware,
+	tenantMw *middleware.TenantMiddleware,
 	logger *zap.Logger,
 	isDev bool,
 ) http.Handler {
 	// ── SSE router (minimal middleware to preserve flushing) ──────────
+	// The stream's only DB access is the initial snapshot; it then loops on an
+	// in-memory hub. The tenant tx is held for the stream lifetime — acceptable
+	// for the low number of admin dashboards in P1.
 	sseRouter := chi.NewRouter()
 	sseRouter.Use(securityMw.CORS)
 	sseRouter.Use(systemMw.RequireEnabled)
+	sseRouter.Use(tenantMw.Resolve)
+	sseRouter.Use(tenantMw.Tx)
 	sseRouter.Get("/v1/inventory/stream", apiHandlers.StreamInventory)
 
 	// ── Main router with full middleware stack ────────────────────────
@@ -65,6 +71,14 @@ func NewRouter(
 	r.Get("/docs/openapi.json", DocsOpenAPIHandler())
 
 	r.Route("/v1", func(v1 chi.Router) {
+
+		// Tenant resolution + per-request tenant transaction. Every /v1
+		// request runs inside a single Postgres tx bound to its tenant via
+		// set_config('app.tenant_id', …), the anchor for RLS. In P1 the tenant
+		// is resolved from the X-Tenant-Id header or BOOTSTRAP_TENANT_SLUG;
+		// host-based resolution replaces the resolver in P2.
+		v1.Use(tenantMw.Resolve)
+		v1.Use(tenantMw.Tx)
 
 		// ── System status (always accessible, no auth) ───────────
 		v1.Get("/system/status", apiHandlers.GetSystemStatus)

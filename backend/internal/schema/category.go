@@ -25,6 +25,12 @@ func (Category) Annotations() []schema.Annotation {
 	}
 }
 
+func (Category) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		TenantMixin{},
+	}
+}
+
 func (Category) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).
