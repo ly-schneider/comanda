@@ -59,6 +59,12 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 - Pass the **Linear ticket ID** into every subagent prompt: it sets `In Progress` on start, posts a progress comment, flips to `In Review` with a summary when done. The lead flips the epic LEY-308.
 - After **P1** and **P4**, run `rls-security-auditor` before advancing.
 
+## Git conventions
+
+- **Commits are GPG-signed.** This repo inherits the global `commit.gpgsign = true`; the key is reachable in the dev/agent environment. **Do not** set `commit.gpgsign false` locally (a past bootstrap did this and left unsigned, unverified commits). If a non-interactive run genuinely can't reach the key, fix the agent's key access rather than disabling signing.
+- **Agents never push to origin.** Implementation agents commit on their **own worktree branch** only; the lead does all rebase-onto-main / merge / push, with the human's explicit OK. Agents must not operate on `main` or rewrite shared history.
+- **Commit messages:** conventional-commit subject line, kept terse. No `Co-Authored-By` trailer.
+
 ## Dev / build commands (carried over; paths update after P0)
 
 ```bash
