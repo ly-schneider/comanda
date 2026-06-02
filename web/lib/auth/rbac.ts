@@ -1,4 +1,4 @@
-// RBAC definitions - mirrors comanda-backend/internal/auth/rbac.go
+// RBAC definitions - mirrors backend/internal/auth/rbac.go
 // This is used for UI gating only. Go is the authoritative enforcement point.
 
 export type UserRole = "customer" | "admin"

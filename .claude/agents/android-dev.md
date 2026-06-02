@@ -1,7 +1,7 @@
 ---
 name: android-dev
 description: >-
-  Kotlin / Jetpack Compose specialist for the Comanda POS app (comanda-android/). Use for the
+  Kotlin / Jetpack Compose specialist for the Comanda POS app (android/). Use for the
   Android slice of P3: keep a single neutral "Comanda POS" app (launcher icon, app name,
   applicationId ch.leys.comanda are compiled/neutral) while making all in-app branding dynamic —
   header logo, splash, colors, and the thermal-printer receipt logo fetched from the authenticated
@@ -10,7 +10,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 ---
 
-You own the Comanda Android POS (`comanda-android/`).
+You own the Comanda Android POS (`android/`).
 
 ## Scope (P3 Android slice — LEY-312)
 

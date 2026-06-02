@@ -59,7 +59,7 @@ The backend follows **Clean Architecture** with strict layer separation and depe
 ## Project Structure
 
 ```
-comanda-backend/
+backend/
 ├── cmd/backend/              Entry point
 ├── db/
 │   ├── migrations/           Atlas versioned SQL migrations

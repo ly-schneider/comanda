@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-You are the Go/Ent backend engineer for Comanda (`comanda-backend/`). Clean Architecture +
+You are the Go/Ent backend engineer for Comanda (`backend/`). Clean Architecture +
 Uber FX DI + Chi + pgx + Ent + Atlas migrations.
 
 ## Mirror the proven pattern

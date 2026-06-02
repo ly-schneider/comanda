@@ -38,15 +38,15 @@ jobs:
           cache-read-only: false
 
       - name: Lint
-        working-directory: comanda-android
+        working-directory: android
         run: ./gradlew lint --parallel
 
       - name: Run tests
-        working-directory: comanda-android
+        working-directory: android
         run: ./gradlew test --parallel
 
       - name: Assemble debug
-        working-directory: comanda-android
+        working-directory: android
         run: ./gradlew assembleDebug --parallel
 
   build-and-release:
@@ -100,7 +100,7 @@ jobs:
           echo "date=$(date +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_OUTPUT"
 
       - name: Build Android release APK
-        working-directory: comanda-android
+        working-directory: android
         env:
           VERSION_TAG: ${{ inputs.version }}
           SUMUP_AFFILIATE_KEY: ${{ secrets.SUMUP_AFFILIATE_KEY }}
@@ -124,9 +124,9 @@ jobs:
         run: |
           # Navigate to the correct output directory based on build type
           if [ "${{ inputs.environment }}" == "staging" ]; then
-            cd comanda-android/app/build/outputs/apk/staging
+            cd android/app/build/outputs/apk/staging
           else
-            cd comanda-android/app/build/outputs/apk/release
+            cd android/app/build/outputs/apk/release
           fi
 
           for apk in *.apk; do
@@ -150,9 +150,9 @@ jobs:
           set -euo pipefail
 
           if [ "$ENVIRONMENT" = "staging" ]; then
-            APK_DIR="comanda-android/app/build/outputs/apk/staging"
+            APK_DIR="android/app/build/outputs/apk/staging"
           else
-            APK_DIR="comanda-android/app/build/outputs/apk/release"
+            APK_DIR="android/app/build/outputs/apk/release"
           fi
 
           NOTES=$(cat <<EOF

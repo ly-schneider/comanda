@@ -5,10 +5,10 @@ description: Architektur, lokale Entwicklung und Komponenten-Deep-Dives
 
 # Repository-Map
 
-- `comanda-web`: Next.js App Router; `/app`, Middleware, `hooks/`, `contexts/`, `components/`, `/api` Proxy in `/lib/api.ts`; Better Auth für Authentifizierung.
-- `comanda-backend`: Go-Service; Clean Architecture: `internal/{app,config,auth,middleware,model,repository,service,http,payrexx}` und `cmd/backend`.
-- `comanda-android`: Android App (WebView POS-Shell), SumUp SDK, ESC/POS Druck, Drucker-Discovery.
-- `comanda-docs`: Dokumentations-Site mit Fumadocs.
+- `web`: Next.js App Router; `/app`, Middleware, `hooks/`, `contexts/`, `components/`, `/api` Proxy in `/lib/api.ts`; Better Auth für Authentifizierung.
+- `backend`: Go-Service; Clean Architecture: `internal/{app,config,auth,middleware,model,repository,service,http,payrexx}` und `cmd/backend`.
+- `android`: Android App (WebView POS-Shell), SumUp SDK, ESC/POS Druck, Drucker-Discovery.
+- `docs`: Dokumentations-Site mit Fumadocs.
 
 ---
 
@@ -29,7 +29,7 @@ Details zur Backend-Architektur und den einzelnen Schichten: [Backend](/entwickl
 Web App:
 
 - `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080`, `BETTER_AUTH_SECRET` und `DATABASE_URL` setzen.
-- `pnpm install && pnpm dev` in `comanda-web`.
+- `pnpm install && pnpm dev` in `web`.
 - Alle API-Calls gehen über gleich-origin `/api` mit CSRF-Cookie für mutierende Requests.
 
 Android POS:

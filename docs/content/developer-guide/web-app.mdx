@@ -5,7 +5,7 @@ description: Struktur, Security-Middleware, POS-Seite & Bridge, Checkout, Admin 
 
 # Struktur
 
-- App Router unter `comanda-web/app` mit Layouts und Pages; `/app/layout.tsx` bindet Analytics-Consent und Auth Provider ein.
+- App Router unter `web/app` mit Layouts und Pages; `/app/layout.tsx` bindet Analytics-Consent und Auth Provider ein.
 - Middleware `middleware.ts`:
   - Leichtgewichtiges Request-Logging; schützt `/profile` und `/admin` via Session-Cookie.
   - Setzt Security-Header.

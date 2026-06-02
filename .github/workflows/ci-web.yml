@@ -13,15 +13,15 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
 
       - name: Format check
-        working-directory: comanda-web
+        working-directory: web
         run: pnpm run prettier
 
       - name: Lint
-        working-directory: comanda-web
+        working-directory: web
         run: pnpm run lint
 
       - name: Type check
-        working-directory: comanda-web
+        working-directory: web
         run: pnpm run typecheck
 
   test:
@@ -37,5 +37,5 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
 
       - name: Run tests
-        working-directory: comanda-web
+        working-directory: web
         run: pnpm test -- --shard=${{ matrix.shard }}/1

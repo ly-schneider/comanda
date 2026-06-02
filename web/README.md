@@ -53,7 +53,7 @@ app/
 ## Project Structure
 
 ```
-comanda-web/
+web/
 ├── app/                  Next.js App Router (routes above)
 ├── components/           Reusable React components
 ├── hooks/                Custom React hooks

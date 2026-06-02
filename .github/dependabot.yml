@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/comanda-web"
+    directory: "/web"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -21,7 +21,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "npm"
-    directory: "/comanda-docs"
+    directory: "/docs"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -41,7 +41,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "gomod"
-    directory: "/comanda-backend"
+    directory: "/backend"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -61,7 +61,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "gradle"
-    directory: "/comanda-android"
+    directory: "/android"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"

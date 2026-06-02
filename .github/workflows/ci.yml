@@ -31,15 +31,15 @@ jobs:
         with:
           filters: |
             web:
-              - 'comanda-web/**'
+              - 'web/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
             backend:
-              - 'comanda-backend/**'
+              - 'backend/**'
               - 'go.mod'
               - 'go.sum'
             docs:
-              - 'comanda-docs/**'
+              - 'docs/**'
 
   ci-web:
     needs: detect-changes
@@ -61,14 +61,14 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
         with:
-          working-directory: comanda-docs
+          working-directory: docs
 
       - name: Lint
-        working-directory: comanda-docs
+        working-directory: docs
         run: pnpm run lint
 
       - name: Build
-        working-directory: comanda-docs
+        working-directory: docs
         run: pnpm run build
 
   ci-gate:

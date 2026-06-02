@@ -1,4 +1,4 @@
-name: comanda-backend
+name: backend
 
 services:
   # PostgreSQL for local development (production uses db/provisioning/ for role setup)

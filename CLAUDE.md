@@ -10,14 +10,14 @@
 - **No unnecessary comments.** Code should speak for itself; comment only genuinely surprising logic.
 - Match the conventions of the surrounding sub-project.
 
-## Repository layout (renamed to `comanda-*` in P0)
+## Repository layout (de-branded from `bfs-*` in P0)
 
 ```
-bfs-backend/   → comanda-backend/    Go + Ent + Chi (Clean Arch, Uber FX). RLS lives here.
-bfs-web-app/   → comanda-web/        Next.js 16 / React 19. Host-based tenant resolution + Better Auth.
-bfs-android-app/ → comanda-android/  Kotlin POS. Single neutral app; in-app branding dynamic.
+bfs-backend/   → backend/    Go + Ent + Chi (Clean Arch, Uber FX). RLS lives here.
+bfs-web-app/   → web/        Next.js 16 / React 19. Host-based tenant resolution + Better Auth.
+bfs-android-app/ → android/  Kotlin POS. Single neutral app; in-app branding dynamic.
 bfs-cloud/     → DELETED in P0       (Azure Terraform — replaced by Hetzner gitops in the `hetzner` repo)
-bfs-docs/      → comanda-docs/       Fumadocs.
+bfs-docs/      → docs/       Fumadocs.
 ```
 
 ## The build: 8 phases, one Linear ticket each (epic LEY-308)
@@ -63,11 +63,11 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 
 ```bash
 # Backend (Go)
-cd comanda-backend && just up && just migrate && just dev   # API :8080
+cd backend && just up && just migrate && just dev   # API :8080
 just test            # unit       |   just test-integration  # needs PG
 just lint --fix && just fmt
 
 # Web (Next.js, pnpm)
-cd comanda-web && pnpm install && pnpm dev                   # :3000
+cd web && pnpm install && pnpm dev                   # :3000
 pnpm typecheck && pnpm lint && pnpm test && pnpm e2e:headless
 ```

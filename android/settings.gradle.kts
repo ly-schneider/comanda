@@ -26,6 +26,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "comanda-android"
+rootProject.name = "android"
 include(":app")
  

@@ -34,7 +34,7 @@ The app uses **Kotlin + Jetpack Compose** with two distinct activities:
 ## Project Structure
 
 ```
-comanda-android/
+android/
 ├── app/
 │   ├── src/
 │   │   ├── main/               Main source code & resources

@@ -15,7 +15,7 @@ jobs:
       - uses: ./.github/actions/generate-backend
 
       - name: Lint
-        working-directory: comanda-backend
+        working-directory: backend
         run: go tool golangci-lint run --timeout=3m ./...
 
   test:
@@ -29,13 +29,13 @@ jobs:
       - uses: ./.github/actions/generate-backend
 
       - name: Run tests
-        working-directory: comanda-backend
+        working-directory: backend
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
         with:
-          files: ./comanda-backend/coverage.out
+          files: ./backend/coverage.out
           flags: backend
           fail_ci_if_error: false
 
@@ -49,13 +49,13 @@ jobs:
         uses: ariga/setup-atlas@2f3c785c89a15e1c0d07bcae3900fb5feb969eea # v0.3
 
       - name: Validate migration integrity
-        working-directory: comanda-backend
+        working-directory: backend
         run: atlas migrate validate --dir "file://db/migrations"
 
       - name: Lint new migrations with squawk
         run: |
           git fetch origin main --depth=1
-          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A origin/main -- comanda-backend/db/migrations/ | grep '\.sql$' || true)
+          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A origin/main -- backend/db/migrations/ | grep '\.sql$' || true)
           if [ -z "$NEW_MIGRATIONS" ]; then
             echo "No new migration files to lint"
             exit 0

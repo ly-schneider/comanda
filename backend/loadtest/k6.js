@@ -243,7 +243,7 @@ export function admin(data) {
   to.setHours(24, 0, 0, 0);
   const qs = `date_from=${encodeURIComponent(from.toISOString())}&date_to=${encodeURIComponent(to.toISOString())}`;
 
-  // Mirrors the parallel fetch in comanda-web/app/admin/page.tsx.
+  // Mirrors the parallel fetch in web/app/admin/page.tsx.
   group("admin/dashboard-fetch", () => {
     const responses = http.batch([
       ["GET", `${BASE_URL}/v1/orders?${qs}`, null, bearer(sessionToken)],

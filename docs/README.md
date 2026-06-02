@@ -29,7 +29,7 @@ Built on [Fumadocs](https://fumadocs.dev), a documentation framework for Next.js
 ## Project Structure
 
 ```
-comanda-docs/
+docs/
 ├── content/
 │   ├── admin-handbuch/       Admin user guide (German)
 │   ├── developer-guide/      Developer documentation

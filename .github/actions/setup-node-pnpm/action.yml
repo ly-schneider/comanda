@@ -4,7 +4,7 @@ description: Install pnpm, Node.js 22, and project dependencies
 inputs:
   working-directory:
     description: Directory containing pnpm-lock.yaml
-    default: comanda-web
+    default: web
 
 runs:
   using: composite

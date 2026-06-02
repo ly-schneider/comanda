@@ -12,14 +12,14 @@ This directory contains integration tests for the PostgreSQL-migrated backend se
 ### Using Make
 
 ```bash
-# From the comanda-backend directory
+# From the backend directory
 POSTGRES_TEST_DSN="postgres://user:pass@localhost:5432/testdb?sslmode=disable" make test-integration
 ```
 
 ### Using Go directly
 
 ```bash
-cd comanda-backend
+cd backend
 POSTGRES_TEST_DSN="postgres://user:pass@localhost:5432/testdb?sslmode=disable" go test -v ./test/integration/...
 ```
 

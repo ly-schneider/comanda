@@ -1,5 +1,5 @@
 default_install_hook_types = ["pre-commit", "commit-msg"]
-exclude = "^comanda-android/"
+exclude = "^android/"
 
 [[repos]]
 repo = "builtin"

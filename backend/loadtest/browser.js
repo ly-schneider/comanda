@@ -119,7 +119,7 @@ export default async function () {
       );
     }
 
-    // Storage key matches CART_STORAGE_KEY in comanda-web/contexts/cart-context.tsx.
+    // Storage key matches CART_STORAGE_KEY in web/contexts/cart-context.tsx.
     const readCartSize = () =>
       page.evaluate(() => {
         try {

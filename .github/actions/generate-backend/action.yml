@@ -6,7 +6,7 @@ runs:
   steps:
     - name: Generate Ent
       shell: bash
-      working-directory: comanda-backend
+      working-directory: backend
       run: |
         mkdir -p ./internal/generated/ent
         echo "package ent" > ./internal/generated/ent/ent.go
@@ -14,7 +14,7 @@ runs:
 
     - name: Generate OpenAPI
       shell: bash
-      working-directory: comanda-backend
+      working-directory: backend
       run: |
         npx @redocly/cli bundle openapi/openapi.yaml -o openapi/bundled.yaml
         go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
@@ -22,7 +22,7 @@ runs:
 
     - name: Generate Swagger
       shell: bash
-      working-directory: comanda-backend
+      working-directory: backend
       run: |
         go install github.com/swaggo/swag/cmd/swag@v1.16.6
         swag init -g cmd/backend/main.go --parseInternal --parseDependency --generatedTime=false

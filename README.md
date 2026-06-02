@@ -28,33 +28,33 @@ A full-stack food ordering and event management platform. Handles the complete l
 
 **Four distinct interfaces** serve different user roles:
 
-| Interface | Path | Purpose |
-|-----------|------|---------|
-| Public Ordering | `/` | Customer-facing menu, cart, QR code ordering, TWINT checkout |
-| Admin Dashboard | `/admin` | Order management, inventory, analytics, device configuration |
-| POS Terminal | `/pos` | Cashier interface for on-site payments via SumUp |
-| Station Display | `/station` | Kitchen/preparation queue for food station operators |
+| Interface       | Path       | Purpose                                                      |
+| --------------- | ---------- | ------------------------------------------------------------ |
+| Public Ordering | `/`        | Customer-facing menu, cart, QR code ordering, TWINT checkout |
+| Admin Dashboard | `/admin`   | Order management, inventory, analytics, device configuration |
+| POS Terminal    | `/pos`     | Cashier interface for on-site payments via SumUp             |
+| Station Display | `/station` | Kitchen/preparation queue for food station operators         |
 
 ## Tech Stack
 
-| Component | Stack |
-|-----------|-------|
-| **Backend** | Go 1.25, Chi, PostgreSQL, Ent ORM, Atlas Migrations, Uber FX, RLS |
-| **Web App** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI |
-| **Android** | Kotlin, Jetpack Compose, SumUp SDK, ZXing, Thermal Printer |
-| **Infrastructure** | Hetzner K3s, ArgoCD gitops, Scaleway DB, Traefik, cert-manager |
-| **Auth** | Better Auth (sessions + Google OAuth), JWKS validation, RBAC |
-| **Payments** | Payrexx (TWINT + more), SumUp (card terminal) |
-| **CI/CD** | GitHub Actions → GHCR, trunk-based development, immutable SHA tags |
-| **Observability** | Sentry, OpenTelemetry, Uber Zap, Doppler secrets |
+| Component          | Stack                                                              |
+| ------------------ | ------------------------------------------------------------------ |
+| **Backend**        | Go 1.25, Chi, PostgreSQL, Ent ORM, Atlas Migrations, Uber FX, RLS  |
+| **Web App**        | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI         |
+| **Android**        | Kotlin, Jetpack Compose, SumUp SDK, ZXing, Thermal Printer         |
+| **Infrastructure** | Hetzner K3s, ArgoCD gitops, Scaleway DB, Traefik, cert-manager     |
+| **Auth**           | Better Auth (sessions + Google OAuth), JWKS validation, RBAC       |
+| **Payments**       | Payrexx (TWINT + more), SumUp (card terminal)                      |
+| **CI/CD**          | GitHub Actions → GHCR, trunk-based development, immutable SHA tags |
+| **Observability**  | Sentry, OpenTelemetry, Uber Zap, Doppler secrets                   |
 
 ## Repository Structure
 
 ```
-comanda-backend/      Go HTTP API — Clean Architecture, Payrexx payments, RLS
-comanda-web/          Next.js web app — ordering, admin, POS, station interfaces
-comanda-android/      Android POS terminal — SumUp payments, thermal printing
-comanda-docs/         Documentation site — Fumadocs, admin handbook, dev guide
+backend/      Go HTTP API — Clean Architecture, Payrexx payments, RLS
+web/          Next.js web app — ordering, admin, POS, station interfaces
+android/      Android POS terminal — SumUp payments, thermal printing
+docs/         Documentation site — Fumadocs, admin handbook, dev guide
 ```
 
 ## Quick Start
@@ -70,7 +70,7 @@ comanda-docs/         Documentation site — Fumadocs, admin handbook, dev guide
 
 ```bash
 # Terminal 1 — Backend
-cd comanda-backend
+cd backend
 cp .env.example .env
 just up
 just migrate
@@ -78,7 +78,7 @@ just seed
 just dev              # API at http://localhost:8080
 
 # Terminal 2 — Web App
-cd comanda-web
+cd web
 pnpm install
 pnpm dev              # App at http://localhost:3000
 ```
@@ -95,9 +95,9 @@ Versions come from commit messages: `feat:` → minor, `fix:` → patch, `feat!:
 
 ### Environments
 
-| Environment | Deployment | Scaling |
-|-------------|------------|---------|
-| **Staging** | On semver tag (automatic) | K3s managed, idle → minimal |
+| Environment    | Deployment                             | Scaling                     |
+| -------------- | -------------------------------------- | --------------------------- |
+| **Staging**    | On semver tag (automatic)              | K3s managed, idle → minimal |
 | **Production** | Manual gitops commit (promote SHA tag) | K3s managed, idle → minimal |
 
 Both environments run on **Hetzner K3s with scale-to-zero**.
@@ -116,10 +116,11 @@ Both environments run on **Hetzner K3s with scale-to-zero**.
 
 Detailed READMEs are available in each sub-project:
 
-- [`comanda-backend/README.md`](comanda-backend/README.md) — API architecture, development setup, testing
-- [`comanda-web/README.md`](comanda-web/README.md) — Frontend architecture, routes, component system
-- [`comanda-android/README.md`](comanda-android/README.md) — Android POS, build variants, hardware integration
-- [`comanda-docs/README.md`](comanda-docs/README.md) — Documentation site setup and content structure
+- [`backend/README.md`](backend/README.md) — API architecture, development setup, testing
+- [`web/README.md`](web/README.md) — Frontend architecture, routes, component system
+- [`android/README.md`](android/README.md) — Android POS, build variants, hardware integration
+- [`docs/README.md`](docs/README.md) — Documentation site setup and content structure
+
 ## License
 
 This project is source-available. All rights reserved. See [LICENSE](LICENSE) for details.

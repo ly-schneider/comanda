@@ -14,8 +14,8 @@ brand-neutral `comanda` repo. This is mechanical — **do not change runtime beh
 
 ## Scope
 
-1. Rename top-level dirs with `git mv`: `bfs-backend`→`comanda-backend`, `bfs-web-app`→`comanda-web`,
-   `bfs-android-app`→`comanda-android`, `bfs-docs`→`comanda-docs`. **Delete `bfs-cloud/`** (Azure TF).
+1. Rename top-level dirs with `git mv`: `bfs-backend`→`backend`, `bfs-web-app`→`web`,
+   `bfs-android-app`→`android`, `bfs-docs`→`docs`. **Delete `bfs-cloud/`** (Azure TF).
 2. Identifiers: package.json names, Go module path (confirm with lead: keep `backend` or rename to `comanda`),
    Terraform project slug, Android `applicationId`/namespace → `ch.leys.comanda`, GHCR/registry refs →
    `ghcr.io/ly-schneider/comanda/{backend,frontend,docs}`, repo/footer links → `ly-schneider/comanda`.
