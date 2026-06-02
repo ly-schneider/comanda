@@ -49,6 +49,7 @@ type AppConfig struct {
 type PostgresConfig struct {
 	DSN             string
 	AppDSN          string
+	AllowSingleDSN  bool
 	MaxConns        int
 	MinConns        int
 	MaxConnLifetime time.Duration
@@ -114,6 +115,7 @@ func Load() Config {
 		Postgres: PostgresConfig{
 			DSN:             getEnvOptional("DATABASE_URL"),
 			AppDSN:          getEnvOptional("DATABASE_URL_APP"),
+			AllowSingleDSN:  getEnvBoolOptional("ALLOW_SINGLE_DSN"),
 			MaxConns:        75,
 			MinConns:        2,
 			MaxConnLifetime: 1 * time.Hour,
@@ -192,6 +194,17 @@ func getEnvAsBool(key string) bool {
 		}
 	}
 	log.Fatalf("config: environment variable %s is not set", key)
+	return false
+}
+
+// getEnvBoolOptional gets an environment variable as a boolean, defaulting to
+// false when unset or unparseable.
+func getEnvBoolOptional(key string) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
 	return false
 }
 

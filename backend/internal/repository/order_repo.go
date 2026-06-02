@@ -307,13 +307,12 @@ type CardMeta struct {
 }
 
 func (r *orderRepo) setPosPayment(ctx context.Context, orderID uuid.UUID, deviceID *uuid.UUID, method orderpayment.Method, amountCents int64, card *CardMeta) error {
-	tx, err := r.ec(ctx).Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	// Runs on the request-scoped tenant tx client; the payment insert + order
+	// status update are atomic through that outer transaction. A nested Ent
+	// Tx() here would return ErrTxStarted and bypass the app.tenant_id GUC.
+	client := r.ec(ctx)
 
-	payBuilder := tx.OrderPayment.Create().
+	payBuilder := client.OrderPayment.Create().
 		SetOrderID(orderID).
 		SetMethod(method).
 		SetAmountCents(amountCents).
@@ -339,13 +338,13 @@ func (r *orderRepo) setPosPayment(ctx context.Context, orderID uuid.UUID, device
 		return translateError(err)
 	}
 
-	if _, err := tx.Order.UpdateOneID(orderID).
+	if _, err := client.Order.UpdateOneID(orderID).
 		SetStatus(order.StatusPaid).
 		Save(ctx); err != nil {
 		return translateError(err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func (r *orderRepo) SetPosPaymentCash(ctx context.Context, orderID uuid.UUID, deviceID *uuid.UUID, amountCents int64) error {

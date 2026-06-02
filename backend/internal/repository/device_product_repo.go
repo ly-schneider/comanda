@@ -98,35 +98,30 @@ func (r *deviceProductRepo) DeleteByDeviceID(ctx context.Context, deviceID uuid.
 }
 
 func (r *deviceProductRepo) ReplaceForDevice(ctx context.Context, deviceID uuid.UUID, productIDs []uuid.UUID) error {
-	// Use a transaction via the TxManager pattern
-	tx, err := r.ec(ctx).Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	// Runs on the request-scoped tenant tx client; the delete+insert is atomic
+	// through that outer transaction. A nested Ent Tx() here would return
+	// ErrTxStarted (we are already in a tx) and bypass the app.tenant_id GUC.
+	client := r.ec(ctx)
 
-	// Delete existing assignments
-	_, err = tx.DeviceProduct.Delete().
+	_, err := client.DeviceProduct.Delete().
 		Where(entDeviceProductDeviceID(deviceID)).
 		Exec(ctx)
 	if err != nil {
 		return translateError(err)
 	}
 
-	// Create new assignments
 	if len(productIDs) == 0 {
-		return tx.Commit()
+		return nil
 	}
 	builders := make([]*ent.DeviceProductCreate, len(productIDs))
 	for i, pid := range productIDs {
-		builders[i] = tx.DeviceProduct.Create().
+		builders[i] = client.DeviceProduct.Create().
 			SetDeviceID(deviceID).
 			SetProductID(pid)
 	}
-	_, err = tx.DeviceProduct.CreateBulk(builders...).Save(ctx)
-	if err != nil {
+	if _, err := client.DeviceProduct.CreateBulk(builders...).Save(ctx); err != nil {
 		return translateError(err)
 	}
 
-	return tx.Commit()
+	return nil
 }

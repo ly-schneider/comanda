@@ -7,13 +7,12 @@ import (
 	"net/http"
 
 	"backend/internal/auth"
+	"backend/internal/database"
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/tenant"
 	"backend/internal/repository"
 
-	"entgo.io/ent/dialect"
-	entsql "entgo.io/ent/dialect/sql"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -127,8 +126,7 @@ func (m *TenantMiddleware) Tx(next http.Handler) http.Handler {
 			return
 		}
 
-		drv := entsql.NewDriver(dialect.Postgres, entsql.Conn{ExecQuerier: tx})
-		txClient := ent.NewClient(ent.Driver(drv))
+		txClient := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
 		enttenant.Register(txClient)
 
 		ctx = repository.ContextWithClient(ctx, txClient)

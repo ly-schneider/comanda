@@ -143,9 +143,14 @@ func (r *settingsRepo) IsSystemEnabled(ctx context.Context) (bool, error) {
 }
 
 func (r *settingsRepo) SetSystemEnabled(ctx context.Context, enabled bool) error {
-	err := r.ec(ctx).Settings.Create().
-		SetID("default").
-		SetSystemEnabled(enabled).
+	id := r.settingsID(ctx)
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetSystemEnabled(enabled)
+	if tenantID, ok := TenantIDFromContext(ctx); ok {
+		create = create.SetTenantID(tenantID)
+	}
+	err := create.
 		OnConflictColumns(settings.FieldID).
 		SetSystemEnabled(enabled).
 		Exec(ctx)

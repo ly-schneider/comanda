@@ -174,26 +174,18 @@ func (s *volunteerService) CreateCampaign(ctx context.Context, input CreateVolun
 
 	accessCode := generateAccessCode()
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	txCtx := repository.ContextWithClient(ctx, tx.Client())
-
-	campaign, err := s.campaigns.Create(txCtx, input.Name, accessCode, input.ValidFrom, input.ValidUntil, volunteercampaign.StatusActive, input.MaxRedemptions)
+	// Runs inside the per-request tenant transaction; the writes are atomic
+	// through that outer tx. Opening a nested Ent tx here would run on the
+	// static app pool with no app.tenant_id GUC and be blocked by RLS.
+	campaign, err := s.campaigns.Create(ctx, input.Name, accessCode, input.ValidFrom, input.ValidUntil, volunteercampaign.StatusActive, input.MaxRedemptions)
 	if err != nil {
 		return nil, fmt.Errorf("create campaign: %w", err)
 	}
 
-	if err := s.campaigns.ReplaceProducts(txCtx, campaign.ID, input.Products); err != nil {
+	if err := s.campaigns.ReplaceProducts(ctx, campaign.ID, input.Products); err != nil {
 		return nil, fmt.Errorf("attach products: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
-	}
 	return campaign, nil
 }
 
@@ -282,14 +274,9 @@ func (s *volunteerService) UpdateCampaign(ctx context.Context, id uuid.UUID, inp
 		return nil, errors.New("name_required")
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	txCtx := repository.ContextWithClient(ctx, tx.Client())
-
-	existing, err := s.campaigns.GetByID(txCtx, id)
+	// Atomicity comes from the outer per-request tenant tx; a nested Ent tx
+	// here would bypass the request's app.tenant_id GUC and be blocked by RLS.
+	existing, err := s.campaigns.GetByID(ctx, id)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ErrVolunteerCampaignNotFound
@@ -297,7 +284,7 @@ func (s *volunteerService) UpdateCampaign(ctx context.Context, id uuid.UUID, inp
 		return nil, err
 	}
 
-	campaign, err := s.campaigns.Update(txCtx, id, input.Name, existing.AccessCode, input.ValidFrom, input.ValidUntil, input.Status)
+	campaign, err := s.campaigns.Update(ctx, id, input.Name, existing.AccessCode, input.ValidFrom, input.ValidUntil, input.Status)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ErrVolunteerCampaignNotFound
@@ -309,7 +296,7 @@ func (s *volunteerService) UpdateCampaign(ctx context.Context, id uuid.UUID, inp
 		if *input.MaxRedemptions <= 0 {
 			return nil, errors.New("max_redemptions_must_be_positive")
 		}
-		updated, ok, err := s.campaigns.UpdateMaxRedemptions(txCtx, id, *input.MaxRedemptions)
+		updated, ok, err := s.campaigns.UpdateMaxRedemptions(ctx, id, *input.MaxRedemptions)
 		if err != nil {
 			return nil, err
 		}
@@ -320,12 +307,9 @@ func (s *volunteerService) UpdateCampaign(ctx context.Context, id uuid.UUID, inp
 	}
 
 	if len(input.Products) > 0 {
-		if err := s.campaigns.ReplaceProducts(txCtx, id, input.Products); err != nil {
+		if err := s.campaigns.ReplaceProducts(ctx, id, input.Products); err != nil {
 			return nil, err
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
 	}
 	return campaign, nil
 }
@@ -464,14 +448,9 @@ func (s *volunteerService) RedeemSharedQR(ctx context.Context, claimToken uuid.U
 		return nil, ErrVolunteerMaxRedemptionsReached
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	txCtx := repository.ContextWithClient(ctx, tx.Client())
-
-	orderID, err := s.createGratisOrder(txCtx, products)
+	// Atomicity comes from the outer per-request tenant tx; a nested Ent tx
+	// here would bypass the request's app.tenant_id GUC and be blocked by RLS.
+	orderID, err := s.createGratisOrder(ctx, products)
 	if err != nil {
 		return nil, err
 	}
@@ -484,12 +463,8 @@ func (s *volunteerService) RedeemSharedQR(ctx context.Context, claimToken uuid.U
 	if stationID != uuid.Nil {
 		stationPtr = &stationID
 	}
-	if _, err := s.redemptions.Create(txCtx, campaign.ID, orderID, stationPtr, idemPtr); err != nil {
+	if _, err := s.redemptions.Create(ctx, campaign.ID, orderID, stationPtr, idemPtr); err != nil {
 		return nil, fmt.Errorf("record redemption: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	stationResp, err := s.stations.RedeemAssigned(ctx, stationID, orderID, idempotencyKey)

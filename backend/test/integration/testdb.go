@@ -223,6 +223,8 @@ type Repositories struct {
 	DeviceProduct     pgRepo.DeviceProductRepository
 	Settings          pgRepo.SettingsRepository
 	Idempotency       pgRepo.IdempotencyRepository
+	VolunteerCampaign pgRepo.VolunteerCampaignRepository
+	VolunteerRedeem   pgRepo.VolunteerRedemptionRepository
 }
 
 // NewRepositories creates all repository instances from an Ent client.
@@ -244,6 +246,8 @@ func NewRepositories(client *ent.Client) *Repositories {
 		DeviceProduct:     pgRepo.NewDeviceProductRepository(client),
 		Settings:          pgRepo.NewSettingsRepository(client),
 		Idempotency:       pgRepo.NewIdempotencyRepository(client),
+		VolunteerCampaign: pgRepo.NewVolunteerCampaignRepository(client),
+		VolunteerRedeem:   pgRepo.NewVolunteerRedemptionRepository(client),
 	}
 }
 

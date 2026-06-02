@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/database"
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/inventoryledger"
@@ -82,6 +83,7 @@ type paymentService struct {
 	inventoryRepo    repository.InventoryLedgerRepository
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
+	appDB            *database.AppClient
 	logger           *zap.Logger
 }
 
@@ -95,6 +97,7 @@ func NewPaymentService(
 	inventoryRepo repository.InventoryLedgerRepository,
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
+	appDB *database.AppClient,
 	logger *zap.Logger,
 ) PaymentService {
 	var client *payrexx.Client
@@ -112,6 +115,7 @@ func NewPaymentService(
 		inventoryRepo:    inventoryRepo,
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
+		appDB:            appDB,
 		logger:           logger,
 	}
 }
@@ -582,20 +586,68 @@ func (s *paymentService) GetPayrexxGateway(ctx context.Context, gatewayID int) (
 	return s.payrexxClient.GetGateway(ctx, gatewayID)
 }
 
+// beginTenantTx opens a short transaction on the RLS-bound app pool, sets
+// app.tenant_id, and returns a context carrying a tenant-guarded Ent client
+// bound to that tx plus a cleanup func that commits (read-only here) and closes
+// the connection. Used by detached goroutines that run after the request tx.
+func (s *paymentService) beginTenantTx(ctx context.Context, tenantID uuid.UUID) (context.Context, func(), error) {
+	if s.appDB == nil {
+		return nil, nil, fmt.Errorf("payment service has no app db configured")
+	}
+
+	conn, err := s.appDB.DB.Conn(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID.String()); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		return nil, nil, err
+	}
+
+	txClient := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
+	enttenant.Register(txClient)
+
+	ctx = repository.ContextWithClient(ctx, txClient)
+	ctx = repository.ContextWithTenantID(ctx, tenantID)
+	ctx = enttenant.WithTenant(ctx, tenantID)
+
+	cleanup := func() {
+		_ = tx.Commit()
+		_ = conn.Close()
+	}
+	return ctx, cleanup, nil
+}
+
 func (s *paymentService) sendReceipt(reqCtx context.Context, orderID uuid.UUID, to string, totalCents int64, paidAt time.Time, method string) {
 	if s.emailService == nil {
 		return
 	}
 
-	// The receipt is sent on a detached background context, so re-attach the
-	// request's tenant: the RLS-bound app client returns zero rows / denies
-	// scoped reads without a tenant.
+	// The receipt is built on a detached background context after the request
+	// tx has committed, so open a fresh, short tenant transaction on the app
+	// pool with the same app.tenant_id GUC. Without it the RLS-bound app
+	// connection returns zero order lines and the receipt has no items.
+	tenantID, ok := repository.TenantIDFromContext(reqCtx)
+	if !ok {
+		s.logger.Error("receipt: no tenant in context; skipping", zap.String("orderId", orderID.String()))
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if tenantID, ok := repository.TenantIDFromContext(reqCtx); ok {
-		ctx = repository.ContextWithTenantID(ctx, tenantID)
-		ctx = enttenant.WithTenant(ctx, tenantID)
+
+	ctx, commit, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		s.logger.Error("receipt: failed to open tenant tx", zap.Error(err), zap.String("orderId", orderID.String()))
+		return
 	}
+	defer commit()
 
 	lines, err := s.orderLineRepo.GetByOrderID(ctx, orderID)
 	if err != nil {

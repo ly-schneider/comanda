@@ -11,9 +11,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// @title Bless2n Food System API
+// @title Comanda API
 // @version 1.0
-// @description Internal BlessThun Food System API
+// @description Comanda multi-tenant food-ordering API
 // @schemes https http
 // @BasePath /
 // @securityDefinitions.apikey BearerAuth

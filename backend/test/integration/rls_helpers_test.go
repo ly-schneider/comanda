@@ -7,6 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"backend/internal/database"
+	"backend/internal/enttenant"
+	"backend/internal/generated/ent"
+	"backend/internal/repository"
+
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -91,4 +96,42 @@ func (e *rlsEnv) withTenant(t *testing.T, tenantID *uuid.UUID, fn func(tx *sql.T
 	}
 
 	fn(tx)
+}
+
+// appRequestTx mirrors the per-request tenant tx middleware against the
+// RLS-bound app pool: opens a tx, sets app.tenant_id, binds a tenant-guarded
+// Ent client, and returns a context carrying that client + tenant plus the
+// client and a cleanup that commits and closes the connection. Service/repo
+// calls made with this context reproduce the production request path, so they
+// catch RLS regressions (e.g. a nested tx on the static pool with no GUC).
+func (e *rlsEnv) appRequestTx(t *testing.T, tenantID uuid.UUID) (context.Context, *ent.Client, func()) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := e.app.Conn(ctx)
+	if err != nil {
+		t.Fatalf("app conn: %v", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		t.Fatalf("app begin tx: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID.String()); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		t.Fatalf("set tenant guc: %v", err)
+	}
+
+	client := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
+	enttenant.Register(client)
+
+	ctx = repository.ContextWithClient(ctx, client)
+	ctx = repository.ContextWithTenantID(ctx, tenantID)
+	ctx = enttenant.WithTenant(ctx, tenantID)
+
+	cleanup := func() {
+		_ = tx.Commit()
+		_ = conn.Close()
+	}
+	return ctx, client, cleanup
 }

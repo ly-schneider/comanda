@@ -60,14 +60,25 @@ func NewPrivilegedClient(cfg config.Config) (*PrivilegedClient, error) {
 	return &PrivilegedClient{Client: client, DB: db}, nil
 }
 
-// NewAppClient opens the RLS-bound app pool (DATABASE_URL_APP, falling back to
-// DATABASE_URL only when unset so single-DSN dev keeps working). The tenant
+// NewAppClient opens the RLS-bound app pool (DATABASE_URL_APP). The tenant
 // guards are registered so any use without a tenant in context fails closed.
+//
+// RLS is the non-negotiable isolation boundary, so a missing DATABASE_URL_APP
+// is fatal: silently falling back to the privileged DSN would route all request
+// traffic through a BYPASSRLS connection and disable tenant isolation. The
+// single-DSN fallback is allowed only with an explicit ALLOW_SINGLE_DSN=true
+// opt-in, intended for local dev.
 func NewAppClient(cfg config.Config) (*AppClient, error) {
 	dsn := cfg.Postgres.AppDSN
 	if dsn == "" {
+		if !cfg.Postgres.AllowSingleDSN {
+			return nil, fmt.Errorf(
+				"DATABASE_URL_APP is required: the app pool must use the RLS-scoped role; " +
+					"set DATABASE_URL_APP, or set ALLOW_SINGLE_DSN=true for local dev only",
+			)
+		}
 		dsn = cfg.Postgres.DSN
-		zap.L().Warn("DATABASE_URL_APP not set; app client falling back to DATABASE_URL (no RLS role separation)")
+		zap.L().Warn("ALLOW_SINGLE_DSN set; app client falling back to DATABASE_URL — RLS role separation is DISABLED (local dev only)")
 	}
 
 	db, err := openPool(dsn, cfg)
