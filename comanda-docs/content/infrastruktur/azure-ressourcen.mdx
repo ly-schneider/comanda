@@ -1,0 +1,68 @@
+---
+title: Infrastruktur (K3s / Hetzner)
+description: K3s-Umgebungen, Kernressourcen, Sicherheit, Observability und Registry
+---
+
+# K3s Überblick & Ressourcen-Map
+
+Umgebungen:
+
+- Staging und Production: K3s Namespaces im gemeinsamen Cluster `leys-k3s` mit ArgoCD GitOps.
+
+Ressourcen-Namen (Staging Beispiele):
+
+- Namespace: `comanda-staging`
+- Ingress: `comanda-staging.example.com` (via Traefik)
+- PostgreSQL: Scaleway managed database (shared oder per-env)
+- Secrets Management: Doppler (`comanda-staging`)
+- Container Registry: `ghcr.io/ly-schneider/comanda/{backend,frontend,docs}`
+
+Apps (Azure Container Apps):
+
+- Frontend: `frontend-staging` (Port 3000)
+- Backend: `backend-staging` (Port 8080)
+
+---
+
+# Deployments (K3s)
+
+- Image References: SHA-based tags via CI (e.g., `ghcr.io/ly-schneider/comanda/backend:sha-abc123`); ArgoCD pins images by commit SHA.
+- Ingress: Traefik ingress; Health-Endpoints `/health` (Frontend) und `/health` + `/ping` (Backend Liveness).
+- Scaling (Staging Default):
+  - Frontend: 2-10 Replicas; CPU limits 256m; Memory 512Mi.
+  - Backend: 2-10 Replicas; CPU limits 512m; Memory 1Gi.
+  - HPA rules based on CPU/Memory.
+- Env Vars & Secrets: Via Kubernetes ConfigMaps/Secrets injected; sensitive values from Doppler.
+
+---
+
+# Datenbank (PostgreSQL)
+
+- Schema-Migrationen via Flyway (Versionierte SQL-Dateien unter `comanda-backend/db/flyway/migrations/`).
+- Verbindung: `DATABASE_URL` als PostgreSQL Connection String.
+- Better Auth speichert Sessions und User-Daten in denselben PostgreSQL-Tabellen.
+
+---
+
+# Security
+
+- Doppler: Speichert Verbindungsgeheimnisse (`DATABASE_URL`), Better Auth Secret, Payrexx Webhook Secret, Google Client Secret, Plunk API Key, URL-Secrets.
+- Kubernetes Secrets: Pod/Service Account Tokens für intra-cluster Auth.
+- RBAC: Service Accounts mit Namespace-beschränkten Rollen; GitHub OIDC für CI/CD.
+- App Security Headers: HSTS, CSP in Produktion; CORS für Trusted Origins.
+
+---
+
+# Observability
+
+- Prometheus (K3s built-in): Zentrale Metrics; ggf. mit Grafana Dashboard.
+- Logs: Pod logs via `kubectl logs` oder Stack (Promtail/Loki optional).
+- Alerts: Prometheus AlertManager für Fehler-Metriken.
+
+---
+
+# Registry (GHCR)
+
+- Naming: `ghcr.io/ly-schneider/comanda/{backend,frontend,docs}:{sha}`.
+- Digest-first Deployments: CI/CD pushes mit commit SHA; ArgoCD pins by digest.
+- Zugriff: GitHub Container Registry; K3s imagePullSecret für GHCR auth.

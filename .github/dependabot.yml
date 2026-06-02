@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/bfs-web-app"
+    directory: "/comanda-web"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -21,7 +21,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "npm"
-    directory: "/bfs-docs"
+    directory: "/comanda-docs"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -41,7 +41,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "gomod"
-    directory: "/bfs-backend"
+    directory: "/comanda-backend"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"
@@ -60,42 +60,8 @@ updates:
         update-types:
           - "minor"
           - "patch"
-  - package-ecosystem: "terraform"
-    directory: "/bfs-cloud/envs/staging"
-    schedule:
-      interval: "cron"
-      cronjob: "0 2 * * fri%2"
-      timezone: "Europe/Zurich"
-    target-branch: "main"
-    labels:
-      - "dependencies"
-      - "area/cloud"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      terraform-all:
-        patterns:
-          - "*"
-  - package-ecosystem: "terraform"
-    directory: "/bfs-cloud/envs/production"
-    schedule:
-      interval: "cron"
-      cronjob: "0 2 * * fri%2"
-      timezone: "Europe/Zurich"
-    target-branch: "main"
-    labels:
-      - "dependencies"
-      - "area/cloud"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      terraform-all:
-        patterns:
-          - "*"
   - package-ecosystem: "gradle"
-    directory: "/bfs-android-app"
+    directory: "/comanda-android"
     schedule:
       interval: "cron"
       cronjob: "0 2 * * fri%2"

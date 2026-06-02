@@ -1,0 +1,20 @@
+import { Metadata } from "next"
+import { AdminGuard } from "@/components/admin/guard"
+import { AdminMainHeader } from "@/components/admin/main-header"
+import { AdminShell } from "@/components/admin/sidebar-nav"
+
+export const metadata: Metadata = {
+  title: "Admin Portal",
+  description: "Verwaltungsportal für das Comanda Bestellsystem.",
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminGuard>
+      <AdminMainHeader />
+      <AdminShell version={process.env.APP_VERSION}>
+        <div className="w-full max-w-7xl min-w-0 pb-10">{children}</div>
+      </AdminShell>
+    </AdminGuard>
+  )
+}
