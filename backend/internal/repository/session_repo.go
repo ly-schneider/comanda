@@ -13,11 +13,12 @@ import (
 )
 
 type SessionWithUser struct {
-	UserID    string
-	Role      user.Role
-	Email     string
-	Name      string
-	UpdatedAt time.Time // needed for sliding refresh check
+	UserID          string
+	Role            user.Role
+	Email           string
+	Name            string
+	IsPlatformAdmin bool
+	UpdatedAt       time.Time // needed for sliding refresh check
 }
 
 type SessionRepository interface {
@@ -61,11 +62,12 @@ func (r *sessionRepo) GetByToken(ctx context.Context, token string) (*SessionWit
 	}
 
 	return &SessionWithUser{
-		UserID:    e.UserID,
-		Role:      u.Role,
-		Email:     email,
-		Name:      name,
-		UpdatedAt: e.UpdatedAt,
+		UserID:          e.UserID,
+		Role:            u.Role,
+		Email:           email,
+		Name:            name,
+		IsPlatformAdmin: u.IsPlatformAdmin,
+		UpdatedAt:       e.UpdatedAt,
 	}, nil
 }
 

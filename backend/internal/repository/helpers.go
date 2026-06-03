@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	stdsql "database/sql"
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/deviceproduct"
@@ -14,6 +15,22 @@ import (
 
 // txClientKey is the context key for an ent.Client scoped to a transaction.
 type txClientKey struct{}
+
+// requestTxKey carries the raw *sql.Tx for the per-request tenant transaction
+// so middleware that runs inside it (e.g. the auth middleware setting the
+// app.is_platform_admin GUC) can execute on the same transaction.
+type requestTxKey struct{}
+
+// ContextWithRequestTx returns a child context carrying the request tx.
+func ContextWithRequestTx(ctx context.Context, tx *stdsql.Tx) context.Context {
+	return context.WithValue(ctx, requestTxKey{}, tx)
+}
+
+// RequestTxFromContext returns the request tx stored in ctx, if any.
+func RequestTxFromContext(ctx context.Context) (*stdsql.Tx, bool) {
+	tx, ok := ctx.Value(requestTxKey{}).(*stdsql.Tx)
+	return tx, ok
+}
 
 // tenantIDKey is the context key for the request's resolved tenant ID. It is
 // set by the tenant-tx middleware alongside the GUC so repositories that need

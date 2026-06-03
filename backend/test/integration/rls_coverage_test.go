@@ -49,3 +49,41 @@ func TestRLSCoverage(t *testing.T) {
 	require.NoError(t, rows.Err())
 	require.Greater(t, checked, 20, "expected to verify RLS on >20 tables; schema may not be migrated")
 }
+
+// scopedRLSTables are the tenant-scoped tables whose isolation policy must carry
+// the platform-admin bypass (OR app_is_platform_admin()). Mirrors the scoped
+// array in the migrations plus the tenant root and tenant_domain.
+var scopedRLSTables = []string{
+	"product", "category", "jeton", "menu_slot", "menu_slot_option", "order",
+	"order_line", "order_payment", "order_line_redemption", "inventory_ledger",
+	"club100_redemption", "club100_free_product", "settings", "idempotency",
+	"device", "device_binding", "device_product", "admin_invite",
+	"volunteer_campaign", "volunteer_campaign_product", "volunteer_redemption",
+	"tenant", "tenant_domain",
+}
+
+// TestRLSPlatformAdminBypass asserts every tenant-scoped isolation policy grants
+// platform admins a cross-tenant bypass on both USING (qual) and WITH CHECK.
+// Without this, a platform admin could not read across tenants; its presence is
+// the DB-layer half of the two-gate platform-admin design.
+func TestRLSPlatformAdminBypass(t *testing.T) {
+	env := newRLSEnv(t)
+
+	for _, table := range scopedRLSTables {
+		var qual, withCheck *string
+		err := env.priv.QueryRow(`
+			SELECT qual, with_check
+			FROM pg_policies
+			WHERE schemaname = 'public' AND tablename = $1 AND policyname = $2
+		`, table, table+"_isolation").Scan(&qual, &withCheck)
+		require.NoErrorf(t, err, "policy %s_isolation not found", table)
+
+		require.NotNilf(t, qual, "policy %s_isolation has no USING clause", table)
+		require.Containsf(t, *qual, "app_is_platform_admin()",
+			"policy %s_isolation USING must include the platform-admin bypass", table)
+
+		require.NotNilf(t, withCheck, "policy %s_isolation has no WITH CHECK clause", table)
+		require.Containsf(t, *withCheck, "app_is_platform_admin()",
+			"policy %s_isolation WITH CHECK must include the platform-admin bypass", table)
+	}
+}

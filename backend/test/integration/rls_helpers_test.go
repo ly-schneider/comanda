@@ -98,6 +98,106 @@ func (e *rlsEnv) withTenant(t *testing.T, tenantID *uuid.UUID, fn func(tx *sql.T
 	fn(tx)
 }
 
+// withPlatform opens an app-pool transaction simulating a platform/no-tenant
+// request: app.tenant_id is left empty (so app_current_tenant_id() is NULL) and
+// app.is_platform_admin is set to the given value. Rolls back afterwards.
+func (e *rlsEnv) withPlatform(t *testing.T, isPlatformAdmin bool, fn func(tx *sql.Tx)) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := e.app.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("app begin tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	admin := "false"
+	if isPlatformAdmin {
+		admin = "true"
+	}
+	if _, err := tx.ExecContext(ctx,
+		"SELECT set_config('app.tenant_id', '', true), set_config('app.is_platform_admin', $1, true)",
+		admin,
+	); err != nil {
+		t.Fatalf("set platform gucs: %v", err)
+	}
+
+	fn(tx)
+}
+
+// appPlatformTx mirrors a platform (no-tenant) request through the Ent layer:
+// it binds a tenant-guarded Ent client with the platform context marker and the
+// is_platform_admin GUC set, so the enttenant interceptor's platform bypass and
+// the RLS policies are exercised together.
+func (e *rlsEnv) appPlatformTx(t *testing.T, isPlatformAdmin bool) (context.Context, *ent.Client, func()) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := e.app.Conn(ctx)
+	if err != nil {
+		t.Fatalf("app conn: %v", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		t.Fatalf("app begin tx: %v", err)
+	}
+	admin := "false"
+	if isPlatformAdmin {
+		admin = "true"
+	}
+	if _, err := tx.ExecContext(ctx,
+		"SELECT set_config('app.tenant_id', '', true), set_config('app.is_platform_admin', $1, true)",
+		admin,
+	); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		t.Fatalf("set platform gucs: %v", err)
+	}
+
+	client := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
+	enttenant.Register(client)
+
+	ctx = repository.ContextWithClient(ctx, client)
+	ctx = enttenant.WithPlatform(ctx)
+
+	cleanup := func() {
+		_ = tx.Rollback()
+		_ = conn.Close()
+	}
+	return ctx, client, cleanup
+}
+
+// appRequestTxNoTenant binds a tenant-guarded Ent client on an app-pool tx with
+// NO tenant in context and NO platform marker — the ordinary fail-closed path.
+// A scoped query through the returned client must return enttenant.ErrNoTenant.
+func (e *rlsEnv) appRequestTxNoTenant(t *testing.T) (context.Context, *ent.Client, func()) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := e.app.Conn(ctx)
+	if err != nil {
+		t.Fatalf("app conn: %v", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		t.Fatalf("app begin tx: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', '', true)"); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		t.Fatalf("set tenant guc: %v", err)
+	}
+
+	client := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
+	enttenant.Register(client)
+	ctx = repository.ContextWithClient(ctx, client)
+
+	cleanup := func() {
+		_ = tx.Rollback()
+		_ = conn.Close()
+	}
+	return ctx, client, cleanup
+}
+
 // appRequestTx mirrors the per-request tenant tx middleware against the
 // RLS-bound app pool: opens a tx, sets app.tenant_id, binds a tenant-guarded
 // Ent client, and returns a context carrying that client + tenant plus the

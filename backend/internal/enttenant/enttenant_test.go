@@ -23,6 +23,7 @@ import (
 	"backend/internal/generated/ent/orderpayment"
 	"backend/internal/generated/ent/product"
 	"backend/internal/generated/ent/settings"
+	"backend/internal/generated/ent/tenantdomain"
 	"backend/internal/generated/ent/volunteercampaign"
 	"backend/internal/generated/ent/volunteercampaignproduct"
 	"backend/internal/generated/ent/volunteerredemption"
@@ -54,6 +55,7 @@ var typeToTable = map[string]string{
 	"VolunteerCampaign":        volunteercampaign.Table,
 	"VolunteerCampaignProduct": volunteercampaignproduct.Table,
 	"VolunteerRedemption":      volunteerredemption.Table,
+	"TenantDomain":             tenantdomain.Table,
 }
 
 // TestScopedTypesMatchSchema asserts the Go-layer guard set (scopedTypes)

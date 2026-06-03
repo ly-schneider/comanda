@@ -35,5 +35,12 @@ func NewTenantMiddleware(
 	cfg config.Config,
 	logger *zap.Logger,
 ) *middleware.TenantMiddleware {
-	return middleware.NewTenantMiddleware(app.DB, privileged.Client, cfg.App.BootstrapTenantSlug, logger)
+	return middleware.NewTenantMiddleware(
+		app.DB,
+		privileged.Client,
+		cfg.App.BootstrapTenantSlug,
+		cfg.App.PlatformHosts,
+		cfg.App.TenantHeaderTrusted,
+		logger,
+	)
 }

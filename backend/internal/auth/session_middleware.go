@@ -66,6 +66,7 @@ func (m *SessionMiddleware) RequireAuth() func(http.Handler) http.Handler {
 				trace.Data(spanCtx, "user.role", role)
 			}
 			finish()
+			m.syncPlatformAdminGUC(ctx, IsPlatformAdmin(ctx))
 			ctx = WithAuthType(ctx, AuthTypeUser)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -141,6 +142,7 @@ func (m *SessionMiddleware) OptionalAuth() func(http.Handler) http.Handler {
 			}
 			trace.Data(spanCtx, "auth.path", "session")
 			finish()
+			m.syncPlatformAdminGUC(ctx, IsPlatformAdmin(ctx))
 			ctx = WithAuthType(ctx, AuthTypeUser)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -153,6 +155,21 @@ func (m *SessionMiddleware) RequireRole(role string) func(http.Handler) http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userRole, ok := GetUserRole(r.Context())
 			if !ok || userRole != role {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequirePlatformAdmin returns middleware that requires a platform-admin user
+// (user.is_platform_admin). Gate platform-only routes with this. No platform
+// routes are wired in P2; the gate is provided for P7 admin tooling.
+func (m *SessionMiddleware) RequirePlatformAdmin() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !IsPlatformAdmin(r.Context()) {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -278,10 +295,30 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 	if session.Name != "" {
 		ctx = WithUserName(ctx, session.Name)
 	}
+	ctx = WithIsPlatformAdmin(ctx, session.IsPlatformAdmin)
 
 	trace.IdentifyUser(ctx, session.UserID, session.Email, session.Name)
 
 	return ctx, nil
+}
+
+// syncPlatformAdminGUC sets the app.is_platform_admin GUC on the request's
+// tenant transaction once the user is known. It only ever writes the literal
+// 'true'/'false' (never user input). On a platform/no-tenant context this is
+// the gate that lets a verified platform admin's queries pass RLS; for everyone
+// else it stays false and RLS denies cross-tenant access.
+func (m *SessionMiddleware) syncPlatformAdminGUC(ctx context.Context, isPlatformAdmin bool) {
+	tx, ok := repository.RequestTxFromContext(ctx)
+	if !ok {
+		return
+	}
+	val := "false"
+	if isPlatformAdmin {
+		val = "true"
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.is_platform_admin', $1, true)", val); err != nil {
+		m.logger.Warn("failed to set is_platform_admin GUC", zap.Error(err))
+	}
 }
 
 // IsAdmin checks whether the request carries a valid admin session.

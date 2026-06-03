@@ -63,6 +63,7 @@ var scopedTypes = map[string]struct{}{
 	ent.TypeVolunteerCampaign:        {},
 	ent.TypeVolunteerCampaignProduct: {},
 	ent.TypeVolunteerRedemption:      {},
+	ent.TypeTenantDomain:             {},
 }
 
 // IsScoped reports whether the named Ent type carries tenant_id.
@@ -82,6 +83,8 @@ func ScopedTypeNames() []string {
 
 type tenantCtxKey struct{}
 
+type platformCtxKey struct{}
+
 // WithTenant binds a tenant ID to ctx for the Ent guards to read. The tenant-tx
 // middleware calls this when building the per-request client.
 func WithTenant(ctx context.Context, tenantID uuid.UUID) context.Context {
@@ -94,6 +97,23 @@ func TenantFromContext(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
+// WithPlatform marks ctx as a no-tenant platform context. The tenant-tx
+// middleware sets this only for requests on a platform host (no tenant
+// resolved). It lets the Ent guards skip the fail-closed predicate, but it is
+// NEVER the isolation boundary on its own: the Postgres RLS GUCs (app.tenant_id
+// NULL + app.is_platform_admin) stay locked until the auth middleware proves a
+// platform admin, so a non-admin platform request still sees zero rows at the
+// database layer.
+func WithPlatform(ctx context.Context) context.Context {
+	return context.WithValue(ctx, platformCtxKey{}, true)
+}
+
+// IsPlatform reports whether ctx is a no-tenant platform context.
+func IsPlatform(ctx context.Context) bool {
+	v, ok := ctx.Value(platformCtxKey{}).(bool)
+	return ok && v
+}
+
 // Interceptor injects the tenant predicate on reads of scoped entities and
 // fails closed when no tenant is present.
 func Interceptor() ent.Interceptor {
@@ -103,6 +123,12 @@ func Interceptor() ent.Interceptor {
 		}
 		tenantID, ok := TenantFromContext(ctx)
 		if !ok {
+			// Platform (no-tenant) context: skip the predicate. RLS + the
+			// app.is_platform_admin GUC remain the boundary, so a non-admin
+			// platform request still reads zero rows. Defense-in-depth only.
+			if IsPlatform(ctx) {
+				return nil
+			}
 			return ErrNoTenant
 		}
 		q.WhereP(func(s *sql.Selector) {
@@ -124,13 +150,23 @@ func Hook() ent.Hook {
 			if !IsScoped(m.Type()) {
 				return next.Mutate(ctx, m)
 			}
-			tenantID, ok := TenantFromContext(ctx)
-			if !ok {
-				return nil, ErrNoTenant
-			}
 			tm, ok := m.(tenantMutation)
 			if !ok {
 				return nil, fmt.Errorf("enttenant: %s is scoped but its mutation lacks SetTenantID", m.Type())
+			}
+			tenantID, ok := TenantFromContext(ctx)
+			if !ok {
+				// Platform (no-tenant) context: never auto-stamp a tenant. A
+				// write is only allowed if it explicitly carries a tenant_id,
+				// and Postgres RLS WITH CHECK (which requires app.is_platform_admin)
+				// is the real guard. Cross-tenant platform write tooling is P7.
+				if IsPlatform(ctx) {
+					if _, set := tm.TenantID(); !set {
+						return nil, ErrNoTenant
+					}
+					return next.Mutate(ctx, m)
+				}
+				return nil, ErrNoTenant
 			}
 			if existing, set := tm.TenantID(); set {
 				if existing != tenantID {

@@ -18,6 +18,13 @@ const (
 	DeviceIDKey    contextKey = "deviceID"
 	DeviceTypeKey  contextKey = "deviceType"
 	TenantIDKey    contextKey = "tenantID"
+
+	// IsPlatformAdminKey carries whether the authenticated user is a platform
+	// admin (user.is_platform_admin). Set by the session middleware.
+	IsPlatformAdminKey contextKey = "isPlatformAdmin"
+	// PlatformContextKey marks a request on a platform host that resolved to no
+	// tenant. Set by the tenant resolver.
+	PlatformContextKey contextKey = "platformContext"
 )
 
 type AuthType string
@@ -54,6 +61,32 @@ func RequireTenantID(ctx context.Context) uuid.UUID {
 
 func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
 	return context.WithValue(ctx, TenantIDKey, tenantID)
+}
+
+// WithIsPlatformAdmin records whether the authenticated user is a platform
+// admin. Only ever set true after a DB-backed session lookup confirms
+// user.is_platform_admin.
+func WithIsPlatformAdmin(ctx context.Context, v bool) context.Context {
+	return context.WithValue(ctx, IsPlatformAdminKey, v)
+}
+
+// IsPlatformAdmin reports whether the request carries a platform-admin user.
+func IsPlatformAdmin(ctx context.Context) bool {
+	v, ok := ctx.Value(IsPlatformAdminKey).(bool)
+	return ok && v
+}
+
+// WithPlatformContext marks the request as running on a platform host that
+// resolved to no tenant.
+func WithPlatformContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, PlatformContextKey, true)
+}
+
+// IsPlatformContext reports whether the request resolved to a no-tenant
+// platform context.
+func IsPlatformContext(ctx context.Context) bool {
+	v, ok := ctx.Value(PlatformContextKey).(bool)
+	return ok && v
 }
 
 func GetUserID(ctx context.Context) (string, bool) {

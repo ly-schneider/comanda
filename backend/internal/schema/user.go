@@ -51,6 +51,8 @@ func (User) Fields() []ent.Field {
 			StorageKey("role"),
 		field.Bool("is_club_100").
 			Default(false),
+		field.Bool("is_platform_admin").
+			Default(false),
 	}
 }
 

@@ -44,6 +44,14 @@ type AppConfig struct {
 	AppPort             string
 	PublicBaseURL       string
 	BootstrapTenantSlug string
+	// PlatformHosts are hostnames that resolve to a no-tenant platform context
+	// (cross-tenant operation for platform admins) instead of being rejected as
+	// unknown. Empty by default.
+	PlatformHosts []string
+	// TenantHeaderTrusted enables the internal/test X-Tenant-Id resolution path.
+	// MUST default false in prod so a forwarded header can never resolve a
+	// tenant even if the proxy slips.
+	TenantHeaderTrusted bool
 }
 
 type PostgresConfig struct {
@@ -111,6 +119,8 @@ func Load() Config {
 			AppPort:             getEnv("APP_PORT"),
 			PublicBaseURL:       getEnv("PUBLIC_BASE_URL"),
 			BootstrapTenantSlug: getEnvOptional("BOOTSTRAP_TENANT_SLUG"),
+			PlatformHosts:       getCommaListOptional("PLATFORM_HOSTS"),
+			TenantHeaderTrusted: getEnvBoolOptional("TENANT_HEADER_TRUSTED"),
 		},
 		Postgres: PostgresConfig{
 			DSN:             getEnvOptional("DATABASE_URL"),
@@ -229,6 +239,24 @@ func getTrustedOrigins(key string) []string {
 // getEnvOptional gets an environment variable or returns empty string
 func getEnvOptional(key string) string {
 	return os.Getenv(key)
+}
+
+// getCommaListOptional parses a comma-separated env var into a lowercased,
+// trimmed slice. Returns nil when unset. Hostnames are compared
+// case-insensitively, so they are normalised to lower case here.
+func getCommaListOptional(key string) []string {
+	value := os.Getenv(key)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(strings.ToLower(p)); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 // getEnvWithDefault gets an environment variable or returns the default value
