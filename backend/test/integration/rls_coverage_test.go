@@ -50,6 +50,61 @@ func TestRLSCoverage(t *testing.T) {
 	require.Greater(t, checked, 20, "expected to verify RLS on >20 tables; schema may not be migrated")
 }
 
+// globalPermissiveTables are auth-plane tables whose RLS is enabled for
+// uniformity but permissive (USING true). Isolation for these is the
+// privileged-role split + app routing, not tenant_id/platform-admin. The Better
+// Auth organization-plugin tables (organization/member/invitation) join this
+// set: org is the tenant identity carrier on the auth plane; tenant-data
+// isolation lives in the scoped tables, not here.
+var globalPermissiveTables = []string{
+	"user", "session", "account", "verification", "jwks", "api_key",
+	"organization", "member", "invitation",
+}
+
+// TestRLSGlobalPermissive asserts the auth-plane tables carry a permissive
+// USING (true) policy and do NOT gate on tenant_id / app_is_platform_admin().
+// This pins the classification so a future change can't silently turn one into
+// a (broken) tenant-scoped policy or vice versa.
+func TestRLSGlobalPermissive(t *testing.T) {
+	env := newRLSEnv(t)
+
+	for _, table := range globalPermissiveTables {
+		var rowSecurity bool
+		err := env.priv.QueryRow(
+			`SELECT relrowsecurity FROM pg_class c
+			 JOIN pg_namespace n ON n.oid = c.relnamespace
+			 WHERE n.nspname = 'public' AND c.relname = $1`, table,
+		).Scan(&rowSecurity)
+		require.NoErrorf(t, err, "table %q not found", table)
+		require.Truef(t, rowSecurity, "table %q must have RLS enabled", table)
+
+		rows, err := env.priv.Query(
+			`SELECT qual, with_check FROM pg_policies
+			 WHERE schemaname = 'public' AND tablename = $1`, table,
+		)
+		require.NoError(t, err)
+
+		var policyCount int
+		for rows.Next() {
+			policyCount++
+			var qual, withCheck *string
+			require.NoError(t, rows.Scan(&qual, &withCheck))
+			for _, clause := range []*string{qual, withCheck} {
+				if clause == nil {
+					continue
+				}
+				require.NotContainsf(t, *clause, "app_current_tenant_id()",
+					"global table %q must not gate on tenant_id", table)
+				require.NotContainsf(t, *clause, "app_is_platform_admin()",
+					"global table %q must not gate on platform-admin", table)
+			}
+		}
+		require.NoError(t, rows.Err())
+		_ = rows.Close()
+		require.GreaterOrEqualf(t, policyCount, 1, "global table %q must have a policy", table)
+	}
+}
+
 // scopedRLSTables are the tenant-scoped tables whose isolation policy must carry
 // the platform-admin bypass (OR app_is_platform_admin()). Mirrors the scoped
 // array in the migrations plus the tenant root and tenant_domain.

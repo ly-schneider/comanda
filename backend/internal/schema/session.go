@@ -37,6 +37,9 @@ func (Session) Fields() []ent.Field {
 		field.String("user_agent").
 			Optional().
 			Nillable(),
+		field.String("active_organization_id").
+			Optional().
+			Nillable(),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),
