@@ -41,8 +41,17 @@ export type TenantHostResult =
  *   - `<slug>.localhost`                                                    → tenant-subdomain (dev)
  *   - anything else                                                         → custom-domain
  */
+/**
+ * Normalize a raw Host / X-Forwarded-Host header value into a canonical host:
+ * take the first entry of a comma-list, strip the port, lowercase. Returns an
+ * empty string for empty input. Idempotent — safe to call on already-clean hosts.
+ */
+export function normalizeHost(raw: string | null | undefined): string {
+  return (raw || "").split(",")[0]!.trim().split(":")[0]!.toLowerCase()
+}
+
 export function parseTenantHost(hostname: string): TenantHostResult {
-  const host = hostname.split(":")[0]!.toLowerCase()
+  const host = normalizeHost(hostname)
 
   if (PLATFORM_BARE_HOSTS.has(host)) {
     return { type: "platform" }
@@ -100,6 +109,5 @@ export function parseTenantHost(hostname: string): TenantHostResult {
  */
 export function getPublicHost(request: Request): string {
   const headers = request.headers
-  const xfh = headers.get("x-forwarded-host") || headers.get("host") || ""
-  return xfh.split(",")[0]!.trim().split(":")[0]!.toLowerCase()
+  return normalizeHost(headers.get("x-forwarded-host") || headers.get("host"))
 }

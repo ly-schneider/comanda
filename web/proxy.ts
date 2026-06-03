@@ -24,7 +24,9 @@ export async function proxy(request: NextRequest) {
   const tenantResult = parseTenantHost(publicHost)
 
   const isStatic = pathname.startsWith("/_next/") || pathname.includes(".")
-  if (!isStatic) {
+  // Per-request access log is dev-only — it records client IP/UA, which we don't
+  // want to emit on every prod request.
+  if (!isStatic && process.env.NODE_ENV !== "production") {
     try {
       const method = request.method
       const ua = request.headers.get("user-agent") || "-"

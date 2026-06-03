@@ -170,34 +170,51 @@ export const auth = betterAuth({
     }),
   ],
 
-  // Dynamic trustedOrigins: trust all comanda.leys.ch subdomains (prod +
-  // staging), *.localhost for dev, and any configured platform hosts.
+  // Dynamic trustedOrigins: trust every comanda.leys.ch subdomain (prod +
+  // staging) plus, in dev, loopback origins. We deliberately do NOT push the
+  // inbound request origin blindly — that would bypass Better Auth's own
+  // CSRF/origin protection. The backend's 404-on-unknown-host is the real
+  // isolation boundary.
   //
-  // We deliberately do NOT push the inbound request origin blindly — that
-  // would bypass Better Auth's own CSRF/origin protection. The backend's
-  // 404-on-unknown-host is the real isolation boundary.
+  // Matching subtleties (see better-auth matchesOriginPattern):
+  //   - A pattern WITHOUT "://" containing "*" is matched against the URL host
+  //     (`new URL(origin).host`), which INCLUDES the port. So a host-only glob
+  //     like "*.localhost" matches "x.comanda.leys.ch" (prod, no port) but NOT
+  //     "x.localhost:3000" (dev). Dev therefore needs scheme+port globs, which
+  //     match against the full origin instead.
+  //   - "*" matches dots, so "*.comanda.leys.ch" also covers the
+  //     "*.beta.comanda.leys.ch" staging subdomains — no separate entry needed.
+  //   - A bare hostname (no "*", no "://") is compared by exact origin equality,
+  //     so it never matches a real "https://host" origin. Platform hostnames
+  //     from PLATFORM_HOSTS are expanded into proper origin patterns below.
   //
   // TODO(P6): once verified custom domains are provisioned, fetch the
   // verified-domain list from the backend and include those origins here.
   trustedOrigins: async (_request?: Request): Promise<string[]> => {
-    const origins: string[] = [
-      // Wildcard patterns — Better Auth's matchesOriginPattern supports * globs.
-      "*.comanda.leys.ch",
-      "*.beta.comanda.leys.ch",
-      "*.localhost",
-      // Loopback http for dev
-      "http://localhost",
-      "http://127.0.0.1",
-    ]
+    const isProd = process.env.NODE_ENV === "production"
 
-    // Extra platform-level hosts supplied via env (e.g. comanda.leys.ch itself).
+    // Prod tenant subdomains (origins carry no port, so the host-only glob is
+    // matched against the bare hostname).
+    const origins: string[] = ["*.comanda.leys.ch"]
+
+    // Platform hostnames (bare, e.g. comanda.leys.ch) — same env contract as the
+    // backend. Expand each into a matchable origin pattern.
     const platformHosts = (process.env.PLATFORM_HOSTS || "")
       .split(",")
-      .map((h) => h.trim())
+      .map((h) => h.trim().toLowerCase())
       .filter(Boolean)
-    origins.push(...platformHosts)
+    for (const h of platformHosts) {
+      origins.push(`https://${h}`)
+      if (!isProd) origins.push(`http://${h}`, `http://${h}:*`)
+    }
 
-    // Single-host dev fallback (NEXT_PUBLIC_APP_URL set in .env.local).
+    // Dev loopback origins. getHost() includes the port, so we use scheme+port
+    // globs (matched against the full origin) rather than host-only globs.
+    if (!isProd) {
+      origins.push("http://localhost:*", "http://127.0.0.1:*", "http://*.localhost:*")
+    }
+
+    // Explicit single-host dev fallback (NEXT_PUBLIC_APP_URL in .env.local).
     if (process.env.NEXT_PUBLIC_APP_URL) {
       origins.push(process.env.NEXT_PUBLIC_APP_URL)
     }

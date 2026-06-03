@@ -36,9 +36,11 @@ func (TenantDomain) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).
 			Default(uuidV7).
 			Immutable(),
+		// Stored lowercase (a DB CHECK enforces hostname = lower(hostname)); the
+		// resolver matches with a plain equality on the lowercased request host.
+		// Uniqueness is declared once via the index below.
 		field.String("hostname").
-			NotEmpty().
-			Unique(),
+			NotEmpty(),
 		field.Bool("is_primary").
 			Default(false),
 		field.Time("verified_at").

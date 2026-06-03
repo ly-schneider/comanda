@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { resolveCookieNames } from "@/lib/server/cookies"
+import { normalizeHost } from "@/lib/tenant"
 
 function backendBase(): string {
   return process.env.BACKEND_INTERNAL_URL || "http://backend:8080"
@@ -59,7 +60,7 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
   // Strip port, take first of comma-lists, lowercase — mirrors backend parsing.
   const xComandaHost = inHeaders.get("x-comanda-host") || ""
   const rawXfh = inHeaders.get("x-forwarded-host") || inHeaders.get("host") || ""
-  const resolvedHost = (xComandaHost || rawXfh).split(",")[0]!.trim().split(":")[0]!.toLowerCase()
+  const resolvedHost = normalizeHost(xComandaHost || rawXfh)
   if (resolvedHost) outHeaders.set("X-Forwarded-Host", resolvedHost)
 
   // Never forward a client-supplied X-Tenant-Id. The backend resolves the

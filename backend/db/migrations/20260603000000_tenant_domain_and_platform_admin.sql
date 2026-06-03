@@ -40,7 +40,7 @@ CREATE TYPE tenant_domain_cert_status AS ENUM ('none', 'pending', 'active', 'fai
 CREATE TABLE tenant_domain (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     tenant_id UUID NOT NULL REFERENCES tenant (id),
-    hostname TEXT NOT NULL,
+    hostname TEXT NOT NULL CHECK (hostname = lower(hostname)),
     is_primary BOOLEAN NOT NULL DEFAULT false,
     verified_at TIMESTAMPTZ,
     cert_status tenant_domain_cert_status NOT NULL DEFAULT 'none',
@@ -48,8 +48,10 @@ CREATE TABLE tenant_domain (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Hostnames compared case-insensitively: store as given, match on lower().
-CREATE UNIQUE INDEX tenant_domain_hostname_key ON tenant_domain (lower(hostname));
+-- Hostnames are stored lowercase (enforced by the CHECK above), so the resolver
+-- can match with a plain equality lookup on the lowercased request host. A flat
+-- unique index keeps the DB consistent with the Ent schema's unique declaration.
+CREATE UNIQUE INDEX tenant_domain_hostname_key ON tenant_domain (hostname);
 CREATE INDEX tenant_domain_tenant_id_idx ON tenant_domain (tenant_id);
 CREATE UNIQUE INDEX tenant_domain_one_primary ON tenant_domain (tenant_id) WHERE is_primary;
 

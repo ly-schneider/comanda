@@ -1,7 +1,15 @@
 -- better_auth_org_plugin.sql
 -- P2 (LEY-311): Better Auth organization plugin tables (org = tenant identity
 -- carrier). Auth-plane tables: same global/permissive RLS as user/session/
--- account/verification. Tenant-data isolation lives in the scoped tables.
+-- account/verification, and written exclusively by Better Auth through the
+-- privileged pool (which bypasses RLS by ownership). Tenant-data isolation
+-- lives in the scoped tables, NOT here.
+--
+-- P7 carry-over (tracked on LEY-316): there is intentionally no FK/column
+-- linking organization.id <-> tenant.id yet. Org creation is disabled
+-- (allowUserToCreateOrganization: false) and no provisioning flow exists in P2,
+-- so the link — and any decision to give member/invitation real tenant-scoped
+-- RLS — belongs to the P7 onboarding/provisioning work.
 
 CREATE TABLE IF NOT EXISTS "organization" (
     "id"         TEXT NOT NULL PRIMARY KEY,

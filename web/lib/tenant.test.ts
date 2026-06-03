@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getPublicHost, parseTenantHost } from "./tenant"
+import { getPublicHost, normalizeHost, parseTenantHost } from "./tenant"
 
 describe("parseTenantHost", () => {
   // Platform bare hosts
@@ -94,5 +94,22 @@ describe("getPublicHost", () => {
 
   it("returns empty string when no host headers present", () => {
     expect(getPublicHost(req({}))).toBe("")
+  })
+})
+
+describe("normalizeHost", () => {
+  it("lowercases, strips port, and trims", () => {
+    expect(normalizeHost("  ACME.comanda.leys.ch:3000 ")).toBe("acme.comanda.leys.ch")
+  })
+  it("takes the first entry of a comma-list", () => {
+    expect(normalizeHost("acme.localhost:3000, internal")).toBe("acme.localhost")
+  })
+  it("is idempotent on already-clean input", () => {
+    expect(normalizeHost("acme.localhost")).toBe("acme.localhost")
+  })
+  it("returns empty string for null/undefined/empty", () => {
+    expect(normalizeHost(null)).toBe("")
+    expect(normalizeHost(undefined)).toBe("")
+    expect(normalizeHost("")).toBe("")
   })
 })
