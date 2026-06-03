@@ -170,35 +170,17 @@ export const auth = betterAuth({
     }),
   ],
 
-  // Dynamic trustedOrigins: trust every comanda.leys.ch subdomain (prod +
-  // staging) plus, in dev, loopback origins. We deliberately do NOT push the
-  // inbound request origin blindly — that would bypass Better Auth's own
-  // CSRF/origin protection. The backend's 404-on-unknown-host is the real
-  // isolation boundary.
-  //
-  // Matching subtleties (see better-auth matchesOriginPattern):
-  //   - A pattern WITHOUT "://" containing "*" is matched against the URL host
-  //     (`new URL(origin).host`), which INCLUDES the port. So a host-only glob
-  //     like "*.localhost" matches "x.comanda.leys.ch" (prod, no port) but NOT
-  //     "x.localhost:3000" (dev). Dev therefore needs scheme+port globs, which
-  //     match against the full origin instead.
-  //   - "*" matches dots, so "*.comanda.leys.ch" also covers the
-  //     "*.beta.comanda.leys.ch" staging subdomains — no separate entry needed.
-  //   - A bare hostname (no "*", no "://") is compared by exact origin equality,
-  //     so it never matches a real "https://host" origin. Platform hostnames
-  //     from PLATFORM_HOSTS are expanded into proper origin patterns below.
-  //
-  // TODO(P6): once verified custom domains are provisioned, fetch the
-  // verified-domain list from the backend and include those origins here.
+  // We deliberately never push the inbound request origin blindly — that would
+  // bypass Better Auth's CSRF/origin protection; the backend's 404-on-unknown-host
+  // is the real isolation boundary. Note: better-auth matches host-only globs
+  // (no "://") against the host *including the port*, so dev needs scheme+port
+  // globs while prod (no port) can use bare host globs.
+  // TODO(P6): include verified custom-domain origins fetched from the backend.
   trustedOrigins: async (_request?: Request): Promise<string[]> => {
     const isProd = process.env.NODE_ENV === "production"
 
-    // Prod tenant subdomains (origins carry no port, so the host-only glob is
-    // matched against the bare hostname).
     const origins: string[] = ["*.comanda.leys.ch"]
 
-    // Platform hostnames (bare, e.g. comanda.leys.ch) — same env contract as the
-    // backend. Expand each into a matchable origin pattern.
     const platformHosts = (process.env.PLATFORM_HOSTS || "")
       .split(",")
       .map((h) => h.trim().toLowerCase())
@@ -208,13 +190,10 @@ export const auth = betterAuth({
       if (!isProd) origins.push(`http://${h}`, `http://${h}:*`)
     }
 
-    // Dev loopback origins. getHost() includes the port, so we use scheme+port
-    // globs (matched against the full origin) rather than host-only globs.
     if (!isProd) {
       origins.push("http://localhost:*", "http://127.0.0.1:*", "http://*.localhost:*")
     }
 
-    // Explicit single-host dev fallback (NEXT_PUBLIC_APP_URL in .env.local).
     if (process.env.NEXT_PUBLIC_APP_URL) {
       origins.push(process.env.NEXT_PUBLIC_APP_URL)
     }

@@ -32,6 +32,11 @@ export type TenantHostResult =
   | { type: "tenant-subdomain"; slug: string }
   | { type: "custom-domain" }
 
+// First entry of a comma-list, port stripped, lowercased. Empty in → empty out.
+export function normalizeHost(raw: string | null | undefined): string {
+  return (raw || "").split(",")[0]!.trim().split(":")[0]!.toLowerCase()
+}
+
 /**
  * Classify a bare hostname (no port, lowercased) into platform / tenant-subdomain / custom-domain.
  *
@@ -41,15 +46,6 @@ export type TenantHostResult =
  *   - `<slug>.localhost`                                                    → tenant-subdomain (dev)
  *   - anything else                                                         → custom-domain
  */
-/**
- * Normalize a raw Host / X-Forwarded-Host header value into a canonical host:
- * take the first entry of a comma-list, strip the port, lowercase. Returns an
- * empty string for empty input. Idempotent — safe to call on already-clean hosts.
- */
-export function normalizeHost(raw: string | null | undefined): string {
-  return (raw || "").split(",")[0]!.trim().split(":")[0]!.toLowerCase()
-}
-
 export function parseTenantHost(hostname: string): TenantHostResult {
   const host = normalizeHost(hostname)
 

@@ -55,9 +55,8 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
   if (idempotencyKey) outHeaders.set("Idempotency-Key", idempotencyKey)
 
   // Forward the canonical public host so the backend can resolve the tenant.
-  // Prefer x-comanda-host (pinned by proxy.ts middleware from the real public
-  // hostname), then x-forwarded-host, then the raw Host header.
-  // Strip port, take first of comma-lists, lowercase — mirrors backend parsing.
+  // Prefer x-comanda-host (pinned by proxy.ts from the real public hostname),
+  // then x-forwarded-host, then the raw Host header.
   const xComandaHost = inHeaders.get("x-comanda-host") || ""
   const rawXfh = inHeaders.get("x-forwarded-host") || inHeaders.get("host") || ""
   const resolvedHost = normalizeHost(xComandaHost || rawXfh)
