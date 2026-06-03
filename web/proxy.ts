@@ -1,7 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getPublicHost, parseTenantHost } from "@/lib/tenant"
+
+/**
+ * Build a mutated request-headers object that pins x-comanda-host.
+ * Next.js middleware can override request headers by returning them from
+ * NextResponse.next({ request: { headers } }).
+ */
+function buildRequestHeaders(request: NextRequest, publicHost: string): Headers {
+  const headers = new Headers(request.headers)
+  if (publicHost) {
+    headers.set("x-comanda-host", publicHost)
+  }
+  return headers
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // Resolve the canonical public host and classify tenant context.
+  // No DB call here — purely string-based. The backend is the authoritative
+  // resolver and returns 404 for unknown hosts.
+  const publicHost = getPublicHost(request)
+  const tenantResult = parseTenantHost(publicHost)
 
   const isStatic = pathname.startsWith("/_next/") || pathname.includes(".")
   if (!isStatic) {
@@ -11,16 +31,16 @@ export async function proxy(request: NextRequest) {
       const fwd = request.headers.get("x-forwarded-for") || "-"
       const proto = (request.headers.get("x-forwarded-proto") || "").toLowerCase()
       console.log(
-        `[req] ${method} ${pathname} proto=${proto || "-"} ip=${fwd.split(",")[0]?.trim() || "-"} ua=${ua.substring(
-          0,
-          80
-        )}`
+        `[req] ${method} ${pathname} tenant=${tenantResult.type}${"slug" in tenantResult ? `(${tenantResult.slug})` : ""} proto=${proto || "-"} ip=${fwd.split(",")[0]?.trim() || "-"} ua=${ua.substring(0, 80)}`
       )
     } catch {}
   }
 
   if (isStatic || pathname.startsWith("/api/")) {
-    return NextResponse.next()
+    // Forward x-comanda-host on API routes so the backend proxy can pick it up.
+    return NextResponse.next({
+      request: { headers: buildRequestHeaders(request, publicHost) },
+    })
   }
 
   // Checkout and Orders are intentionally NOT protected to allow guest flows
@@ -40,7 +60,9 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.next()
+  const response = NextResponse.next({
+    request: { headers: buildRequestHeaders(request, publicHost) },
+  })
 
   response.headers.set("X-Frame-Options", "DENY")
   response.headers.set("X-Content-Type-Options", "nosniff")

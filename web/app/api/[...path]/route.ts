@@ -53,6 +53,20 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
   const idempotencyKey = inHeaders.get("idempotency-key") || inHeaders.get("Idempotency-Key")
   if (idempotencyKey) outHeaders.set("Idempotency-Key", idempotencyKey)
 
+  // Forward the canonical public host so the backend can resolve the tenant.
+  // Prefer x-comanda-host (pinned by proxy.ts middleware from the real public
+  // hostname), then x-forwarded-host, then the raw Host header.
+  // Strip port, take first of comma-lists, lowercase — mirrors backend parsing.
+  const xComandaHost = inHeaders.get("x-comanda-host") || ""
+  const rawXfh = inHeaders.get("x-forwarded-host") || inHeaders.get("host") || ""
+  const resolvedHost = (xComandaHost || rawXfh).split(",")[0]!.trim().split(":")[0]!.toLowerCase()
+  if (resolvedHost) outHeaders.set("X-Forwarded-Host", resolvedHost)
+
+  // Never forward a client-supplied X-Tenant-Id. The backend resolves the
+  // tenant from X-Forwarded-Host only (TENANT_HEADER_TRUSTED is false in prod).
+  outHeaders.delete("X-Tenant-Id")
+  outHeaders.delete("x-tenant-id")
+
   const headerToken = inHeaders.get("x-csrf") || inHeaders.get("X-CSRF") || undefined
   const { csrfName } = await resolveCookieNames()
   const ck = await cookies()

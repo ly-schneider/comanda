@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth"
-import { admin, emailOTP } from "better-auth/plugins"
+import { admin, emailOTP, organization } from "better-auth/plugins"
 import { Pool } from "pg"
 import { ac, adminRole, customerRole } from "./auth/permissions"
 
@@ -49,6 +49,12 @@ export const auth = betterAuth({
         type: "string",
         defaultValue: "customer",
         input: false, // Don't allow setting via signup
+      },
+      isPlatformAdmin: {
+        type: "boolean",
+        defaultValue: false,
+        input: false, // Admin-set out of band; never writable via the auth API
+        fieldName: "is_platform_admin",
       },
     },
   },
@@ -128,9 +134,81 @@ export const auth = betterAuth({
         },
       },
     }),
+
+    // Organization plugin: org = tenant, members = vendor staff/admins.
+    // End-customers are per-tenant users (scoped by signup host) and are NOT
+    // org members. Org creation is platform-provisioned only (P7).
+    organization({
+      allowUserToCreateOrganization: false,
+      schema: {
+        session: {
+          fields: {
+            activeOrganizationId: "active_organization_id",
+          },
+        },
+        organization: {
+          fields: {
+            createdAt: "created_at",
+          },
+        },
+        member: {
+          fields: {
+            organizationId: "organization_id",
+            userId: "user_id",
+            createdAt: "created_at",
+          },
+        },
+        invitation: {
+          fields: {
+            organizationId: "organization_id",
+            inviterId: "inviter_id",
+            expiresAt: "expires_at",
+            createdAt: "created_at",
+          },
+        },
+      },
+    }),
   ],
 
-  trustedOrigins: [process.env.NEXT_PUBLIC_APP_URL!].filter(Boolean),
+  // Dynamic trustedOrigins: trust all comanda.leys.ch subdomains (prod +
+  // staging), *.localhost for dev, and any configured platform hosts.
+  //
+  // We deliberately do NOT push the inbound request origin blindly — that
+  // would bypass Better Auth's own CSRF/origin protection. The backend's
+  // 404-on-unknown-host is the real isolation boundary.
+  //
+  // TODO(P6): once verified custom domains are provisioned, fetch the
+  // verified-domain list from the backend and include those origins here.
+  trustedOrigins: async (_request?: Request): Promise<string[]> => {
+    const origins: string[] = [
+      // Wildcard patterns — Better Auth's matchesOriginPattern supports * globs.
+      "*.comanda.leys.ch",
+      "*.beta.comanda.leys.ch",
+      "*.localhost",
+      // Loopback http for dev
+      "http://localhost",
+      "http://127.0.0.1",
+    ]
+
+    // Extra platform-level hosts supplied via env (e.g. comanda.leys.ch itself).
+    const platformHosts = (process.env.PLATFORM_HOSTS || "")
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean)
+    origins.push(...platformHosts)
+
+    // Single-host dev fallback (NEXT_PUBLIC_APP_URL set in .env.local).
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      origins.push(process.env.NEXT_PUBLIC_APP_URL)
+    }
+
+    return origins
+  },
+
+  // Cookie security: do NOT set crossSubDomainCookies. Without a domain
+  // attribute, browsers scope each session cookie to the exact issuing host.
+  // Setting crossSubDomainCookies would share the session cookie across all
+  // *.comanda.leys.ch — a direct tenant-session-leakage vector.
 })
 
 // Export type for use in other server files

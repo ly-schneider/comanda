@@ -48,7 +48,7 @@ const config: NextConfig = {
       { protocol: "http", hostname: "127.0.0.1", port: "8080", pathname: "/**" },
       { protocol: "https", hostname: "*.leys.ch", pathname: "/**" },
       { protocol: "https", hostname: "*.comanda.leys.ch", pathname: "/**" },
-      { protocol: "https", hostname: "*.blob.core.windows.net", pathname: "/**" },
+      // TODO(P3): add Cloudflare R2 public bucket hostname here once configured
       { protocol: "http", hostname: "localhost", port: "10000", pathname: "/**" },
       { protocol: "http", hostname: "127.0.0.1", port: "10000", pathname: "/**" },
     ],
