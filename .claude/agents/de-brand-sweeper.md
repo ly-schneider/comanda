@@ -18,7 +18,7 @@ brand-neutral `comanda` repo. This is mechanical — **do not change runtime beh
    `bfs-android-app`→`android`, `bfs-docs`→`docs`. **Delete `bfs-cloud/`** (Azure TF).
 2. Identifiers: package.json names, Go module path (confirm with lead: keep `backend` or rename to `comanda`),
    Terraform project slug, Android `applicationId`/namespace → `ch.leys.comanda`, GHCR/registry refs →
-   `ghcr.io/ly-schneider/comanda/{backend,frontend,docs}`, repo/footer links → `ly-schneider/comanda`.
+   `ghcr.io/ly-schneider/comanda/{backend,web,docs}`, repo/footer links → `ly-schneider/comanda`.
 3. Strip the Azure half of the release pipeline (Container Apps deploy, Terraform Cloud, crane promotion)
    from `.github/workflows`. Leave a TODO marker where Hetzner gitops/ArgoCD will plug in (P5).
 4. Replace user-facing brand with **neutral placeholders**: `"BlessThun Food"` → a neutral default

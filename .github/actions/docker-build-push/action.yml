@@ -9,7 +9,7 @@ inputs:
     description: Path to Dockerfile
     required: true
   image-name:
-    description: Image name without registry prefix (e.g. frontend)
+    description: Image name without registry prefix (e.g. web)
     required: true
   image-tag:
     description: Immutable version tag
