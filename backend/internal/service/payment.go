@@ -604,7 +604,13 @@ func (s *paymentService) beginTenantTx(ctx context.Context, tenantID uuid.UUID) 
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID.String()); err != nil {
+	// Seed both GUCs atomically, mirroring the request tenant-tx middleware: a
+	// per-tenant background job is never a platform admin, so app.is_platform_admin
+	// is pinned false rather than left to the NULL→false default.
+	if _, err := tx.ExecContext(ctx,
+		"SELECT set_config('app.tenant_id', $1, true), set_config('app.is_platform_admin', 'false', true)",
+		tenantID.String(),
+	); err != nil {
 		_ = tx.Rollback()
 		_ = conn.Close()
 		return nil, nil, err
