@@ -2,8 +2,7 @@ import { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "Datenschutzerklärung",
-  description:
-    "Datenschutzerklärung der Comanda System Plattform gemäss dem Schweizer Datenschutzgesetz (nDSG).",
+  description: "Datenschutzerklärung der Comanda System Plattform gemäss dem Schweizer Datenschutzgesetz (nDSG).",
 }
 
 export default function PrivacyPolicyPage() {

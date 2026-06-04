@@ -39,9 +39,7 @@ export default function Header() {
             </div>
           </Link>
 
-          <h1 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-bold">
-            Comanda
-          </h1>
+          <h1 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-bold">Comanda</h1>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

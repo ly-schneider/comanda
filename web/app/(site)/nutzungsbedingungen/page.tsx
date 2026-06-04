@@ -2,8 +2,7 @@ import { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "Nutzungsbedingungen",
-  description:
-    "Nutzungsbedingungen der Comanda System Plattform für die Online-Essensbestellung in der Schweiz.",
+  description: "Nutzungsbedingungen der Comanda System Plattform für die Online-Essensbestellung in der Schweiz.",
 }
 
 export default function NutzungsbedingungenPage() {
@@ -16,9 +15,9 @@ export default function NutzungsbedingungenPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">1. Geltungsbereich</h2>
           <p>
-            Diese Nutzungsbedingungen regeln die Verwendung der Comanda System (nachfolgend «Plattform») sowie
-            die darüber getätigten Bestellungen von Speisen und Getränken. Mit der Nutzung der Plattform oder dem
-            Aufgeben einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
+            Diese Nutzungsbedingungen regeln die Verwendung der Comanda System (nachfolgend «Plattform») sowie die
+            darüber getätigten Bestellungen von Speisen und Getränken. Mit der Nutzung der Plattform oder dem Aufgeben
+            einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
           </p>
         </section>
 
