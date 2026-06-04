@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth"
 import { admin, emailOTP, organization } from "better-auth/plugins"
 import { Pool } from "pg"
 import { ac, adminRole, customerRole } from "./auth/permissions"
+import { getAppEnv } from "./env"
 
 // OTP types supported by the backend
 type OTPType = "sign-in" | "email-verification" | "forget-password"
@@ -177,9 +178,15 @@ export const auth = betterAuth({
   // globs while prod (no port) can use bare host globs.
   // TODO(P6): include verified custom-domain origins fetched from the backend.
   trustedOrigins: async (_request?: Request): Promise<string[]> => {
-    const isProd = process.env.NODE_ENV === "production"
+    const appEnv = getAppEnv()
+    const isDev = appEnv === "dev"
 
     const origins: string[] = ["*.comanda.leys.ch"]
+
+    // *.comanda.leys.ch is single-label and won't match the nested staging apex.
+    if (appEnv === "staging") {
+      origins.push("*.staging.comanda.leys.ch")
+    }
 
     const platformHosts = (process.env.PLATFORM_HOSTS || "")
       .split(",")
@@ -187,15 +194,16 @@ export const auth = betterAuth({
       .filter(Boolean)
     for (const h of platformHosts) {
       origins.push(`https://${h}`)
-      if (!isProd) origins.push(`http://${h}`, `http://${h}:*`)
+      if (isDev) origins.push(`http://${h}`, `http://${h}:*`)
     }
 
-    if (!isProd) {
+    if (isDev) {
       origins.push("http://localhost:*", "http://127.0.0.1:*", "http://*.localhost:*")
     }
 
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      origins.push(process.env.NEXT_PUBLIC_APP_URL)
+    const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL
+    if (appUrl) {
+      origins.push(appUrl)
     }
 
     return origins

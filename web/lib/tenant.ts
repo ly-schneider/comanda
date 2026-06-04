@@ -14,7 +14,7 @@ const RESERVED_SLUGS = new Set([
   "www",
   "api",
   "app",
-  "beta",
+  "staging",
   "static",
   "assets",
   "cdn",
@@ -25,7 +25,7 @@ const RESERVED_SLUGS = new Set([
 ])
 
 /** Platform-level bare hostnames (no tenant context). */
-const PLATFORM_BARE_HOSTS = new Set(["localhost", "127.0.0.1", "comanda.leys.ch", "beta.comanda.leys.ch"])
+const PLATFORM_BARE_HOSTS = new Set(["localhost", "127.0.0.1", "comanda.leys.ch", "staging.comanda.leys.ch"])
 
 export type TenantHostResult =
   | { type: "platform" }
@@ -41,8 +41,8 @@ export function normalizeHost(raw: string | null | undefined): string {
  * Classify a bare hostname (no port, lowercased) into platform / tenant-subdomain / custom-domain.
  *
  * Recognised patterns:
- *   - `comanda.leys.ch`, `beta.comanda.leys.ch`, `localhost`, `127.0.0.1`  → platform
- *   - `<slug>.comanda.leys.ch`, `<slug>.beta.comanda.leys.ch`              → tenant-subdomain
+ *   - `comanda.leys.ch`, `staging.comanda.leys.ch`, `localhost`, `127.0.0.1`  → platform
+ *   - `<slug>.comanda.leys.ch`, `<slug>.staging.comanda.leys.ch`              → tenant-subdomain
  *   - `<slug>.localhost`                                                    → tenant-subdomain (dev)
  *   - anything else                                                         → custom-domain
  */
@@ -62,12 +62,12 @@ export function parseTenantHost(hostname: string): TenantHostResult {
     return { type: "platform" }
   }
 
-  // Check the more-specific beta staging apex BEFORE the prod apex, because
-  // acme.beta.comanda.leys.ch also matches *.comanda.leys.ch.
+  // Check the more-specific staging apex BEFORE the prod apex, because
+  // acme.staging.comanda.leys.ch also matches *.comanda.leys.ch.
 
-  // Tenant subdomains on the beta staging apex.
-  if (host.endsWith(".beta.comanda.leys.ch")) {
-    const slug = host.replace(/\.beta\.comanda\.leys\.ch$/, "")
+  // Tenant subdomains on the staging apex.
+  if (host.endsWith(".staging.comanda.leys.ch")) {
+    const slug = host.replace(/\.staging\.comanda\.leys\.ch$/, "")
     if (!slug.includes(".") && !RESERVED_SLUGS.has(slug) && slug.length > 0) {
       return { type: "tenant-subdomain", slug }
     }
@@ -94,6 +94,15 @@ export function parseTenantHost(hostname: string): TenantHostResult {
   }
 
   return { type: "custom-domain" }
+}
+
+// Client-side env signal — the browser knows its own host, so nothing is baked
+// at build. Server code uses the runtime APP_ENV var instead (lib/env.ts).
+export function appEnvFromHost(hostname: string): "dev" | "staging" | "prod" {
+  const host = normalizeHost(hostname)
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) return "dev"
+  if (host === "staging.comanda.leys.ch" || host.endsWith(".staging.comanda.leys.ch")) return "staging"
+  return "prod"
 }
 
 /**

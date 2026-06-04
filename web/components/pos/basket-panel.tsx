@@ -207,8 +207,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     })
   }, [cart.items])
   const generatePickupQr = useCallback((orderId: string) => {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? (typeof window !== "undefined" ? window.location.origin : "")
-    return `${base}/o/${orderId}`
+    return `${window.location.origin}/o/${orderId}`
   }, [])
 
   useEffect(() => {

@@ -6,8 +6,8 @@ describe("parseTenantHost", () => {
   it("classifies comanda.leys.ch as platform", () => {
     expect(parseTenantHost("comanda.leys.ch")).toEqual({ type: "platform" })
   })
-  it("classifies beta.comanda.leys.ch as platform", () => {
-    expect(parseTenantHost("beta.comanda.leys.ch")).toEqual({ type: "platform" })
+  it("classifies staging.comanda.leys.ch as platform", () => {
+    expect(parseTenantHost("staging.comanda.leys.ch")).toEqual({ type: "platform" })
   })
   it("classifies localhost as platform", () => {
     expect(parseTenantHost("localhost")).toEqual({ type: "platform" })
@@ -25,8 +25,8 @@ describe("parseTenantHost", () => {
   })
 
   // Tenant subdomains — staging apex
-  it("classifies acme.beta.comanda.leys.ch as tenant-subdomain", () => {
-    expect(parseTenantHost("acme.beta.comanda.leys.ch")).toEqual({ type: "tenant-subdomain", slug: "acme" })
+  it("classifies acme.staging.comanda.leys.ch as tenant-subdomain", () => {
+    expect(parseTenantHost("acme.staging.comanda.leys.ch")).toEqual({ type: "tenant-subdomain", slug: "acme" })
   })
 
   // Tenant subdomains — dev
@@ -41,8 +41,8 @@ describe("parseTenantHost", () => {
   it("classifies api.comanda.leys.ch as platform (reserved)", () => {
     expect(parseTenantHost("api.comanda.leys.ch")).toEqual({ type: "platform" })
   })
-  it("classifies beta.localhost as platform (reserved slug 'beta')", () => {
-    expect(parseTenantHost("beta.localhost")).toEqual({ type: "platform" })
+  it("classifies staging.localhost as platform (reserved slug 'staging')", () => {
+    expect(parseTenantHost("staging.localhost")).toEqual({ type: "platform" })
   })
 
   // Custom domains

@@ -160,8 +160,13 @@ export default function OrderPageClient() {
       return <p className="text-red-600">Bestellnummer fehlt.</p>
     }
     if (qrReady) {
-      const base = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
-      return <QRCode value={`${base}/o/${orderId}`} size={260} className="mx-auto rounded-[11px] border-2 p-1" />
+      return (
+        <QRCode
+          value={`${window.location.origin}/o/${orderId}`}
+          size={260}
+          className="mx-auto rounded-[11px] border-2 p-1"
+        />
+      )
     }
     return <div className="mx-auto h-[260px] w-[260px] animate-pulse rounded-[11px] border-2 bg-gray-100" />
   })()

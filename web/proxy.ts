@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isProdEnv } from "@/lib/env"
 import { getPublicHost, parseTenantHost } from "@/lib/tenant"
 
 /**
@@ -24,8 +25,8 @@ export async function proxy(request: NextRequest) {
   const tenantResult = parseTenantHost(publicHost)
 
   const isStatic = pathname.startsWith("/_next/") || pathname.includes(".")
-  // Dev-only: this access log records client IP/UA, not wanted on every prod request.
-  if (!isStatic && process.env.NODE_ENV !== "production") {
+  // Dev-only: per-request IP/UA log, too noisy for staging/prod.
+  if (!isStatic && process.env.NODE_ENV === "development") {
     try {
       const method = request.method
       const ua = request.headers.get("user-agent") || "-"
@@ -69,6 +70,10 @@ export async function proxy(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("Referrer-Policy", "origin-when-cross-origin")
 
+  if (!isProdEnv()) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  }
+
   const umamiScript = "https://cloud.umami.is"
   const umamiConnect =
     "https://api-gateway.umami.dev https://api-gateway-eu.umami.dev https://gateway.umami.is https://eu.umami.is"
@@ -77,7 +82,7 @@ export async function proxy(request: NextRequest) {
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${umamiScript}`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: https:${process.env.NODE_ENV !== "production" ? " http://localhost:* http://127.0.0.1:*" : ""}`,
+    `img-src 'self' data: blob: https:${process.env.NODE_ENV === "development" ? " http://localhost:* http://127.0.0.1:*" : ""}`,
     "font-src 'self' data:",
     `connect-src 'self' ws: wss: ${umamiConnect}`,
     "frame-src 'self'",

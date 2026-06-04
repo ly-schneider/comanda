@@ -10,6 +10,7 @@ const golosText = Golos_Text({
   variable: "--font-golos-text",
 })
 
+// noindex for staging/dev is set at runtime via X-Robots-Tag in proxy.ts.
 export const metadata: Metadata = {
   title: {
     default: "Comanda",
@@ -20,10 +21,6 @@ export const metadata: Metadata = {
     siteName: "Comanda",
     type: "website",
     locale: "de_CH",
-  },
-  robots: {
-    index: true,
-    follow: true,
   },
   verification: {
     google: "BHYX2MGysKIAqHYfd-nyBvfNhP-3zImiovPfzGSQEjc",

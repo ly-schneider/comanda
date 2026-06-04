@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"backend/internal/config"
@@ -34,6 +35,7 @@ type EmailService interface {
 
 type emailService struct {
 	cfg    config.PlunkConfig
+	appEnv string
 	client *http.Client
 	logger *zap.Logger
 }
@@ -41,9 +43,17 @@ type emailService struct {
 func NewEmailService(cfg config.Config, logger *zap.Logger) EmailService {
 	return &emailService{
 		cfg:    cfg.Plunk,
+		appEnv: strings.ToLower(strings.TrimSpace(cfg.App.AppEnv)),
 		client: &http.Client{Timeout: 30 * time.Second},
 		logger: logger,
 	}
+}
+
+func (s *emailService) subject(base string) string {
+	if s.appEnv == "staging" {
+		return "[Staging] " + base
+	}
+	return base
 }
 
 func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL string, expiresAt time.Time) error {
@@ -67,7 +77,7 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 
 	payload := PlunkSendRequest{
 		To:         to,
-		Subject:    "Admin-Einladung",
+		Subject:    s.subject("Admin-Einladung"),
 		Body:       htmlBody,
 		Subscribed: false,
 		Name:       s.cfg.FromName,
@@ -129,7 +139,7 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 
 	htmlBody := renderOTPHTML(data)
 	textBody := renderOTPText(data)
-	subject := getOTPSubject(otpType)
+	subject := s.subject(getOTPSubject(otpType))
 
 	payload := PlunkSendRequest{
 		To:         to,
@@ -196,7 +206,7 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 
 	payload := PlunkSendRequest{
 		To:         to,
-		Subject:    "Deine Quittung — " + data.Brand,
+		Subject:    s.subject("Deine Quittung — " + data.Brand),
 		Body:       htmlBody,
 		Subscribed: false,
 		Name:       s.cfg.FromName,
