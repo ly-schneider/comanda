@@ -39,9 +39,28 @@ import android.widget.Toast
 import android.util.Log
 import java.util.UUID
 import org.json.JSONArray
-
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
+
+/** Branding supplied by the web POS in the print payload. All fields optional/nullable. */
+private data class ReceiptBranding(
+    val displayName: String?,
+    val logoUrl: String?,
+    val address: String?,
+    val currency: String?,
+    val thankYou: String?
+)
+
+private fun parseBranding(obj: JSONObject): ReceiptBranding {
+    val b = obj.optJSONObject("branding")
+    return if (b != null) ReceiptBranding(
+        displayName = b.optString("displayName").ifBlank { null },
+        logoUrl     = b.optString("logoUrl").ifBlank { null },
+        address     = b.optString("address").ifBlank { null },
+        currency    = b.optString("currency").ifBlank { null },
+        thankYou    = b.optString("thankYou").ifBlank { null }
+    ) else ReceiptBranding(null, null, null, null, null)
+}
 
 class WebPosActivity : ComponentActivity() {
 
@@ -656,11 +675,11 @@ class WebPosActivity : ComponentActivity() {
             val printer = com.dantsu.escposprinter.EscPosPrinter(connection, 203, 48f, 32)
             // Render a simple receipt from JSON content
             val obj = try { JSONObject(content) } catch (_: Exception) { JSONObject() }
+            val branding = parseBranding(obj)
             val totalCents = obj.optLong("totalCents", -1)
             val orderId = obj.optString("orderId", "-")
             val method = obj.optString("method", "card")
-            val currency = obj.optString("currency", "CHF")
-            val address = "Industriestrasse 5, 3600 Thun"
+            val currency = branding.currency ?: obj.optString("currency", "CHF")
             val orderTs = obj.optLong("orderTimestamp", -1L)
             val dateStr = try {
                 val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
@@ -668,8 +687,14 @@ class WebPosActivity : ComponentActivity() {
                 fmt.format(java.util.Date(whenMs))
             } catch (_: Throwable) { "" }
             val lines = StringBuilder()
-            lines.append("[C]<b>Comanda</b>\n")
-            lines.append("[C]$address\n")
+            val headerName = branding.displayName ?: "Comanda"
+            lines.append("[C]<b>$headerName</b>\n")
+            // Omit address entirely when not provided — no fallback to a hardcoded address
+            if (!branding.address.isNullOrBlank()) {
+                branding.address.split("\n").forEach { line ->
+                    if (line.isNotBlank()) lines.append("[C]${line.trim()}\n")
+                }
+            }
             if (dateStr.isNotEmpty()) lines.append("[C]$dateStr\n")
             if (totalCents >= 0) {
                 val amt = String.format("%s %.2f", currency, totalCents.toDouble() / 100.0)
@@ -691,7 +716,8 @@ class WebPosActivity : ComponentActivity() {
             }
             lines.append("Bestellung: ${orderId}\n")
             lines.append("\n")
-            lines.append("[C]Danke!\n\n")
+            val thankYou = branding.thankYou ?: "Danke!"
+            lines.append("[C]$thankYou\n\n")
             printer.printFormattedText(lines.toString())
             try { connection.disconnect() } catch (_: Throwable) {}
             true
@@ -740,7 +766,7 @@ class WebPosActivity : ComponentActivity() {
                 Log.d("POS_PRINT", "Connected (raw) to printer: $name")
 
                 val obj = try { JSONObject(content) } catch (_: Exception) { JSONObject() }
-                val bmp = renderReceiptBitmap(obj)
+                val bmp = renderReceiptBitmap(obj, parseBranding(obj))
 
                 val out = sock.outputStream
                 val wBytes = bmp.width / 8
@@ -812,7 +838,7 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    private fun renderReceiptBitmap(obj: JSONObject): Bitmap {
+    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null, null)): Bitmap {
         val width = 384
         val padding = 10
         val headerSize = 24f
@@ -823,21 +849,41 @@ class WebPosActivity : ComponentActivity() {
         val headerBottomPad = 6
         val bottomPad = 56
         val qrSize = 200
+        val logoMaxHeight = 160
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = fontSize }
         val bold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = headerSize; isFakeBoldText = true }
         val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = smallSize }
+
+        // Attempt logo fetch (blocking; printing already runs off the main thread via Bluetooth I/O).
+        // Falls back to null silently — the text header path below handles that.
+        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank()) {
+            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight)
+        } else null
+
+        val addressLines: List<String> = branding.address
+            ?.split("\n")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
 
         fun measureHeight(): Int {
             var h = 0
             val fmHeader = Paint.FontMetrics(); bold.getFontMetrics(fmHeader)
             val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
             val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            // Header (top pad + header + bottom pad)
-            h += headerTopPad + (fmHeader.bottom - fmHeader.top).toInt() + headerBottomPad
-            // Address and datetime lines (small)
-            h += (fmSmall.bottom - fmSmall.top).toInt() + lineSpacing // address
-            h += (fmSmall.bottom - fmSmall.top).toInt() + lineSpacing // date/time
+            val lineH = (fmSmall.bottom - fmSmall.top).toInt()
+            // Header: logo or text
+            h += headerTopPad
+            if (logoBitmap != null) {
+                h += logoBitmap.height + headerBottomPad
+            } else {
+                h += (fmHeader.bottom - fmHeader.top).toInt() + headerBottomPad
+            }
+            // Address lines (omitted when absent)
+            h += addressLines.size * (lineH + lineSpacing)
+            // Date/time
+            h += lineH + lineSpacing
             // QR (optional)
             val hasQr = obj.optString("pickupQr", "").isNotEmpty()
             if (hasQr) h += qrSize + lineSpacing
@@ -850,14 +896,14 @@ class WebPosActivity : ComponentActivity() {
             if (methodForHeight.equals("cash", ignoreCase = true)) {
                 val rec = obj.optLong("amountReceivedCents", -1L)
                 val chg = obj.optLong("changeCents", -1L)
-                if (rec >= 0) h += (fmSmall.bottom - fmSmall.top).toInt() + lineSpacing
-                if (chg >= 0) h += (fmSmall.bottom - fmSmall.top).toInt() + lineSpacing
+                if (rec >= 0) h += lineH + lineSpacing
+                if (chg >= 0) h += lineH + lineSpacing
             }
             // Order ID (small)
-            h += (fmSmall.bottom - fmSmall.top).toInt() + lineSpacing
+            h += lineH + lineSpacing
             // Whitespace divider
             h += (fm.bottom - fm.top).toInt() / 2 + lineSpacing
-            // Danke + bottom pad
+            // Thank-you line + bottom pad
             h += (fm.bottom - fm.top).toInt() + bottomPad
             return h.coerceAtLeast(200)
         }
@@ -866,23 +912,30 @@ class WebPosActivity : ComponentActivity() {
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.WHITE)
 
-        var y: Float
-        run {
+        var y: Float = headerTopPad.toFloat()
+
+        // Header: logo (if fetched successfully) or displayName/fallback text
+        if (logoBitmap != null) {
+            val left = ((width - logoBitmap.width) / 2f).coerceAtLeast(0f)
+            canvas.drawBitmap(logoBitmap, left, y, null)
+            y += logoBitmap.height + headerBottomPad
+        } else {
             val fm = Paint.FontMetrics(); bold.getFontMetrics(fm)
-            y = headerTopPad - fm.top
-            val title = "Comanda"
+            y -= fm.top
+            val title = branding.displayName ?: "Comanda"
             val tw = bold.measureText(title)
             canvas.drawText(title, (width - tw) / 2f, y, bold)
-            y += (fm.bottom - fm.top) + headerBottomPad
+            y += fm.bottom + headerBottomPad
         }
 
-        // Address (centered, small)
-        run {
+        // Address lines (centered, small). Omitted entirely when not provided.
+        if (addressLines.isNotEmpty()) {
             val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            val addr = "Industriestrasse 5, 3600 Thun"
-            val aw = small.measureText(addr)
-            canvas.drawText(addr, (width - aw) / 2f, y - fmSmall.top, small)
-            y += (fmSmall.bottom - fmSmall.top) + lineSpacing
+            for (line in addressLines) {
+                val aw = small.measureText(line)
+                canvas.drawText(line, (width - aw) / 2f, y - fmSmall.top, small)
+                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
+            }
         }
 
         // Date/time of order (centered, small). Prefer orderTimestamp if provided.
@@ -924,7 +977,7 @@ class WebPosActivity : ComponentActivity() {
         y += lineSpacing
 
         val totalCents = obj.optLong("totalCents", -1)
-        val currency = obj.optString("currency", "CHF")
+        val currency = branding.currency ?: obj.optString("currency", "CHF")
         val method = obj.optString("method", "card")
         val orderId = obj.optString("orderId", "-")
 
@@ -976,11 +1029,11 @@ class WebPosActivity : ComponentActivity() {
             y += (fm.bottom - fm.top) / 2 + lineSpacing
         }
 
-        // Danke (with extra bottom padding to avoid clipping)
+        // Thank-you line (with extra bottom padding to avoid clipping)
         run {
             val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            canvas.drawText("Danke!", padding.toFloat(), y - fm.top, paint)
-            // leave some bottom padding to avoid clipping on printers
+            val thankYou = branding.thankYou ?: "Danke!"
+            canvas.drawText(thankYou, padding.toFloat(), y - fm.top, paint)
             y += bottomPad
         }
 
