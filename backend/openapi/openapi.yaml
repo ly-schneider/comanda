@@ -135,6 +135,11 @@ paths:
 
   /settings:
     $ref: "paths/settings.yaml#/collection"
+  /settings/logo:
+    $ref: "paths/settings.yaml#/logo"
+
+  /branding:
+    $ref: "paths/branding.yaml#/collection"
 
   /devices:
     $ref: "paths/devices.yaml#/collection"

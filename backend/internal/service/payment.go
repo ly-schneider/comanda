@@ -83,6 +83,7 @@ type paymentService struct {
 	inventoryRepo    repository.InventoryLedgerRepository
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
+	settingsRepo     repository.SettingsRepository
 	appDB            *database.AppClient
 	logger           *zap.Logger
 }
@@ -97,6 +98,7 @@ func NewPaymentService(
 	inventoryRepo repository.InventoryLedgerRepository,
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
+	settingsRepo repository.SettingsRepository,
 	appDB *database.AppClient,
 	logger *zap.Logger,
 ) PaymentService {
@@ -115,6 +117,7 @@ func NewPaymentService(
 		inventoryRepo:    inventoryRepo,
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
+		settingsRepo:     settingsRepo,
 		appDB:            appDB,
 		logger:           logger,
 	}
@@ -411,11 +414,20 @@ func (s *paymentService) CreatePayrexxGateway(ctx context.Context, prep *Checkou
 		return nil, fmt.Errorf("payrexx client not configured")
 	}
 
+	currency := "CHF"
+	if s.settingsRepo != nil {
+		if st, err := s.settingsRepo.Get(ctx); err == nil && st.Currency != "" {
+			currency = st.Currency
+		}
+	}
+
 	gatewayCtx, gatewayCancel := context.WithTimeout(ctx, payrexx.DefaultRequestTimeout)
 	defer gatewayCancel()
+	// TODO(P4): the TWINT payment-means and Payrexx's 5000-unit TWINT limit are
+	// CHF-specific; revisit when non-CHF currencies / providers land.
 	gateway, err := s.payrexxClient.CreateGateway(gatewayCtx, payrexx.CreateGatewayParams{
 		Amount:             int(prep.TotalCents),
-		Currency:           "CHF",
+		Currency:           currency,
 		ReferenceID:        prep.OrderID.String(),
 		SuccessRedirectURL: successURL,
 		FailedRedirectURL:  failedURL,

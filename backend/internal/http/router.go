@@ -92,6 +92,10 @@ func NewRouter(
 		v1.Get("/payments/{paymentId}", wrapper.GetPayment)
 		v1.Post("/auth/otp-email", wrapper.SendOtpEmail)
 
+		// Public branding (no auth). Exempt from RequireEnabled so the
+		// storefront can render branding even when the tenant is disabled.
+		v1.Get("/branding", wrapper.GetBranding)
+
 		// ── Public routes (no auth, blocked when system disabled) ─
 		v1.Group(func(pub chi.Router) {
 			pub.Use(systemMw.RequireEnabled)
@@ -187,6 +191,8 @@ func NewRouter(
 
 			admin.Get("/settings", wrapper.GetSettings)
 			admin.Patch("/settings", wrapper.UpdateSettings)
+			admin.Post("/settings/logo", wrapper.UploadBrandingLogo)
+			admin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
 
 			admin.Get("/jetons", wrapper.ListJetons)
 			admin.Post("/jetons", wrapper.CreateJeton)

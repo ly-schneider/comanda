@@ -1,0 +1,16 @@
+collection:
+  get:
+    tags: [Settings]
+    summary: Get public branding
+    description: >
+      Returns the tenant's public presentation data (brand name, logo, colors,
+      contact, legal, currency). No authentication; the tenant is resolved from
+      the request host. On a platform host this returns neutral defaults.
+    operationId: getBranding
+    responses:
+      "200":
+        description: Branding
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/settings.yaml#/Branding"

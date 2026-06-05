@@ -66,6 +66,31 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if brandingPresent(&body) {
+		in := service.BrandingInput{
+			DisplayName:     body.DisplayName,
+			ColorPrimary:    body.ColorPrimary,
+			ColorPrimaryFg:  body.ColorPrimaryForeground,
+			ColorBackground: body.ColorBackground,
+			ColorForeground: body.ColorForeground,
+			ContactEmail:    body.ContactEmail,
+			ContactPhone:    body.ContactPhone,
+			LegalName:       body.LegalName,
+			LegalAddress:    body.LegalAddress,
+			LegalText:       body.LegalText,
+			Currency:        body.Currency,
+			PaymentProvider: body.PaymentProvider,
+		}
+		if err := h.settings.UpdateBranding(ctx, in); err != nil {
+			if errors.Is(err, service.ErrInvalidBranding) {
+				writeError(w, http.StatusBadRequest, "invalid_body", "Invalid branding (hex color or currency)")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "update_failed", err.Error())
+			return
+		}
+	}
+
 	if body.Club100FreeProductIds != nil || body.Club100MaxRedemptions != nil {
 		var productIDs []uuid.UUID
 		if body.Club100FreeProductIds != nil {
@@ -92,11 +117,25 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 	s := generated.Settings{
-		Id:                    e.ID,
-		SystemEnabled:         e.SystemEnabled,
-		PosMode:               generated.PosFulfillmentMode(e.PosMode),
-		Club100MaxRedemptions: e.Club100MaxRedemptions,
-		UpdatedAt:             ptr(e.UpdatedAt),
+		Id:                     e.ID,
+		SystemEnabled:          e.SystemEnabled,
+		PosMode:                generated.PosFulfillmentMode(e.PosMode),
+		Club100MaxRedemptions:  e.Club100MaxRedemptions,
+		DisplayName:            e.DisplayName,
+		LogoUrl:                e.LogoURL,
+		FaviconUrl:             e.FaviconURL,
+		ColorPrimary:           ptr(e.ColorPrimary),
+		ColorPrimaryForeground: ptr(e.ColorPrimaryForeground),
+		ColorBackground:        ptr(e.ColorBackground),
+		ColorForeground:        ptr(e.ColorForeground),
+		ContactEmail:           e.ContactEmail,
+		ContactPhone:           e.ContactPhone,
+		LegalName:              e.LegalName,
+		LegalAddress:           e.LegalAddress,
+		LegalText:              e.LegalText,
+		Currency:               ptr(e.Currency),
+		PaymentProvider:        ptr(e.PaymentProvider),
+		UpdatedAt:              ptr(e.UpdatedAt),
 	}
 
 	if missingJetons > 0 {
@@ -112,4 +151,21 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 	}
 
 	return s
+}
+
+// brandingPresent reports whether the update body carries any branding field.
+// logoUrl/faviconUrl are set via the dedicated upload endpoint, not here.
+func brandingPresent(b *generated.SettingsUpdate) bool {
+	return b.DisplayName != nil ||
+		b.ColorPrimary != nil ||
+		b.ColorPrimaryForeground != nil ||
+		b.ColorBackground != nil ||
+		b.ColorForeground != nil ||
+		b.ContactEmail != nil ||
+		b.ContactPhone != nil ||
+		b.LegalName != nil ||
+		b.LegalAddress != nil ||
+		b.LegalText != nil ||
+		b.Currency != nil ||
+		b.PaymentProvider != nil
 }

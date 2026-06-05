@@ -1,4 +1,4 @@
-h1:1E/vrxXHzO87uUxfUI4tHJVMWytEINhYEVCWH/rnViQ=
+h1:slnV3/UbAH8FVrt1g50TBTdZLv5+cUT5arQSaSFUdLA=
 20250101000000_baseline.sql h1:z9BJICN8dYjrasqPjQowYTfcrKGSGsYtpVYCoUZGadQ=
 20260221000000_add_system_enabled.sql h1:lHyW5L6Zu54ssG45YaRwxKzNLCwGp0byB69DQiTxxJc=
 20260329000000_add_hybrid_pos_mode.sql h1:iEWaAO+s+NRkmEXKNaxaj+mdnCBvXWPzfqhPQCf6fHk=
@@ -11,3 +11,4 @@ h1:1E/vrxXHzO87uUxfUI4tHJVMWytEINhYEVCWH/rnViQ=
 20260601000000_tenant_and_rls.sql h1:qIlpU1aZmiUL7dALsra6atp2rliMsckncRr9BCy/OEs=
 20260603000000_tenant_domain_and_platform_admin.sql h1:kZPEaQOmsEDAnAIitMqp2XHXp2v+LAUqvX8lNerqXgM=
 20260603000001_better_auth_org_plugin.sql h1:vTPvGqegkbzzH/RHb8FDkhJ7CssP3Lz/tpYcxyhwvbw=
+20260605000000_p3_branding_settings.sql h1:vqa/ul7NxHUIfXRLjMg7mZxPPlbcO/Eecc7HmvrRjWE=

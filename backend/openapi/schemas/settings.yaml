@@ -24,6 +24,45 @@ Settings:
       type: integer
       default: 2
       description: Maximum free redemptions per 100 Club member
+    displayName:
+      type: string
+      nullable: true
+      description: Public brand name; falls back to the tenant name when null
+    logoUrl:
+      type: string
+      nullable: true
+    faviconUrl:
+      type: string
+      nullable: true
+    colorPrimary:
+      type: string
+      description: Hex color "#RRGGBB" or "#RRGGBBAA"
+    colorPrimaryForeground:
+      type: string
+    colorBackground:
+      type: string
+    colorForeground:
+      type: string
+    contactEmail:
+      type: string
+      nullable: true
+    contactPhone:
+      type: string
+      nullable: true
+    legalName:
+      type: string
+      nullable: true
+    legalAddress:
+      type: string
+      nullable: true
+    legalText:
+      type: string
+      nullable: true
+    currency:
+      type: string
+      description: ISO 4217 currency code (3 uppercase letters)
+    paymentProvider:
+      type: string
     updatedAt:
       type: string
       format: date-time
@@ -43,3 +82,98 @@ SettingsUpdate:
     club100MaxRedemptions:
       type: integer
       minimum: 0
+    displayName:
+      type: string
+      nullable: true
+      description: Send "" or null to clear (UI falls back to tenant name)
+    colorPrimary:
+      type: string
+    colorPrimaryForeground:
+      type: string
+    colorBackground:
+      type: string
+    colorForeground:
+      type: string
+    contactEmail:
+      type: string
+      nullable: true
+    contactPhone:
+      type: string
+      nullable: true
+    legalName:
+      type: string
+      nullable: true
+    legalAddress:
+      type: string
+      nullable: true
+    legalText:
+      type: string
+      nullable: true
+    currency:
+      type: string
+    paymentProvider:
+      type: string
+
+Branding:
+  type: object
+  required: [displayName, colors, contact, legal, currency]
+  properties:
+    displayName:
+      type: string
+    logoUrl:
+      type: string
+      nullable: true
+    faviconUrl:
+      type: string
+      nullable: true
+    colors:
+      $ref: "#/BrandingColors"
+    contact:
+      $ref: "#/BrandingContact"
+    legal:
+      $ref: "#/BrandingLegal"
+    currency:
+      type: string
+
+BrandingColors:
+  type: object
+  required: [primary, primaryForeground, background, foreground]
+  properties:
+    primary:
+      type: string
+    primaryForeground:
+      type: string
+    background:
+      type: string
+    foreground:
+      type: string
+
+BrandingContact:
+  type: object
+  properties:
+    email:
+      type: string
+      nullable: true
+    phone:
+      type: string
+      nullable: true
+
+BrandingLegal:
+  type: object
+  properties:
+    name:
+      type: string
+      nullable: true
+    address:
+      type: string
+      nullable: true
+    text:
+      type: string
+      nullable: true
+
+LogoUploadResponse:
+  type: object
+  required: [url]
+  properties:
+    url:
+      type: string

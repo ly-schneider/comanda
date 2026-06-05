@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/settings"
 	"backend/internal/repository"
@@ -25,7 +26,66 @@ type systemEnabledCache struct {
 
 var (
 	ErrJetonRequired = errors.New("jeton_required")
+	// ErrInvalidBranding signals a 400 to the handler (invalid hex / currency).
+	ErrInvalidBranding = errors.New("invalid_branding")
 )
+
+var (
+	hexColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$`)
+	currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+)
+
+// BrandingView is the resolved public branding for a tenant. DisplayName is
+// already resolved (settings.display_name, else tenant name). Nil string fields
+// map to JSON null.
+type BrandingView struct {
+	DisplayName            string
+	LogoURL                *string
+	FaviconURL             *string
+	ColorPrimary           string
+	ColorPrimaryForeground string
+	ColorBackground        string
+	ColorForeground        string
+	ContactEmail           *string
+	ContactPhone           *string
+	LegalName              *string
+	LegalAddress           *string
+	LegalText              *string
+	Currency               string
+}
+
+// PlatformBrandingDefaults is the neutral branding returned on a platform host
+// (no tenant). It never touches the database.
+func PlatformBrandingDefaults() *BrandingView {
+	return &BrandingView{
+		DisplayName:            "Comanda",
+		ColorPrimary:           "#f87778",
+		ColorPrimaryForeground: "#fdfdfd",
+		ColorBackground:        "#e9e7e6",
+		ColorForeground:        "#000000",
+		Currency:               "CHF",
+	}
+}
+
+// BrandingInput is the validated branding patch from the admin API. Nil pointer
+// = leave unchanged; pointer to "" on a nillable text field = clear (NULL).
+// Colors and currency, when present, must be non-empty and well-formed.
+type BrandingInput struct {
+	DisplayName     *string
+	LogoURL         *string
+	FaviconURL      *string
+	ColorPrimary    *string
+	ColorPrimaryFg  *string
+	ColorBackground *string
+	ColorForeground *string
+	ContactEmail    *string
+	ContactPhone    *string
+	LegalName       *string
+	LegalAddress    *string
+	LegalText       *string
+	Currency        *string
+	PaymentProvider *string
+}
 
 type MissingJetonForActiveProductsError struct {
 	Count int64
@@ -50,6 +110,8 @@ type SettingsService interface {
 	SetClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions *int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
+	UpdateBranding(ctx context.Context, in BrandingInput) error
+	GetBranding(ctx context.Context) (*BrandingView, error)
 	ListJetons(ctx context.Context) ([]*ent.Jeton, error)
 	CreateJeton(ctx context.Context, name, color string) (*ent.Jeton, error)
 	UpdateJeton(ctx context.Context, id uuid.UUID, name, color string) (*ent.Jeton, error)
@@ -136,6 +198,83 @@ func (s *settingsService) SetSystemEnabled(ctx context.Context, enabled bool) er
 		expiresAt: time.Now().Add(systemEnabledCacheTTL),
 	})
 	return nil
+}
+
+func validateBrandingColor(v *string) error {
+	if v == nil {
+		return nil
+	}
+	if !hexColorPattern.MatchString(*v) {
+		return ErrInvalidBranding
+	}
+	return nil
+}
+
+func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) error {
+	for _, c := range []*string{in.ColorPrimary, in.ColorPrimaryFg, in.ColorBackground, in.ColorForeground} {
+		if err := validateBrandingColor(c); err != nil {
+			return err
+		}
+	}
+	if in.Currency != nil && !currencyPattern.MatchString(*in.Currency) {
+		return ErrInvalidBranding
+	}
+
+	return s.settings.UpdateBranding(ctx, repository.BrandingUpdate{
+		DisplayName:            in.DisplayName,
+		LogoURL:                in.LogoURL,
+		FaviconURL:             in.FaviconURL,
+		ColorPrimary:           in.ColorPrimary,
+		ColorPrimaryForeground: in.ColorPrimaryFg,
+		ColorBackground:        in.ColorBackground,
+		ColorForeground:        in.ColorForeground,
+		ContactEmail:           in.ContactEmail,
+		ContactPhone:           in.ContactPhone,
+		LegalName:              in.LegalName,
+		LegalAddress:           in.LegalAddress,
+		LegalText:              in.LegalText,
+		Currency:               in.Currency,
+		PaymentProvider:        in.PaymentProvider,
+	})
+}
+
+func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error) {
+	// Platform (no-tenant) host: return neutral defaults without touching the
+	// DB. The interceptor fail-closes on tenant-scoped reads with no tenant.
+	if enttenant.IsPlatform(ctx) {
+		return PlatformBrandingDefaults(), nil
+	}
+
+	e, err := s.settings.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	displayName := ""
+	if e.DisplayName != nil {
+		displayName = strings.TrimSpace(*e.DisplayName)
+	}
+	if displayName == "" {
+		if name, err := s.settings.TenantName(ctx); err == nil {
+			displayName = name
+		}
+	}
+
+	return &BrandingView{
+		DisplayName:            displayName,
+		LogoURL:                e.LogoURL,
+		FaviconURL:             e.FaviconURL,
+		ColorPrimary:           e.ColorPrimary,
+		ColorPrimaryForeground: e.ColorPrimaryForeground,
+		ColorBackground:        e.ColorBackground,
+		ColorForeground:        e.ColorForeground,
+		ContactEmail:           e.ContactEmail,
+		ContactPhone:           e.ContactPhone,
+		LegalName:              e.LegalName,
+		LegalAddress:           e.LegalAddress,
+		LegalText:              e.LegalText,
+		Currency:               e.Currency,
+	}, nil
 }
 
 func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions *int) error {

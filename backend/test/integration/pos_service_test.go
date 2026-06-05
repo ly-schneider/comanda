@@ -35,6 +35,7 @@ func TestPOSService_GetDeviceByToken(t *testing.T) {
 		repos.Inventory,
 		nil,
 		nil,
+		repos.Settings,
 		nil,
 		zap.NewNop(),
 	)
@@ -86,6 +87,7 @@ func TestPOSService_CreateOrder(t *testing.T) {
 		repos.Inventory,
 		nil,
 		nil,
+		repos.Settings,
 		nil,
 		zap.NewNop(),
 	)
@@ -172,6 +174,7 @@ func TestPOSService_PayCash(t *testing.T) {
 		repos.Inventory,
 		nil,
 		nil,
+		repos.Settings,
 		nil,
 		zap.NewNop(),
 	)
@@ -230,6 +233,7 @@ func TestPOSService_PayCard(t *testing.T) {
 		repos.Inventory,
 		nil,
 		nil,
+		repos.Settings,
 		nil,
 		zap.NewNop(),
 	)
@@ -281,6 +285,7 @@ func TestPOSService_PayTwint(t *testing.T) {
 		repos.Inventory,
 		nil,
 		nil,
+		repos.Settings,
 		nil,
 		zap.NewNop(),
 	)

@@ -396,7 +396,8 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 	}
 
 	reader := bytes.NewReader(allData.Bytes())
-	url, err := h.blobStore.Upload(ctx, reader, contentType)
+	key := "products/" + uuid.NewString()
+	url, err := h.blobStore.Upload(ctx, key, reader, contentType)
 	if err != nil {
 		h.logger.Error("failed to upload image", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "upload_failed", "Failed to upload image")

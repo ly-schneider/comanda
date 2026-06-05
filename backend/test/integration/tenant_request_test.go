@@ -233,6 +233,7 @@ func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 		repos.Inventory,
 		nil,
 		capture,
+		repos.Settings,
 		appClientFor(env.app),
 		zap.NewNop(),
 	)

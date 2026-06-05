@@ -86,3 +86,86 @@ collection:
           application/json:
             schema:
               $ref: "../schemas/common.yaml#/Error"
+
+logo:
+  post:
+    tags: [Settings]
+    summary: Upload branding logo or favicon
+    description: >
+      Uploads a logo or favicon image to the tenant's asset bucket and stores
+      the resulting URL in settings. Accepts PNG, JPEG, WebP, or ICO.
+    operationId: uploadBrandingLogo
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file:
+                type: string
+                format: binary
+              kind:
+                type: string
+                enum: [logo, favicon]
+                default: logo
+    responses:
+      "200":
+        description: Asset uploaded
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/settings.yaml#/LogoUploadResponse"
+      "400":
+        description: Invalid file
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  delete:
+    tags: [Settings]
+    summary: Delete branding logo or favicon
+    operationId: deleteBrandingLogo
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [logo, favicon]
+          default: logo
+    responses:
+      "204":
+        description: Asset deleted
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

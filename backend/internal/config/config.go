@@ -89,10 +89,11 @@ type PlunkConfig struct {
 }
 
 type BlobStorageConfig struct {
-	AccountName  string
-	AccountKey   string
-	Container    string
-	BlobEndpoint string
+	Endpoint        string // R2_ENDPOINT - https://<accountid>.r2.cloudflarestorage.com
+	AccessKeyID     string // R2_ACCESS_KEY_ID
+	SecretAccessKey string // R2_SECRET_ACCESS_KEY
+	Bucket          string // R2_BUCKET
+	PublicBaseURL   string // R2_PUBLIC_BASE_URL - public asset host
 }
 
 func Load() Config {
@@ -152,10 +153,11 @@ func Load() Config {
 			ReplyTo:   getEnvOptional("PLUNK_REPLY_TO"),
 		},
 		BlobStorage: BlobStorageConfig{
-			AccountName:  getEnvOptional("AZURE_STORAGE_ACCOUNT_NAME"),
-			AccountKey:   getEnvOptional("AZURE_STORAGE_ACCOUNT_KEY"),
-			Container:    getEnvWithDefault("AZURE_STORAGE_CONTAINER", "product-images"),
-			BlobEndpoint: getEnvOptional("AZURE_STORAGE_BLOB_ENDPOINT"),
+			Endpoint:        getEnvOptional("R2_ENDPOINT"),
+			AccessKeyID:     getEnvOptional("R2_ACCESS_KEY_ID"),
+			SecretAccessKey: getEnvOptional("R2_SECRET_ACCESS_KEY"),
+			Bucket:          getEnvWithDefault("R2_BUCKET", "comanda-assets"),
+			PublicBaseURL:   getEnvOptional("R2_PUBLIC_BASE_URL"),
 		},
 		Elvanto: ElvantoConfig{
 			APIKey:  getEnvOptional("ELVANTO_API_KEY"),

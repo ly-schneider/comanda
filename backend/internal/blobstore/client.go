@@ -2,85 +2,112 @@ package blobstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
-	"github.com/google/uuid"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
+// cacheControl marks uploaded assets as immutable; keys are content-addressed
+// (random UUIDs) so the URL changes whenever the asset does.
+const cacheControl = "public, max-age=31536000, immutable"
+
+// Client wraps a Cloudflare R2 (S3-compatible) bucket. R2 requires path-style
+// addressing and the "auto" region.
 type Client struct {
-	client        *azblob.Client
-	containerName string
-	blobEndpoint  string
+	s3            *s3.Client
+	bucket        string
+	publicBaseURL string
 }
 
-func NewClient(accountName, accountKey, containerName, blobEndpoint string) (*Client, error) {
-	if blobEndpoint == "" {
-		blobEndpoint = fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
+// NewClient builds an R2-backed blob client. endpoint is the account endpoint
+// (e.g. https://<accountid>.r2.cloudflarestorage.com); publicBaseURL is the
+// public asset host the returned URLs are built from (custom domain or the
+// r2.dev bucket URL).
+func NewClient(endpoint, accessKeyID, secretAccessKey, bucket, publicBaseURL string) (*Client, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithRegion("auto"),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("blobstore: load config: %w", err)
 	}
 
-	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	if err != nil {
-		return nil, fmt.Errorf("blobstore: invalid credentials: %w", err)
-	}
-
-	client, err := azblob.NewClientWithSharedKeyCredential(blobEndpoint, cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("blobstore: failed to create client: %w", err)
-	}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	})
 
 	return &Client{
-		client:        client,
-		containerName: containerName,
-		blobEndpoint:  strings.TrimRight(blobEndpoint, "/"),
+		s3:            client,
+		bucket:        bucket,
+		publicBaseURL: strings.TrimRight(publicBaseURL, "/"),
 	}, nil
 }
 
-func (c *Client) Upload(ctx context.Context, data io.ReadSeeker, contentType string) (string, error) {
-	blobName := uuid.New().String()
-
-	cacheControl := "public, max-age=31536000, immutable"
-	opts := &azblob.UploadStreamOptions{
-		HTTPHeaders: &blob.HTTPHeaders{
-			BlobContentType:  &contentType,
-			BlobCacheControl: &cacheControl,
-		},
-	}
-
-	_, err := c.client.UploadStream(ctx, c.containerName, blobName, data, opts)
+// Upload stores data under key and returns its public URL. key is the full
+// object key (e.g. "products/<uuid>"); callers own the key namespace.
+func (c *Client) Upload(ctx context.Context, key string, data io.ReadSeeker, contentType string) (string, error) {
+	_, err := c.s3.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:       aws.String(c.bucket),
+		Key:          aws.String(key),
+		Body:         data,
+		ContentType:  aws.String(contentType),
+		CacheControl: aws.String(cacheControl),
+	})
 	if err != nil {
 		return "", fmt.Errorf("blobstore: upload failed: %w", err)
 	}
-
-	url := fmt.Sprintf("%s/%s/%s", c.blobEndpoint, c.containerName, blobName)
-	return url, nil
+	return c.publicBaseURL + "/" + key, nil
 }
 
-func (c *Client) Delete(ctx context.Context, blobURL string) error {
-	prefix := fmt.Sprintf("%s/%s/", c.blobEndpoint, c.containerName)
-	if !strings.HasPrefix(blobURL, prefix) {
+// keyFromURL derives the object key from a public URL, or "" if the URL does
+// not belong to this bucket's public base.
+func (c *Client) keyFromURL(url string) string {
+	prefix := c.publicBaseURL + "/"
+	if !strings.HasPrefix(url, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(url, prefix)
+}
+
+// Delete removes the object referenced by a public URL. URLs that don't belong
+// to this bucket are ignored (no error), matching the previous behavior.
+func (c *Client) Delete(ctx context.Context, url string) error {
+	key := c.keyFromURL(url)
+	if key == "" {
 		return nil
 	}
-	blobName := strings.TrimPrefix(blobURL, prefix)
-
-	_, err := c.client.DeleteBlob(ctx, c.containerName, blobName, nil)
+	_, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
 	if err != nil {
 		return fmt.Errorf("blobstore: delete failed: %w", err)
 	}
 	return nil
 }
 
-func (c *Client) EnsureContainer(ctx context.Context) error {
-	access := container.PublicAccessTypeBlob
-	_, err := c.client.CreateContainer(ctx, c.containerName, &azblob.CreateContainerOptions{
-		Access: &access,
+// EnsureBucket verifies the bucket is reachable. R2 buckets are provisioned out
+// of band, so a missing bucket is logged by the caller rather than created here.
+func (c *Client) EnsureBucket(ctx context.Context) error {
+	_, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(c.bucket),
 	})
-	if err != nil && !strings.Contains(err.Error(), "ContainerAlreadyExists") {
-		return fmt.Errorf("blobstore: failed to create container: %w", err)
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			return fmt.Errorf("blobstore: bucket %q not reachable: %s", c.bucket, apiErr.ErrorCode())
+		}
+		return fmt.Errorf("blobstore: head bucket: %w", err)
 	}
 	return nil
 }
