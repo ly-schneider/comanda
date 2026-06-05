@@ -3,6 +3,7 @@ import { Golos_Text } from "next/font/google"
 import Footer from "@/components/layout/footer"
 import Header from "@/components/layout/header"
 import { CartProvider } from "@/contexts/cart-context"
+import { getBranding } from "@/lib/server/branding"
 
 const golosText = Golos_Text({
   weight: ["500"],
@@ -10,12 +11,15 @@ const golosText = Golos_Text({
   variable: "--font-golos-text",
 })
 
-export const metadata: Metadata = {
-  other: {
-    "theme-color": "#E9E7E6",
-    "msapplication-TileColor": "#E9E7E6",
-    "apple-mobile-web-app-status-bar-style": "default",
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getBranding()
+  return {
+    other: {
+      "theme-color": branding.colors.background,
+      "msapplication-TileColor": branding.colors.background,
+      "apple-mobile-web-app-status-bar-style": "default",
+    },
+  }
 }
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {

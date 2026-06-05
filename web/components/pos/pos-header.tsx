@@ -6,6 +6,7 @@ import { createPortal } from "react-dom"
 import { PrinterSelector } from "@/components/pos/printer-selector"
 import { SyncStatusIndicator } from "@/components/pos/sync-status-indicator"
 import { Button } from "@/components/ui/button"
+import { useBranding } from "@/contexts/branding-context"
 import type { PosFulfillmentMode } from "@/types/jeton"
 
 interface POSHeaderProps {
@@ -22,6 +23,7 @@ interface POSHeaderProps {
 const HOLD_DURATION_MS = 1000
 
 export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
+  const { displayName, logoUrl } = useBranding()
   const LOCK_KEY = "comanda.pos.locked"
   const IDLE_MS = Number(process.env.NEXT_PUBLIC_POS_IDLE_TIMEOUT) || 300000
   const [locked, setLocked] = useState<boolean>(() => {
@@ -157,9 +159,9 @@ export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
       <div className="pointer-events-none relative z-10 flex flex-col items-center gap-4">
         <div className="mb-2 flex items-center gap-2">
           <div className="bg-muted mr-1 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
-            <Image src="/assets/images/comanda-logo.png" alt="Comanda" width={40} height={40} />
+            <Image src={logoUrl ?? "/assets/images/comanda-logo.png"} alt={displayName} width={40} height={40} />
           </div>
-          <span className="text-lg font-semibold">Comanda</span>
+          <span className="text-lg font-semibold">{displayName}</span>
         </div>
         <h2 className="text-6xl font-bold tracking-tight">GESPERRT</h2>
       </div>
@@ -172,9 +174,9 @@ export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
         <div className="flex h-8 items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-muted flex h-9 w-9 items-center justify-center overflow-hidden rounded-full">
-              <Image src="/assets/images/comanda-logo.png" alt="Comanda" width={36} height={36} />
+              <Image src={logoUrl ?? "/assets/images/comanda-logo.png"} alt={displayName} width={36} height={36} />
             </div>
-            <span className="text-sm font-semibold">Comanda</span>
+            <span className="text-sm font-semibold">{displayName}</span>
             <div className="ml-3">{tabSlot}</div>
           </div>
           <div className="flex items-center gap-1.5">

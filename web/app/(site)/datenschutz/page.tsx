@@ -1,11 +1,20 @@
 import { Metadata } from "next"
+import { getBranding } from "@/lib/server/branding"
 
-export const metadata: Metadata = {
-  title: "Datenschutzerklärung",
-  description: "Datenschutzerklärung der Comanda System Plattform gemäss dem Schweizer Datenschutzgesetz (nDSG).",
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getBranding()
+  return {
+    title: "Datenschutzerklärung",
+    description: `Datenschutzerklärung der ${branding.displayName} Plattform gemäss dem Schweizer Datenschutzgesetz (nDSG).`,
+  }
 }
 
-export default function PrivacyPolicyPage() {
+export default async function PrivacyPolicyPage() {
+  const branding = await getBranding()
+  const entityName = branding.legal.name || branding.displayName
+  const address = branding.legal.address
+  const email = branding.contact.email
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Datenschutzerklärung</h1>
@@ -15,24 +24,32 @@ export default function PrivacyPolicyPage() {
         <section>
           <p>
             Diese Datenschutzerklärung informiert Sie gemäss dem Schweizer Bundesgesetz über den Datenschutz (nDSG)
-            darüber, wie wir Ihre Personendaten im Zusammenhang mit der Nutzung der Comanda System (nachfolgend
-            «Plattform») bearbeiten.
+            darüber, wie wir Ihre Personendaten im Zusammenhang mit der Nutzung der {branding.displayName} System
+            (nachfolgend «Plattform») bearbeiten.
           </p>
         </section>
+
+        {branding.legal.text ? (
+          <section>
+            <div className="whitespace-pre-wrap">{branding.legal.text}</div>
+          </section>
+        ) : null}
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">1. Verantwortliche Stelle</h2>
           <p>Verantwortlich für die Datenbearbeitung ist:</p>
           <p className="mt-2">
-            Comanda
-            <br />
-            Industriestrasse 5
-            <br />
-            3600 Thun
+            {entityName}
+            {address ? (
+              <>
+                <br />
+                {address}
+              </>
+            ) : null}
             <br />
             Schweiz
           </p>
-          <p className="mt-2">E-Mail: levyn.schneider@leys.ch</p>
+          {email ? <p className="mt-2">E-Mail: {email}</p> : null}
         </section>
 
         <section>
@@ -90,9 +107,6 @@ export default function PrivacyPolicyPage() {
             <li>
               <strong>Google LLC</strong> — Authentifizierung via Google OAuth (sofern Sie diese Anmeldemethode wählen)
             </li>
-            <li>
-              <strong>Microsoft Azure</strong> — Cloud-Hosting und Infrastruktur
-            </li>
           </ul>
           <p className="mt-2">
             Mit allen Auftragsbearbeitern bestehen Vereinbarungen zur Auftragsbearbeitung gemäss Art. 9 nDSG.
@@ -111,14 +125,7 @@ export default function PrivacyPolicyPage() {
               Standarddatenschutzklauseln (Standard Contractual Clauses, SCC) oder anderer geeigneter Garantien gemäss
               Art. 16–17 nDSG.
             </li>
-            <li>
-              <strong>EU/EWR</strong> (ggf. Azure-Rechenzentren) — Die EU/der EWR verfügt über ein vom Bundesrat
-              anerkanntes angemessenes Datenschutzniveau.
-            </li>
           </ul>
-          <p className="mt-2">
-            Soweit möglich, werden Daten in Schweizer Rechenzentren (Azure Switzerland North) verarbeitet.
-          </p>
         </section>
 
         <section>
@@ -184,10 +191,17 @@ export default function PrivacyPolicyPage() {
               Profileinstellungen löschen.
             </li>
           </ul>
-          <p className="mt-2">
-            Zur Ausübung Ihrer Rechte kontaktieren Sie uns bitte per E-Mail an [kontakt@example.ch]. Wir werden Ihr
-            Anliegen innert 30 Tagen bearbeiten.
-          </p>
+          {email ? (
+            <p className="mt-2">
+              Zur Ausübung Ihrer Rechte kontaktieren Sie uns bitte per E-Mail an {email}. Wir werden Ihr Anliegen innert
+              30 Tagen bearbeiten.
+            </p>
+          ) : (
+            <p className="mt-2">
+              Zur Ausübung Ihrer Rechte kontaktieren Sie uns bitte per E-Mail. Wir werden Ihr Anliegen innert 30 Tagen
+              bearbeiten.
+            </p>
+          )}
         </section>
 
         <section>

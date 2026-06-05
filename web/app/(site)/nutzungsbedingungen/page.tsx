@@ -1,11 +1,20 @@
 import { Metadata } from "next"
+import { getBranding } from "@/lib/server/branding"
 
-export const metadata: Metadata = {
-  title: "Nutzungsbedingungen",
-  description: "Nutzungsbedingungen der Comanda System Plattform für die Online-Essensbestellung in der Schweiz.",
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getBranding()
+  return {
+    title: "Nutzungsbedingungen",
+    description: `Nutzungsbedingungen der ${branding.displayName} Plattform für die Online-Essensbestellung in der Schweiz.`,
+  }
 }
 
-export default function NutzungsbedingungenPage() {
+export default async function NutzungsbedingungenPage() {
+  const branding = await getBranding()
+  const entityName = branding.legal.name || branding.displayName
+  const address = branding.legal.address
+  const email = branding.contact.email
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Nutzungsbedingungen</h1>
@@ -15,24 +24,26 @@ export default function NutzungsbedingungenPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">1. Geltungsbereich</h2>
           <p>
-            Diese Nutzungsbedingungen regeln die Verwendung der Comanda System (nachfolgend «Plattform») sowie die
-            darüber getätigten Bestellungen von Speisen und Getränken. Mit der Nutzung der Plattform oder dem Aufgeben
-            einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
+            Diese Nutzungsbedingungen regeln die Verwendung der {branding.displayName} System (nachfolgend «Plattform»)
+            sowie die darüber getätigten Bestellungen von Speisen und Getränken. Mit der Nutzung der Plattform oder dem
+            Aufgeben einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
           </p>
         </section>
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">2. Betreiber</h2>
           <p>
-            Comanda
-            <br />
-            Industriestrasse 5
-            <br />
-            3600 Thun
+            {entityName}
+            {address ? (
+              <>
+                <br />
+                {address}
+              </>
+            ) : null}
             <br />
             Schweiz
           </p>
-          <p className="mt-2">E-Mail: levyn.schneider@leys.ch</p>
+          {email ? <p className="mt-2">E-Mail: {email}</p> : null}
         </section>
 
         <section>
@@ -72,7 +83,7 @@ export default function NutzungsbedingungenPage() {
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">6. Preise und Zahlung</h2>
-          <p>Alle Preise sind in Schweizer Franken (CHF) angegeben.</p>
+          <p>Alle Preise sind in {branding.currency} angegeben.</p>
           <p className="mt-2">
             Die Zahlung erfolgt über den Zahlungsdienstleister Payrexx mittels TWINT. Mit dem Absenden der Bestellung
             autorisieren Sie die Belastung des fälligen Betrags. Kommt die Zahlung nicht zustande, wird die Bestellung

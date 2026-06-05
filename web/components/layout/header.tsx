@@ -7,9 +7,11 @@ import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranding } from "@/contexts/branding-context"
 
 export default function Header() {
   const { user, signOut } = useAuth()
+  const { displayName, logoUrl } = useBranding()
   const router = useRouter()
   const pathname = usePathname()
 
@@ -30,8 +32,8 @@ export default function Header() {
           <Link href="/food" className="flex items-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full">
               <Image
-                src="/assets/images/comanda-logo.png"
-                alt="Comanda Logo"
+                src={logoUrl ?? "/assets/images/comanda-logo.png"}
+                alt={`${displayName} Logo`}
                 width={48}
                 height={48}
                 className="h-12 w-12"
@@ -39,7 +41,9 @@ export default function Header() {
             </div>
           </Link>
 
-          <h1 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-bold">Comanda</h1>
+          <h1 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-bold">
+            {displayName}
+          </h1>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

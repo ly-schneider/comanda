@@ -48,7 +48,16 @@ const config: NextConfig = {
       { protocol: "http", hostname: "127.0.0.1", port: "8080", pathname: "/**" },
       { protocol: "https", hostname: "*.leys.ch", pathname: "/**" },
       { protocol: "https", hostname: "*.comanda.leys.ch", pathname: "/**" },
-      // TODO(P3): add Cloudflare R2 public bucket hostname here once configured
+      // R2 public bucket — env-driven, falls back to *.r2.dev wildcard
+      ...(process.env.R2_PUBLIC_BASE_URL
+        ? [
+            {
+              protocol: new URL(process.env.R2_PUBLIC_BASE_URL).protocol.replace(":", "") as "https" | "http",
+              hostname: new URL(process.env.R2_PUBLIC_BASE_URL).hostname,
+              pathname: "/**",
+            },
+          ]
+        : [{ protocol: "https" as const, hostname: "*.r2.dev", pathname: "/**" }]),
       { protocol: "http", hostname: "localhost", port: "10000", pathname: "/**" },
       { protocol: "http", hostname: "127.0.0.1", port: "10000", pathname: "/**" },
     ],

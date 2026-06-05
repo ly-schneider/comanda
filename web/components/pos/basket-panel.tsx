@@ -12,11 +12,12 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-
 import type { Club100Person } from "@/lib/api/club100"
 import { formatChf } from "@/lib/utils"
+
 import type { CartItem } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type {
@@ -31,6 +32,12 @@ import type {
 import type { ProductSummaryDTO } from "@/types/product"
 
 type Tender = PosPaymentMethod | null
+type ReceiptBranding = {
+  displayName: string
+  logoUrl: string | null
+  address: string | null
+  currency: string
+}
 type Receipt = {
   method: PosPaymentMethod
   totalCents: number
@@ -42,6 +49,7 @@ type Receipt = {
     configuration?: Array<{ slot: string; choice: string }>
   }>
   pickupQr?: string | null
+  branding?: ReceiptBranding
 }
 
 type PosBridge = {
@@ -84,6 +92,13 @@ interface BasketPanelProps {
 
 export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: BasketPanelProps) {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
+  const { displayName, logoUrl, legal, currency } = useBranding()
+  const receiptBranding: ReceiptBranding = {
+    displayName,
+    logoUrl,
+    address: legal.address,
+    currency,
+  }
   const isMobile = useIsMobile()
 
   const getMaxQuantity = useCallback(
@@ -393,7 +408,13 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           if (shouldPrint && canPrint && queued) {
             setCardPrintInProgress(true)
             pendingPrintsRef.current.set(queued.localId, {
-              template: { method: "card", totalCents: total, items: printItems, orderTimestamp: Date.now() },
+              template: {
+                method: "card",
+                totalCents: total,
+                items: printItems,
+                orderTimestamp: Date.now(),
+                branding: receiptBranding,
+              },
             })
           }
 
@@ -515,7 +536,13 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
 
     if (shouldPrint && canPrint && queued) {
       pendingPrintsRef.current.set(queued.localId, {
-        template: { method: "cash", totalCents: total, items: printItems, orderTimestamp: Date.now() },
+        template: {
+          method: "cash",
+          totalCents: total,
+          items: printItems,
+          orderTimestamp: Date.now(),
+          branding: receiptBranding,
+        },
       })
     }
     if (jetonMode && queued) {
@@ -573,7 +600,13 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
 
     if (shouldPrint && canPrint && queued) {
       pendingPrintsRef.current.set(queued.localId, {
-        template: { method: "twint", totalCents: total, items: printItems, orderTimestamp: Date.now() },
+        template: {
+          method: "twint",
+          totalCents: total,
+          items: printItems,
+          orderTimestamp: Date.now(),
+          branding: receiptBranding,
+        },
       })
     }
     if (jetonMode && queued) {
@@ -698,7 +731,13 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
 
       if (shouldPrint && canPrint && queued) {
         pendingPrintsRef.current.set(queued.localId, {
-          template: { method: paymentMethod, totalCents: total, items: printItems, orderTimestamp: Date.now() },
+          template: {
+            method: paymentMethod,
+            totalCents: total,
+            items: printItems,
+            orderTimestamp: Date.now(),
+            branding: receiptBranding,
+          },
         })
       }
       if (jetonMode && queued) {

@@ -8,6 +8,7 @@ import {
   Home,
   MailPlus,
   MonitorCheck,
+  Paintbrush,
   ReceiptText,
   Settings,
   Smartphone,
@@ -42,6 +43,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     { href: "/admin/pos", label: "POS", icon: <CreditCard className="size-5" /> },
     { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" /> },
     { href: "/admin/staff-meals", label: "Mitarbeiter-Essen", icon: <Ticket className="size-5" /> },
+    { href: "/admin/branding", label: "Branding", icon: <Paintbrush className="size-5" /> },
     { href: "/admin/settings", label: "Einstellungen", icon: <Settings className="size-5" /> },
   ]
 
