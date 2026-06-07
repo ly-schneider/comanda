@@ -1,6 +1,15 @@
 -- Realistic ops-dashboard seed.
 -- Re-runnable: if any device named 'Grill' already exists, bail.
 
+-- tenant_id is NOT NULL with no DB default; the seed runs as the table owner
+-- (bypasses RLS), so set a transient default to the bootstrap tenant for the tables
+-- this demo seeds, then drop it after the block. Keeps the data statements untouched.
+ALTER TABLE device ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE device_product ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE "order" ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE order_line ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE order_line_redemption ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+
 DO $$
 DECLARE
   v_grill_id        UUID := '01970000-0000-7000-1000-000000000001';
@@ -218,3 +227,9 @@ BEGIN
 
   RAISE NOTICE 'Ops demo seed complete.';
 END $$;
+
+ALTER TABLE device ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE device_product ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE "order" ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE order_line ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE order_line_redemption ALTER COLUMN tenant_id DROP DEFAULT;

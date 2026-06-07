@@ -1,3 +1,7 @@
+-- tenant_id is NOT NULL with no DB default; the seed runs as the table owner
+-- (bypasses RLS), so set a transient default to the bootstrap tenant, then drop it.
+ALTER TABLE product ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+
 INSERT INTO product (id, category_id, type, name, image, price_cents, jeton_id, is_active) VALUES
   ('01970000-0000-7000-0002-000000000001', '01970000-0000-7000-0000-000000000001', 'simple', 'Coca Cola', '/assets/images/products/coca-cola.png', 350, '01970000-0000-7000-0001-000000000003', true),
   ('01970000-0000-7000-0002-000000000002', '01970000-0000-7000-0000-000000000001', 'simple', 'El Tony Mate', '/assets/images/products/el-tony-mate.png', 350, '01970000-0000-7000-0001-000000000002', true),
@@ -15,3 +19,5 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO product (id, category_id, type, name, image, price_cents, jeton_id, is_active) VALUES
   ('01970000-0000-7000-0002-000000000020', '01970000-0000-7000-0000-000000000003', 'simple', 'Pommes', '/assets/images/products/pommes.png', 450, '01970000-0000-7000-0001-000000000004', true)
 ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE product ALTER COLUMN tenant_id DROP DEFAULT;

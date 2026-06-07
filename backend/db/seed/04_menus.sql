@@ -1,3 +1,9 @@
+-- tenant_id is NOT NULL with no DB default; the seed runs as the table owner
+-- (bypasses RLS), so set a transient default to the bootstrap tenant, then drop it.
+ALTER TABLE product ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE menu_slot ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE menu_slot_option ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+
 -- Menu products (in Menüs category)
 INSERT INTO product (id, category_id, type, name, image, price_cents, jeton_id, is_active) VALUES
   ('01970000-0000-7000-0002-000000000100', '01970000-0000-7000-0000-000000000004', 'menu', 'Menü Klein', '/assets/images/products/menu-1-klein.png', 1200, NULL, true),
@@ -44,3 +50,7 @@ INSERT INTO menu_slot_option (menu_slot_id, option_product_id) VALUES
   ('01970000-0000-7000-0003-000000000012', '01970000-0000-7000-0002-000000000004'),
   ('01970000-0000-7000-0003-000000000012', '01970000-0000-7000-0002-000000000006')
 ON CONFLICT DO NOTHING;
+
+ALTER TABLE product ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE menu_slot ALTER COLUMN tenant_id DROP DEFAULT;
+ALTER TABLE menu_slot_option ALTER COLUMN tenant_id DROP DEFAULT;

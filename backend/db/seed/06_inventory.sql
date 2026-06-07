@@ -1,3 +1,7 @@
+-- tenant_id is NOT NULL with no DB default; the seed runs as the table owner
+-- (bypasses RLS), so set a transient default to the bootstrap tenant, then drop it.
+ALTER TABLE inventory_ledger ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+
 -- Add opening balance for Getränke (50 each)
 INSERT INTO inventory_ledger (product_id, delta, reason)
 SELECT id, 50, 'opening_balance'
@@ -27,3 +31,5 @@ WHERE category_id = '01970000-0000-7000-0000-000000000003'
     SELECT 1 FROM inventory_ledger il
     WHERE il.product_id = product.id AND il.reason = 'opening_balance'
   );
+
+ALTER TABLE inventory_ledger ALTER COLUMN tenant_id DROP DEFAULT;
