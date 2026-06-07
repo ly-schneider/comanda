@@ -1,5 +1,4 @@
--- tenant_id is NOT NULL with no DB default; the seed runs as the table owner
--- (bypasses RLS), so set a transient default to the bootstrap tenant, then drop it.
+-- tenant_id has no DB default; default it to the bootstrap tenant for this seed.
 ALTER TABLE category ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
 
 INSERT INTO category (id, name, is_active, position) VALUES
