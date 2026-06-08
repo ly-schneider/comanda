@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
@@ -24,20 +23,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	// Setup test products
@@ -177,20 +163,7 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	// Setup menu product
@@ -298,20 +271,7 @@ func TestPaymentService_FindPendingOrderByAttemptID(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	// Setup
@@ -356,20 +316,7 @@ func TestPaymentService_MarkOrderPaidByPayrexx(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	t.Run("MarkOrderPaidByPayrexx updates order status", func(t *testing.T) {
@@ -407,20 +354,7 @@ func TestPaymentService_CleanupPendingOrderByID(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	// Setup
@@ -478,20 +412,7 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	svc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := context.Background()
 
 	// Setup expensive product

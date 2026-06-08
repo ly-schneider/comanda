@@ -169,3 +169,100 @@ logo:
           application/json:
             schema:
               $ref: "../schemas/common.yaml#/Error"
+
+payrexx:
+  get:
+    tags: [Settings]
+    summary: Get Payrexx connection status
+    description: |
+      Returns whether the tenant's Payrexx integration is configured and the
+      tenant-specific webhook URL to register in the Payrexx dashboard. Secrets
+      are never returned.
+    operationId: getPayrexxStatus
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Payrexx status
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [configured]
+              properties:
+                configured:
+                  type: boolean
+                instance:
+                  type: string
+                webhookUrl:
+                  type: string
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  put:
+    tags: [Settings]
+    summary: Configure Payrexx credentials
+    description: |
+      Validates the supplied Payrexx credentials with a live API call, then
+      stores them AES-256-GCM-encrypted on the tenant settings row. Returns the
+      tenant-specific webhook URL.
+    operationId: configurePayrexx
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [instance, apiSecret, webhookSecret]
+            properties:
+              instance:
+                type: string
+              apiSecret:
+                type: string
+              webhookSecret:
+                type: string
+    responses:
+      "200":
+        description: Payrexx configured
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [configured, webhookUrl]
+              properties:
+                configured:
+                  type: boolean
+                webhookUrl:
+                  type: string
+      "400":
+        description: Invalid or unverifiable credentials
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

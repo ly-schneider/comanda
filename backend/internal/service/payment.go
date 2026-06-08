@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/crypto"
 	"backend/internal/database"
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
@@ -16,6 +17,7 @@ import (
 	"backend/internal/generated/ent/orderpayment"
 	"backend/internal/generated/ent/product"
 	"backend/internal/inventory"
+	"backend/internal/payment"
 	"backend/internal/payrexx"
 	"backend/internal/repository"
 	"backend/internal/trace"
@@ -26,12 +28,12 @@ import (
 )
 
 type PaymentService interface {
-	// IsPayrexxEnabled returns true if Payrexx is configured (both instance and API secret set).
-	IsPayrexxEnabled() bool
+	// IsPaymentConfigured requires the tenant transaction (app.tenant_id set).
+	IsPaymentConfigured(ctx context.Context) bool
 	// PrepareAndCreateOrder validates items and creates a pending order with inventory reservation.
 	PrepareAndCreateOrder(ctx context.Context, in CreateCheckoutInput, userID *string, attemptID *string) (*CheckoutPreparation, error)
-	// CreatePayrexxGateway creates a Payrexx payment gateway for the prepared order.
-	CreatePayrexxGateway(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payrexx.Gateway, error)
+	// CreatePaymentCheckout creates a hosted checkout for the prepared order.
+	CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error)
 	// MarkOrderPaidByPayrexx marks an order as paid based on Payrexx webhook data.
 	MarkOrderPaidByPayrexx(ctx context.Context, orderID uuid.UUID, gatewayID, transactionID int, contactEmail *string) error
 	// MarkOrderPaidDev marks an order as paid in dev mode (no Payrexx gateway/transaction IDs).
@@ -44,8 +46,24 @@ type PaymentService interface {
 	CleanupPendingOrderByID(ctx context.Context, orderID uuid.UUID) error
 	// CleanupOtherPendingOrdersByAttemptID deletes other pending orders with the same attempt ID.
 	CleanupOtherPendingOrdersByAttemptID(ctx context.Context, attemptID string, keepOrderID uuid.UUID) (int64, error)
-	// GetPayrexxGateway retrieves a Payrexx gateway by ID.
-	GetPayrexxGateway(ctx context.Context, gatewayID int) (*payrexx.Gateway, error)
+	// GetPaymentCheckout retrieves a hosted checkout by its provider gateway ID.
+	GetPaymentCheckout(ctx context.Context, gatewayID int) (*payment.CheckoutResult, error)
+	// ConfigurePayrexx validates, encrypts and stores credentials, returning the webhook URL.
+	ConfigurePayrexx(ctx context.Context, in ConfigurePayrexxInput) (string, error)
+	// GetPayrexxStatus reports whether Payrexx is configured and the webhook URL.
+	GetPayrexxStatus(ctx context.Context) (PayrexxStatus, error)
+}
+
+type ConfigurePayrexxInput struct {
+	Instance      string
+	APISecret     string
+	WebhookSecret string
+}
+
+type PayrexxStatus struct {
+	Configured bool
+	Instance   string
+	WebhookURL string
 }
 
 type CreateCheckoutInput struct {
@@ -66,7 +84,7 @@ type CheckoutItemInput struct {
 type CheckoutPreparation struct {
 	OrderID       uuid.UUID
 	TotalCents    int64
-	LineItems     []payrexx.InvoiceItem
+	LineItems     []payment.LineItem
 	CustomerEmail *string
 	UserID        *string
 	Order         *ent.Order
@@ -74,7 +92,8 @@ type CheckoutPreparation struct {
 
 type paymentService struct {
 	cfg              config.Config
-	payrexxClient    *payrexx.Client
+	providers        *payment.Factory
+	encryptor        *crypto.Encryptor
 	orderRepo        repository.OrderRepository
 	orderLineRepo    repository.OrderLineRepository
 	orderPaymentRepo repository.OrderPaymentRepository
@@ -90,6 +109,8 @@ type paymentService struct {
 
 func NewPaymentService(
 	cfg config.Config,
+	providers *payment.Factory,
+	encryptor *crypto.Encryptor,
 	orderRepo repository.OrderRepository,
 	orderLineRepo repository.OrderLineRepository,
 	orderPaymentRepo repository.OrderPaymentRepository,
@@ -102,13 +123,10 @@ func NewPaymentService(
 	appDB *database.AppClient,
 	logger *zap.Logger,
 ) PaymentService {
-	var client *payrexx.Client
-	if cfg.Payrexx.InstanceName != "" && cfg.Payrexx.APISecret != "" {
-		client = payrexx.NewClient(cfg.Payrexx.InstanceName, cfg.Payrexx.APISecret)
-	}
 	return &paymentService{
 		cfg:              cfg,
-		payrexxClient:    client,
+		providers:        providers,
+		encryptor:        encryptor,
 		orderRepo:        orderRepo,
 		orderLineRepo:    orderLineRepo,
 		orderPaymentRepo: orderPaymentRepo,
@@ -123,8 +141,8 @@ func NewPaymentService(
 	}
 }
 
-func (s *paymentService) IsPayrexxEnabled() bool {
-	return s.payrexxClient != nil
+func (s *paymentService) IsPaymentConfigured(ctx context.Context) bool {
+	return s.providers != nil && s.providers.IsConfigured(ctx)
 }
 
 func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateCheckoutInput, userID *string, attemptID *string) (*CheckoutPreparation, error) {
@@ -377,11 +395,11 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		s.publishInventoryUpdates(ctx, inventoryEntries, preloadedStock)
 	}
 
-	// Prepare Payrexx line items from the params (we have all the data we need)
-	lineItems := make([]payrexx.InvoiceItem, 0)
+	// Prepare provider line items from the params (we have all the data we need)
+	lineItems := make([]payment.LineItem, 0)
 	for _, line := range orderLines {
 		if line.ParentLineID == nil && line.UnitPriceCents > 0 && line.Quantity > 0 {
-			lineItems = append(lineItems, payrexx.InvoiceItem{
+			lineItems = append(lineItems, payment.LineItem{
 				Name:     line.Title,
 				Quantity: line.Quantity,
 				Amount:   int(line.UnitPriceCents),
@@ -403,15 +421,19 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}, nil
 }
 
-func (s *paymentService) CreatePayrexxGateway(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payrexx.Gateway, error) {
-	ctx, finish := trace.StartSpan(ctx, "service", "payment.create_gateway")
+func (s *paymentService) CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error) {
+	ctx, finish := trace.StartSpan(ctx, "service", "payment.create_checkout")
 	defer finish()
 	trace.Data(ctx, "gateway.order_id", prep.OrderID.String())
 	trace.Data(ctx, "gateway.amount_cents", prep.TotalCents)
 
-	if s.payrexxClient == nil {
-		trace.Err(ctx, fmt.Errorf("payrexx client not configured"))
-		return nil, fmt.Errorf("payrexx client not configured")
+	if s.providers == nil {
+		return nil, fmt.Errorf("payment provider factory not configured")
+	}
+	provider, err := s.providers.For(ctx)
+	if err != nil {
+		trace.Err(ctx, err)
+		return nil, err
 	}
 
 	currency := "CHF"
@@ -425,21 +447,21 @@ func (s *paymentService) CreatePayrexxGateway(ctx context.Context, prep *Checkou
 	defer gatewayCancel()
 	// TODO(P4): the TWINT payment-means and Payrexx's 5000-unit TWINT limit are
 	// CHF-specific; revisit when non-CHF currencies / providers land.
-	gateway, err := s.payrexxClient.CreateGateway(gatewayCtx, payrexx.CreateGatewayParams{
-		Amount:             int(prep.TotalCents),
+	result, err := provider.CreateCheckout(gatewayCtx, payment.CheckoutRequest{
+		AmountCents:        int(prep.TotalCents),
 		Currency:           currency,
 		ReferenceID:        prep.OrderID.String(),
 		SuccessRedirectURL: successURL,
 		FailedRedirectURL:  failedURL,
 		CancelRedirectURL:  cancelURL,
 		PaymentMeans:       []string{"twint"},
-		InvoiceItems:       prep.LineItems,
+		LineItems:          prep.LineItems,
 		CustomerEmail:      safeStr(prep.CustomerEmail),
 		Purpose:            "Comanda Order",
 		ValidityMinutes:    15,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create payrexx gateway: %w", err)
+		return nil, fmt.Errorf("create payment checkout: %w", err)
 	}
 
 	// Update order with gateway ID - get current order first to preserve all fields
@@ -447,12 +469,12 @@ func (s *paymentService) CreatePayrexxGateway(ctx context.Context, prep *Checkou
 	if err != nil {
 		return nil, err
 	}
-	gwID := gateway.ID
+	gwID := result.GatewayID
 	if _, err := s.orderRepo.Update(ctx, ord.ID, ord.TotalCents, ord.Status, ord.Origin, ord.CustomerID, ord.ContactEmail, ord.PaymentAttemptID, &gwID, ord.PayrexxTransactionID); err != nil {
 		return nil, fmt.Errorf("update order with gateway: %w", err)
 	}
 
-	return gateway, nil
+	return result, nil
 }
 
 func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID uuid.UUID, gatewayID, transactionID int, contactEmail *string) error {
@@ -591,11 +613,73 @@ func (s *paymentService) CleanupOtherPendingOrdersByAttemptID(ctx context.Contex
 	return s.orderRepo.DeletePendingByAttemptIDExcept(ctx, attemptID, keepOrderID)
 }
 
-func (s *paymentService) GetPayrexxGateway(ctx context.Context, gatewayID int) (*payrexx.Gateway, error) {
-	if s.payrexxClient == nil {
-		return nil, fmt.Errorf("payrexx client not configured")
+func (s *paymentService) GetPaymentCheckout(ctx context.Context, gatewayID int) (*payment.CheckoutResult, error) {
+	if s.providers == nil {
+		return nil, fmt.Errorf("payment provider factory not configured")
 	}
-	return s.payrexxClient.GetGateway(ctx, gatewayID)
+	provider, err := s.providers.For(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return provider.GetCheckout(ctx, gatewayID)
+}
+
+func (s *paymentService) ConfigurePayrexx(ctx context.Context, in ConfigurePayrexxInput) (string, error) {
+	if s.encryptor == nil {
+		return "", fmt.Errorf("payment master key not configured")
+	}
+	if in.Instance == "" || in.APISecret == "" || in.WebhookSecret == "" {
+		return "", fmt.Errorf("instance, api secret and webhook secret are required")
+	}
+
+	if err := payment.ValidatePayrexxCredentials(ctx, in.Instance, in.APISecret); err != nil {
+		return "", err
+	}
+
+	apiEnc, err := s.encryptor.EncryptString(in.APISecret)
+	if err != nil {
+		return "", fmt.Errorf("encrypt api secret: %w", err)
+	}
+	webhookEnc, err := s.encryptor.EncryptString(in.WebhookSecret)
+	if err != nil {
+		return "", fmt.Errorf("encrypt webhook secret: %w", err)
+	}
+
+	token, err := s.settingsRepo.EnsureWebhookToken(ctx)
+	if err != nil {
+		return "", fmt.Errorf("ensure webhook token: %w", err)
+	}
+
+	if err := s.settingsRepo.UpsertPayrexxCredentials(ctx, repository.PayrexxCredentials{
+		Instance:         in.Instance,
+		APISecretEnc:     apiEnc,
+		WebhookSecretEnc: webhookEnc,
+		WebhookToken:     token,
+	}); err != nil {
+		return "", fmt.Errorf("store payrexx credentials: %w", err)
+	}
+
+	return s.webhookURL(token), nil
+}
+
+func (s *paymentService) GetPayrexxStatus(ctx context.Context) (PayrexxStatus, error) {
+	creds, err := s.settingsRepo.GetPayrexxCredentials(ctx)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return PayrexxStatus{Configured: false}, nil
+		}
+		return PayrexxStatus{}, err
+	}
+	return PayrexxStatus{
+		Configured: true,
+		Instance:   creds.Instance,
+		WebhookURL: s.webhookURL(creds.WebhookToken),
+	}, nil
+}
+
+func (s *paymentService) webhookURL(token string) string {
+	base := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
+	return base + "/v1/payments/webhooks/payrexx/" + token
 }
 
 // beginTenantTx opens a short transaction on the RLS-bound app pool, sets

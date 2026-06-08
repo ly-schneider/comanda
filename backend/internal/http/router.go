@@ -66,6 +66,14 @@ func NewRouter(
 	// ── Android update check (public, no auth) ──────────────────────
 	r.Get("/v1/android/latest", apiHandlers.GetAndroidLatestVersion)
 
+	// ── Payrexx webhook (per-tenant, no auth, no Host) ──────────────
+	// Wired outside the /v1 tenant-tx group: with no tenant-bearing Host it can't
+	// use the Host resolver, so the handler resolves {tenantToken} and opens its
+	// own RLS-bound tenant tx.
+	r.Post("/v1/payments/webhooks/payrexx/{tenantToken}", func(w http.ResponseWriter, req *http.Request) {
+		apiHandlers.HandlePayrexxWebhook(w, req, chi.URLParam(req, "tenantToken"))
+	})
+
 	// ── API documentation (Scalar) ───────────────────────────────────
 	r.Get("/docs", DocsScalarHandler())
 	r.Get("/docs/openapi.json", DocsOpenAPIHandler())
@@ -88,7 +96,6 @@ func NewRouter(
 		v1.Get("/devices/pairings/{code}", wrapper.GetDevicePairing)
 		v1.Post("/invites/verify", wrapper.VerifyInvite)
 		v1.Post("/invites/accept", wrapper.AcceptInvite)
-		v1.Post("/payments/webhooks/payrexx", wrapper.HandlePayrexxWebhook)
 		v1.Get("/payments/{paymentId}", wrapper.GetPayment)
 		v1.Post("/auth/otp-email", wrapper.SendOtpEmail)
 
@@ -193,6 +200,8 @@ func NewRouter(
 			admin.Patch("/settings", wrapper.UpdateSettings)
 			admin.Post("/settings/logo", wrapper.UploadBrandingLogo)
 			admin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
+			admin.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
+			admin.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
 
 			admin.Get("/jetons", wrapper.ListJetons)
 			admin.Post("/jetons", wrapper.CreateJeton)

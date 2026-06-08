@@ -193,13 +193,26 @@ Payrexx handles payment gateway creation for TWINT (Swiss mobile payment):
 
 Key configuration (see `.env.example` for full list):
 
-| Variable                   | Purpose                            |
-| -------------------------- | ---------------------------------- |
-| `DATABASE_URL`             | PostgreSQL connection string       |
-| `BETTER_AUTH_URL`          | Next.js app URL for JWKS discovery |
-| `PAYREXX_INSTANCE`         | Payrexx instance name              |
-| `PAYREXX_API_SECRET`       | Payrexx request signing            |
-| `PAYREXX_WEBHOOK_SECRET`   | Webhook verification               |
-| `PUBLIC_BASE_URL`          | Frontend URL for redirects         |
-| `PLUNK_API_KEY`            | Transactional email service        |
-| `SECURITY_TRUSTED_ORIGINS` | CORS allowed origins               |
+| Variable                   | Purpose                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`             | PostgreSQL connection string (privileged role)                                                              |
+| `DATABASE_URL_APP`         | RLS-scoped app role connection string                                                                       |
+| `BETTER_AUTH_URL`          | Next.js app URL for JWKS discovery                                                                          |
+| `PAYMENTS_MASTER_KEY`      | base64-encoded 32-byte AES-256-GCM key (Doppler) that encrypts per-tenant payment/email credentials at rest |
+| `PAYREXX_INSTANCE`         | Legacy GLOBAL Payrexx instance — first-boot seed only (per-tenant creds live encrypted on the settings row) |
+| `PAYREXX_API_SECRET`       | Legacy GLOBAL Payrexx secret — first-boot seed only                                                         |
+| `PAYREXX_WEBHOOK_SECRET`   | Legacy GLOBAL webhook secret — first-boot seed only                                                         |
+| `PUBLIC_BASE_URL`          | Frontend URL for redirects; also builds per-tenant webhook URLs                                             |
+| `PLUNK_API_KEY`            | Legacy GLOBAL Plunk key — first-boot seed only (per-tenant creds live encrypted on the settings row)        |
+| `SECURITY_TRUSTED_ORIGINS` | CORS allowed origins                                                                                        |
+
+> **Per-tenant payments (P4).** Each tenant supplies its own Payrexx
+> (`instance`/`api_secret`/`webhook_secret`) and optionally Plunk credentials via
+> `PUT /v1/settings/payrexx`. They are validated with a live API call, then stored
+> AES-256-GCM-encrypted (master key = `PAYMENTS_MASTER_KEY`) on the tenant settings
+> row — never in plaintext. Inbound Payrexx webhooks are routed per tenant at
+> `POST /v1/payments/webhooks/payrexx/{tenantToken}`; the handler resolves the
+> token to a tenant via the privileged client, then verifies the HMAC against
+> THAT tenant's secret, so a webhook can never be cross-attributed. The legacy
+> global `PAYREXX_*` / `PLUNK_*` env vars are now only an optional first-boot seed
+> that populates the bootstrap tenant's encrypted credentials.

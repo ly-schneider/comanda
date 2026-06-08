@@ -396,7 +396,7 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 			returnURL = *body.ReturnUrl
 		}
 
-		if !h.payments.IsPayrexxEnabled() {
+		if !h.payments.IsPaymentConfigured(ctx) {
 			h.logger.Warn("Payrexx not configured — simulating payment for dev",
 				zap.String("orderId", id.String()))
 			if err := h.payments.MarkOrderPaidDev(ctx, id); err != nil {
@@ -423,9 +423,9 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 			failedURL = returnURL + sep + "result=failed"
 			cancelURL = returnURL + sep + "result=cancel"
 		}
-		gw, err := h.payments.CreatePayrexxGateway(ctx, prep, returnURL, failedURL, cancelURL)
+		gw, err := h.payments.CreatePaymentCheckout(ctx, prep, returnURL, failedURL, cancelURL)
 		if err != nil {
-			h.logger.Error("payrexx gateway creation failed",
+			h.logger.Error("payment checkout creation failed",
 				zap.Error(err),
 				zap.String("orderId", id.String()),
 				zap.Int64("totalCents", prep.TotalCents),
@@ -433,7 +433,7 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 			writeError(w, http.StatusBadGateway, "gateway_error", err.Error())
 			return
 		}
-		resp := map[string]any{"orderId": id.String(), "method": "twint", "redirectUrl": gw.Link, "gatewayId": gw.ID}
+		resp := map[string]any{"orderId": id.String(), "method": "twint", "redirectUrl": gw.Link, "gatewayId": gw.GatewayID}
 		cachePaymentResponse(resp)
 		response.WriteJSON(w, http.StatusCreated, resp)
 

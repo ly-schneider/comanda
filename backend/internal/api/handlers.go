@@ -3,8 +3,11 @@ package api
 import (
 	"backend/internal/blobstore"
 	"backend/internal/config"
+	"backend/internal/database"
 	"backend/internal/generated/api/generated"
+	"backend/internal/generated/ent"
 	"backend/internal/inventory"
+	"backend/internal/payment"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -35,8 +38,13 @@ type Handlers struct {
 	blobStore     *blobstore.Client
 	inventoryHub  *inventory.Hub
 
-	payrexxWebhookSecret string
-	logger               *zap.Logger
+	// privileged resolves {tenantToken} -> tenant before context exists; appDB
+	// opens the RLS-bound tenant tx for the webhook path.
+	privileged *ent.Client
+	appDB      *database.AppClient
+	providers  *payment.Factory
+
+	logger *zap.Logger
 }
 
 // Compile-time check that Handlers implements ServerInterface.
@@ -64,31 +72,36 @@ type HandlersDeps struct {
 	Idempotency   repository.IdempotencyRepository
 	BlobStore     *blobstore.Client `optional:"true"`
 	InventoryHub  *inventory.Hub
+	Privileged    *database.PrivilegedClient
+	AppDB         *database.AppClient
+	Providers     *payment.Factory
 	Logger        *zap.Logger
 }
 
 // NewHandlers creates a new Handlers with all required service dependencies.
 func NewHandlers(deps HandlersDeps) *Handlers {
 	return &Handlers{
-		categories:           deps.Categories,
-		products:             deps.Products,
-		orders:               deps.Orders,
-		payments:             deps.Payments,
-		pos:                  deps.POS,
-		settings:             deps.Settings,
-		stations:             deps.Stations,
-		invites:              deps.Invites,
-		email:                deps.Email,
-		users:                deps.Users,
-		devices:              deps.Devices,
-		club100:              deps.Club100,
-		volunteers:           deps.Volunteers,
-		androidUpdate:        deps.AndroidUpdate,
-		verification:         deps.Verification,
-		idempotency:          deps.Idempotency,
-		blobStore:            deps.BlobStore,
-		inventoryHub:         deps.InventoryHub,
-		payrexxWebhookSecret: deps.Config.Payrexx.WebhookSecret,
-		logger:               deps.Logger,
+		categories:    deps.Categories,
+		products:      deps.Products,
+		orders:        deps.Orders,
+		payments:      deps.Payments,
+		pos:           deps.POS,
+		settings:      deps.Settings,
+		stations:      deps.Stations,
+		invites:       deps.Invites,
+		email:         deps.Email,
+		users:         deps.Users,
+		devices:       deps.Devices,
+		club100:       deps.Club100,
+		volunteers:    deps.Volunteers,
+		androidUpdate: deps.AndroidUpdate,
+		verification:  deps.Verification,
+		idempotency:   deps.Idempotency,
+		blobStore:     deps.BlobStore,
+		inventoryHub:  deps.InventoryHub,
+		privileged:    deps.Privileged.Client,
+		appDB:         deps.AppDB,
+		providers:     deps.Providers,
+		logger:        deps.Logger,
 	}
 }

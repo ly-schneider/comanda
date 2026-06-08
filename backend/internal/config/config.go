@@ -16,6 +16,7 @@ type Config struct {
 	Postgres    PostgresConfig
 	Logger      LoggerConfig
 	Security    SecurityConfig
+	Payments    PaymentsConfig
 	Payrexx     PayrexxConfig
 	Plunk       PlunkConfig
 	BlobStorage BlobStorageConfig
@@ -75,6 +76,12 @@ type SecurityConfig struct {
 	TrustedOrigins []string
 }
 
+type PaymentsConfig struct {
+	MasterKey string // PAYMENTS_MASTER_KEY - base64-encoded 32-byte AES key
+}
+
+// PayrexxConfig holds legacy global credentials, used only as an optional
+// first-boot seed onto the bootstrap tenant. No-op when empty.
 type PayrexxConfig struct {
 	InstanceName  string // PAYREXX_INSTANCE - Payrexx instance name
 	APISecret     string // PAYREXX_API_SECRET - API secret for HMAC signature
@@ -140,6 +147,9 @@ func Load() Config {
 			EnableHSTS:     getEnvAsBool("SECURITY_ENABLE_HSTS"),
 			EnableCSP:      getEnvAsBool("SECURITY_ENABLE_CSP"),
 			TrustedOrigins: getTrustedOrigins("SECURITY_TRUSTED_ORIGINS"),
+		},
+		Payments: PaymentsConfig{
+			MasterKey: getEnvOptional("PAYMENTS_MASTER_KEY"),
 		},
 		Payrexx: PayrexxConfig{
 			InstanceName:  getEnvOptional("PAYREXX_INSTANCE"),

@@ -46,6 +46,21 @@ func NewClient(instanceName, apiSecret string) *Client {
 	}
 }
 
+// ValidateCredentials confirms the instance + API secret authenticate, used
+// before encrypting and storing per-tenant credentials.
+func (c *Client) ValidateCredentials(ctx context.Context) error {
+	if c.instanceName == "" || c.apiSecret == "" {
+		return fmt.Errorf("payrexx: missing instance or api secret")
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultRequestTimeout)
+		defer cancel()
+	}
+	_, err := c.doRequest(ctx, http.MethodGet, "SignatureCheck/", nil)
+	return err
+}
+
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, params map[string]any) ([]byte, error) {
 	reqURL := apiBaseURL + endpoint + "?instance=" + url.QueryEscape(c.instanceName)
 

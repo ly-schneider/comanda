@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/crypto"
+	"backend/internal/repository"
 
 	"go.uber.org/zap"
 )
@@ -34,19 +36,68 @@ type EmailService interface {
 }
 
 type emailService struct {
-	cfg    config.PlunkConfig
-	appEnv string
-	client *http.Client
-	logger *zap.Logger
+	cfg          config.PlunkConfig
+	appEnv       string
+	client       *http.Client
+	settingsRepo repository.SettingsRepository
+	encryptor    *crypto.Encryptor
+	logger       *zap.Logger
 }
 
-func NewEmailService(cfg config.Config, logger *zap.Logger) EmailService {
+func NewEmailService(cfg config.Config, settingsRepo repository.SettingsRepository, encryptor *crypto.Encryptor, logger *zap.Logger) EmailService {
 	return &emailService{
-		cfg:    cfg.Plunk,
-		appEnv: strings.ToLower(strings.TrimSpace(cfg.App.AppEnv)),
-		client: &http.Client{Timeout: 30 * time.Second},
-		logger: logger,
+		cfg:          cfg.Plunk,
+		appEnv:       strings.ToLower(strings.TrimSpace(cfg.App.AppEnv)),
+		client:       &http.Client{Timeout: 30 * time.Second},
+		settingsRepo: settingsRepo,
+		encryptor:    encryptor,
+		logger:       logger,
 	}
+}
+
+type plunkCreds struct {
+	apiKey    string
+	fromName  string
+	fromEmail string
+	replyTo   string
+}
+
+// resolveCreds falls back to the global config credentials only when no
+// per-tenant credentials exist, keeping the bootstrap tenant and local dev
+// working. ok=false means callers skip sending.
+func (s *emailService) resolveCreds(ctx context.Context) (plunkCreds, bool) {
+	if s.encryptor != nil && s.settingsRepo != nil {
+		creds, err := s.settingsRepo.GetPlunkCredentials(ctx)
+		if err == nil {
+			key, derr := s.encryptor.DecryptString(creds.APIKeyEnc)
+			if derr != nil {
+				s.logger.Error("plunk: failed to decrypt per-tenant api key", zap.Error(derr))
+				return plunkCreds{}, false
+			}
+			return plunkCreds{
+				apiKey:    key,
+				fromName:  firstNonEmpty(creds.FromName, s.cfg.FromName),
+				fromEmail: firstNonEmpty(creds.FromEmail, s.cfg.FromEmail),
+				replyTo:   firstNonEmpty(creds.ReplyTo, s.cfg.ReplyTo),
+			}, true
+		}
+	}
+	if s.cfg.APIKey != "" {
+		return plunkCreds{
+			apiKey:    s.cfg.APIKey,
+			fromName:  s.cfg.FromName,
+			fromEmail: s.cfg.FromEmail,
+			replyTo:   s.cfg.ReplyTo,
+		}, true
+	}
+	return plunkCreds{}, false
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (s *emailService) subject(base string) string {
@@ -57,9 +108,9 @@ func (s *emailService) subject(base string) string {
 }
 
 func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL string, expiresAt time.Time) error {
-	// Check if Plunk is configured
-	if s.cfg.APIKey == "" {
-		s.logger.Warn("Plunk API key not configured, skipping email",
+	creds, ok := s.resolveCreds(ctx)
+	if !ok {
+		s.logger.Warn("Plunk not configured, skipping email",
 			zap.String("to", to),
 			zap.String("inviteURL", inviteURL),
 		)
@@ -80,14 +131,26 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 		Subject:    s.subject("Admin-Einladung"),
 		Body:       htmlBody,
 		Subscribed: false,
-		Name:       s.cfg.FromName,
-		From:       s.cfg.FromEmail,
-		Reply:      s.cfg.ReplyTo,
+		Name:       creds.fromName,
+		From:       creds.fromEmail,
+		Reply:      creds.replyTo,
 		Headers: map[string]string{
 			"X-Text-Version": textBody,
 		},
 	}
 
+	if err := s.send(ctx, creds, payload); err != nil {
+		return err
+	}
+
+	s.logger.Info("sent invite email",
+		zap.String("to", to),
+	)
+
+	return nil
+}
+
+func (s *emailService) send(ctx context.Context, creds plunkCreds, payload PlunkSendRequest) error {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal email payload: %w", err)
@@ -99,7 +162,7 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
+	req.Header.Set("Authorization", "Bearer "+creds.apiKey)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -108,19 +171,21 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var respBody bytes.Buffer
+		_, _ = respBody.ReadFrom(resp.Body)
+		s.logger.Error("plunk error response",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", respBody.String()),
+		)
 		return fmt.Errorf("plunk returned status %d", resp.StatusCode)
 	}
-
-	s.logger.Info("sent invite email",
-		zap.String("to", to),
-	)
-
 	return nil
 }
 
 func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, otpType OTPType) error {
-	if s.cfg.APIKey == "" {
-		s.logger.Warn("Plunk API key not configured, skipping OTP email",
+	creds, ok := s.resolveCreds(ctx)
+	if !ok {
+		s.logger.Warn("Plunk not configured, skipping OTP email",
 			zap.String("to", to),
 			zap.String("type", string(otpType)),
 		)
@@ -146,42 +211,16 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 		Subject:    subject,
 		Body:       htmlBody,
 		Subscribed: false,
-		Name:       s.cfg.FromName,
-		From:       s.cfg.FromEmail,
-		Reply:      s.cfg.ReplyTo,
+		Name:       creds.fromName,
+		From:       creds.fromEmail,
+		Reply:      creds.replyTo,
 		Headers: map[string]string{
 			"X-Text-Version": textBody,
 		},
 	}
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal OTP email payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, plunkSendEndpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send OTP email: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var respBody bytes.Buffer
-		_, _ = respBody.ReadFrom(resp.Body)
-		s.logger.Error("plunk error response",
-			zap.Int("status", resp.StatusCode),
-			zap.String("body", respBody.String()),
-			zap.String("request_body", string(jsonData)),
-		)
-		return fmt.Errorf("plunk returned status %d", resp.StatusCode)
+	if err := s.send(ctx, creds, payload); err != nil {
+		return err
 	}
 
 	s.logger.Info("sent OTP email",
@@ -193,8 +232,9 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 }
 
 func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data ReceiptEmailData) error {
-	if s.cfg.APIKey == "" {
-		s.logger.Warn("Plunk API key not configured, skipping receipt email",
+	creds, ok := s.resolveCreds(ctx)
+	if !ok {
+		s.logger.Warn("Plunk not configured, skipping receipt email",
 			zap.String("to", to),
 			zap.String("orderId", data.OrderID),
 		)
@@ -209,35 +249,16 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 		Subject:    s.subject("Deine Quittung — " + data.Brand),
 		Body:       htmlBody,
 		Subscribed: false,
-		Name:       s.cfg.FromName,
-		From:       s.cfg.FromEmail,
-		Reply:      s.cfg.ReplyTo,
+		Name:       creds.fromName,
+		From:       creds.fromEmail,
+		Reply:      creds.replyTo,
 		Headers: map[string]string{
 			"X-Text-Version": textBody,
 		},
 	}
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal receipt email payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, plunkSendEndpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send receipt email: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("plunk returned status %d", resp.StatusCode)
+	if err := s.send(ctx, creds, payload); err != nil {
+		return err
 	}
 
 	s.logger.Info("sent receipt email",

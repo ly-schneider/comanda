@@ -30,6 +30,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
 )
 
 // DefaultTestTenantID is the tenant every functional integration test runs
@@ -260,6 +261,27 @@ type Fixtures struct {
 // NewFixtures creates a new Fixtures helper.
 func NewFixtures(repos *Repositories) *Fixtures {
 	return &Fixtures{repos: repos, ctx: context.Background()}
+}
+
+// NewPaymentSvc builds a PaymentService with a nil provider factory/encryptor;
+// cross-tenant payment isolation is covered by the dedicated RLS tests.
+func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.ProductService) service.PaymentService {
+	return service.NewPaymentService(
+		cfg,
+		nil, // provider factory
+		nil, // encryptor
+		repos.Order,
+		repos.OrderLine,
+		repos.OrderPayment,
+		products,
+		repos.MenuSlot,
+		repos.Inventory,
+		nil, // inventory hub
+		nil, // email service
+		repos.Settings,
+		nil, // app db
+		zap.NewNop(),
+	)
 }
 
 // NewProductSvc builds a ProductService wired to the test repositories.

@@ -48,6 +48,21 @@ func (f *fakeSettingsRepo) TenantName(context.Context) (string, error) {
 	f.touched = true
 	return f.tenant, nil
 }
+func (f *fakeSettingsRepo) EnsureWebhookToken(context.Context) (string, error) {
+	return "test-token", nil
+}
+func (f *fakeSettingsRepo) UpsertPayrexxCredentials(context.Context, repository.PayrexxCredentials) error {
+	return nil
+}
+func (f *fakeSettingsRepo) GetPayrexxCredentials(context.Context) (*repository.PayrexxCredentials, error) {
+	return nil, repository.ErrNotFound
+}
+func (f *fakeSettingsRepo) UpsertPlunkCredentials(context.Context, repository.PlunkCredentials) error {
+	return nil
+}
+func (f *fakeSettingsRepo) GetPlunkCredentials(context.Context) (*repository.PlunkCredentials, error) {
+	return nil, repository.ErrNotFound
+}
 
 func newSvc(repo repository.SettingsRepository) SettingsService {
 	return &settingsService{settings: repo}

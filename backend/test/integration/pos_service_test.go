@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func TestPOSService_GetDeviceByToken(t *testing.T) {
@@ -25,20 +24,7 @@ func TestPOSService_GetDeviceByToken(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	paymentSvc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 
@@ -77,20 +63,7 @@ func TestPOSService_CreateOrder(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	paymentSvc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 
@@ -164,20 +137,7 @@ func TestPOSService_PayCash(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	paymentSvc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 
@@ -223,20 +183,7 @@ func TestPOSService_PayCard(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	paymentSvc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 
@@ -275,20 +222,7 @@ func TestPOSService_PayTwint(t *testing.T) {
 	fixtures := NewFixtures(repos)
 	cfg := TestConfig()
 
-	paymentSvc := service.NewPaymentService(
-		cfg,
-		repos.Order,
-		repos.OrderLine,
-		repos.OrderPayment,
-		NewProductSvc(repos),
-		repos.MenuSlot,
-		repos.Inventory,
-		nil,
-		nil,
-		repos.Settings,
-		nil,
-		zap.NewNop(),
-	)
+	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 

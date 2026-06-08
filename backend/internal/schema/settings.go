@@ -85,6 +85,46 @@ func (Settings) Fields() []ent.Field {
 		field.String("payment_provider").
 			MaxLen(50).
 			Default("payrexx"),
+		// Opaque token routing inbound webhooks to a tenant before any tenant
+		// context exists, so it is unique-indexed and never the raw tenant_id.
+		// Resolving by token still requires the tenant's secret to verify the HMAC.
+		field.String("payment_webhook_token").
+			MaxLen(64).
+			Optional().
+			Nillable().
+			Unique(),
+		// Plaintext: the instance name is part of the API URL, not a secret.
+		field.String("payrexx_instance").
+			MaxLen(100).
+			Optional().
+			Nillable(),
+		field.Text("payrexx_api_secret_enc").
+			Optional().
+			Nillable(),
+		field.Text("payrexx_webhook_secret_enc").
+			Optional().
+			Nillable(),
+		field.Time("payrexx_configured_at").
+			Optional().
+			Nillable(),
+		field.Text("plunk_api_key_enc").
+			Optional().
+			Nillable(),
+		field.String("plunk_from_name").
+			MaxLen(100).
+			Optional().
+			Nillable(),
+		field.String("plunk_from_email").
+			MaxLen(255).
+			Optional().
+			Nillable(),
+		field.String("plunk_reply_to").
+			MaxLen(255).
+			Optional().
+			Nillable(),
+		field.Time("plunk_configured_at").
+			Optional().
+			Nillable(),
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),

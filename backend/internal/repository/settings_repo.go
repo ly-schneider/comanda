@@ -2,12 +2,16 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"time"
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/club100freeproduct"
 	"backend/internal/generated/ent/settings"
 	"backend/internal/generated/ent/tenant"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 )
 
@@ -21,6 +25,30 @@ type SettingsRepository interface {
 	UpdateBranding(ctx context.Context, b BrandingUpdate) error
 	// TenantName returns the current tenant's name (RLS scopes it to one row).
 	TenantName(ctx context.Context) (string, error)
+	// EnsureWebhookToken returns the tenant's webhook token, generating one if absent.
+	EnsureWebhookToken(ctx context.Context) (string, error)
+	UpsertPayrexxCredentials(ctx context.Context, c PayrexxCredentials) error
+	// GetPayrexxCredentials returns ErrNotFound when the tenant has none configured.
+	GetPayrexxCredentials(ctx context.Context) (*PayrexxCredentials, error)
+	UpsertPlunkCredentials(ctx context.Context, c PlunkCredentials) error
+	// GetPlunkCredentials returns ErrNotFound when the tenant has none configured.
+	GetPlunkCredentials(ctx context.Context) (*PlunkCredentials, error)
+}
+
+// PayrexxCredentials carries the per-tenant Payrexx connection. Instance is
+// plaintext (part of the API URL); the secrets are AES-256-GCM ciphertext.
+type PayrexxCredentials struct {
+	Instance         string
+	APISecretEnc     string
+	WebhookSecretEnc string
+	WebhookToken     string
+}
+
+type PlunkCredentials struct {
+	APIKeyEnc string
+	FromName  string
+	FromEmail string
+	ReplyTo   string
 }
 
 // BrandingUpdate carries branding columns to upsert. A nil pointer leaves the
@@ -299,4 +327,162 @@ func (r *settingsRepo) UpdateBranding(ctx context.Context, b BrandingUpdate) err
 		}).
 		Exec(ctx)
 	return translateError(err)
+}
+
+func newWebhookToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func (r *settingsRepo) EnsureWebhookToken(ctx context.Context) (string, error) {
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
+
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err == nil && e.PaymentWebhookToken != nil && *e.PaymentWebhookToken != "" {
+		return *e.PaymentWebhookToken, nil
+	}
+	if err != nil && translateError(err) != ErrNotFound {
+		return "", translateError(err)
+	}
+
+	token, err := newWebhookToken()
+	if err != nil {
+		return "", err
+	}
+
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetPaymentWebhookToken(token)
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+	// COALESCE keeps any value already stored so a concurrent caller can't
+	// clobber a token that was already handed out.
+	if err := create.
+		OnConflict(
+			sql.ConflictColumns(settings.FieldID),
+			sql.ResolveWith(func(u *sql.UpdateSet) {
+				u.Set(settings.FieldPaymentWebhookToken, sql.Expr(
+					"COALESCE("+settings.Table+"."+settings.FieldPaymentWebhookToken+", EXCLUDED."+settings.FieldPaymentWebhookToken+")",
+				))
+			}),
+		).
+		Exec(ctx); err != nil {
+		return "", translateError(err)
+	}
+	stored, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err != nil {
+		return "", translateError(err)
+	}
+	if stored.PaymentWebhookToken == nil || *stored.PaymentWebhookToken == "" {
+		return token, nil
+	}
+	return *stored.PaymentWebhookToken, nil
+}
+
+func (r *settingsRepo) UpsertPayrexxCredentials(ctx context.Context, c PayrexxCredentials) error {
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
+	now := time.Now()
+
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetPayrexxInstance(c.Instance).
+		SetPayrexxAPISecretEnc(c.APISecretEnc).
+		SetPayrexxWebhookSecretEnc(c.WebhookSecretEnc).
+		SetPaymentWebhookToken(c.WebhookToken).
+		SetPaymentProvider("payrexx").
+		SetPayrexxConfiguredAt(now)
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+
+	err := create.
+		OnConflictColumns(settings.FieldID).
+		Update(func(u *ent.SettingsUpsert) {
+			u.SetPayrexxInstance(c.Instance)
+			u.SetPayrexxAPISecretEnc(c.APISecretEnc)
+			u.SetPayrexxWebhookSecretEnc(c.WebhookSecretEnc)
+			u.SetPaymentWebhookToken(c.WebhookToken)
+			u.SetPaymentProvider("payrexx")
+			u.SetPayrexxConfiguredAt(now)
+		}).
+		Exec(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) GetPayrexxCredentials(ctx context.Context) (*PayrexxCredentials, error) {
+	id := r.settingsID(ctx)
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	if e.PayrexxInstance == nil || e.PayrexxAPISecretEnc == nil || e.PayrexxWebhookSecretEnc == nil {
+		return nil, ErrNotFound
+	}
+	token := ""
+	if e.PaymentWebhookToken != nil {
+		token = *e.PaymentWebhookToken
+	}
+	return &PayrexxCredentials{
+		Instance:         *e.PayrexxInstance,
+		APISecretEnc:     *e.PayrexxAPISecretEnc,
+		WebhookSecretEnc: *e.PayrexxWebhookSecretEnc,
+		WebhookToken:     token,
+	}, nil
+}
+
+func (r *settingsRepo) UpsertPlunkCredentials(ctx context.Context, c PlunkCredentials) error {
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
+	now := time.Now()
+
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetPlunkAPIKeyEnc(c.APIKeyEnc).
+		SetPlunkFromName(c.FromName).
+		SetPlunkFromEmail(c.FromEmail).
+		SetPlunkReplyTo(c.ReplyTo).
+		SetPlunkConfiguredAt(now)
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+
+	err := create.
+		OnConflictColumns(settings.FieldID).
+		Update(func(u *ent.SettingsUpsert) {
+			u.SetPlunkAPIKeyEnc(c.APIKeyEnc)
+			u.SetPlunkFromName(c.FromName)
+			u.SetPlunkFromEmail(c.FromEmail)
+			u.SetPlunkReplyTo(c.ReplyTo)
+			u.SetPlunkConfiguredAt(now)
+		}).
+		Exec(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) GetPlunkCredentials(ctx context.Context) (*PlunkCredentials, error) {
+	id := r.settingsID(ctx)
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	if e.PlunkAPIKeyEnc == nil {
+		return nil, ErrNotFound
+	}
+	out := &PlunkCredentials{APIKeyEnc: *e.PlunkAPIKeyEnc}
+	if e.PlunkFromName != nil {
+		out.FromName = *e.PlunkFromName
+	}
+	if e.PlunkFromEmail != nil {
+		out.FromEmail = *e.PlunkFromEmail
+	}
+	if e.PlunkReplyTo != nil {
+		out.ReplyTo = *e.PlunkReplyTo
+	}
+	return out, nil
 }

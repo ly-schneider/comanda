@@ -225,6 +225,8 @@ func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 	repos := NewRepositories(client)
 	svc := service.NewPaymentService(
 		cfg,
+		nil,
+		nil,
 		repos.Order,
 		repos.OrderLine,
 		repos.OrderPayment,

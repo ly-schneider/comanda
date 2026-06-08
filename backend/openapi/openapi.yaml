@@ -95,8 +95,6 @@ paths:
     $ref: "paths/payments.yaml#/order-payment"
   /payments/{paymentId}:
     $ref: "paths/payments.yaml#/item"
-  /payments/webhooks/payrexx:
-    $ref: "paths/payments.yaml#/payrexx-webhook"
 
   /users:
     $ref: "paths/users.yaml#/collection"
@@ -137,6 +135,8 @@ paths:
     $ref: "paths/settings.yaml#/collection"
   /settings/logo:
     $ref: "paths/settings.yaml#/logo"
+  /settings/payrexx:
+    $ref: "paths/settings.yaml#/payrexx"
 
   /branding:
     $ref: "paths/branding.yaml#/collection"

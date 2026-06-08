@@ -49,6 +49,8 @@ func main() {
 			app.NewPrivilegedClient,
 			app.NewAppClient,
 			app.NewEntClient,
+			app.NewEncryptor,
+			app.NewPaymentFactory,
 			app.NewTenantMiddleware,
 			app.NewSessionMiddleware,
 			app.NewRouter,
@@ -64,6 +66,7 @@ func main() {
 
 		fx.Invoke(
 			app.SetupSentry,
+			app.SeedProviderCredentials,
 			app.StartHTTPServer,
 		),
 	).Run()
