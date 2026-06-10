@@ -91,3 +91,14 @@ jobs:
           fi
 
           echo "All required jobs passed or were skipped"
+
+  build-and-dispatch:
+    name: Build & Dispatch
+    needs:
+      - ci-gate
+      - detect-changes
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.ci-gate.result == 'success'
+    uses: ./.github/workflows/build-and-dispatch.yml
+    with:
+      needs-migrate: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    secrets: inherit

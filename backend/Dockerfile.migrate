@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1.10
+# Keep ATLAS_VERSION in sync with .github/workflows/ci-backend.yml.
+ARG ATLAS_VERSION=v1.2.0
+
+FROM curlimages/curl:8.10.1@sha256:d9b4541e214bcd85196d6e92e2753ac6d0ea699f0af5741f8c6cccbfcf00ef4b AS atlas
+ARG ATLAS_VERSION
+RUN curl -fsSL -o /tmp/atlas \
+      "https://release.ariga.io/atlas/atlas-linux-amd64-${ATLAS_VERSION}" \
+ && chmod +x /tmp/atlas
+
+FROM debian:12-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 1001 appgroup \
+ && useradd --system --uid 1001 --gid 1001 --home /app appuser
+
+COPY --from=atlas /tmp/atlas /usr/local/bin/atlas
+
+WORKDIR /app
+COPY --chown=appuser:appgroup backend/atlas.hcl ./atlas.hcl
+COPY --chown=appuser:appgroup backend/db/migrations ./db/migrations
+
+USER appuser
+ENTRYPOINT ["atlas"]
+CMD ["migrate", "apply", "--env", "deploy"]
