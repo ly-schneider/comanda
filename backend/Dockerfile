@@ -43,6 +43,7 @@ RUN --mount=type=cache,target=/go/pkg/mod,uid=1001,gid=1001 \
     echo "package ent" > ./internal/generated/ent/ent.go && \
     go run -mod=mod entgo.io/ent/cmd/ent generate \
         --feature sql/modifier --feature sql/upsert \
+        --feature intercept --feature privacy \
         --target ./internal/generated/ent ./internal/schema
 
 # Generate API types from bundled OpenAPI spec

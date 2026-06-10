@@ -10,7 +10,7 @@ runs:
       run: |
         mkdir -p ./internal/generated/ent
         echo "package ent" > ./internal/generated/ent/ent.go
-        go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --target ./internal/generated/ent ./internal/schema
+        go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --feature intercept --feature privacy --target ./internal/generated/ent ./internal/schema
 
     - name: Generate OpenAPI
       shell: bash
