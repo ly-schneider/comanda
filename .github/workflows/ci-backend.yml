@@ -42,6 +42,18 @@ jobs:
   migrate-lint:
     name: Migration Lint
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -51,6 +63,12 @@ jobs:
       - name: Validate migration integrity
         working-directory: backend
         run: atlas migrate validate --dir "file://db/migrations"
+
+      # Replays the whole migration dir on PostgreSQL 17. Scaleway prod maxes
+      # at PG17, so PG18-only SQL (like uuidv7()) must fail here, not at deploy.
+      - name: Replay migrations on PostgreSQL 17
+        working-directory: backend
+        run: atlas migrate apply --dir "file://db/migrations" --url "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
       - name: Lint new migrations with squawk
         run: |
