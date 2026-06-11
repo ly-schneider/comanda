@@ -23,7 +23,6 @@ import (
 	"backend/internal/generated/ent/intercept"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // ErrNoTenant is returned when a tenant-scoped operation runs on the app
@@ -87,13 +86,13 @@ type platformCtxKey struct{}
 
 // WithTenant binds a tenant ID to ctx for the Ent guards to read. The tenant-tx
 // middleware calls this when building the per-request client.
-func WithTenant(ctx context.Context, tenantID uuid.UUID) context.Context {
+func WithTenant(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, tenantCtxKey{}, tenantID)
 }
 
 // TenantFromContext returns the tenant bound to ctx, if any.
-func TenantFromContext(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(tenantCtxKey{}).(uuid.UUID)
+func TenantFromContext(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(tenantCtxKey{}).(string)
 	return id, ok
 }
 
@@ -139,8 +138,8 @@ func Interceptor() ent.Interceptor {
 }
 
 type tenantMutation interface {
-	SetTenantID(uuid.UUID)
-	TenantID() (uuid.UUID, bool)
+	SetTenantID(string)
+	TenantID() (string, bool)
 }
 
 // Hook stamps and validates tenant_id on writes of scoped entities.

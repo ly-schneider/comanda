@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,12 +15,12 @@ import (
 func TestRLSIsolation(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "rls-a-"+uuid.NewString()[:8])
-	tenantB := env.seedTenant(t, "rls-b-"+uuid.NewString()[:8])
+	tenantA := env.seedTenant(t, "rls-a-"+randSuffix())
+	tenantB := env.seedTenant(t, "rls-b-"+randSuffix())
 
 	// Seed one category per tenant via the privileged pool.
-	catA := uuid.Must(uuid.NewV7())
-	catB := uuid.Must(uuid.NewV7())
+	catA := nanoid.New()
+	catB := nanoid.New()
 	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'A', $2)`, catA, tenantA)
 	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'B', $2)`, catB, tenantB)
 
@@ -60,7 +60,7 @@ func TestRLSIsolation(t *testing.T) {
 		env.withTenant(t, &tenantA, func(tx *sql.Tx) {
 			_, err := tx.Exec(
 				`INSERT INTO category (id, name, tenant_id) VALUES ($1, 'evil', $2)`,
-				uuid.Must(uuid.NewV7()), tenantB,
+				nanoid.New(), tenantB,
 			)
 			require.Error(t, err, "WITH CHECK must reject inserting another tenant's row")
 		})
@@ -75,19 +75,19 @@ func TestRLSIsolation(t *testing.T) {
 
 	t.Run("order/settings/idempotency isolation", func(t *testing.T) {
 		// order
-		ordA := uuid.Must(uuid.NewV7())
-		ordB := uuid.Must(uuid.NewV7())
+		ordA := nanoid.New()
+		ordB := nanoid.New()
 		env.privExec(t, `INSERT INTO "order" (id, total_cents, status, origin, tenant_id) VALUES ($1, 100, 'paid', 'pos', $2)`, ordA, tenantA)
 		env.privExec(t, `INSERT INTO "order" (id, total_cents, status, origin, tenant_id) VALUES ($1, 200, 'paid', 'pos', $2)`, ordB, tenantB)
 
 		// settings (one row per tenant; id = tenant uuid string)
-		env.privExec(t, `INSERT INTO settings (id, tenant_id) VALUES ($1, $2)`, tenantA.String(), tenantA)
-		env.privExec(t, `INSERT INTO settings (id, tenant_id) VALUES ($1, $2)`, tenantB.String(), tenantB)
+		env.privExec(t, `INSERT INTO settings (id, tenant_id) VALUES ($1, $2)`, tenantA, tenantA)
+		env.privExec(t, `INSERT INTO settings (id, tenant_id) VALUES ($1, $2)`, tenantB, tenantB)
 
 		// idempotency: same (scope,key) under each tenant — re-scoped uniqueness
 		// means this no longer collides.
-		env.privExec(t, `INSERT INTO idempotency (id, scope, key, expires_at, tenant_id) VALUES ($1, 'pay', 'k1', now()+interval '1 day', $2)`, uuid.Must(uuid.NewV7()), tenantA)
-		env.privExec(t, `INSERT INTO idempotency (id, scope, key, expires_at, tenant_id) VALUES ($1, 'pay', 'k1', now()+interval '1 day', $2)`, uuid.Must(uuid.NewV7()), tenantB)
+		env.privExec(t, `INSERT INTO idempotency (id, scope, key, expires_at, tenant_id) VALUES ($1, 'pay', 'k1', now()+interval '1 day', $2)`, nanoid.New(), tenantA)
+		env.privExec(t, `INSERT INTO idempotency (id, scope, key, expires_at, tenant_id) VALUES ($1, 'pay', 'k1', now()+interval '1 day', $2)`, nanoid.New(), tenantB)
 
 		env.withTenant(t, &tenantA, func(tx *sql.Tx) {
 			require.Equal(t, 1, count(t, tx, `SELECT count(*) FROM "order"`))

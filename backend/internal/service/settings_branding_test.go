@@ -10,7 +10,7 @@ import (
 	"backend/internal/generated/ent/settings"
 	"backend/internal/repository"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 )
 
 // fakeSettingsRepo records UpdateBranding calls and serves a canned Get result.
@@ -35,7 +35,7 @@ func (f *fakeSettingsRepo) GetWithProducts(context.Context) (*ent.Settings, erro
 	return f.Get(context.Background())
 }
 func (f *fakeSettingsRepo) Upsert(context.Context, settings.PosMode) error { return nil }
-func (f *fakeSettingsRepo) UpdateClub100Settings(context.Context, []uuid.UUID, int) error {
+func (f *fakeSettingsRepo) UpdateClub100Settings(context.Context, []string, int) error {
 	return nil
 }
 func (f *fakeSettingsRepo) IsSystemEnabled(context.Context) (bool, error) { return true, nil }
@@ -140,7 +140,7 @@ func TestGetBrandingDisplayNameFallsBackToTenant(t *testing.T) {
 		tenant: "Acme Bistro",
 	}
 	// Tenant present (not platform) so the settings path runs.
-	ctx := enttenant.WithTenant(context.Background(), uuid.New())
+	ctx := enttenant.WithTenant(context.Background(), nanoid.New())
 
 	view, err := newSvc(repo).GetBranding(ctx)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestGetBrandingPrefersSettingsDisplayName(t *testing.T) {
 		got:    &ent.Settings{Currency: "CHF", DisplayName: strptr("Custom Brand")},
 		tenant: "Tenant Name",
 	}
-	ctx := enttenant.WithTenant(context.Background(), uuid.New())
+	ctx := enttenant.WithTenant(context.Background(), nanoid.New())
 
 	view, err := newSvc(repo).GetBranding(ctx)
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"backend/internal/generated/ent/predicate"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // txClientKey is the context key for an ent.Client scoped to a transaction.
@@ -39,13 +38,13 @@ func RequestTxFromContext(ctx context.Context) (*stdsql.Tx, bool) {
 type tenantIDKey struct{}
 
 // ContextWithTenantID returns a child context carrying the given tenant ID.
-func ContextWithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
+func ContextWithTenantID(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, tenantIDKey{}, tenantID)
 }
 
 // TenantIDFromContext returns the tenant ID stored in ctx, if any.
-func TenantIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(tenantIDKey{}).(uuid.UUID)
+func TenantIDFromContext(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(tenantIDKey{}).(string)
 	return id, ok
 }
 
@@ -71,24 +70,24 @@ func entDescOpt() sql.OrderTermOption {
 
 // entDeviceProductDeviceID returns a predicate matching device_product rows
 // by device_id.
-func entDeviceProductDeviceID(id uuid.UUID) predicate.DeviceProduct {
+func entDeviceProductDeviceID(id string) predicate.DeviceProduct {
 	return deviceproduct.DeviceIDEQ(id)
 }
 
 // entDeviceProductProductID returns a predicate matching device_product rows
 // by product_id.
-func entDeviceProductProductID(id uuid.UUID) predicate.DeviceProduct {
+func entDeviceProductProductID(id string) predicate.DeviceProduct {
 	return deviceproduct.ProductIDEQ(id)
 }
 
 // entMenuSlotOptionMenuSlotID returns a predicate matching menu_slot_option rows
 // by menu_slot_id.
-func entMenuSlotOptionMenuSlotID(id uuid.UUID) predicate.MenuSlotOption {
+func entMenuSlotOptionMenuSlotID(id string) predicate.MenuSlotOption {
 	return menuslotoption.MenuSlotIDEQ(id)
 }
 
 // entMenuSlotOptionProductID returns a predicate matching menu_slot_option rows
 // by option_product_id.
-func entMenuSlotOptionProductID(id uuid.UUID) predicate.MenuSlotOption {
+func entMenuSlotOptionProductID(id string) predicate.MenuSlotOption {
 	return menuslotoption.OptionProductIDEQ(id)
 }

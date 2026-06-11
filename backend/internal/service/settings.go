@@ -13,8 +13,6 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/settings"
 	"backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 const systemEnabledCacheTTL = 5 * time.Second
@@ -107,17 +105,17 @@ type SettingsService interface {
 	GetSettings(ctx context.Context) (*ent.Settings, error)
 	GetSettingsWithProducts(ctx context.Context) (*ent.Settings, error)
 	SetPosMode(ctx context.Context, mode settings.PosMode) error
-	SetClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions *int) error
+	SetClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions *int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
 	UpdateBranding(ctx context.Context, in BrandingInput) error
 	GetBranding(ctx context.Context) (*BrandingView, error)
 	ListJetons(ctx context.Context) ([]*ent.Jeton, error)
 	CreateJeton(ctx context.Context, name, color string) (*ent.Jeton, error)
-	UpdateJeton(ctx context.Context, id uuid.UUID, name, color string) (*ent.Jeton, error)
-	DeleteJeton(ctx context.Context, id uuid.UUID) error
-	SetProductJeton(ctx context.Context, productID uuid.UUID, jetonID *uuid.UUID) error
-	GetFreeProductIDs(ctx context.Context) ([]uuid.UUID, error)
+	UpdateJeton(ctx context.Context, id string, name, color string) (*ent.Jeton, error)
+	DeleteJeton(ctx context.Context, id string) error
+	SetProductJeton(ctx context.Context, productID string, jetonID *string) error
+	GetFreeProductIDs(ctx context.Context) ([]string, error)
 }
 
 type settingsService struct {
@@ -277,7 +275,7 @@ func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error
 	}, nil
 }
 
-func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions *int) error {
+func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions *int) error {
 	current, err := s.settings.Get(ctx)
 	if err != nil {
 		return err
@@ -298,7 +296,7 @@ func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs
 			return err
 		}
 		if settingsWithProducts.Edges.Club100FreeProducts != nil {
-			productIDs = make([]uuid.UUID, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
+			productIDs = make([]string, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
 			for _, p := range settingsWithProducts.Edges.Club100FreeProducts {
 				productIDs = append(productIDs, p.ID)
 			}
@@ -306,7 +304,7 @@ func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs
 	}
 
 	for _, productID := range productIDs {
-		if productID == uuid.Nil {
+		if productID == "" {
 			continue
 		}
 		if _, err := s.products.GetByID(ctx, productID); err != nil {
@@ -314,9 +312,9 @@ func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs
 		}
 	}
 
-	validProductIDs := make([]uuid.UUID, 0, len(productIDs))
+	validProductIDs := make([]string, 0, len(productIDs))
 	for _, id := range productIDs {
-		if id != uuid.Nil {
+		if id != "" {
 			validProductIDs = append(validProductIDs, id)
 		}
 	}
@@ -340,7 +338,7 @@ func (s *settingsService) CreateJeton(ctx context.Context, name, color string) (
 	return s.jetons.Create(ctx, name, normColor)
 }
 
-func (s *settingsService) UpdateJeton(ctx context.Context, id uuid.UUID, name, color string) (*ent.Jeton, error) {
+func (s *settingsService) UpdateJeton(ctx context.Context, id string, name, color string) (*ent.Jeton, error) {
 	if _, err := s.jetons.GetByID(ctx, id); err != nil {
 		return nil, err
 	}
@@ -355,8 +353,8 @@ func (s *settingsService) UpdateJeton(ctx context.Context, id uuid.UUID, name, c
 	return s.jetons.Update(ctx, id, name, normColor)
 }
 
-func (s *settingsService) DeleteJeton(ctx context.Context, id uuid.UUID) error {
-	usage, err := s.products.CountByJetonIDs(ctx, []uuid.UUID{id})
+func (s *settingsService) DeleteJeton(ctx context.Context, id string) error {
+	usage, err := s.products.CountByJetonIDs(ctx, []string{id})
 	if err == nil {
 		if c := usage[id]; c > 0 {
 			return JetonInUseError{Count: c}
@@ -365,7 +363,7 @@ func (s *settingsService) DeleteJeton(ctx context.Context, id uuid.UUID) error {
 	return s.jetons.Delete(ctx, id)
 }
 
-func (s *settingsService) SetProductJeton(ctx context.Context, productID uuid.UUID, jetonID *uuid.UUID) error {
+func (s *settingsService) SetProductJeton(ctx context.Context, productID string, jetonID *string) error {
 	p, err := s.products.GetByID(ctx, productID)
 	if err != nil {
 		return err
@@ -387,15 +385,15 @@ func (s *settingsService) SetProductJeton(ctx context.Context, productID uuid.UU
 	return s.products.UpdateJeton(ctx, productID, jetonID)
 }
 
-func (s *settingsService) GetFreeProductIDs(ctx context.Context) ([]uuid.UUID, error) {
+func (s *settingsService) GetFreeProductIDs(ctx context.Context) ([]string, error) {
 	settingsWithProducts, err := s.settings.GetWithProducts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get settings: %w", err)
 	}
 	if settingsWithProducts.Edges.Club100FreeProducts == nil {
-		return []uuid.UUID{}, nil
+		return []string{}, nil
 	}
-	ids := make([]uuid.UUID, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
+	ids := make([]string, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
 	for _, p := range settingsWithProducts.Edges.Club100FreeProducts {
 		ids = append(ids, p.ID)
 	}

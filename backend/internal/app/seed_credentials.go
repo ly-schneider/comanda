@@ -51,7 +51,7 @@ func SeedProviderCredentials(
 				}
 				return fmt.Errorf("seed credentials: lookup bootstrap tenant: %w", err)
 			}
-			id := t.ID.String()
+			id := t.ID
 
 			row, err := priv.Client.Settings.Get(ctx, id)
 			if err != nil && !ent.IsNotFound(err) {

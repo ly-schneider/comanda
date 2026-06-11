@@ -18,17 +18,17 @@ import (
 	"backend/internal/repository"
 	"backend/internal/service"
 
+	nanoid "backend/internal/id"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 type payrexxTestTenant struct {
-	id            uuid.UUID
+	id            string
 	webhookToken  string
 	webhookSecret string
-	orderID       uuid.UUID
+	orderID       string
 }
 
 func newTestEncryptor(t *testing.T) *crypto.Encryptor {
@@ -45,9 +45,9 @@ func newTestEncryptor(t *testing.T) *crypto.Encryptor {
 // RLS context, exercising the production write path.
 func (e *rlsEnv) configurePayrexxTenant(t *testing.T, enc *crypto.Encryptor, slug, instance, apiSecret, webhookSecret string) payrexxTestTenant {
 	t.Helper()
-	tenantID := e.seedTenant(t, slug+"-"+uuid.NewString()[:8])
+	tenantID := e.seedTenant(t, slug+"-"+randSuffix())
 
-	orderID := uuid.Must(uuid.NewV7())
+	orderID := nanoid.New()
 	e.privExec(t,
 		`INSERT INTO "order" (id, total_cents, status, origin, tenant_id)
 		 VALUES ($1, 1000, 'pending', 'shop', $2)`,
@@ -59,7 +59,7 @@ func (e *rlsEnv) configurePayrexxTenant(t *testing.T, enc *crypto.Encryptor, slu
 	whEnc, err := enc.EncryptString(webhookSecret)
 	require.NoError(t, err)
 
-	token := uuid.Must(uuid.NewV7()).String() + uuid.Must(uuid.NewV7()).String()
+	token := nanoid.New() + nanoid.New() + nanoid.New() + nanoid.New()
 	token = token[:43]
 
 	ctx, _, cleanup := e.appRequestTx(t, tenantID)
@@ -75,13 +75,13 @@ func (e *rlsEnv) configurePayrexxTenant(t *testing.T, enc *crypto.Encryptor, slu
 	return payrexxTestTenant{id: tenantID, webhookToken: token, webhookSecret: webhookSecret, orderID: orderID}
 }
 
-func signedWebhookBody(t *testing.T, orderID uuid.UUID, secret string) ([]byte, string) {
+func signedWebhookBody(t *testing.T, orderID string, secret string) ([]byte, string) {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
 		"transaction": map[string]any{
 			"id":          4242,
 			"status":      "confirmed",
-			"referenceId": orderID.String(),
+			"referenceId": orderID,
 			"amount":      1000,
 			"currency":    "CHF",
 		},
@@ -125,7 +125,7 @@ func (e *rlsEnv) buildWebhookRouter(t *testing.T, enc *crypto.Encryptor) http.Ha
 	return r
 }
 
-func (e *rlsEnv) orderStatus(t *testing.T, orderID uuid.UUID) string {
+func (e *rlsEnv) orderStatus(t *testing.T, orderID string) string {
 	t.Helper()
 	var status string
 	require.NoError(t, e.priv.QueryRow(`SELECT status FROM "order" WHERE id = $1`, orderID).Scan(&status))

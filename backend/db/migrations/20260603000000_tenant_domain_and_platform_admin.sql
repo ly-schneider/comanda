@@ -38,8 +38,8 @@ ALTER TABLE "user" ADD COLUMN is_platform_admin boolean NOT NULL DEFAULT false;
 CREATE TYPE tenant_domain_cert_status AS ENUM ('none', 'pending', 'active', 'failed');
 
 CREATE TABLE tenant_domain (
-    id UUID PRIMARY KEY DEFAULT uuidv7(),
-    tenant_id UUID NOT NULL REFERENCES tenant (id),
+    id VARCHAR(12) PRIMARY KEY,
+    tenant_id VARCHAR(12) NOT NULL REFERENCES tenant (id),
     hostname TEXT NOT NULL CHECK (hostname = lower(hostname)),
     is_primary BOOLEAN NOT NULL DEFAULT false,
     verified_at TIMESTAMPTZ,
@@ -71,10 +71,11 @@ BEGIN
 END$$;
 
 -- Seed the bootstrap tenant's hosts so local dev + tests keep resolving.
-INSERT INTO tenant_domain (tenant_id, hostname, is_primary) VALUES
-  ('00000000-0000-7000-8000-000000000001', 'localhost', true),
-  ('00000000-0000-7000-8000-000000000001', '127.0.0.1', false),
-  ('00000000-0000-7000-8000-000000000001', 'default.comanda.leys.ch', false);
+-- Ids are explicit: there is no DB-side id default (app-side nanoids only).
+INSERT INTO tenant_domain (id, tenant_id, hostname, is_primary) VALUES
+  ('tdmn_seed__1', 'tenant_seed1', 'localhost', true),
+  ('tdmn_seed__2', 'tenant_seed1', '127.0.0.1', false),
+  ('tdmn_seed__3', 'tenant_seed1', 'default.comanda.leys.ch', false);
 
 -- =====================================================================
 -- REWRITE tenant-scoped RLS policies to add the platform-admin bypass.

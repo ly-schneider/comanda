@@ -9,7 +9,8 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
+
+	"backend/internal/id"
 )
 
 type VolunteerCampaign struct {
@@ -30,11 +31,11 @@ func (VolunteerCampaign) Mixin() []ent.Mixin {
 
 func (VolunteerCampaign) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("claim_token", uuid.UUID{}).
-			Default(uuidV7).
+		nanoidPK(),
+		field.String("claim_token").
+			MaxLen(12).
+			NotEmpty().
+			DefaultFunc(id.New).
 			Unique(),
 		field.String("name").
 			MaxLen(100).

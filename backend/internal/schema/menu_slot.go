@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type MenuSlot struct {
@@ -27,10 +26,8 @@ func (MenuSlot) Mixin() []ent.Mixin {
 
 func (MenuSlot) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("menu_product_id", uuid.UUID{}),
+		nanoidPK(),
+		field.String("menu_product_id").MaxLen(12),
 		field.String("name").
 			MaxLen(20).
 			NotEmpty(),

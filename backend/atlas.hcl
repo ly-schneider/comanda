@@ -1,12 +1,12 @@
 env "local" {
-  dev = "docker://postgres/18/dev?search_path=public"
+  dev = "docker://postgres/17/dev?search_path=public"
   migration {
     dir = "file://db/migrations"
   }
 }
 
 env "ci" {
-  dev = "docker://postgres/18/dev?search_path=public"
+  dev = "docker://postgres/17/dev?search_path=public"
   migration {
     dir = "file://db/migrations"
   }

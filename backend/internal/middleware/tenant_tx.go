@@ -16,8 +16,8 @@ import (
 	"backend/internal/generated/ent/tenantdomain"
 	"backend/internal/repository"
 
+	nanoid "backend/internal/id"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +60,7 @@ func NewTenantMiddleware(appDB *sql.DB, privileged *ent.Client, bootstrapSlug st
 
 // resolution is the outcome of host-based tenant resolution.
 type resolution struct {
-	tenantID   uuid.UUID
+	tenantID   string
 	hasTenant  bool
 	isPlatform bool // platform host -> allowed no-tenant context
 }
@@ -103,11 +103,10 @@ func (m *TenantMiddleware) resolve(ctx context.Context, r *http.Request) (resolu
 	// (1) Internal/test escape hatch — only when explicitly trusted.
 	if m.headerTrusted {
 		if raw := r.Header.Get(TenantHeader); raw != "" {
-			id, err := uuid.Parse(raw)
-			if err != nil {
+			if !nanoid.Valid(raw) {
 				return resolution{}, errInvalidTenantHeader
 			}
-			t, err := m.privileged.Tenant.Query().Where(tenant.IDEQ(id)).Only(ctx)
+			t, err := m.privileged.Tenant.Query().Where(tenant.IDEQ(raw)).Only(ctx)
 			if err != nil {
 				return resolution{}, err
 			}
@@ -215,7 +214,7 @@ func (m *TenantMiddleware) Tx(next http.Handler) http.Handler {
 		// '' for the platform path -> app_current_tenant_id() returns NULL.
 		tenantGUC := ""
 		if hasTenant {
-			tenantGUC = tenantID.String()
+			tenantGUC = tenantID
 		}
 		if _, err := tx.ExecContext(ctx,
 			"SELECT set_config('app.tenant_id', $1, true), set_config('app.is_platform_admin', 'false', true)",

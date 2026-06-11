@@ -11,7 +11,7 @@ import (
 	"backend/internal/response"
 	"backend/internal/service"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -130,7 +130,7 @@ func (h *Handlers) UploadBrandingLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	previous := currentBrandingURL(current, kind)
 
-	key := "tenants/" + tenantID.String() + "/branding/" + kind + "-" + uuid.NewString() + ext
+	key := "tenants/" + tenantID + "/branding/" + kind + "-" + nanoid.New() + ext
 	reader := bytes.NewReader(data.Bytes())
 	url, err := h.blobStore.Upload(ctx, key, reader, contentType)
 	if err != nil {

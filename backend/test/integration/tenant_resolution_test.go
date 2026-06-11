@@ -11,9 +11,9 @@ import (
 	"backend/internal/middleware"
 	"backend/internal/repository"
 
+	nanoid "backend/internal/id"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -25,11 +25,11 @@ func (e *rlsEnv) privClient() *ent.Client {
 }
 
 // seedDomain registers a hostname -> tenant mapping via the privileged pool.
-func (e *rlsEnv) seedDomain(t *testing.T, tenantID uuid.UUID, hostname string) {
+func (e *rlsEnv) seedDomain(t *testing.T, tenantID string, hostname string) {
 	t.Helper()
 	e.privExec(t,
 		`INSERT INTO tenant_domain (id, tenant_id, hostname) VALUES ($1, $2, $3)`,
-		uuid.Must(uuid.NewV7()), tenantID, hostname,
+		nanoid.New(), tenantID, hostname,
 	)
 }
 
@@ -87,15 +87,15 @@ func doGet(t *testing.T, h http.Handler, host string, headers map[string]string)
 func TestHostResolutionIsolation(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "host-a-"+uuid.NewString()[:8])
-	tenantB := env.seedTenant(t, "host-b-"+uuid.NewString()[:8])
-	hostA := "a-" + uuid.NewString()[:8] + ".comanda.test"
-	hostB := "b-" + uuid.NewString()[:8] + ".comanda.test"
+	tenantA := env.seedTenant(t, "host-a-"+randSuffix())
+	tenantB := env.seedTenant(t, "host-b-"+randSuffix())
+	hostA := "a-" + randSuffix() + ".comanda.test"
+	hostB := "b-" + randSuffix() + ".comanda.test"
 	env.seedDomain(t, tenantA, hostA)
 	env.seedDomain(t, tenantB, hostB)
 
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'OnlyA', $2)`, uuid.Must(uuid.NewV7()), tenantA)
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'OnlyB', $2)`, uuid.Must(uuid.NewV7()), tenantB)
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'OnlyA', $2)`, nanoid.New(), tenantA)
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'OnlyB', $2)`, nanoid.New(), tenantB)
 
 	h := env.buildResolverStack(nil, false)
 
@@ -129,27 +129,27 @@ func TestHostResolutionIsolation(t *testing.T) {
 func TestUnknownHost404(t *testing.T) {
 	env := newRLSEnv(t)
 	h := env.buildResolverStack(nil, false)
-	code, _ := doGet(t, h, "nobody."+uuid.NewString()[:8]+".test", nil)
+	code, _ := doGet(t, h, "nobody."+randSuffix()+".test", nil)
 	require.Equal(t, http.StatusNotFound, code)
 }
 
 // TestTenantHeaderTrust: X-Tenant-Id is honored only when headerTrusted is true.
 func TestTenantHeaderTrust(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantA := env.seedTenant(t, "hdr-a-"+uuid.NewString()[:8])
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'HdrA', $2)`, uuid.Must(uuid.NewV7()), tenantA)
+	tenantA := env.seedTenant(t, "hdr-a-"+randSuffix())
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'HdrA', $2)`, nanoid.New(), tenantA)
 
-	unknownHost := "unknown-" + uuid.NewString()[:8] + ".test"
+	unknownHost := "unknown-" + randSuffix() + ".test"
 
 	t.Run("trusted=false ignores X-Tenant-Id -> 404 on unknown host", func(t *testing.T) {
 		h := env.buildResolverStack(nil, false)
-		code, _ := doGet(t, h, unknownHost, map[string]string{middleware.TenantHeader: tenantA.String()})
+		code, _ := doGet(t, h, unknownHost, map[string]string{middleware.TenantHeader: tenantA})
 		require.Equal(t, http.StatusNotFound, code, "header must be ignored when not trusted")
 	})
 
 	t.Run("trusted=true honors X-Tenant-Id", func(t *testing.T) {
 		h := env.buildResolverStack(nil, true)
-		code, body := doGet(t, h, unknownHost, map[string]string{middleware.TenantHeader: tenantA.String()})
+		code, body := doGet(t, h, unknownHost, map[string]string{middleware.TenantHeader: tenantA})
 		require.Equal(t, http.StatusOK, code)
 		require.Equal(t, "HdrA", body)
 	})
@@ -163,12 +163,12 @@ func TestTenantHeaderTrust(t *testing.T) {
 func TestPlatformHostContext(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "plat-a-"+uuid.NewString()[:8])
-	tenantB := env.seedTenant(t, "plat-b-"+uuid.NewString()[:8])
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PlatA', $2)`, uuid.Must(uuid.NewV7()), tenantA)
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PlatB', $2)`, uuid.Must(uuid.NewV7()), tenantB)
+	tenantA := env.seedTenant(t, "plat-a-"+randSuffix())
+	tenantB := env.seedTenant(t, "plat-b-"+randSuffix())
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PlatA', $2)`, nanoid.New(), tenantA)
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PlatB', $2)`, nanoid.New(), tenantB)
 
-	platformHost := "admin-" + uuid.NewString()[:8] + ".comanda.test"
+	platformHost := "admin-" + randSuffix() + ".comanda.test"
 
 	// adminGUCHandler flips the is_platform_admin GUC on the request tx (as the
 	// auth middleware would for a verified platform admin) then reads categories.

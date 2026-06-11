@@ -2,42 +2,51 @@
 -- Re-runnable: if any device named 'Grill' already exists, bail.
 
 -- tenant_id has no DB default; default it to the bootstrap tenant for this seed.
-ALTER TABLE device ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
-ALTER TABLE device_product ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
-ALTER TABLE "order" ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
-ALTER TABLE order_line ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
-ALTER TABLE order_line_redemption ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE device ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+ALTER TABLE device_product ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+ALTER TABLE "order" ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+ALTER TABLE order_line ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+ALTER TABLE order_line_redemption ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+
+-- ids have no DB default (app-side nanoids only); session-temporary generator
+-- for the demo rows. random() is fine for dev data.
+CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
+LANGUAGE sql VOLATILE AS $$
+  SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',
+                           (floor(random()*55))::int + 1, 1), '')
+  FROM generate_series(1, 12)
+$$;
 
 DO $$
 DECLARE
-  v_grill_id        UUID := '01970000-0000-7000-1000-000000000001';
-  v_pommes_id       UUID := '01970000-0000-7000-1000-000000000002';
-  v_drinks_id       UUID := '01970000-0000-7000-1000-000000000003';
-  v_dessert_id      UUID := '01970000-0000-7000-1000-000000000004';
-  v_pos1_id         UUID := '01970000-0000-7000-1000-000000000010';
-  v_pos2_id         UUID := '01970000-0000-7000-1000-000000000011';
-  v_pos3_id         UUID := '01970000-0000-7000-1000-000000000012';
+  v_grill_id        varchar(12) := 'dev________1';
+  v_pommes_id       varchar(12) := 'dev________2';
+  v_drinks_id       varchar(12) := 'dev________3';
+  v_dessert_id      varchar(12) := 'dev________4';
+  v_pos1_id         varchar(12) := 'dev_______11';
+  v_pos2_id         varchar(12) := 'dev_______12';
+  v_pos3_id         varchar(12) := 'dev_______13';
 
-  v_p_smash         UUID := '01970000-0000-7000-0002-000000000010';
-  v_p_veggie        UUID := '01970000-0000-7000-0002-000000000011';
-  v_p_pommes        UUID := '01970000-0000-7000-0002-000000000020';
-  v_p_cola          UUID := '01970000-0000-7000-0002-000000000001';
-  v_p_eltony        UUID := '01970000-0000-7000-0002-000000000002';
-  v_p_icetea        UUID := '01970000-0000-7000-0002-000000000003';
-  v_p_wasser        UUID := '01970000-0000-7000-0002-000000000004';
-  v_p_redbull       UUID := '01970000-0000-7000-0002-000000000006';
-  v_p_capri         UUID := '01970000-0000-7000-0002-000000000007';
-  v_p_menu_small    UUID := '01970000-0000-7000-0002-000000000100';
-  v_p_menu_large    UUID := '01970000-0000-7000-0002-000000000101';
+  v_p_smash         varchar(12) := 'prd_______11';
+  v_p_veggie        varchar(12) := 'prd_______12';
+  v_p_pommes        varchar(12) := 'prd_______21';
+  v_p_cola          varchar(12) := 'prd________1';
+  v_p_eltony        varchar(12) := 'prd________2';
+  v_p_icetea        varchar(12) := 'prd________3';
+  v_p_wasser        varchar(12) := 'prd________4';
+  v_p_redbull       varchar(12) := 'prd________6';
+  v_p_capri         varchar(12) := 'prd________7';
+  v_p_menu_small    varchar(12) := 'prd_menu___1';
+  v_p_menu_large    varchar(12) := 'prd_menu___2';
 
   v_now             TIMESTAMPTZ := NOW();
-  v_order_id        UUID;
-  v_line_id         UUID;
+  v_order_id        varchar(12);
+  v_line_id         varchar(12);
   v_created         TIMESTAMPTZ;
   v_delay_min       INT;
   v_qty             INT;
-  v_drink           UUID;
-  v_burger          UUID;
+  v_drink           varchar(12);
+  v_burger          varchar(12);
   i                 INT;
 BEGIN
   IF EXISTS (SELECT 1 FROM device WHERE name IN ('Grill','Pommesfritteuse','Getränke','Dessert')) THEN
@@ -73,7 +82,7 @@ BEGIN
   --  20 redeemed orders across the day, throughput median ~14 min
   ----------------------------------------------------------------------
   FOR i IN 1..1 LOOP
-    v_order_id := gen_random_uuid();
+    v_order_id := pg_temp.nanoid();
     v_created  := v_now - make_interval(mins => 4 + i * 5);  -- 9,14,19,24,29 min ago
     v_burger   := CASE WHEN i % 2 = 0 THEN v_p_veggie ELSE v_p_smash END;
 
@@ -81,14 +90,14 @@ BEGIN
       VALUES (v_order_id, 950, 'paid', 'shop', v_created);
 
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
-      VALUES (gen_random_uuid(), v_order_id, 'simple', v_burger,
+      VALUES (pg_temp.nanoid(), v_order_id, 'simple', v_burger,
               CASE WHEN v_burger = v_p_veggie THEN 'Veggie Burger' ELSE 'Smash Burger' END,
               1, 950);
   END LOOP;
 
   FOR i IN 1..20 LOOP
-    v_order_id  := gen_random_uuid();
-    v_line_id   := gen_random_uuid();
+    v_order_id  := pg_temp.nanoid();
+    v_line_id   := pg_temp.nanoid();
     v_created   := v_now - make_interval(mins => 35 + i * 12);   -- spread 47m..275m ago
     v_delay_min := 8 + ((i * 7) % 14);                            -- 8..21 min (median ~14)
     v_burger    := CASE WHEN i % 3 = 0 THEN v_p_veggie ELSE v_p_smash END;
@@ -99,8 +108,8 @@ BEGIN
       VALUES (v_line_id, v_order_id, 'simple', v_burger,
               CASE WHEN v_burger = v_p_veggie THEN 'Veggie Burger' ELSE 'Smash Burger' END,
               1, 950);
-    INSERT INTO order_line_redemption (order_line_id, redeemed_at)
-      VALUES (v_line_id, v_created + make_interval(mins => v_delay_min));
+    INSERT INTO order_line_redemption (id, order_line_id, redeemed_at)
+      VALUES (pg_temp.nanoid(), v_line_id, v_created + make_interval(mins => v_delay_min));
   END LOOP;
 
   ----------------------------------------------------------------------
@@ -109,19 +118,19 @@ BEGIN
   --  15 redeemed, throughput median ~28 min
   ----------------------------------------------------------------------
   FOR i IN 1..10 LOOP
-    v_order_id := gen_random_uuid();
+    v_order_id := pg_temp.nanoid();
     v_created  := v_now - make_interval(mins => 8 + i * 4);
     v_qty      := 1 + (i % 3);
 
     INSERT INTO "order" (id, total_cents, status, origin, created_at)
       VALUES (v_order_id, 450 * v_qty, 'paid', 'shop', v_created);
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
-      VALUES (gen_random_uuid(), v_order_id, 'simple', v_p_pommes, 'Pommes', v_qty, 450);
+      VALUES (pg_temp.nanoid(), v_order_id, 'simple', v_p_pommes, 'Pommes', v_qty, 450);
   END LOOP;
 
   FOR i IN 1..15 LOOP
-    v_order_id  := gen_random_uuid();
-    v_line_id   := gen_random_uuid();
+    v_order_id  := pg_temp.nanoid();
+    v_line_id   := pg_temp.nanoid();
     v_created   := v_now - make_interval(mins => 80 + i * 14);
     v_delay_min := 22 + ((i * 5) % 14);
 
@@ -129,8 +138,8 @@ BEGIN
       VALUES (v_order_id, 450, 'paid', 'shop', v_created);
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
       VALUES (v_line_id, v_order_id, 'simple', v_p_pommes, 'Pommes', 1, 450);
-    INSERT INTO order_line_redemption (order_line_id, redeemed_at)
-      VALUES (v_line_id, v_created + make_interval(mins => v_delay_min));
+    INSERT INTO order_line_redemption (id, order_line_id, redeemed_at)
+      VALUES (pg_temp.nanoid(), v_line_id, v_created + make_interval(mins => v_delay_min));
   END LOOP;
 
   ----------------------------------------------------------------------
@@ -138,15 +147,15 @@ BEGIN
   --   1 open order (3 min old)
   --  40 redeemed, throughput median ~3 min
   ----------------------------------------------------------------------
-  v_order_id := gen_random_uuid();
+  v_order_id := pg_temp.nanoid();
   INSERT INTO "order" (id, total_cents, status, origin, created_at)
     VALUES (v_order_id, 350, 'paid', 'shop', v_now - INTERVAL '3 minutes');
   INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
-    VALUES (gen_random_uuid(), v_order_id, 'simple', v_p_cola, 'Coca Cola', 1, 350);
+    VALUES (pg_temp.nanoid(), v_order_id, 'simple', v_p_cola, 'Coca Cola', 1, 350);
 
   FOR i IN 1..40 LOOP
-    v_order_id  := gen_random_uuid();
-    v_line_id   := gen_random_uuid();
+    v_order_id  := pg_temp.nanoid();
+    v_line_id   := pg_temp.nanoid();
     v_created   := v_now - make_interval(mins => 10 + i * 8);
     v_delay_min := 1 + (i % 5);
 
@@ -173,8 +182,8 @@ BEGIN
                 ELSE                  'Capri Sun'
               END,
               1, 350);
-    INSERT INTO order_line_redemption (order_line_id, redeemed_at)
-      VALUES (v_line_id, v_created + make_interval(mins => v_delay_min));
+    INSERT INTO order_line_redemption (id, order_line_id, redeemed_at)
+      VALUES (pg_temp.nanoid(), v_line_id, v_created + make_interval(mins => v_delay_min));
   END LOOP;
 
   ----------------------------------------------------------------------
@@ -182,32 +191,32 @@ BEGIN
   -- bundle/component flattening and "top products last hour"
   ----------------------------------------------------------------------
   FOR i IN 1..6 LOOP
-    v_order_id  := gen_random_uuid();
+    v_order_id  := pg_temp.nanoid();
     v_created   := v_now - make_interval(mins => 5 + i * 8);  -- 13..53 min ago
 
     INSERT INTO "order" (id, total_cents, status, origin, created_at)
       VALUES (v_order_id, 1500, 'paid', 'shop', v_created);
 
     -- bundle parent (filtered out by flattenOrderLines)
-    v_line_id := gen_random_uuid();
+    v_line_id := pg_temp.nanoid();
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
       VALUES (v_line_id, v_order_id, 'bundle', v_p_menu_large, 'Menü Gross', 1, 1500);
 
     -- component: Smash Burger -> grill
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents, parent_line_id)
-      VALUES (gen_random_uuid(), v_order_id, 'component', v_p_smash, 'Smash Burger', 1, 0, v_line_id);
+      VALUES (pg_temp.nanoid(), v_order_id, 'component', v_p_smash, 'Smash Burger', 1, 0, v_line_id);
 
     -- component: Pommes -> pommesfritteuse
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents, parent_line_id)
-      VALUES (gen_random_uuid(), v_order_id, 'component', v_p_pommes, 'Pommes', 1, 0, v_line_id);
+      VALUES (pg_temp.nanoid(), v_order_id, 'component', v_p_pommes, 'Pommes', 1, 0, v_line_id);
 
     -- component: Cola -> drinks (already redeemed quickly)
-    v_line_id := gen_random_uuid();
+    v_line_id := pg_temp.nanoid();
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents, parent_line_id)
       VALUES (v_line_id, v_order_id, 'component', v_p_cola, 'Coca Cola', 1, 0,
               (SELECT id FROM order_line WHERE order_id = v_order_id AND line_type = 'bundle' LIMIT 1));
-    INSERT INTO order_line_redemption (order_line_id, redeemed_at)
-      VALUES (v_line_id, v_created + INTERVAL '2 minutes');
+    INSERT INTO order_line_redemption (id, order_line_id, redeemed_at)
+      VALUES (pg_temp.nanoid(), v_line_id, v_created + INTERVAL '2 minutes');
   END LOOP;
 
   ----------------------------------------------------------------------
@@ -215,12 +224,12 @@ BEGIN
   -- ops view filters them out via status='paid' — sanity check)
   ----------------------------------------------------------------------
   FOR i IN 1..5 LOOP
-    v_order_id := gen_random_uuid();
+    v_order_id := pg_temp.nanoid();
     v_created  := v_now - make_interval(mins => 40 + i * 30);
     INSERT INTO "order" (id, total_cents, status, origin, created_at)
       VALUES (v_order_id, 1050, 'cancelled', 'shop', v_created);
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
-      VALUES (gen_random_uuid(), v_order_id, 'simple', v_p_veggie, 'Veggie Burger', 1, 1050);
+      VALUES (pg_temp.nanoid(), v_order_id, 'simple', v_p_veggie, 'Veggie Burger', 1, 1050);
   END LOOP;
 
   RAISE NOTICE 'Ops demo seed complete.';

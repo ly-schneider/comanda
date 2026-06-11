@@ -7,7 +7,6 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type DeviceBinding struct {
@@ -28,9 +27,7 @@ func (DeviceBinding) Mixin() []ent.Mixin {
 
 func (DeviceBinding) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
+		nanoidPK(),
 		field.Enum("device_type").
 			Values("POS", "STATION").
 			StorageKey("device_type"),
@@ -50,10 +47,10 @@ func (DeviceBinding) Fields() []ent.Field {
 		field.Time("revoked_at").
 			Optional().
 			Nillable(),
-		field.UUID("station_id", uuid.UUID{}).
+		field.String("station_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.UUID("device_id", uuid.UUID{}).
+		field.String("device_id").MaxLen(12).
 			Optional().
 			Nillable(),
 	}

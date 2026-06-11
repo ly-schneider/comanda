@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type InventoryLedger struct {
@@ -29,10 +28,8 @@ func (InventoryLedger) Mixin() []ent.Mixin {
 
 func (InventoryLedger) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("product_id", uuid.UUID{}),
+		nanoidPK(),
+		field.String("product_id").MaxLen(12),
 		field.Int("delta"),
 		field.Enum("reason").
 			Values("opening_balance", "sale", "refund", "cancellation", "manual_adjust", "correction").
@@ -40,13 +37,13 @@ func (InventoryLedger) Fields() []ent.Field {
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),
-		field.UUID("order_id", uuid.UUID{}).
+		field.String("order_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.UUID("order_line_id", uuid.UUID{}).
+		field.String("order_line_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.UUID("device_id", uuid.UUID{}).
+		field.String("device_id").MaxLen(12).
 			Optional().
 			Nillable(),
 		field.String("created_by").

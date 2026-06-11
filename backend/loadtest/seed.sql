@@ -1,7 +1,7 @@
 -- Load test seed. Idempotent: safe to re-run.
 --
 -- USAGE
---   psql "$DATABASE_URL" -v station_device_id=<uuid> -v pos_device_id=<uuid> -f seed.sql
+--   psql "$DATABASE_URL" -v station_device_id=<device id> -v pos_device_id=<device id> -f seed.sql
 --
 -- station_device_id is required for the station scenario (it must be an
 -- approved STATION device with products assigned via device_product).
@@ -13,7 +13,7 @@
 \if :{?station_device_id}
 \else
   \set station_device_id NULL
-  \echo 'WARNING: -v station_device_id=<uuid> not provided. Station scenario will return empty matches.'
+  \echo 'WARNING: -v station_device_id=<device id> not provided. Station scenario will return empty matches.'
 \endif
 
 \if :{?pos_device_id}
@@ -64,23 +64,29 @@ FROM generate_series(1, 3) AS i
 ON CONFLICT (token) DO UPDATE SET expires_at = EXCLUDED.expires_at, updated_at = EXCLUDED.updated_at;
 
 -- token_hash = sha256(plaintext_token), matching repository.HashToken().
-INSERT INTO device_binding (device_type, token_hash, name, created_by_user_id, station_id)
+-- id and tenant_id are explicit: ids have no DB default (app-side nanoids),
+-- and tenant_id is NOT NULL since the tenant+RLS migration.
+INSERT INTO device_binding (id, tenant_id, device_type, token_hash, name, created_by_user_id, station_id)
 SELECT
+  'bnd_statn__' || i,
+  'tenant_seed1',
   'STATION',
   encode(sha256(('loadtest_station_token_' || lpad(i::text, 3, '0'))::bytea), 'hex'),
   'Load Station ' || i,
   'loadtest_user_admin_001',
-  NULLIF(:'station_device_id', 'NULL')::uuid
+  NULLIF(:'station_device_id', 'NULL')
 FROM generate_series(1, 3) AS i
 ON CONFLICT (token_hash) DO UPDATE SET last_seen_at = NOW(), revoked_at = NULL, station_id = EXCLUDED.station_id;
 
-INSERT INTO device_binding (device_type, token_hash, name, created_by_user_id, device_id)
+INSERT INTO device_binding (id, tenant_id, device_type, token_hash, name, created_by_user_id, device_id)
 SELECT
+  'bnd_kasse__' || i,
+  'tenant_seed1',
   'POS',
   encode(sha256(('loadtest_pos_token_' || lpad(i::text, 3, '0'))::bytea), 'hex'),
   'Load POS ' || i,
   'loadtest_user_admin_001',
-  NULLIF(:'pos_device_id', 'NULL')::uuid
+  NULLIF(:'pos_device_id', 'NULL')
 FROM generate_series(1, 2) AS i
 ON CONFLICT (token_hash) DO UPDATE SET last_seen_at = NOW(), revoked_at = NULL, device_id = EXCLUDED.device_id;
 

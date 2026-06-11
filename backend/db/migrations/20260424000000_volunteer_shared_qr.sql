@@ -12,10 +12,10 @@ ALTER TABLE volunteer_campaign
     ADD CONSTRAINT volunteer_campaign_max_redemptions_positive_ck CHECK (max_redemptions > 0);
 
 CREATE TABLE volunteer_redemption (
-    id                UUID PRIMARY KEY DEFAULT uuidv7(),
-    campaign_id       UUID NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
-    order_id          UUID NOT NULL UNIQUE REFERENCES "order" (id) ON DELETE RESTRICT,
-    station_device_id UUID NULL REFERENCES device (id) ON DELETE SET NULL,
+    id                VARCHAR(12) PRIMARY KEY,
+    campaign_id       VARCHAR(12) NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
+    order_id          VARCHAR(12) NOT NULL UNIQUE REFERENCES "order" (id) ON DELETE RESTRICT,
+    station_device_id VARCHAR(12) NULL REFERENCES device (id) ON DELETE SET NULL,
     idempotency_key   VARCHAR(64) NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
