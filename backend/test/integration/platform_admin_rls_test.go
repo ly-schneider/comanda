@@ -7,7 +7,7 @@ import (
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent/category"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,11 +19,11 @@ import (
 func TestPlatformAdminRLS(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "pa-a-"+uuid.NewString()[:8])
-	tenantB := env.seedTenant(t, "pa-b-"+uuid.NewString()[:8])
+	tenantA := env.seedTenant(t, "pa-a-"+randSuffix())
+	tenantB := env.seedTenant(t, "pa-b-"+randSuffix())
 
-	catA := uuid.Must(uuid.NewV7())
-	catB := uuid.Must(uuid.NewV7())
+	catA := nanoid.New()
+	catB := nanoid.New()
 	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PA-A', $2)`, catA, tenantA)
 	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PA-B', $2)`, catB, tenantB)
 
@@ -49,10 +49,10 @@ func TestPlatformAdminRLS(t *testing.T) {
 func TestPlatformAdminEntInterceptor(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "pe-a-"+uuid.NewString()[:8])
-	tenantB := env.seedTenant(t, "pe-b-"+uuid.NewString()[:8])
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PE-A', $2)`, uuid.Must(uuid.NewV7()), tenantA)
-	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PE-B', $2)`, uuid.Must(uuid.NewV7()), tenantB)
+	tenantA := env.seedTenant(t, "pe-a-"+randSuffix())
+	tenantB := env.seedTenant(t, "pe-b-"+randSuffix())
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PE-A', $2)`, nanoid.New(), tenantA)
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'PE-B', $2)`, nanoid.New(), tenantB)
 
 	t.Run("platform admin Ent query reads both tenants", func(t *testing.T) {
 		ctx, client, cleanup := env.appPlatformTx(t, true)

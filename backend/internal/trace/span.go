@@ -8,12 +8,12 @@ import (
 )
 
 func StartSpan(ctx context.Context, op, description string) (context.Context, func()) {
-	parent := sentry.SpanFromContext(ctx)
-	if parent == nil {
+	if sentry.SpanFromContext(ctx) == nil {
 		return ctx, func() {}
 	}
-	span := parent.StartChild(op)
-	span.Description = description
+	// Not parent.StartChild — its context predates the middleware chain,
+	// dropping request values like the tenant.
+	span := sentry.StartSpan(ctx, op, sentry.WithDescription(description))
 	return span.Context(), span.Finish
 }
 

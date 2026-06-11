@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 )
 
 // TenantDomain maps a public hostname to a tenant. The host-based resolver
@@ -33,9 +32,7 @@ func (TenantDomain) Mixin() []ent.Mixin {
 
 func (TenantDomain) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
+		nanoidPK(),
 		// Lowercase-only (enforced by a DB CHECK); unique via the index below.
 		field.String("hostname").
 			NotEmpty(),

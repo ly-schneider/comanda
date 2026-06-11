@@ -15,8 +15,7 @@ import (
 	"backend/internal/response"
 	"backend/internal/service"
 
-	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -64,14 +63,14 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	prov, err := h.providers.For(ctx)
 	if err != nil {
 		h.logger.Warn("payrexx webhook: tenant has no provider configured",
-			zap.String("tenantId", tenantID.String()), zap.Error(err))
+			zap.String("tenantId", tenantID), zap.Error(err))
 		writeError(w, http.StatusUnauthorized, "not_configured", "Payment provider not configured")
 		return
 	}
 
 	signature := r.Header.Get("X-Webhook-Signature")
 	if !prov.VerifyWebhook(body, signature) {
-		h.logger.Warn("payrexx webhook: invalid signature", zap.String("tenantId", tenantID.String()))
+		h.logger.Warn("payrexx webhook: invalid signature", zap.String("tenantId", tenantID))
 		writeError(w, http.StatusUnauthorized, "invalid_signature", "Invalid webhook signature")
 		return
 	}
@@ -95,8 +94,8 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	orderID, err := uuid.Parse(result.ReferenceID)
-	if err != nil {
+	orderID := result.ReferenceID
+	if !nanoid.Valid(orderID) {
 		h.logger.Warn("payrexx webhook: invalid referenceId", zap.String("referenceId", result.ReferenceID))
 		writeError(w, http.StatusBadRequest, "invalid_payload", "Invalid referenceId")
 		return
@@ -110,15 +109,15 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	if err := h.payments.MarkOrderPaidByPayrexx(ctx, orderID, result.GatewayID, result.TransactionID, contactEmail); err != nil {
 		h.logger.Error("payrexx webhook: failed to mark order paid",
 			zap.Error(err),
-			zap.String("orderId", orderID.String()),
+			zap.String("orderId", orderID),
 		)
 		writeError(w, http.StatusInternalServerError, "processing_error", "Failed to process payment")
 		return
 	}
 
 	h.logger.Info("payrexx webhook: order marked as paid",
-		zap.String("tenantId", tenantID.String()),
-		zap.String("orderId", orderID.String()),
+		zap.String("tenantId", tenantID),
+		zap.String("orderId", orderID),
 		zap.Int("gatewayId", result.GatewayID),
 		zap.Int("transactionId", result.TransactionID),
 	)
@@ -130,19 +129,19 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 
 // resolveWebhookTenant uses the privileged (RLS-bypassing) client because it
 // runs before any tenant context exists, like the host->tenant middleware.
-func (h *Handlers) resolveWebhookTenant(ctx context.Context, token string) (uuid.UUID, error) {
+func (h *Handlers) resolveWebhookTenant(ctx context.Context, token string) (string, error) {
 	row, err := h.privileged.Settings.Query().
 		Where(settings.PaymentWebhookTokenEQ(token)).
 		Only(ctx)
 	if err != nil {
-		return uuid.Nil, err
+		return "", err
 	}
 	return row.TenantID, nil
 }
 
 // beginWebhookTenantTx mirrors the request tenant-tx middleware so RLS behaves
 // identically on the webhook path.
-func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID uuid.UUID) (context.Context, func(ok bool), error) {
+func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID string) (context.Context, func(ok bool), error) {
 	conn, err := h.appDB.DB.Conn(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -154,7 +153,7 @@ func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID uuid.UUID)
 	}
 	if _, err := tx.ExecContext(ctx,
 		"SELECT set_config('app.tenant_id', $1, true), set_config('app.is_platform_admin', 'false', true)",
-		tenantID.String(),
+		tenantID,
 	); err != nil {
 		_ = tx.Rollback()
 		_ = conn.Close()
@@ -221,6 +220,6 @@ func (h *Handlers) ConfigurePayrexx(w http.ResponseWriter, r *http.Request) {
 
 // GetPayment returns a payment by ID.
 // (GET /payments/{paymentId})
-func (h *Handlers) GetPayment(w http.ResponseWriter, r *http.Request, paymentId openapi_types.UUID) {
+func (h *Handlers) GetPayment(w http.ResponseWriter, r *http.Request, paymentId string) {
 	writeError(w, http.StatusNotImplemented, "not_implemented", "Payment lookup by ID will be available after service refactoring")
 }

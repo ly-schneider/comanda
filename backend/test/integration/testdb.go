@@ -3,7 +3,9 @@ package integration
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +30,6 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
@@ -38,7 +39,18 @@ import (
 // ownership); a fixed-default tenant guard stamps tenant_id on writes and
 // filters reads so they exercise the multi-tenant code paths without each test
 // having to thread a tenant through.
-var DefaultTestTenantID = uuid.MustParse("00000000-0000-7000-8000-0000000000ff")
+var DefaultTestTenantID = "tenant_test1"
+
+// randSuffix returns 8 lowercase hex chars for unique slugs/hostnames in
+// tests — lowercase-only so DB hostname CHECKs and host normalization can't
+// reject it.
+func randSuffix() string {
+	b := make([]byte, 4)
+	if _, err := cryptorand.Read(b); err != nil {
+		panic(fmt.Sprintf("crypto/rand: %v", err))
+	}
+	return hex.EncodeToString(b)
+}
 
 // TestDB wraps an Ent client and raw sql.DB for integration tests.
 type TestDB struct {
@@ -150,8 +162,8 @@ func defaultTenantHook(next ent.Mutator) ent.Mutator {
 			return next.Mutate(ctx, m)
 		}
 		if tm, ok := m.(interface {
-			SetTenantID(uuid.UUID)
-			TenantID() (uuid.UUID, bool)
+			SetTenantID(string)
+			TenantID() (string, bool)
 		}); ok {
 			if _, set := tm.TenantID(); !set {
 				tm.SetTenantID(DefaultTestTenantID)
@@ -317,7 +329,7 @@ func (f *Fixtures) CreateJeton(name, color string) *ent.Jeton {
 }
 
 // CreateProduct creates a test product.
-func (f *Fixtures) CreateProduct(name string, categoryID uuid.UUID, priceCents int64, productType product.Type, jetonID *uuid.UUID) *ent.Product {
+func (f *Fixtures) CreateProduct(name string, categoryID string, priceCents int64, productType product.Type, jetonID *string) *ent.Product {
 	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, true, nil, nil, jetonID)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create product: %v", err))
@@ -360,7 +372,7 @@ func (f *Fixtures) ensureUser(id string) {
 }
 
 // CreateOrderLine creates a test order line.
-func (f *Fixtures) CreateOrderLine(orderID, productID uuid.UUID, title string, quantity int, priceCents int64, lineType orderline.LineType) *ent.OrderLine {
+func (f *Fixtures) CreateOrderLine(orderID, productID string, title string, quantity int, priceCents int64, lineType orderline.LineType) *ent.OrderLine {
 	line, err := f.repos.OrderLine.Create(f.ctx, orderID, lineType, productID, title, quantity, priceCents, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create order line: %v", err))
@@ -378,7 +390,7 @@ func (f *Fixtures) CreateDevice(name, deviceKey string, deviceType device.Type, 
 }
 
 // AddInventory adds inventory for a product.
-func (f *Fixtures) AddInventory(productID uuid.UUID, delta int, reason inventoryledger.Reason) *ent.InventoryLedger {
+func (f *Fixtures) AddInventory(productID string, delta int, reason inventoryledger.Reason) *ent.InventoryLedger {
 	entry, err := f.repos.Inventory.Create(f.ctx, productID, delta, reason, nil, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create inventory entry: %v", err))
@@ -387,7 +399,7 @@ func (f *Fixtures) AddInventory(productID uuid.UUID, delta int, reason inventory
 }
 
 // CreateMenuSlot creates a test menu slot.
-func (f *Fixtures) CreateMenuSlot(menuProductID uuid.UUID, name string, sequence int) *ent.MenuSlot {
+func (f *Fixtures) CreateMenuSlot(menuProductID string, name string, sequence int) *ent.MenuSlot {
 	slot, err := f.repos.MenuSlot.Create(f.ctx, menuProductID, name, sequence)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create menu slot: %v", err))
@@ -396,7 +408,7 @@ func (f *Fixtures) CreateMenuSlot(menuProductID uuid.UUID, name string, sequence
 }
 
 // CreateMenuSlotOption creates a test menu slot option.
-func (f *Fixtures) CreateMenuSlotOption(slotID, optionProductID uuid.UUID) *ent.MenuSlotOption {
+func (f *Fixtures) CreateMenuSlotOption(slotID, optionProductID string) *ent.MenuSlotOption {
 	opt, err := f.repos.MenuSlotOption.Create(f.ctx, slotID, optionProductID)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create menu slot option: %v", err))
@@ -405,7 +417,7 @@ func (f *Fixtures) CreateMenuSlotOption(slotID, optionProductID uuid.UUID) *ent.
 }
 
 // AssignProductToDevice assigns a product to a device (station).
-func (f *Fixtures) AssignProductToDevice(deviceID, productID uuid.UUID) {
+func (f *Fixtures) AssignProductToDevice(deviceID, productID string) {
 	if _, err := f.repos.DeviceProduct.Create(f.ctx, deviceID, productID); err != nil {
 		panic(fmt.Sprintf("failed to assign product to device: %v", err))
 	}

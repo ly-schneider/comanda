@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type OrderLine struct {
@@ -27,14 +26,12 @@ func (OrderLine) Mixin() []ent.Mixin {
 
 func (OrderLine) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("order_id", uuid.UUID{}),
+		nanoidPK(),
+		field.String("order_id").MaxLen(12),
 		field.Enum("line_type").
 			Values("simple", "bundle", "component").
 			StorageKey("line_type"),
-		field.UUID("product_id", uuid.UUID{}),
+		field.String("product_id").MaxLen(12),
 		field.String("title").
 			MaxLen(20).
 			NotEmpty(),
@@ -42,10 +39,10 @@ func (OrderLine) Fields() []ent.Field {
 			Default(1),
 		field.Int64("unit_price_cents").
 			Default(0),
-		field.UUID("parent_line_id", uuid.UUID{}).
+		field.String("parent_line_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.UUID("menu_slot_id", uuid.UUID{}).
+		field.String("menu_slot_id").MaxLen(12).
 			Optional().
 			Nillable(),
 		field.String("menu_slot_name").

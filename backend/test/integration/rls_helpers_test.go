@@ -12,7 +12,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/repository"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -54,9 +54,9 @@ func newRLSEnv(t *testing.T) *rlsEnv {
 }
 
 // seedTenant inserts a tenant via the privileged pool and returns its id.
-func (e *rlsEnv) seedTenant(t *testing.T, slug string) uuid.UUID {
+func (e *rlsEnv) seedTenant(t *testing.T, slug string) string {
 	t.Helper()
-	id := uuid.Must(uuid.NewV7())
+	id := nanoid.New()
 	_, err := e.priv.Exec(
 		`INSERT INTO tenant (id, slug, name) VALUES ($1, $2, $3)`,
 		id, slug, slug,
@@ -78,7 +78,7 @@ func (e *rlsEnv) privExec(t *testing.T, query string, args ...any) {
 // withTenant opens an app-pool transaction, sets app.tenant_id, runs fn, and
 // rolls back (read-only assertions need no commit). A nil tenantID leaves the
 // GUC unset to exercise the fail-closed path. Mirrors iglesio's withRlsContext.
-func (e *rlsEnv) withTenant(t *testing.T, tenantID *uuid.UUID, fn func(tx *sql.Tx)) {
+func (e *rlsEnv) withTenant(t *testing.T, tenantID *string, fn func(tx *sql.Tx)) {
 	t.Helper()
 	ctx := context.Background()
 	tx, err := e.app.BeginTx(ctx, nil)
@@ -89,7 +89,7 @@ func (e *rlsEnv) withTenant(t *testing.T, tenantID *uuid.UUID, fn func(tx *sql.T
 
 	val := ""
 	if tenantID != nil {
-		val = tenantID.String()
+		val = *tenantID
 	}
 	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", val); err != nil {
 		t.Fatalf("set tenant guc: %v", err)
@@ -204,7 +204,7 @@ func (e *rlsEnv) appRequestTxNoTenant(t *testing.T) (context.Context, *ent.Clien
 // client and a cleanup that commits and closes the connection. Service/repo
 // calls made with this context reproduce the production request path, so they
 // catch RLS regressions (e.g. a nested tx on the static pool with no GUC).
-func (e *rlsEnv) appRequestTx(t *testing.T, tenantID uuid.UUID) (context.Context, *ent.Client, func()) {
+func (e *rlsEnv) appRequestTx(t *testing.T, tenantID string) (context.Context, *ent.Client, func()) {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := e.app.Conn(ctx)
@@ -216,7 +216,7 @@ func (e *rlsEnv) appRequestTx(t *testing.T, tenantID uuid.UUID) (context.Context
 		_ = conn.Close()
 		t.Fatalf("app begin tx: %v", err)
 	}
-	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID.String()); err != nil {
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID); err != nil {
 		_ = tx.Rollback()
 		_ = conn.Close()
 		t.Fatalf("set tenant guc: %v", err)

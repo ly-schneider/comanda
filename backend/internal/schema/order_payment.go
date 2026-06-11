@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type OrderPayment struct {
@@ -29,15 +28,13 @@ func (OrderPayment) Mixin() []ent.Mixin {
 
 func (OrderPayment) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("order_id", uuid.UUID{}),
+		nanoidPK(),
+		field.String("order_id").MaxLen(12),
 		field.Enum("method").
 			Values("CASH", "CARD", "TWINT", "GRATIS_GUEST", "GRATIS_VIP", "GRATIS_STAFF", "GRATIS_100CLUB").
 			StorageKey("method"),
 		field.Int64("amount_cents"),
-		field.UUID("device_id", uuid.UUID{}).
+		field.String("device_id").MaxLen(12).
 			Optional().
 			Nillable(),
 		field.Time("paid_at").

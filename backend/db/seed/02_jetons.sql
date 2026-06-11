@@ -1,11 +1,11 @@
 -- tenant_id has no DB default; default it to the bootstrap tenant for this seed.
-ALTER TABLE jeton ALTER COLUMN tenant_id SET DEFAULT '00000000-0000-7000-8000-000000000001';
+ALTER TABLE jeton ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
 
 INSERT INTO jeton (id, name, color) VALUES
-  ('01970000-0000-7000-0001-000000000001', 'Burger', '#EF4444'),
-  ('01970000-0000-7000-0001-000000000002', 'El Tony Maté', '#3B82F6'),
-  ('01970000-0000-7000-0001-000000000003', 'Getränk', '#22C55E'),
-  ('01970000-0000-7000-0001-000000000004', 'Beilage', '#EAB308')
+  ('tkn________1', 'Burger', '#EF4444'),
+  ('tkn________2', 'El Tony Maté', '#3B82F6'),
+  ('tkn________3', 'Getränk', '#22C55E'),
+  ('tkn________4', 'Beilage', '#EAB308')
 ON CONFLICT (id) DO NOTHING;
 
 ALTER TABLE jeton ALTER COLUMN tenant_id DROP DEFAULT;

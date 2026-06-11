@@ -10,7 +10,7 @@ import (
 	"backend/internal/generated/ent/product"
 	"backend/internal/service"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,14 +38,14 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	t.Run("PrepareAndCreateOrder creates order with simple products", func(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 2},
-				{ProductID: sprite.ID.String(), Quantity: 1},
+				{ProductID: cola.ID, Quantity: 2},
+				{ProductID: sprite.ID, Quantity: 1},
 			},
 		}
 
 		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
 		require.NoError(t, err)
-		require.NotEqual(t, uuid.Nil, prep.OrderID)
+		require.NotEqual(t, "", prep.OrderID)
 		require.Equal(t, int64(1050), prep.TotalCents) // 2*350 + 1*350
 		require.Len(t, prep.LineItems, 2)
 
@@ -62,11 +62,11 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	})
 
 	t.Run("PrepareAndCreateOrder with user ID", func(t *testing.T) {
-		userID := uuid.Must(uuid.NewV7()).String()
+		userID := nanoid.New()
 		require.NoError(t, repos.Client.User.Create().SetID(userID).Exec(ctx))
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 1},
+				{ProductID: cola.ID, Quantity: 1},
 			},
 		}
 
@@ -88,7 +88,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 		attemptID := "test-attempt-123"
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 1},
+				{ProductID: cola.ID, Quantity: 1},
 			},
 		}
 
@@ -108,7 +108,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 5},
+				{ProductID: cola.ID, Quantity: 5},
 			},
 		}
 
@@ -144,7 +144,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	t.Run("PrepareAndCreateOrder with non-existent product fails", func(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: uuid.Must(uuid.NewV7()).String(), Quantity: 1},
+				{ProductID: nanoid.New(), Quantity: 1},
 			},
 		}
 
@@ -188,11 +188,11 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID.String(),
+					ProductID: menu.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
-						drinkSlot.ID.String(): cola.ID.String(),
-						sideSlot.ID.String():  fries.ID.String(),
+						drinkSlot.ID: cola.ID,
+						sideSlot.ID:  fries.ID,
 					},
 				},
 			},
@@ -225,14 +225,14 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 	})
 
 	t.Run("PrepareAndCreateOrder with invalid slot configuration fails", func(t *testing.T) {
-		invalidSlotID := uuid.Must(uuid.NewV7())
+		invalidSlotID := nanoid.New()
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID.String(),
+					ProductID: menu.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
-						invalidSlotID.String(): cola.ID.String(),
+						invalidSlotID: cola.ID,
 					},
 				},
 			},
@@ -247,10 +247,10 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID.String(),
+					ProductID: menu.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
-						drinkSlot.ID.String(): fries.ID.String(), // Fries not allowed in drink slot
+						drinkSlot.ID: fries.ID, // Fries not allowed in drink slot
 					},
 				},
 			},
@@ -283,7 +283,7 @@ func TestPaymentService_FindPendingOrderByAttemptID(t *testing.T) {
 		attemptID := "attempt-123"
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 1},
+				{ProductID: cola.ID, Quantity: 1},
 			},
 		}
 
@@ -340,7 +340,7 @@ func TestPaymentService_MarkOrderPaidByPayrexx(t *testing.T) {
 	})
 
 	t.Run("MarkOrderPaidByPayrexx returns error for non-existent order", func(t *testing.T) {
-		err := svc.MarkOrderPaidByPayrexx(ctx, uuid.Must(uuid.NewV7()), 123, 456, nil)
+		err := svc.MarkOrderPaidByPayrexx(ctx, nanoid.New(), 123, 456, nil)
 		require.Error(t, err)
 	})
 }
@@ -365,7 +365,7 @@ func TestPaymentService_CleanupPendingOrderByID(t *testing.T) {
 	t.Run("CleanupPendingOrderByID deletes pending order and releases inventory", func(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: cola.ID.String(), Quantity: 5},
+				{ProductID: cola.ID, Quantity: 5},
 			},
 		}
 
@@ -423,7 +423,7 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 	t.Run("PrepareAndCreateOrder fails for single item exceeding TWINT limit", func(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: expensive.ID.String(), Quantity: 1},
+				{ProductID: expensive.ID, Quantity: 1},
 			},
 		}
 
@@ -438,7 +438,7 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
-				{ProductID: affordable.ID.String(), Quantity: 6}, // 6000 CHF total
+				{ProductID: affordable.ID, Quantity: 6}, // 6000 CHF total
 			},
 		}
 

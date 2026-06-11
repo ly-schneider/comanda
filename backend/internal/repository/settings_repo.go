@@ -12,14 +12,13 @@ import (
 	"backend/internal/generated/ent/tenant"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 type SettingsRepository interface {
 	Get(ctx context.Context) (*ent.Settings, error)
 	GetWithProducts(ctx context.Context) (*ent.Settings, error)
 	Upsert(ctx context.Context, mode settings.PosMode) error
-	UpdateClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions int) error
+	UpdateClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
 	UpdateBranding(ctx context.Context, b BrandingUpdate) error
@@ -83,11 +82,11 @@ func (r *settingsRepo) ec(ctx context.Context) *ent.Client {
 }
 
 // settingsID returns the per-tenant settings row id. Settings is a singleton
-// per tenant; its primary key is the tenant's UUID string so it never collides
+// per tenant; its primary key is the tenant's id so it never collides
 // across tenants while RLS still scopes visibility by tenant_id.
 func (r *settingsRepo) settingsID(ctx context.Context) string {
 	if id, ok := TenantIDFromContext(ctx); ok {
-		return id.String()
+		return id
 	}
 	return "default"
 }
@@ -152,7 +151,7 @@ func (r *settingsRepo) Upsert(ctx context.Context, mode settings.PosMode) error 
 	return translateError(err)
 }
 
-func (r *settingsRepo) UpdateClub100Settings(ctx context.Context, freeProductIDs []uuid.UUID, maxRedemptions int) error {
+func (r *settingsRepo) UpdateClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions int) error {
 	client := r.ec(ctx)
 	id := r.settingsID(ctx)
 	tenantID, hasTenant := TenantIDFromContext(ctx)

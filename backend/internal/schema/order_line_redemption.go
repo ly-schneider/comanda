@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type OrderLineRedemption struct {
@@ -29,10 +28,8 @@ func (OrderLineRedemption) Mixin() []ent.Mixin {
 
 func (OrderLineRedemption) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("order_line_id", uuid.UUID{}).
+		nanoidPK(),
+		field.String("order_line_id").MaxLen(12).
 			Unique(),
 		field.Time("redeemed_at").
 			Default(time.Now),

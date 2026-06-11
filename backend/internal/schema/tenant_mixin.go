@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"entgo.io/ent/schema/mixin"
-	"github.com/google/uuid"
 )
 
 // TenantMixin adds the tenant_id column, its index, and a one-directional
@@ -26,7 +25,9 @@ type TenantMixin struct {
 
 func (TenantMixin) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("tenant_id", uuid.UUID{}).
+		field.String("tenant_id").
+			MaxLen(12).
+			NotEmpty().
 			Immutable(),
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 )
 
 type Idempotency struct {
@@ -29,9 +28,7 @@ func (Idempotency) Mixin() []ent.Mixin {
 
 func (Idempotency) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
+		nanoidPK(),
 		field.String("scope").
 			MaxLen(100).
 			NotEmpty(),

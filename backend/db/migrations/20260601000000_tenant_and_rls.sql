@@ -21,7 +21,7 @@
 CREATE TYPE tenant_status AS ENUM ('active', 'suspended');
 
 CREATE TABLE tenant (
-    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    id VARCHAR(12) PRIMARY KEY,
     slug VARCHAR(63) NOT NULL,
     name VARCHAR(100) NOT NULL,
     status tenant_status NOT NULL DEFAULT 'active',
@@ -34,7 +34,7 @@ CREATE UNIQUE INDEX tenant_slug_key ON tenant (slug);
 -- Bootstrap tenant: existing single-tenant data is migrated under it. Its slug
 -- matches BOOTSTRAP_TENANT_SLUG so the P1 stopgap resolver can find it.
 INSERT INTO tenant (id, slug, name)
-VALUES ('00000000-0000-7000-8000-000000000001', 'default', 'Default Tenant');
+VALUES ('tenant_seed1', 'default', 'Default Tenant');
 
 -- =====================================================================
 -- tenant_id COLUMN + INDEX + FK + BACKFILL + NOT NULL, per scoped table.
@@ -43,7 +43,7 @@ VALUES ('00000000-0000-7000-8000-000000000001', 'default', 'Default Tenant');
 DO $$
 DECLARE
   t text;
-  bootstrap_id constant uuid := '00000000-0000-7000-8000-000000000001';
+  bootstrap_id constant text := 'tenant_seed1';
   scoped text[] := ARRAY[
     'product','category','jeton','menu_slot','menu_slot_option','order',
     'order_line','order_payment','order_line_redemption','inventory_ledger',
@@ -53,7 +53,7 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY scoped LOOP
-    EXECUTE format('ALTER TABLE %I ADD COLUMN tenant_id uuid', t);
+    EXECUTE format('ALTER TABLE %I ADD COLUMN tenant_id varchar(12)', t);
     EXECUTE format('UPDATE %I SET tenant_id = %L WHERE tenant_id IS NULL', t, bootstrap_id);
     EXECUTE format('ALTER TABLE %I ALTER COLUMN tenant_id SET NOT NULL', t);
     EXECUTE format(
@@ -108,18 +108,18 @@ CREATE UNIQUE INDEX idx_volunteer_redemption_tenant_campaign_idempotency
 -- the primary key never collides across tenants while RLS isolates visibility.
 -- =====================================================================
 
-UPDATE club100_free_product SET settings_id = '00000000-0000-7000-8000-000000000001'
+UPDATE club100_free_product SET settings_id = 'tenant_seed1'
   WHERE settings_id = 'default';
-UPDATE settings SET id = '00000000-0000-7000-8000-000000000001'
+UPDATE settings SET id = 'tenant_seed1'
   WHERE id = 'default';
 
 -- =====================================================================
 -- HELPER: read the request tenant GUC, fail-closed.
 -- =====================================================================
 
-CREATE OR REPLACE FUNCTION app_current_tenant_id() RETURNS uuid
+CREATE OR REPLACE FUNCTION app_current_tenant_id() RETURNS text
 LANGUAGE sql STABLE PARALLEL SAFE AS $$
-  SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid
+  SELECT NULLIF(current_setting('app.tenant_id', true), '')
 $$;
 
 -- =====================================================================

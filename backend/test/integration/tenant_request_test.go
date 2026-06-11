@@ -12,7 +12,7 @@ import (
 	"backend/internal/repository"
 	"backend/internal/service"
 
-	"github.com/google/uuid"
+	nanoid "backend/internal/id"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -24,14 +24,14 @@ import (
 
 // seedTenantWithProducts seeds a tenant + a category + N simple products via the
 // privileged pool and returns the tenant id and product ids.
-func (e *rlsEnv) seedTenantWithProducts(t *testing.T, slug string, n int) (uuid.UUID, []uuid.UUID) {
+func (e *rlsEnv) seedTenantWithProducts(t *testing.T, slug string, n int) (string, []string) {
 	t.Helper()
 	tenantID := e.seedTenant(t, slug)
-	catID := uuid.Must(uuid.NewV7())
+	catID := nanoid.New()
 	e.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'Cat', $2)`, catID, tenantID)
-	ids := make([]uuid.UUID, n)
+	ids := make([]string, n)
 	for i := 0; i < n; i++ {
-		pid := uuid.Must(uuid.NewV7())
+		pid := nanoid.New()
 		e.privExec(t,
 			`INSERT INTO product (id, category_id, type, name, price_cents, is_active, tenant_id)
 			 VALUES ($1, $2, 'simple', $3, 100, true, $4)`,
@@ -49,15 +49,15 @@ func appClientFor(db *sql.DB) *database.AppClient {
 // H1: volunteer campaign create + redeem must not 500 inside the request tx.
 func TestTenantRequest_VolunteerCreateAndRedeem(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantID, productIDs := env.seedTenantWithProducts(t, "vol-"+uuid.NewString()[:8], 1)
+	tenantID, productIDs := env.seedTenantWithProducts(t, "vol-"+randSuffix(), 1)
 
 	// Seed a station device + assign the campaign product to it (so the redeem
 	// station-match check passes).
-	stationID := uuid.Must(uuid.NewV7())
+	stationID := nanoid.New()
 	env.privExec(t,
 		`INSERT INTO device (id, name, device_key, type, status, tenant_id)
 		 VALUES ($1, 'St', $2, 'STATION', 'approved', $3)`,
-		stationID, "stationkey-"+uuid.NewString()[:8], tenantID,
+		stationID, "stationkey-"+randSuffix(), tenantID,
 	)
 	env.privExec(t,
 		`INSERT INTO device_product (device_id, product_id, tenant_id) VALUES ($1, $2, $3)`,
@@ -90,21 +90,21 @@ func TestTenantRequest_VolunteerCreateAndRedeem(t *testing.T) {
 	})
 	require.NoError(t, err, "UpdateCampaign must not error inside the request tx")
 
-	res, err := svc.RedeemSharedQR(ctx, campaign.ClaimToken, stationID, "idem-"+uuid.NewString()[:8])
+	res, err := svc.RedeemSharedQR(ctx, campaign.ClaimToken, stationID, "idem-"+randSuffix())
 	require.NoError(t, err, "RedeemSharedQR must not error inside the request tx")
-	require.NotEqual(t, uuid.Nil, res.OrderID)
+	require.NotEqual(t, "", res.OrderID)
 }
 
 // H2: replacing station products must not 500 inside the request tx.
 func TestTenantRequest_SetStationProducts(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantID, productIDs := env.seedTenantWithProducts(t, "sta-"+uuid.NewString()[:8], 2)
+	tenantID, productIDs := env.seedTenantWithProducts(t, "sta-"+randSuffix(), 2)
 
-	stationID := uuid.Must(uuid.NewV7())
+	stationID := nanoid.New()
 	env.privExec(t,
 		`INSERT INTO device (id, name, device_key, type, status, tenant_id)
 		 VALUES ($1, 'St', $2, 'STATION', 'approved', $3)`,
-		stationID, "stationkey-"+uuid.NewString()[:8], tenantID,
+		stationID, "stationkey-"+randSuffix(), tenantID,
 	)
 
 	ctx, client, cleanup := env.appRequestTx(t, tenantID)
@@ -130,9 +130,9 @@ func TestTenantRequest_SetStationProducts(t *testing.T) {
 // H2: POS cash payment (setPosPayment) must not 500 inside the request tx.
 func TestTenantRequest_PosPayment(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantID, _ := env.seedTenantWithProducts(t, "pos-"+uuid.NewString()[:8], 0)
+	tenantID, _ := env.seedTenantWithProducts(t, "pos-"+randSuffix(), 0)
 
-	orderID := uuid.Must(uuid.NewV7())
+	orderID := nanoid.New()
 	env.privExec(t,
 		`INSERT INTO "order" (id, total_cents, status, origin, tenant_id)
 		 VALUES ($1, 250, 'pending', 'pos', $2)`,
@@ -154,7 +154,7 @@ func TestTenantRequest_PosPayment(t *testing.T) {
 // M1: settings system_enabled toggles round-trip per tenant.
 func TestTenantRequest_SettingsSystemEnabledRoundTrip(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantID := env.seedTenant(t, "set-"+uuid.NewString()[:8])
+	tenantID := env.seedTenant(t, "set-"+randSuffix())
 
 	ctx, client, cleanup := env.appRequestTx(t, tenantID)
 	defer cleanup()
@@ -200,11 +200,11 @@ func (c *captureEmail) get() *service.ReceiptEmailData {
 // opens its own tenant tx; without the GUC it would see zero lines).
 func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 	env := newRLSEnv(t)
-	tenantID, productIDs := env.seedTenantWithProducts(t, "rcpt-"+uuid.NewString()[:8], 1)
+	tenantID, productIDs := env.seedTenantWithProducts(t, "rcpt-"+randSuffix(), 1)
 
 	// Seed a committed order + line + contact email via the privileged pool so
 	// the detached receipt tx can read it.
-	orderID := uuid.Must(uuid.NewV7())
+	orderID := nanoid.New()
 	email := "guest@example.com"
 	env.privExec(t,
 		`INSERT INTO "order" (id, total_cents, status, origin, contact_email, tenant_id)
@@ -214,7 +214,7 @@ func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 	env.privExec(t,
 		`INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents, tenant_id)
 		 VALUES ($1, $2, 'simple', $3, 'Cola', 2, 100, $4)`,
-		uuid.Must(uuid.NewV7()), orderID, productIDs[0], tenantID,
+		nanoid.New(), orderID, productIDs[0], tenantID,
 	)
 
 	capture := &captureEmail{}

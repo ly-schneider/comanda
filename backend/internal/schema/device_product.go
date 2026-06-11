@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type DeviceProduct struct {
@@ -28,8 +27,8 @@ func (DeviceProduct) Mixin() []ent.Mixin {
 
 func (DeviceProduct) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("device_id", uuid.UUID{}),
-		field.UUID("product_id", uuid.UUID{}),
+		field.String("device_id").MaxLen(12),
+		field.String("product_id").MaxLen(12),
 	}
 }
 

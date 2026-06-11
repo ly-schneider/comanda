@@ -12,7 +12,6 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +42,7 @@ func TestClub100Service_GetPeopleWithRedemptions_NoNPlusOne(t *testing.T) {
 	require.NoError(t, repos.Settings.UpdateClub100Settings(ctx, nil, 2))
 
 	fixtures := NewFixtures(repos)
-	newOrderID := func() uuid.UUID {
+	newOrderID := func() string {
 		return fixtures.CreateOrder(0, order.StatusPaid, order.OriginPos).ID
 	}
 

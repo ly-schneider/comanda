@@ -7,11 +7,18 @@
 
 \set ON_ERROR_STOP on
 
+CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
+LANGUAGE sql VOLATILE AS $$
+  SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',
+                           (floor(random()*55))::int + 1, 1), '')
+  FROM generate_series(1, 12)
+$$;
+
 BEGIN;
 
-INSERT INTO inventory_ledger (product_id, delta, reason, created_by)
-SELECT id, 50000, 'manual_adjust', 'loadtest_user_admin_001'
-FROM product
+INSERT INTO inventory_ledger (id, tenant_id, product_id, delta, reason, created_by)
+SELECT pg_temp.nanoid(), p.tenant_id, p.id, 50000, 'manual_adjust', 'loadtest_user_admin_001'
+FROM product p
 WHERE type = 'simple' AND is_active = TRUE;
 
 COMMIT;

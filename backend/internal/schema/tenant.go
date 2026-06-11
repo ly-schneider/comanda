@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 )
 
 type Tenant struct {
@@ -23,9 +22,7 @@ func (Tenant) Annotations() []schema.Annotation {
 
 func (Tenant) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
+		nanoidPK(),
 		field.String("slug").
 			MaxLen(63).
 			NotEmpty().

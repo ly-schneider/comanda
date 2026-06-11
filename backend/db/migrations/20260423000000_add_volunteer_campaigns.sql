@@ -1,8 +1,8 @@
 CREATE TYPE volunteer_campaign_status AS ENUM ('draft', 'active', 'ended');
 
 CREATE TABLE volunteer_campaign (
-    id             UUID PRIMARY KEY DEFAULT uuidv7(),
-    claim_token    UUID NOT NULL DEFAULT uuidv7(),
+    id             VARCHAR(12) PRIMARY KEY,
+    claim_token    VARCHAR(12) NOT NULL,
     name           VARCHAR(100) NOT NULL,
     access_code    VARCHAR(4) NOT NULL,
     valid_from     TIMESTAMPTZ NULL,
@@ -16,16 +16,16 @@ CREATE UNIQUE INDEX idx_volunteer_campaign_claim_token ON volunteer_campaign (cl
 CREATE INDEX idx_volunteer_campaign_status ON volunteer_campaign (status);
 
 CREATE TABLE volunteer_campaign_product (
-    campaign_id  UUID NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
-    product_id   UUID NOT NULL REFERENCES product (id) ON DELETE RESTRICT,
+    campaign_id  VARCHAR(12) NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
+    product_id   VARCHAR(12) NOT NULL REFERENCES product (id) ON DELETE RESTRICT,
     quantity     INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (campaign_id, product_id)
 );
 
 CREATE TABLE volunteer_slot (
-    id                   UUID PRIMARY KEY DEFAULT uuidv7(),
-    campaign_id          UUID NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
-    order_id             UUID NOT NULL UNIQUE REFERENCES "order" (id) ON DELETE RESTRICT,
+    id                   VARCHAR(12) PRIMARY KEY,
+    campaign_id          VARCHAR(12) NOT NULL REFERENCES volunteer_campaign (id) ON DELETE CASCADE,
+    order_id             VARCHAR(12) NOT NULL UNIQUE REFERENCES "order" (id) ON DELETE RESTRICT,
     reserved_by_session  VARCHAR(64) NULL,
     reserved_at          TIMESTAMPTZ NULL,
     reserved_until       TIMESTAMPTZ NULL,

@@ -3,7 +3,7 @@ name: backend
 services:
   # PostgreSQL for local development (production uses db/provisioning/ for role setup)
   postgres:
-    image: postgres:18.1-alpine
+    image: postgres:17.6-alpine
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT:-5432}:5432"

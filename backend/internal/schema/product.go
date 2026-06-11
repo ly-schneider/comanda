@@ -8,7 +8,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type Product struct {
@@ -29,10 +28,8 @@ func (Product) Mixin() []ent.Mixin {
 
 func (Product) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
-		field.UUID("category_id", uuid.UUID{}),
+		nanoidPK(),
+		field.String("category_id").MaxLen(12),
 		field.Enum("type").
 			Values("simple", "menu").
 			Default("simple").
@@ -49,7 +46,7 @@ func (Product) Fields() []ent.Field {
 			Nillable(),
 		field.Int64("price_cents").
 			Default(0),
-		field.UUID("jeton_id", uuid.UUID{}).
+		field.String("jeton_id").MaxLen(12).
 			Optional().
 			Nillable(),
 		field.Bool("is_active").

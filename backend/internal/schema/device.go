@@ -9,7 +9,6 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 )
 
 type Device struct {
@@ -30,9 +29,7 @@ func (Device) Mixin() []ent.Mixin {
 
 func (Device) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuidV7).
-			Immutable(),
+		nanoidPK(),
 		field.String("name").
 			MaxLen(20).
 			NotEmpty(),

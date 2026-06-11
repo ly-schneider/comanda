@@ -15,9 +15,8 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/admininvite"
 	"backend/internal/generated/ent/user"
+	nanoid "backend/internal/id"
 	"backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -70,7 +69,7 @@ func NewAdminInviteService(
 }
 
 func (s *adminInviteService) GetByID(ctx context.Context, id string) (*ent.AdminInvite, error) {
-	uid, err := parseUUID(id)
+	uid, err := parseID(id)
 	if err != nil {
 		return nil, ErrInviteNotFound
 	}
@@ -134,12 +133,12 @@ func (s *adminInviteService) Create(ctx context.Context, inviterID, email string
 }
 
 func (s *adminInviteService) Delete(ctx context.Context, id string) error {
-	uuid, err := parseUUID(id)
+	inviteID, err := parseID(id)
 	if err != nil {
 		return ErrInviteNotFound
 	}
 
-	if err := s.inviteRepo.Delete(ctx, uuid); err != nil {
+	if err := s.inviteRepo.Delete(ctx, inviteID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInviteNotFound
 		}
@@ -149,12 +148,12 @@ func (s *adminInviteService) Delete(ctx context.Context, id string) error {
 }
 
 func (s *adminInviteService) Revoke(ctx context.Context, id string) error {
-	uuid, err := parseUUID(id)
+	inviteID, err := parseID(id)
 	if err != nil {
 		return ErrInviteNotFound
 	}
 
-	invite, err := s.inviteRepo.GetByID(ctx, uuid)
+	invite, err := s.inviteRepo.GetByID(ctx, inviteID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInviteNotFound
@@ -166,16 +165,16 @@ func (s *adminInviteService) Revoke(ctx context.Context, id string) error {
 		return ErrInviteNotPending
 	}
 
-	return s.inviteRepo.UpdateStatus(ctx, uuid, admininvite.StatusRevoked)
+	return s.inviteRepo.UpdateStatus(ctx, inviteID, admininvite.StatusRevoked)
 }
 
 func (s *adminInviteService) Resend(ctx context.Context, id string) error {
-	uuid, err := parseUUID(id)
+	inviteID, err := parseID(id)
 	if err != nil {
 		return ErrInviteNotFound
 	}
 
-	invite, err := s.inviteRepo.GetByID(ctx, uuid)
+	invite, err := s.inviteRepo.GetByID(ctx, inviteID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInviteNotFound
@@ -195,7 +194,7 @@ func (s *adminInviteService) Resend(ctx context.Context, id string) error {
 
 	expiresAt := time.Now().Add(defaultInviteTTL)
 
-	if err := s.inviteRepo.UpdateTokenAndExpiry(ctx, uuid, tokenHash, expiresAt); err != nil {
+	if err := s.inviteRepo.UpdateTokenAndExpiry(ctx, inviteID, tokenHash, expiresAt); err != nil {
 		return err
 	}
 
@@ -305,7 +304,9 @@ func hashToken(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// parseUUID parses a string UUID, returning an error if invalid.
-func parseUUID(s string) (uuid.UUID, error) {
-	return uuid.Parse(s)
+func parseID(s string) (string, error) {
+	if !nanoid.Valid(s) {
+		return "", fmt.Errorf("invalid id: %s", s)
+	}
+	return s, nil
 }

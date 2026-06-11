@@ -9,8 +9,7 @@ import (
 	"backend/internal/generated/ent/product"
 	"backend/internal/response"
 
-	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
+	nanoid "backend/internal/id"
 )
 
 // ListMenus returns all menu-type products with their slots and options.
@@ -52,7 +51,7 @@ func (h *Handlers) CreateMenu(w http.ResponseWriter, r *http.Request) {
 
 	prod, err := h.products.Create(
 		r.Context(),
-		uuid.UUID(body.CategoryId),
+		body.CategoryId,
 		product.TypeMenu,
 		body.Name,
 		priceCents,
@@ -70,8 +69,8 @@ func (h *Handlers) CreateMenu(w http.ResponseWriter, r *http.Request) {
 
 // GetMenu returns a single menu by ID with slots and options loaded.
 // (GET /menus/{menuId})
-func (h *Handlers) GetMenu(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID) {
-	prod, err := h.products.GetByID(r.Context(), uuid.UUID(menuId))
+func (h *Handlers) GetMenu(w http.ResponseWriter, r *http.Request, menuId string) {
+	prod, err := h.products.GetByID(r.Context(), menuId)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -81,9 +80,9 @@ func (h *Handlers) GetMenu(w http.ResponseWriter, r *http.Request, menuId openap
 
 // UpdateMenu partially updates a menu product.
 // (PATCH /menus/{menuId})
-func (h *Handlers) UpdateMenu(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID) {
+func (h *Handlers) UpdateMenu(w http.ResponseWriter, r *http.Request, menuId string) {
 	ctx := r.Context()
-	id := uuid.UUID(menuId)
+	id := menuId
 
 	existing, err := h.products.GetByID(ctx, id)
 	if err != nil {
@@ -143,8 +142,8 @@ func (h *Handlers) UpdateMenu(w http.ResponseWriter, r *http.Request, menuId ope
 
 // DeleteMenu removes a menu product.
 // (DELETE /menus/{menuId})
-func (h *Handlers) DeleteMenu(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID) {
-	if err := h.products.Delete(r.Context(), uuid.UUID(menuId)); err != nil {
+func (h *Handlers) DeleteMenu(w http.ResponseWriter, r *http.Request, menuId string) {
+	if err := h.products.Delete(r.Context(), menuId); err != nil {
 		writeEntError(w, err)
 		return
 	}
@@ -153,14 +152,14 @@ func (h *Handlers) DeleteMenu(w http.ResponseWriter, r *http.Request, menuId ope
 
 // CreateMenuSlot creates a new slot on a menu.
 // (POST /menus/{menuId}/slots)
-func (h *Handlers) CreateMenuSlot(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID) {
+func (h *Handlers) CreateMenuSlot(w http.ResponseWriter, r *http.Request, menuId string) {
 	var body generated.MenuSlotCreate
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
 
-	slot, err := h.products.CreateMenuSlot(r.Context(), uuid.UUID(menuId), body.Name)
+	slot, err := h.products.CreateMenuSlot(r.Context(), menuId, body.Name)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -170,7 +169,7 @@ func (h *Handlers) CreateMenuSlot(w http.ResponseWriter, r *http.Request, menuId
 
 // UpdateMenuSlot renames a menu slot.
 // (PATCH /menus/{menuId}/slots/{slotId})
-func (h *Handlers) UpdateMenuSlot(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID, slotId openapi_types.UUID) {
+func (h *Handlers) UpdateMenuSlot(w http.ResponseWriter, r *http.Request, menuId string, slotId string) {
 	var body generated.MenuSlotUpdate
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
@@ -182,7 +181,7 @@ func (h *Handlers) UpdateMenuSlot(w http.ResponseWriter, r *http.Request, menuId
 		name = *body.Name
 	}
 
-	slot, err := h.products.UpdateMenuSlot(r.Context(), uuid.UUID(menuId), uuid.UUID(slotId), name)
+	slot, err := h.products.UpdateMenuSlot(r.Context(), menuId, slotId, name)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -192,8 +191,8 @@ func (h *Handlers) UpdateMenuSlot(w http.ResponseWriter, r *http.Request, menuId
 
 // DeleteMenuSlot removes a slot from a menu.
 // (DELETE /menus/{menuId}/slots/{slotId})
-func (h *Handlers) DeleteMenuSlot(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID, slotId openapi_types.UUID) {
-	if err := h.products.DeleteMenuSlot(r.Context(), uuid.UUID(menuId), uuid.UUID(slotId)); err != nil {
+func (h *Handlers) DeleteMenuSlot(w http.ResponseWriter, r *http.Request, menuId string, slotId string) {
+	if err := h.products.DeleteMenuSlot(r.Context(), menuId, slotId); err != nil {
 		writeEntError(w, err)
 		return
 	}
@@ -202,25 +201,23 @@ func (h *Handlers) DeleteMenuSlot(w http.ResponseWriter, r *http.Request, menuId
 
 // ReorderMenuSlots updates the sequence order of menu slots.
 // (PATCH /menus/{menuId}/slots/reorder)
-func (h *Handlers) ReorderMenuSlots(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID) {
+func (h *Handlers) ReorderMenuSlots(w http.ResponseWriter, r *http.Request, menuId string) {
 	var body generated.MenuSlotReorder
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
 
-	// Convert string keys to uuid.UUID keys.
-	positions := make(map[uuid.UUID]int, len(body.Positions))
+	positions := make(map[string]int, len(body.Positions))
 	for idStr, seq := range body.Positions {
-		uid, err := uuid.Parse(idStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_slot_id", "Invalid slot UUID: "+idStr)
+		if !nanoid.Valid(idStr) {
+			writeError(w, http.StatusBadRequest, "invalid_slot_id", "Invalid slot id: "+idStr)
 			return
 		}
-		positions[uid] = seq
+		positions[idStr] = seq
 	}
 
-	if err := h.products.ReorderMenuSlots(r.Context(), uuid.UUID(menuId), positions); err != nil {
+	if err := h.products.ReorderMenuSlots(r.Context(), menuId, positions); err != nil {
 		writeEntError(w, err)
 		return
 	}
@@ -229,14 +226,14 @@ func (h *Handlers) ReorderMenuSlots(w http.ResponseWriter, r *http.Request, menu
 
 // AddSlotOption adds a product as an option to a menu slot.
 // (POST /menus/{menuId}/slots/{slotId}/options)
-func (h *Handlers) AddSlotOption(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID, slotId openapi_types.UUID) {
+func (h *Handlers) AddSlotOption(w http.ResponseWriter, r *http.Request, menuId string, slotId string) {
 	var body generated.MenuSlotOptionCreate
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
 
-	opt, err := h.products.AddSlotOption(r.Context(), uuid.UUID(menuId), uuid.UUID(slotId), uuid.UUID(body.ProductId))
+	opt, err := h.products.AddSlotOption(r.Context(), menuId, slotId, body.ProductId)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -246,8 +243,8 @@ func (h *Handlers) AddSlotOption(w http.ResponseWriter, r *http.Request, menuId 
 
 // RemoveSlotOption removes a product option from a menu slot.
 // (DELETE /menus/{menuId}/slots/{slotId}/options/{optionProductId})
-func (h *Handlers) RemoveSlotOption(w http.ResponseWriter, r *http.Request, menuId openapi_types.UUID, slotId openapi_types.UUID, optionProductId openapi_types.UUID) {
-	if err := h.products.RemoveSlotOption(r.Context(), uuid.UUID(menuId), uuid.UUID(slotId), uuid.UUID(optionProductId)); err != nil {
+func (h *Handlers) RemoveSlotOption(w http.ResponseWriter, r *http.Request, menuId string, slotId string, optionProductId string) {
+	if err := h.products.RemoveSlotOption(r.Context(), menuId, slotId, optionProductId); err != nil {
 		writeEntError(w, err)
 		return
 	}

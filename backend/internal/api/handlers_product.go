@@ -12,8 +12,8 @@ import (
 	"backend/internal/response"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
+
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +26,7 @@ func (h *Handlers) ListProducts(w http.ResponseWriter, r *http.Request, params g
 	var err error
 
 	if params.CategoryId != nil {
-		products, err = h.products.GetByCategory(ctx, uuid.UUID(*params.CategoryId))
+		products, err = h.products.GetByCategory(ctx, string(*params.CategoryId))
 	} else {
 		products, err = h.products.GetAll(ctx)
 	}
@@ -38,7 +38,7 @@ func (h *Handlers) ListProducts(w http.ResponseWriter, r *http.Request, params g
 	apiProducts := toAPIProducts(products)
 
 	// Enrich with inventory stock levels.
-	ids := make([]uuid.UUID, len(products))
+	ids := make([]string, len(products))
 	for i, p := range products {
 		ids[i] = p.ID
 	}
@@ -69,9 +69,9 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		pType = product.Type(*body.Type)
 	}
 
-	var jetonID *uuid.UUID
+	var jetonID *string
 	if body.JetonId != nil {
-		id := uuid.UUID(*body.JetonId)
+		id := string(*body.JetonId)
 		jetonID = &id
 	}
 
@@ -82,7 +82,7 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 	prod, err := h.products.Create(
 		r.Context(),
-		uuid.UUID(body.CategoryId),
+		body.CategoryId,
 		pType,
 		body.Name,
 		body.PriceCents,
@@ -100,9 +100,9 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 // GetProduct returns a single product by ID.
 // (GET /products/{productId})
-func (h *Handlers) GetProduct(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) GetProduct(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 	prod, err := h.products.GetByID(ctx, id)
 	if err != nil {
 		writeEntError(w, err)
@@ -118,9 +118,9 @@ func (h *Handlers) GetProduct(w http.ResponseWriter, r *http.Request, productId 
 
 // UpdateProduct partially updates a product.
 // (PATCH /products/{productId})
-func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 
 	existing, err := h.products.GetByID(ctx, id)
 	if err != nil {
@@ -148,7 +148,7 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 	}
 	categoryID := existing.CategoryID
 	if body.CategoryId != nil {
-		categoryID = uuid.UUID(*body.CategoryId)
+		categoryID = string(*body.CategoryId)
 	}
 	image := existing.Image
 	if body.Image != nil {
@@ -164,7 +164,7 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 	}
 	jetonID := existing.JetonID
 	if body.JetonId != nil {
-		id := uuid.UUID(*body.JetonId)
+		id := string(*body.JetonId)
 		jetonID = &id
 	}
 
@@ -189,8 +189,8 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 
 // DeleteProduct removes a product.
 // (DELETE /products/{productId})
-func (h *Handlers) DeleteProduct(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
-	if err := h.products.Delete(r.Context(), uuid.UUID(productId)); err != nil {
+func (h *Handlers) DeleteProduct(w http.ResponseWriter, r *http.Request, productId string) {
+	if err := h.products.Delete(r.Context(), productId); err != nil {
 		writeEntError(w, err)
 		return
 	}
@@ -199,9 +199,9 @@ func (h *Handlers) DeleteProduct(w http.ResponseWriter, r *http.Request, product
 
 // GetProductInventory returns the current inventory for a product.
 // (GET /products/{productId}/inventory)
-func (h *Handlers) GetProductInventory(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) GetProductInventory(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 
 	// Verify product exists.
 	_, err := h.products.GetByID(ctx, id)
@@ -216,16 +216,16 @@ func (h *Handlers) GetProductInventory(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, generated.Inventory{
-		ProductId: openapi_types.UUID(id),
+		ProductId: string(id),
 		Quantity:  int(stock),
 	})
 }
 
 // GetProductInventoryHistory returns paginated inventory ledger entries for a product.
 // (GET /products/{productId}/inventory/history)
-func (h *Handlers) GetProductInventoryHistory(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID, params generated.GetProductInventoryHistoryParams) {
+func (h *Handlers) GetProductInventoryHistory(w http.ResponseWriter, r *http.Request, productId string, params generated.GetProductInventoryHistoryParams) {
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 
 	// Verify product exists.
 	_, err := h.products.GetByID(ctx, id)
@@ -258,7 +258,7 @@ func (h *Handlers) GetProductInventoryHistory(w http.ResponseWriter, r *http.Req
 
 // AdjustProductInventory adjusts the inventory for a product.
 // (PATCH /products/{productId}/inventory)
-func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request, productId string) {
 	var body generated.InventoryAdjustment
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
@@ -266,7 +266,7 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 
 	// Verify product exists.
 	_, err := h.products.GetByID(ctx, id)
@@ -286,7 +286,7 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, generated.Inventory{
-		ProductId: openapi_types.UUID(id),
+		ProductId: string(id),
 		Quantity:  int(stock),
 	})
 }
@@ -296,8 +296,8 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	id, err := uuid.Parse(chi.URLParam(r, "productId"))
-	if err != nil {
+	id := chi.URLParam(r, "productId")
+	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid product id")
 		return
 	}
@@ -341,7 +341,7 @@ var allowedImageTypes = map[string]bool{
 	"image/webp": true,
 }
 
-func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, productId string) {
 	if h.blobStore == nil {
 		writeError(w, http.StatusNotImplemented, "not_configured", "Image uploads not configured")
 		return
@@ -378,7 +378,7 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 	}
 
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 	existing, err := h.products.GetByID(ctx, id)
 	if err != nil {
 		writeEntError(w, err)
@@ -396,7 +396,7 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 	}
 
 	reader := bytes.NewReader(allData.Bytes())
-	key := "products/" + uuid.NewString()
+	key := "products/" + nanoid.New()
 	url, err := h.blobStore.Upload(ctx, key, reader, contentType)
 	if err != nil {
 		h.logger.Error("failed to upload image", zap.Error(err))
@@ -413,9 +413,9 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 	response.WriteJSON(w, http.StatusOK, generated.ProductImageResponse{ImageUrl: url})
 }
 
-func (h *Handlers) DeleteProductImage(w http.ResponseWriter, r *http.Request, productId openapi_types.UUID) {
+func (h *Handlers) DeleteProductImage(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()
-	id := uuid.UUID(productId)
+	id := productId
 
 	existing, err := h.products.GetByID(ctx, id)
 	if err != nil {

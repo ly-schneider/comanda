@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 type Club100FreeProduct struct {
@@ -29,7 +28,7 @@ func (Club100FreeProduct) Mixin() []ent.Mixin {
 func (Club100FreeProduct) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("settings_id").MaxLen(50),
-		field.UUID("product_id", uuid.UUID{}),
+		field.String("product_id").MaxLen(12),
 	}
 }
 
