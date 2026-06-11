@@ -48,7 +48,7 @@ func NewRouter(
 	r.Use(chiMw.Logger)
 	r.Use(chiMw.Recoverer)
 	r.Use(chiMw.RequestID)
-	r.Use(chiMw.RealIP)
+	r.Use(middleware.RealIP)
 	r.Use(chiMw.Heartbeat("/ping"))
 	r.Use(middleware.LogHTTPErrors)
 
