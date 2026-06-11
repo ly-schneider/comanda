@@ -8,12 +8,15 @@ import (
 )
 
 func StartSpan(ctx context.Context, op, description string) (context.Context, func()) {
-	parent := sentry.SpanFromContext(ctx)
-	if parent == nil {
+	if sentry.SpanFromContext(ctx) == nil {
 		return ctx, func() {}
 	}
-	span := parent.StartChild(op)
-	span.Description = description
+	// sentry.StartSpan derives the returned span's context from ctx. Do NOT
+	// use parent.StartChild here: its context derives from the ctx captured
+	// when the parent span started (pre-middleware), silently dropping
+	// request-scoped values — the enttenant guard then fails closed on every
+	// eager-load query.
+	span := sentry.StartSpan(ctx, op, sentry.WithDescription(description))
 	return span.Context(), span.Finish
 }
 
