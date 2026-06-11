@@ -1,7 +1,7 @@
 export const ENTITY_ID_RE = /^[1-9A-HKMNP-Za-hkmnp-z_-]{12}$/
 
 const CAMPAIGN_PREFIX = "CAMP:"
-// Anchored to /o/<id> — a loose 12-char window also matches inside long subdomains.
+// Anchored to /o/<id> at end-of-string so it won’t match 12-char substrings inside hostnames.
 const ORDER_URL_RE = /\/o\/([1-9A-HKMNP-Za-hkmnp-z_-]{12})\/?$/
 
 export type ParsedScan = { kind: "order" | "campaign"; id: string }
