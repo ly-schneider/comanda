@@ -1,8 +1,5 @@
-// Package id generates and validates Comanda entity IDs: 12-char nanoids
-// drawn from a 55-char alphabet that excludes the confusables 0/O/o, I/i,
-// J/j, and L/l. IDs are generated app-side only (crypto/rand) — Postgres
-// columns are varchar(12) with no DB-side default, because the platform's
-// managed Postgres (PG17) has no uuidv7() and we don't want a DB generator.
+// Package id generates and validates the 12-char nanoid entity IDs.
+// App-side only — columns have no DB default (PG17 has no uuidv7()).
 package id
 
 import (

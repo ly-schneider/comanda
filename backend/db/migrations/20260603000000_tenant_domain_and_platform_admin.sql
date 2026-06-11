@@ -71,7 +71,6 @@ BEGIN
 END$$;
 
 -- Seed the bootstrap tenant's hosts so local dev + tests keep resolving.
--- Ids are explicit: there is no DB-side id default (app-side nanoids only).
 INSERT INTO tenant_domain (id, tenant_id, hostname, is_primary) VALUES
   ('tdmn_seed__1', 'tenant_seed1', 'localhost', true),
   ('tdmn_seed__2', 'tenant_seed1', '127.0.0.1', false),

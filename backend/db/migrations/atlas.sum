@@ -1,4 +1,4 @@
-h1:F5HpU12HBcm2NkanHrKomw1W1dUhRliR7tmZEU7vX18=
+h1:jfuu+ulYV2/JZ5HTeoc84TajadhD/aVsAjz+c3FjoEI=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -9,7 +9,7 @@ h1:F5HpU12HBcm2NkanHrKomw1W1dUhRliR7tmZEU7vX18=
 20260527000000_idempotency_unique_scope_key.sql h1:+8xLzv2M1Y3EGEAP9GzuW2navozFRebZ1qTw3FVLD1o=
 20260528000000_order_line_redemption_unique_order_line_id.sql h1:bmbluQGIs9m5ziE+npyQ3jBMw+C81Nhwb5VSC0l5GII=
 20260601000000_tenant_and_rls.sql h1:pVykVp+DDGqJwebMgnpvUBO0GNjBQHcFgbSBI+TxOrI=
-20260603000000_tenant_domain_and_platform_admin.sql h1:UMDysMqtBN/Rrat9Gm4+aREBPPSTzdIZ6H+dKARLmOg=
-20260603000001_better_auth_org_plugin.sql h1:eer3QenY59Ez0esnA5wmoyMyRqdzz0XVXydd/yVGJPQ=
-20260605000000_p3_branding_settings.sql h1:c6c/dGSdHA4vMvJHIvfUlNM9gLeUDpenOgyFipTjNjc=
-20260608000000_p4_per_tenant_payments.sql h1:D/+/X9G+V//3Y1TUvmo+M2QtT6M3qmulidrcURkERHI=
+20260603000000_tenant_domain_and_platform_admin.sql h1:UgPo4AI5x984n92Ew4XWpbgyHoXS8CK+ut1YAP1hx0c=
+20260603000001_better_auth_org_plugin.sql h1:+7ldaygbE1zFhy6Mjbelpe9k31J2XTAJbCN+Z8aengM=
+20260605000000_p3_branding_settings.sql h1:faAXDGmYU0jUn8t+lMpyquZZ35RPHdXSArQdMqFIXX0=
+20260608000000_p4_per_tenant_payments.sql h1:SvxAQWh3fZgjIMguGcW5q4cjdV0PErXfBcZVgA30iRQ=

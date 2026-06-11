@@ -8,8 +8,6 @@ ALTER TABLE "order" ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
 ALTER TABLE order_line ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
 ALTER TABLE order_line_redemption ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
 
--- ids have no DB default (app-side nanoids only); session-temporary generator
--- for the demo rows. random() is fine for dev data.
 CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
 LANGUAGE sql VOLATILE AS $$
   SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',

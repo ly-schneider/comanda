@@ -1,12 +1,7 @@
-// Entity ids are 12-char nanoids from a 55-char alphabet (see backend
-// internal/id). Mirrors of that contract live wherever a scanned payload must
-// be parsed back into an id.
 export const ENTITY_ID_RE = /^[1-9A-HKMNP-Za-hkmnp-z_-]{12}$/
 
 const CAMPAIGN_PREFIX = "CAMP:"
-// Order QR codes encode a pickup URL: `${origin}/o/<orderId>`. Extract the id
-// from the path segment — a bare 12-char window match against the whole URL
-// would also match inside long tenant subdomains.
+// Anchored to /o/<id> — a loose 12-char window also matches inside long subdomains.
 const ORDER_URL_RE = /\/o\/([1-9A-HKMNP-Za-hkmnp-z_-]{12})\/?$/
 
 export type ParsedScan = { kind: "order" | "campaign"; id: string }

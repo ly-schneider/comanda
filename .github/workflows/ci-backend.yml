@@ -64,8 +64,7 @@ jobs:
         working-directory: backend
         run: atlas migrate validate --dir "file://db/migrations"
 
-      # Replays the whole migration dir on PostgreSQL 17. Scaleway prod maxes
-      # at PG17, so PG18-only SQL (like uuidv7()) must fail here, not at deploy.
+      # Scaleway prod maxes at PG17 — PG18-only SQL must fail here, not at deploy.
       - name: Replay migrations on PostgreSQL 17
         working-directory: backend
         run: atlas migrate apply --dir "file://db/migrations" --url "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"

@@ -304,8 +304,6 @@ func hashToken(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// parseID validates an entity id, returning ErrInviteNotFound-compatible
-// errors at call sites if invalid.
 func parseID(s string) (string, error) {
 	if !nanoid.Valid(s) {
 		return "", fmt.Errorf("invalid id: %s", s)

@@ -1,8 +1,6 @@
 -- tenant_id has no DB default; default it to the bootstrap tenant for this seed.
 ALTER TABLE inventory_ledger ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
 
--- ids have no DB default either (app-side nanoids only); a session-temporary
--- generator covers seed rows. random() is fine for dev data.
 CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
 LANGUAGE sql VOLATILE AS $$
   SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',

@@ -64,8 +64,6 @@ FROM generate_series(1, 3) AS i
 ON CONFLICT (token) DO UPDATE SET expires_at = EXCLUDED.expires_at, updated_at = EXCLUDED.updated_at;
 
 -- token_hash = sha256(plaintext_token), matching repository.HashToken().
--- id and tenant_id are explicit: ids have no DB default (app-side nanoids),
--- and tenant_id is NOT NULL since the tenant+RLS migration.
 INSERT INTO device_binding (id, tenant_id, device_type, token_hash, name, created_by_user_id, station_id)
 SELECT
   'bnd_statn__' || i,

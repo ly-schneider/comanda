@@ -44,12 +44,12 @@ func TestValid(t *testing.T) {
 	invalid := []string{
 		"",
 		"short",
-		"tenant_seed12",                        // 13 chars
-		"01970000-000",                         // contains 0 and is uuid-ish
-		"00000000-0000-7000-8000-000000000001", // old uuid
-		"tenant.seed1",                         // '.' not in alphabet
-		"tenant seed1",                         // space
-		"OIJLoijl0000",                         // all confusables
+		"tenant_seed12",
+		"01970000-000",
+		"00000000-0000-7000-8000-000000000001",
+		"tenant.seed1",
+		"tenant seed1",
+		"OIJLoijl0000",
 		"tenant_seed\x00",
 	}
 	for _, s := range invalid {

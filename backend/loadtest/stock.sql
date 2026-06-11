@@ -7,7 +7,6 @@
 
 \set ON_ERROR_STOP on
 
--- ids have no DB default (app-side nanoids); session-temporary generator.
 CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
 LANGUAGE sql VOLATILE AS $$
   SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',

@@ -11,11 +11,8 @@ func StartSpan(ctx context.Context, op, description string) (context.Context, fu
 	if sentry.SpanFromContext(ctx) == nil {
 		return ctx, func() {}
 	}
-	// sentry.StartSpan derives the returned span's context from ctx. Do NOT
-	// use parent.StartChild here: its context derives from the ctx captured
-	// when the parent span started (pre-middleware), silently dropping
-	// request-scoped values — the enttenant guard then fails closed on every
-	// eager-load query.
+	// Not parent.StartChild — its context predates the middleware chain,
+	// dropping request values like the tenant.
 	span := sentry.StartSpan(ctx, op, sentry.WithDescription(description))
 	return span.Context(), span.Finish
 }
