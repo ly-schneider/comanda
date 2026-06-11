@@ -98,6 +98,10 @@ jobs:
       - ci-gate
       - detect-changes
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.ci-gate.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/build-and-dispatch.yml
     with:
       needs-migrate: ${{ needs.detect-changes.outputs.backend == 'true' }}
