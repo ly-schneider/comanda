@@ -46,7 +46,9 @@ var DefaultTestTenantID = "tenant_test1"
 // reject it.
 func randSuffix() string {
 	b := make([]byte, 4)
-	_, _ = cryptorand.Read(b)
+	if _, err := cryptorand.Read(b); err != nil {
+		panic(fmt.Sprintf("crypto/rand: %v", err))
+	}
 	return hex.EncodeToString(b)
 }
 
