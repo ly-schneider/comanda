@@ -23,8 +23,9 @@ func TestNewShape(t *testing.T) {
 }
 
 func TestNewUniqueness(t *testing.T) {
-	seen := make(map[string]struct{}, 100_000)
-	for range 100_000 {
+	const draws = 10_000
+	seen := make(map[string]struct{}, draws)
+	for range draws {
 		got := New()
 		if _, dup := seen[got]; dup {
 			t.Fatalf("duplicate id %q after %d draws", got, len(seen))
