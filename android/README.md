@@ -84,7 +84,7 @@ When developing against a local backend, forward the required ports to the Andro
 ```bash
 adb reverse tcp:3000 tcp:3000     # Next.js web app
 adb reverse tcp:8080 tcp:8080     # Go backend API
-adb reverse tcp:10000 tcp:10000   # Azurite blob storage
+adb reverse tcp:9000 tcp:9000     # MinIO object storage
 ```
 
 ## Versioning

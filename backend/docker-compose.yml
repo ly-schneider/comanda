@@ -24,15 +24,34 @@ services:
       timeout: 5s
       retries: 5
 
-  # Azurite for local Azure Blob Storage emulation
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
+  # MinIO — S3-compatible local object storage (staging/prod use Scaleway).
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     restart: unless-stopped
     ports:
-      - "10000:10000"
+      - "9000:9000" # S3 API
+      - "9001:9001" # Console
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
-      - azurite_data:/data
-    command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck"
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # One-shot: create the bucket and make it anonymously readable, mirroring the
+  # public-read posture of the Scaleway bucket in staging/prod. The until-loop on
+  # `mc alias set` (which validates connectivity) waits for MinIO to be ready —
+  # the minio server image has no mc/curl for a healthcheck.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${STORAGE_ACCESS_KEY_ID:-minioadmin} ${STORAGE_SECRET_ACCESS_KEY:-minioadmin}; do echo 'waiting for minio...'; sleep 1; done &&
+      mc mb --ignore-existing local/${STORAGE_BUCKET:-comanda-assets} &&
+      mc anonymous set download local/${STORAGE_BUCKET:-comanda-assets}
+      "
 
   # Mailpit for email testing
   mailpit:
@@ -45,4 +64,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
-  azurite_data:
+  minio_data:

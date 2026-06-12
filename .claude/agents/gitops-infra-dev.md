@@ -22,7 +22,7 @@ not in `comanda`. Mirror how **iglesio** is deployed there.
   AES master key, OAuth, Plunk).
 - ArgoCD app entry under `gitops/clusters/{env}`. CI builds **commit-SHA-tagged** images →
   `ghcr.io/ly-schneider/comanda/*`; ArgoCD deploys by SHA; semantic-release runs for semver tags + changelogs.
-- R2 bucket/module wiring for branding assets (supports P3).
+- Object Storage (Scaleway) bucket/module wiring for branding assets (supports P3).
 
 ## P6 — BYO custom domains (LEY-315) — the genuinely new platform piece
 

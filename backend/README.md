@@ -89,7 +89,7 @@ backend/
 ├── docs/                     Generated Swagger docs
 ├── test/
 │   └── integration/          Integration tests (requires PostgreSQL)
-├── docker-compose.yml        PostgreSQL, Mailpit, Azurite
+├── docker-compose.yml        PostgreSQL, Mailpit, MinIO
 ├── Dockerfile                Multi-stage distroless build
 ├── justfile                  Development commands
 ├── atlas.hcl                 Atlas migration config
@@ -99,7 +99,7 @@ backend/
 ## Prerequisites
 
 - **Go 1.25+**
-- **Docker & Docker Compose** — for PostgreSQL, Mailpit, and Azurite
+- **Docker & Docker Compose** — for PostgreSQL, Mailpit, and MinIO
 - **Just** — for running development commands
 
 ## Development Setup
@@ -107,7 +107,7 @@ backend/
 ```bash
 cp .env.example .env
 
-just up                 # Start PostgreSQL + Mailpit + Azurite
+just up                 # Start PostgreSQL + Mailpit + MinIO
 just migrate            # Apply database migrations
 just seed               # Seed development data (idempotent)
 just dev                # Start with live reload via Air
@@ -120,7 +120,8 @@ just dev                # Start with live reload via Air
 | Backend API            | http://localhost:8080  |
 | Mailpit (email UI)     | http://localhost:8025  |
 | PostgreSQL             | localhost:5432         |
-| Azurite (blob storage) | http://localhost:10000 |
+| MinIO (S3 API)         | http://localhost:9000  |
+| MinIO (console)        | http://localhost:9001  |
 
 ## Commands
 

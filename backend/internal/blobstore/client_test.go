@@ -26,7 +26,7 @@ func TestKeyFromURL(t *testing.T) {
 }
 
 func TestNewClientTrimsTrailingSlash(t *testing.T) {
-	c, err := NewClient("https://acct.r2.cloudflarestorage.com", "k", "s", "bucket", "https://cdn.example.com/")
+	c, err := NewClient("https://s3.fr-par.scw.cloud", "k", "s", "bucket", "https://cdn.example.com/")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

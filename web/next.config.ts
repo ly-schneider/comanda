@@ -48,18 +48,20 @@ const config: NextConfig = {
       { protocol: "http", hostname: "127.0.0.1", port: "8080", pathname: "/**" },
       { protocol: "https", hostname: "*.leys.ch", pathname: "/**" },
       { protocol: "https", hostname: "*.comanda.leys.ch", pathname: "/**" },
-      // R2 public bucket — env-driven, falls back to *.r2.dev wildcard
-      ...(process.env.R2_PUBLIC_BASE_URL
+      // Public object-storage host (Scaleway CDN domain) — env-driven, derived
+      // from STORAGE_PUBLIC_URL. Falls back to the leys.ch CDN wildcard.
+      ...(process.env.STORAGE_PUBLIC_URL
         ? [
             {
-              protocol: new URL(process.env.R2_PUBLIC_BASE_URL).protocol.replace(":", "") as "https" | "http",
-              hostname: new URL(process.env.R2_PUBLIC_BASE_URL).hostname,
+              protocol: new URL(process.env.STORAGE_PUBLIC_URL).protocol.replace(":", "") as "https" | "http",
+              hostname: new URL(process.env.STORAGE_PUBLIC_URL).hostname,
               pathname: "/**",
             },
           ]
-        : [{ protocol: "https" as const, hostname: "*.r2.dev", pathname: "/**" }]),
-      { protocol: "http", hostname: "localhost", port: "10000", pathname: "/**" },
-      { protocol: "http", hostname: "127.0.0.1", port: "10000", pathname: "/**" },
+        : [{ protocol: "https" as const, hostname: "**.leys.ch", pathname: "/**" }]),
+      // Local MinIO (S3 API) for dev object storage.
+      { protocol: "http", hostname: "localhost", port: "9000", pathname: "/**" },
+      { protocol: "http", hostname: "127.0.0.1", port: "9000", pathname: "/**" },
     ],
     qualities: [90],
   },

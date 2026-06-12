@@ -13,7 +13,7 @@ import (
 func NewBlobStore(lc fx.Lifecycle, cfg config.Config, logger *zap.Logger) *blobstore.Client {
 	b := cfg.BlobStorage
 	if b.Endpoint == "" || b.AccessKeyID == "" || b.SecretAccessKey == "" || b.PublicBaseURL == "" {
-		logger.Warn("R2 storage not configured, image uploads disabled")
+		logger.Warn("object storage not configured, image uploads disabled")
 		return nil
 	}
 
@@ -25,14 +25,14 @@ func NewBlobStore(lc fx.Lifecycle, cfg config.Config, logger *zap.Logger) *blobs
 		b.PublicBaseURL,
 	)
 	if err != nil {
-		logger.Error("failed to create R2 storage client", zap.Error(err))
+		logger.Error("failed to create object storage client", zap.Error(err))
 		return nil
 	}
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := client.EnsureBucket(ctx); err != nil {
-				logger.Warn("failed to reach R2 bucket", zap.Error(err))
+				logger.Warn("failed to reach object storage bucket", zap.Error(err))
 			}
 			return nil
 		},

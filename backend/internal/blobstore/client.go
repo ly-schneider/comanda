@@ -18,21 +18,21 @@ import (
 // (random UUIDs) so the URL changes whenever the asset does.
 const cacheControl = "public, max-age=31536000, immutable"
 
-// Client wraps a Cloudflare R2 (S3-compatible) bucket. R2 requires path-style
-// addressing and the "auto" region.
+// Client wraps a Scaleway Object Storage (S3-compatible) bucket. We use
+// path-style addressing and the bucket's real region for SigV4 — Scaleway
+// validates the signing region, so "auto" (the R2 convention) is rejected.
 type Client struct {
 	s3            *s3.Client
 	bucket        string
 	publicBaseURL string
 }
 
-// NewClient builds an R2-backed blob client. endpoint is the account endpoint
-// (e.g. https://<accountid>.r2.cloudflarestorage.com); publicBaseURL is the
-// public asset host the returned URLs are built from (custom domain or the
-// r2.dev bucket URL).
+// NewClient builds an Object Storage blob client. endpoint is the S3 API
+// endpoint (e.g. https://s3.fr-par.scw.cloud); publicBaseURL is the public asset
+// host the returned URLs are built from (the Cloudflare-proxied CDN domain).
 func NewClient(endpoint, accessKeyID, secretAccessKey, bucket, publicBaseURL string) (*Client, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
-		awsconfig.WithRegion("auto"),
+		awsconfig.WithRegion("fr-par"),
 		awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
 		),
@@ -96,8 +96,8 @@ func (c *Client) Delete(ctx context.Context, url string) error {
 	return nil
 }
 
-// EnsureBucket verifies the bucket is reachable. R2 buckets are provisioned out
-// of band, so a missing bucket is logged by the caller rather than created here.
+// EnsureBucket verifies the bucket is reachable. Buckets are provisioned out of
+// band (tofu), so a missing bucket is logged by the caller rather than created here.
 func (c *Client) EnsureBucket(ctx context.Context) error {
 	_, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(c.bucket),
