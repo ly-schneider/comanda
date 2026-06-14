@@ -59,6 +59,12 @@ func (Order) Fields() []ent.Field {
 		field.Int("payrexx_transaction_id").
 			Optional().
 			Nillable(),
+		// Signed, self-contained Ed25519 QR token (see internal/qrsign). Persisted
+		// at creation so reprints don't re-sign; opaque to readers other than a
+		// station verifier holding the tenant public key.
+		field.Text("qr_payload").
+			Optional().
+			Nillable(),
 	}
 }
 

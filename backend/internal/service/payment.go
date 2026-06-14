@@ -19,6 +19,7 @@ import (
 	"backend/internal/inventory"
 	"backend/internal/payment"
 	"backend/internal/payrexx"
+	"backend/internal/qrsign"
 	"backend/internal/repository"
 	"backend/internal/trace"
 
@@ -88,6 +89,8 @@ type CheckoutPreparation struct {
 	CustomerEmail *string
 	UserID        *string
 	Order         *ent.Order
+	// QRPayload is the signed, self-contained pickup QR token (see internal/qrsign).
+	QRPayload string
 }
 
 type paymentService struct {
@@ -103,6 +106,7 @@ type paymentService struct {
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
 	settingsRepo     repository.SettingsRepository
+	qrKeys           QRKeyService
 	appDB            *database.AppClient
 	logger           *zap.Logger
 }
@@ -120,6 +124,7 @@ func NewPaymentService(
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
 	settingsRepo repository.SettingsRepository,
+	qrKeys QRKeyService,
 	appDB *database.AppClient,
 	logger *zap.Logger,
 ) PaymentService {
@@ -136,6 +141,7 @@ func NewPaymentService(
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
 		settingsRepo:     settingsRepo,
+		qrKeys:           qrKeys,
 		appDB:            appDB,
 		logger:           logger,
 	}
@@ -387,6 +393,18 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		s.publishInventoryUpdates(ctx, inventoryEntries, preloadedStock)
 	}
 
+	// Sign a self-contained, offline-verifiable pickup QR token and persist it on
+	// the order so reprints don't re-sign. A signing failure must not fail the
+	// order: stations fall back to online lookup, so we log and continue.
+	qrToken := s.signOrderQR(ctx, ord.ID, orderLines)
+	if qrToken != "" {
+		if err := s.orderRepo.SetQRPayload(ctx, ord.ID, qrToken); err != nil {
+			s.logger.Error("failed to persist qr payload", zap.Error(err), zap.String("orderId", ord.ID))
+		} else {
+			ord.QrPayload = &qrToken
+		}
+	}
+
 	// Prepare provider line items from the params (we have all the data we need)
 	lineItems := make([]payment.LineItem, 0)
 	for _, line := range orderLines {
@@ -410,7 +428,52 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		CustomerEmail: in.CustomerEmail,
 		UserID:        userID,
 		Order:         ord,
+		QRPayload:     qrToken,
 	}, nil
+}
+
+// signOrderQR builds and signs the pickup QR token from the order's redeemable
+// parent lines (one entry per simple/bundle line). It returns "" on any error
+// (missing key service, no tenant, sign failure) so the caller can continue.
+func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) string {
+	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
+	defer finish()
+
+	if s.qrKeys == nil {
+		return ""
+	}
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok {
+		s.logger.Error("qr sign: no tenant in context", zap.String("orderId", orderID))
+		return ""
+	}
+
+	redeemable := make([]qrsign.Line, 0, len(lines))
+	for _, l := range lines {
+		if l.ParentLineID != nil {
+			continue
+		}
+		redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+	}
+
+	priv, _, err := s.qrKeys.EnsureTenantKey(ctx)
+	if err != nil {
+		s.logger.Error("qr sign: ensure tenant key", zap.Error(err), zap.String("orderId", orderID))
+		return ""
+	}
+
+	token, err := qrsign.Sign(priv, qrsign.Payload{
+		Version:  qrsign.Version,
+		TenantID: tenantID,
+		OrderID:  orderID,
+		IssuedAt: time.Now().Unix(),
+		Lines:    redeemable,
+	})
+	if err != nil {
+		s.logger.Error("qr sign: sign payload", zap.Error(err), zap.String("orderId", orderID))
+		return ""
+	}
+	return token
 }
 
 func (s *paymentService) CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error) {

@@ -236,6 +236,7 @@ func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 		nil,
 		capture,
 		repos.Settings,
+		NewQRKeySvc(repos),
 		appClientFor(env.app),
 		zap.NewNop(),
 	)

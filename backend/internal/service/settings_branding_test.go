@@ -63,6 +63,12 @@ func (f *fakeSettingsRepo) UpsertPlunkCredentials(context.Context, repository.Pl
 func (f *fakeSettingsRepo) GetPlunkCredentials(context.Context) (*repository.PlunkCredentials, error) {
 	return nil, repository.ErrNotFound
 }
+func (f *fakeSettingsRepo) GetQRSigningKey(context.Context) (*repository.QRSigningKey, error) {
+	return nil, repository.ErrNotFound
+}
+func (f *fakeSettingsRepo) UpsertQRSigningKey(context.Context, repository.QRSigningKey) error {
+	return nil
+}
 
 func newSvc(repo repository.SettingsRepository) SettingsService {
 	return &settingsService{settings: repo}
