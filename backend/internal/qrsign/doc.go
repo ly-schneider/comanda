@@ -1,0 +1,44 @@
+// Package qrsign — wire format contract (LEY-324)
+//
+// This is the authoritative description of the signed QR token. The web P4
+// verifier (@noble/ed25519) and the Android client MUST mirror it exactly.
+//
+// # Algorithm
+//
+//	alg = Ed25519 (RFC 8032), 32-byte public key, 64-byte signature.
+//
+// # Payload
+//
+// The signed body is canonical JSON with a FIXED key order. It is produced by
+// marshalling the Payload struct (never a map), so the bytes are deterministic:
+//
+//	{"v":1,"t":"<tenantId>","o":"<orderId>","i":<issuedAtUnixSeconds>,"l":[{"p":"<productId>","q":<qty>}, ...]}
+//
+//	v  payload schema version, currently 1
+//	t  tenant id
+//	o  order id
+//	i  issued-at, Unix seconds (UTC)
+//	l  redeemable lines: one entry per simple/bundle parent line.
+//	     p = product id, q = quantity (>= 1)
+//
+// # Token encoding
+//
+//	body  = the exact payload JSON bytes (as signed)
+//	sig   = ed25519.Sign(privateKey, body)            // 64 bytes
+//	token = base64url_nopad( body || sig )            // sig is the LAST 64 bytes
+//
+// base64url is RFC 4648 §5 ("URL and filename safe") with NO padding.
+//
+// # Verification
+//
+//  1. base64url-decode the token.
+//  2. The signature is the LAST 64 bytes; everything before it is the body.
+//  3. ed25519.Verify(publicKey, body, sig) over the LITERAL body bytes.
+//     Never re-serialize the decoded payload before verifying — re-serialization
+//     can change byte order/spacing and break the signature.
+//  4. Only after a successful verify, JSON-unmarshal body into the payload.
+//
+// The public key is published unauthenticated at GET /v1/qr-config as
+// base64url(no-pad) of the 32 raw public-key bytes. The private seed is stored
+// AES-256-GCM-encrypted, never exposed.
+package qrsign
