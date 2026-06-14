@@ -221,8 +221,11 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       }
     })
   }, [cart.items])
-  const generatePickupQr = useCallback((orderId: string) => {
-    return `${window.location.origin}/o/${orderId}`
+  // Prefer the server's signed, offline-verifiable QR token; fall back to the
+  // order URL only when the backend did not return one (older API/dev).
+  const generatePickupQr = useCallback((order: QueuedOrder) => {
+    if (order.serverQrPayload) return order.serverQrPayload
+    return `${window.location.origin}/o/${order.serverId}`
   }, [])
 
   useEffect(() => {
@@ -236,7 +239,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       const finalReceipt: Receipt & { orderTimestamp?: number } = {
         ...entry.template,
         orderId: synced.serverId,
-        pickupQr: generatePickupQr(synced.serverId),
+        pickupQr: generatePickupQr(synced),
       }
       try {
         getBridge()?.print?.(JSON.stringify(finalReceipt))

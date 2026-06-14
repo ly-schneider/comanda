@@ -70,6 +70,9 @@ export interface QueuedOrder {
   cardMeta?: CardMeta
   status: OrderSyncStatus
   serverId?: string
+  // Signed, offline-verifiable Ed25519 pickup QR token returned by order create.
+  // When set, it is the printed pickupQr; otherwise the UI falls back to a URL.
+  serverQrPayload?: string
   attemptCount: number
   lastAttemptAt?: number
   lastError?: string
