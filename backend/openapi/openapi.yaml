@@ -141,6 +141,9 @@ paths:
   /branding:
     $ref: "paths/branding.yaml#/collection"
 
+  /qr-config:
+    $ref: "paths/qr-config.yaml#/collection"
+
   /devices:
     $ref: "paths/devices.yaml#/collection"
   /devices/{deviceId}:

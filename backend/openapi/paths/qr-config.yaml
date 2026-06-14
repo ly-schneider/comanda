@@ -1,0 +1,17 @@
+collection:
+  get:
+    tags: [Stations]
+    summary: Get tenant QR signing config
+    description: >
+      Returns the tenant's public Ed25519 verification key and the QR payload
+      format metadata. No authentication; the tenant is resolved from the request
+      host. A station/PWA fetches this once at setup to verify pickup QR tokens
+      fully offline. Calling this ensures the tenant's keypair exists.
+    operationId: getQRConfig
+    responses:
+      "200":
+        description: QR signing config
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/qr.yaml#/QRConfig"
