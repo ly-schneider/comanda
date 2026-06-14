@@ -394,16 +394,16 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}
 
 	// Sign a self-contained, offline-verifiable pickup QR token and persist it on
-	// the order so reprints don't re-sign. A signing failure must not fail the
-	// order: stations fall back to online lookup, so we log and continue.
-	qrToken := s.signOrderQR(ctx, ord.ID, orderLines)
-	if qrToken != "" {
-		if err := s.orderRepo.SetQRPayload(ctx, ord.ID, qrToken); err != nil {
-			s.logger.Error("failed to persist qr payload", zap.Error(err), zap.String("orderId", ord.ID))
-		} else {
-			ord.QrPayload = &qrToken
-		}
+	// the order so reprints don't re-sign. Required for offline redemption, so a
+	// signing or persist failure fails the order (the request tx rolls back).
+	qrToken, err := s.signOrderQR(ctx, ord.ID, orderLines)
+	if err != nil {
+		return nil, fmt.Errorf("sign order qr: %w", err)
 	}
+	if err := s.orderRepo.SetQRPayload(ctx, ord.ID, qrToken); err != nil {
+		return nil, fmt.Errorf("persist qr payload: %w", err)
+	}
+	ord.QrPayload = &qrToken
 
 	// Prepare provider line items from the params (we have all the data we need)
 	lineItems := make([]payment.LineItem, 0)
@@ -433,19 +433,20 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 }
 
 // signOrderQR builds and signs the pickup QR token from the order's redeemable
-// parent lines (one entry per simple/bundle line). It returns "" on any error
-// (missing key service, no tenant, sign failure) so the caller can continue.
-func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) string {
+// parent lines (one entry per simple/bundle line). Signing is required: offline
+// redemption replaces online lookup, so an order without a token is unredeemable
+// at a stand. Any failure is returned and fails the order (rolling back the
+// request tx) rather than silently producing a dead order.
+func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) (string, error) {
 	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
 	defer finish()
 
 	if s.qrKeys == nil {
-		return ""
+		return "", fmt.Errorf("qr signing not configured")
 	}
 	tenantID, ok := repository.TenantIDFromContext(ctx)
 	if !ok {
-		s.logger.Error("qr sign: no tenant in context", zap.String("orderId", orderID))
-		return ""
+		return "", fmt.Errorf("qr sign: no tenant in context")
 	}
 
 	redeemable := make([]qrsign.Line, 0, len(lines))
@@ -458,8 +459,7 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 
 	priv, _, err := s.qrKeys.EnsureTenantKey(ctx)
 	if err != nil {
-		s.logger.Error("qr sign: ensure tenant key", zap.Error(err), zap.String("orderId", orderID))
-		return ""
+		return "", fmt.Errorf("qr sign: ensure tenant key: %w", err)
 	}
 
 	token, err := qrsign.Sign(priv, qrsign.Payload{
@@ -470,10 +470,9 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 		Lines:    redeemable,
 	})
 	if err != nil {
-		s.logger.Error("qr sign: sign payload", zap.Error(err), zap.String("orderId", orderID))
-		return ""
+		return "", fmt.Errorf("qr sign: sign payload: %w", err)
 	}
-	return token
+	return token, nil
 }
 
 func (s *paymentService) CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error) {
