@@ -37,6 +37,11 @@
 //     Never re-serialize the decoded payload before verifying — re-serialization
 //     can change byte order/spacing and break the signature.
 //  4. Only after a successful verify, JSON-unmarshal body into the payload.
+//  5. REQUIRED multi-tenant check: compare payload.t against the station's own
+//     provisioned tenant id and REJECT on mismatch ("Wrong event"). A valid
+//     signature only proves some tenant signed it; on the fully-offline path
+//     there is no server backstop, so the station is the sole enforcer of
+//     tenant scoping. Never skip this even when the signature verifies.
 //
 // The public key is published unauthenticated at GET /v1/qr-config as
 // base64url(no-pad) of the 32 raw public-key bytes. The private seed is stored

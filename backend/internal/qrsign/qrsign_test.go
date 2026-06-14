@@ -137,6 +137,16 @@ func TestTruncatedToken(t *testing.T) {
 	}
 }
 
+func TestExactlySigSizeToken(t *testing.T) {
+	pub, _ := mustKey(t)
+	// 64 bytes decoded = signature with an empty body; must be rejected as
+	// malformed before reaching signature/JSON verification.
+	exact := base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	if _, err := Verify(pub, exact); err != ErrMalformed {
+		t.Fatalf("expected ErrMalformed, got %v", err)
+	}
+}
+
 func TestWrongLengthPublicKey(t *testing.T) {
 	_, priv := mustKey(t)
 	token, err := Sign(priv, samplePayload())

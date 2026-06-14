@@ -69,7 +69,9 @@ func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	if err != nil {
 		return Payload{}, ErrMalformed
 	}
-	if len(raw) < ed25519.SignatureSize {
+	// Require at least one body byte before the 64-byte signature; an
+	// exactly-64-byte token (empty body) must fail here, not reach Verify.
+	if len(raw) <= ed25519.SignatureSize {
 		return Payload{}, ErrMalformed
 	}
 	split := len(raw) - ed25519.SignatureSize
