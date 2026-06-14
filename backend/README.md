@@ -115,13 +115,13 @@ just dev                # Start with live reload via Air
 
 ### Service URLs
 
-| Service                | URL                    |
-| ---------------------- | ---------------------- |
-| Backend API            | http://localhost:8080  |
-| Mailpit (email UI)     | http://localhost:8025  |
-| PostgreSQL             | localhost:5432         |
-| MinIO (S3 API)         | http://localhost:9000  |
-| MinIO (console)        | http://localhost:9001  |
+| Service            | URL                   |
+| ------------------ | --------------------- |
+| Backend API        | http://localhost:8080 |
+| Mailpit (email UI) | http://localhost:8025 |
+| PostgreSQL         | localhost:5432        |
+| MinIO (S3 API)     | http://localhost:9000 |
+| MinIO (console)    | http://localhost:9001 |
 
 ## Commands
 
