@@ -17,6 +17,10 @@ type QRKeyService interface {
 	// EnsureTenantKey returns the tenant's signing key, generating and persisting
 	// one on first use. Idempotent: repeated calls return the same key.
 	EnsureTenantKey(ctx context.Context) (ed25519.PrivateKey, ed25519.PublicKey, error)
+	// TenantPublicKey returns the tenant's stored Ed25519 public key. Read-only:
+	// unlike EnsureTenantKey it never generates or persists, returning
+	// repository.ErrNotFound when no key has been provisioned yet.
+	TenantPublicKey(ctx context.Context) (ed25519.PublicKey, error)
 }
 
 type qrKeyService struct {
@@ -66,6 +70,21 @@ func (s *qrKeyService) EnsureTenantKey(ctx context.Context) (ed25519.PrivateKey,
 		return nil, nil, fmt.Errorf("qr signing key: reload: %w", err)
 	}
 	return s.deriveFromStored(stored)
+}
+
+func (s *qrKeyService) TenantPublicKey(ctx context.Context) (ed25519.PublicKey, error) {
+	stored, err := s.settings.GetQRSigningKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := base64.RawURLEncoding.DecodeString(stored.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("qr signing key: decode public key: %w", err)
+	}
+	if len(pub) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("qr signing key: bad public key length %d", len(pub))
+	}
+	return ed25519.PublicKey(pub), nil
 }
 
 func (s *qrKeyService) deriveFromStored(k *repository.QRSigningKey) (ed25519.PrivateKey, ed25519.PublicKey, error) {

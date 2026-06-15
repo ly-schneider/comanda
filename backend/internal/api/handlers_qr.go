@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"errors"
 	"net/http"
 
 	"backend/internal/generated/api/generated"
@@ -14,7 +15,8 @@ import (
 
 // GetQRConfig publishes the tenant's public Ed25519 verification key and payload
 // metadata for offline pickup-token verification. No auth; tenant is resolved
-// from the host. Ensures the keypair exists so setup always yields a usable key.
+// from the host. Read-only: the keypair is provisioned at boot and on first
+// order, so a 503 here means it isn't ready yet.
 // (GET /qr-config)
 func (h *Handlers) GetQRConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -25,10 +27,14 @@ func (h *Handlers) GetQRConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, pub, err := h.qrKeys.EnsureTenantKey(ctx)
+	pub, err := h.qrKeys.TenantPublicKey(ctx)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusServiceUnavailable, "qr_key_unprovisioned", "Signing key not provisioned yet")
+		return
+	}
 	if err != nil {
-		h.logger.Error("qr-config: ensure tenant key", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "qr_key_error", "Could not provision signing key")
+		h.logger.Error("qr-config: load tenant key", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "qr_key_error", "Could not load signing key")
 		return
 	}
 

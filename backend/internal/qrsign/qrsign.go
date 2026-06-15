@@ -18,9 +18,10 @@ import (
 const Version = 1
 
 var (
-	ErrMalformed    = errors.New("qrsign: malformed token")
-	ErrBadSignature = errors.New("qrsign: signature verification failed")
-	ErrBadPayload   = errors.New("qrsign: invalid payload json")
+	ErrMalformed          = errors.New("qrsign: malformed token")
+	ErrBadSignature       = errors.New("qrsign: signature verification failed")
+	ErrBadPayload         = errors.New("qrsign: invalid payload json")
+	ErrUnsupportedVersion = errors.New("qrsign: unsupported payload version")
 )
 
 type Line struct {
@@ -77,6 +78,13 @@ func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	var p Payload
 	if err := json.Unmarshal(body, &p); err != nil {
 		return Payload{}, ErrBadPayload
+	}
+	// Reject unknown schema versions even on a valid signature: a v2 token must
+	// not be silently accepted by a v1 reader (the cross-language verifiers do
+	// the same). Freshness (the `i` field) is verifier policy and is enforced by
+	// the caller, not here.
+	if p.Version != Version {
+		return Payload{}, ErrUnsupportedVersion
 	}
 	return p, nil
 }

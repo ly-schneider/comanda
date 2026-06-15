@@ -147,6 +147,21 @@ func TestExactlySigSizeToken(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsUnknownVersion(t *testing.T) {
+	pub, priv := mustKey(t)
+	p := samplePayload()
+	p.Version = Version + 1
+	token, err := Sign(priv, p)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	// Signature is valid but the schema version is unknown: must be rejected even
+	// though the bytes authenticate.
+	if _, err := Verify(pub, token); err != ErrUnsupportedVersion {
+		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
+	}
+}
+
 func TestWrongLengthPublicKey(t *testing.T) {
 	_, priv := mustKey(t)
 	token, err := Sign(priv, samplePayload())

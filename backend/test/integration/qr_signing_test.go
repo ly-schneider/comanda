@@ -117,3 +117,103 @@ func TestPaymentService_SignsQRPayloadAtCreation(t *testing.T) {
 	require.Equal(t, 2, byProduct[cola.ID])
 	require.Equal(t, 1, byProduct[sprite.ID])
 }
+
+func TestPaymentService_SignsBundleComponentsAtCreation(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+	cfg := TestConfig()
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
+	keys := NewQRKeySvc(repos)
+	ctx := tenantCtx()
+
+	cat := fixtures.CreateCategory("Food", 1, true)
+	combo := fixtures.CreateProduct("Combo", cat.ID, 900, product.TypeMenu, nil)
+	burger := fixtures.CreateProduct("Burger", cat.ID, 0, product.TypeSimple, nil)
+	drink := fixtures.CreateProduct("Drink", cat.ID, 0, product.TypeSimple, nil)
+	fixtures.AddInventory(burger.ID, 50, inventoryledger.ReasonOpeningBalance)
+	fixtures.AddInventory(drink.ID, 50, inventoryledger.ReasonOpeningBalance)
+
+	mainSlot := fixtures.CreateMenuSlot(combo.ID, "Main", 1)
+	drinkSlot := fixtures.CreateMenuSlot(combo.ID, "Drink", 2)
+	fixtures.CreateMenuSlotOption(mainSlot.ID, burger.ID)
+	fixtures.CreateMenuSlotOption(drinkSlot.ID, drink.ID)
+
+	input := service.CreateCheckoutInput{
+		Items: []service.CheckoutItemInput{
+			{
+				ProductID: combo.ID,
+				Quantity:  2,
+				Configuration: map[string]string{
+					mainSlot.ID:  burger.ID,
+					drinkSlot.ID: drink.ID,
+				},
+			},
+		},
+	}
+
+	prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+	require.NoError(t, err)
+
+	_, pub, err := keys.EnsureTenantKey(ctx)
+	require.NoError(t, err)
+	payload, err := qrsign.Verify(pub, prep.QRPayload)
+	require.NoError(t, err)
+
+	byProduct := map[string]int{}
+	for _, l := range payload.Lines {
+		byProduct[l.ProductID] = l.Quantity
+	}
+	// The bundle parent is a non-physical grouping and must not be redeemable; its
+	// two chosen components are, at the bundle quantity.
+	require.NotContains(t, byProduct, combo.ID, "bundle parent must not be a redeemable line")
+	require.Equal(t, 2, byProduct[burger.ID])
+	require.Equal(t, 2, byProduct[drink.ID])
+	require.Len(t, payload.Lines, 2)
+}
+
+func TestQRKeyService_PublicKeyMatchesSigner(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	svc := NewQRKeySvc(repos)
+	ctx := tenantCtx()
+
+	priv, pub, err := svc.EnsureTenantKey(ctx)
+	require.NoError(t, err)
+
+	// The read-only key served at GET /v1/qr-config must equal the signer's key.
+	servedPub, err := svc.TenantPublicKey(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []byte(pub), []byte(servedPub))
+
+	tok, err := qrsign.Sign(priv, qrsign.Payload{
+		Version:  qrsign.Version,
+		TenantID: DefaultTestTenantID,
+		OrderID:  "o",
+		IssuedAt: 1,
+		Lines:    []qrsign.Line{{ProductID: "p", Quantity: 1}},
+	})
+	require.NoError(t, err)
+	_, err = qrsign.Verify(servedPub, tok)
+	require.NoError(t, err, "served public key must verify a token from the signing key")
+}
+
+func TestQRKeyService_TenantPublicKeyNotProvisioned(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	svc := NewQRKeySvc(repos)
+
+	// No EnsureTenantKey call: the read-only path reports the key is absent so the
+	// handler can answer 503 rather than provision on a GET.
+	_, err := svc.TenantPublicKey(tenantCtx())
+	require.ErrorIs(t, err, repository.ErrNotFound)
+}

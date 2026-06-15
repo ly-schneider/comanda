@@ -430,8 +430,12 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}, nil
 }
 
-// signOrderQR signs the pickup token over the order's redeemable parent lines
-// (one entry per simple/bundle line; child lines are skipped).
+// signOrderQR signs the pickup token over the order's redeemable physical items:
+// simple products and the chosen menu components — the items actually handed
+// over and tracked in inventory. A configured menu's bundle parent is a grouping
+// row with no stock of its own, so it is omitted; its components carry the items.
+// A degenerate bundle with no components falls back to the parent so the item is
+// never lost from the token.
 func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) (string, error) {
 	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
 	defer finish()
@@ -444,12 +448,23 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 		return "", fmt.Errorf("qr sign: no tenant in context")
 	}
 
-	redeemable := make([]qrsign.Line, 0, len(lines))
+	hasComponents := make(map[string]bool, len(lines))
 	for _, l := range lines {
 		if l.ParentLineID != nil {
-			continue
+			hasComponents[*l.ParentLineID] = true
 		}
-		redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+	}
+
+	redeemable := make([]qrsign.Line, 0, len(lines))
+	for _, l := range lines {
+		switch l.LineType {
+		case orderline.LineTypeSimple, orderline.LineTypeComponent:
+			redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+		case orderline.LineTypeBundle:
+			if l.ID == nil || !hasComponents[*l.ID] {
+				redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+			}
+		}
 	}
 
 	priv, _, err := s.qrKeys.EnsureTenantKey(ctx)

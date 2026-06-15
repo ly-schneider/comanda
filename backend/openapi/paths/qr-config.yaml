@@ -6,7 +6,8 @@ collection:
       Returns the tenant's public Ed25519 verification key and the QR payload
       format metadata. No authentication; the tenant is resolved from the request
       host. A station/PWA fetches this once at setup to verify pickup QR tokens
-      fully offline. Calling this ensures the tenant's keypair exists.
+      fully offline. Read-only: the keypair is provisioned at boot and on first
+      order, so a 503 means it isn't ready yet.
     operationId: getQRConfig
     responses:
       "200":
@@ -15,3 +16,5 @@ collection:
           application/json:
             schema:
               $ref: "../schemas/qr.yaml#/QRConfig"
+      "503":
+        description: Signing key not provisioned yet

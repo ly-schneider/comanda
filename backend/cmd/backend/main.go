@@ -67,6 +67,7 @@ func main() {
 		fx.Invoke(
 			app.SetupSentry,
 			app.SeedProviderCredentials,
+			app.EnsureBootstrapQRKey,
 			app.StartHTTPServer,
 		),
 	).Run()

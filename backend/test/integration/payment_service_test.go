@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"backend/internal/generated/ent/inventoryledger"
@@ -24,7 +23,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup test products
 	category := fixtures.CreateCategory("Drinks", 1, true)
@@ -164,7 +163,7 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup menu product
 	category := fixtures.CreateCategory("Menus", 1, true)
@@ -272,7 +271,7 @@ func TestPaymentService_FindPendingOrderByAttemptID(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup
 	category := fixtures.CreateCategory("Drinks", 1, true)
@@ -317,7 +316,7 @@ func TestPaymentService_MarkOrderPaidByPayrexx(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	t.Run("MarkOrderPaidByPayrexx updates order status", func(t *testing.T) {
 		orderObj := fixtures.CreateOrder(1000, order.StatusPending, order.OriginShop)
@@ -355,7 +354,7 @@ func TestPaymentService_CleanupPendingOrderByID(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup
 	category := fixtures.CreateCategory("Drinks", 1, true)
@@ -413,7 +412,7 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 	cfg := TestConfig()
 
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup expensive product
 	category := fixtures.CreateCategory("Expensive", 1, true)
