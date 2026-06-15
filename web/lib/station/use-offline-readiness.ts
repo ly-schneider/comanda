@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { idbKVStore } from "@/lib/station/offline-db"
-import { getReadiness, type ReadinessRecord, runOfflineSetup } from "@/lib/station/offline-setup"
+import { getReadiness, runOfflineSetup } from "@/lib/station/offline-setup"
 import { stationSWClient } from "@/lib/station/sw-client"
 import { appEnvFromHost } from "@/lib/tenant"
 
@@ -11,14 +11,13 @@ export type ReadinessState =
   | "checking" // loading the persisted record
   | "unprepared" // never set up, or last setup did not complete
   | "preparing" // ritual in flight
-  | "ready" // all assets cached for the active SW version
-  | "stale" // cached for an older SW version — needs a re-run while online
+  | "ready" // all asserted assets confirmed present in the live cache
+  | "stale" // assets missing from the live cache (e.g. wiped by an SW upgrade) — re-run while online
   | "error" // last ritual failed
 
 export interface OfflineReadiness {
   state: ReadinessState
   online: boolean
-  record: ReadinessRecord | null
   prepare: () => void
 }
 
@@ -40,7 +39,6 @@ function useOnline(): boolean {
 export function useOfflineReadiness(): OfflineReadiness {
   const online = useOnline()
   const [state, setState] = useState<ReadinessState>("checking")
-  const [record, setRecord] = useState<ReadinessRecord | null>(null)
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -57,16 +55,19 @@ export function useOfflineReadiness(): OfflineReadiness {
     ;(async () => {
       const stored = await getReadiness(idbKVStore()).catch(() => null)
       if (cancelled) return
-      setRecord(stored)
       if (!stored || !stored.ready) {
         setState("unprepared")
         return
       }
-      const liveVersion = await stationSWClient().version()
+      // Cache Storage is wiped on every SW version bump while this record
+      // survives in IndexedDB, so confirm the asserted assets are still cached
+      // rather than trusting the stored flag. If no worker can answer, we can't
+      // serve offline anyway — prompt a re-run instead of claiming readiness.
+      const status = await stationSWClient()
+        .cacheStatus(stored.assets ?? [])
+        .catch(() => null)
       if (cancelled) return
-      // A version mismatch means the shell was re-cached under a new SW; the
-      // stored assets may be gone, so prompt a re-run rather than lie.
-      setState(stored.swVersion && liveVersion && stored.swVersion !== liveVersion ? "stale" : "ready")
+      setState(!status || status.missing.length > 0 ? "stale" : "ready")
     })()
     return () => {
       cancelled = true
@@ -76,12 +77,9 @@ export function useOfflineReadiness(): OfflineReadiness {
   const prepare = useCallback(() => {
     setState("preparing")
     runOfflineSetup()
-      .then((result) => {
-        setRecord(result)
-        setState(result.ready ? "ready" : "error")
-      })
+      .then((result) => setState(result.ready ? "ready" : "error"))
       .catch(() => setState("error"))
   }, [])
 
-  return { state, online, record, prepare }
+  return { state, online, prepare }
 }

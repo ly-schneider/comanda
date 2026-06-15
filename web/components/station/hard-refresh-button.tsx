@@ -3,6 +3,7 @@
 import { RefreshCwIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { STATION_SW_SCOPE } from "@/lib/station/sw-client"
 
 export function HardRefreshButton() {
   const [refreshing, setRefreshing] = useState(false)
@@ -11,7 +12,7 @@ export function HardRefreshButton() {
     setRefreshing(true)
     try {
       if ("serviceWorker" in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration("/station")
+        const reg = await navigator.serviceWorker.getRegistration(STATION_SW_SCOPE)
         if (reg?.active) {
           reg.active.postMessage("hard-refresh")
           await new Promise((r) => setTimeout(r, 200))

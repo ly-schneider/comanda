@@ -9,7 +9,7 @@ vi.mock("@/lib/station/use-offline-readiness", () => ({
 }))
 
 function mock(state: Readiness["state"], online = true) {
-  useOfflineReadiness.mockReturnValue({ state, online, record: null, prepare: vi.fn() })
+  useOfflineReadiness.mockReturnValue({ state, online, prepare: vi.fn() })
 }
 
 afterEach(cleanup)

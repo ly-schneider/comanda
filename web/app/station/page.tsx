@@ -850,11 +850,14 @@ function ConsolidatedItemCard({ item, redeemed }: { item: ConsolidatedItem; rede
       <div className="flex items-center gap-3">
         {item.productImage ? (
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
+            {/* Unoptimized so the request hits the raw R2 URL the offline
+                precache stored — the /_next/image optimizer URL is never cached. */}
             <Image
               src={item.productImage}
               alt={item.title}
               fill
               sizes="64px"
+              unoptimized
               className="h-full w-full rounded-[11px] object-cover"
             />
           </div>
@@ -887,11 +890,14 @@ function LineGroupCard({ group, redeemed }: { group: LineGroup; redeemed: boolea
       <div className="flex items-center gap-3">
         {parent.productImage ? (
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
+            {/* Unoptimized so the request hits the raw R2 URL the offline
+                precache stored — the /_next/image optimizer URL is never cached. */}
             <Image
               src={parent.productImage}
               alt={parent.title}
               fill
               sizes="64px"
+              unoptimized
               className="h-full w-full rounded-[11px] object-cover"
             />
           </div>

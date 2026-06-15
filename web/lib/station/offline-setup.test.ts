@@ -29,7 +29,7 @@ const STATION_ME_OK = res(200, { products: [{ productId: "p1" }] })
 function deps(overrides: Partial<SetupDeps> = {}, routes: Record<string, FakeResponse> = {}): SetupDeps {
   const table: Record<string, FakeResponse> = {
     "/api/v1/qr-config": QR_OK,
-    "/api/v1/public/products": PRODUCTS_OK,
+    "/api/v1/products": PRODUCTS_OK,
     "/api/v1/stations/me": STATION_ME_OK,
     ...routes,
   }
@@ -44,6 +44,7 @@ function deps(overrides: Partial<SetupDeps> = {}, routes: Record<string, FakeRes
     sw: {
       version: vi.fn(async () => "comanda-station-v4"),
       precache: vi.fn(async (urls: string[]): Promise<PrecacheResult[]> => urls.map((u) => ({ url: u, ok: true }))),
+      cacheStatus: vi.fn(async () => ({ version: "comanda-station-v4", missing: [] })),
     },
     getToken: () => "device-token",
     collectAssets: () => ["/station", "/_next/static/a.js"],
@@ -66,6 +67,10 @@ describe("runOfflineSetup", () => {
     expect(record.shellCached).toBe(2)
     expect(record.imageCached).toBe(1)
     expect(record.failures).toEqual([])
+
+    // The asset manifest is persisted so readiness can be re-verified against
+    // the live cache on load.
+    expect(record.assets).toEqual(["/station", "/_next/static/a.js", "https://r2.example/p1.png"])
 
     // Image of the assigned product is precached through the SW.
     expect(d.sw.precache).toHaveBeenCalledWith(["/station", "/_next/static/a.js", "https://r2.example/p1.png"])
@@ -95,11 +100,19 @@ describe("runOfflineSetup", () => {
   })
 
   it("is not ready when the catalog cannot be loaded", async () => {
-    const d = deps({}, { "/api/v1/public/products": res(500, {}) })
+    const d = deps({}, { "/api/v1/products": res(500, {}) })
     const record = await runOfflineSetup(d)
 
     expect(record.ready).toBe(false)
-    expect(record.failures).toContain("/api/v1/public/products")
+    expect(record.failures).toContain("/api/v1/products")
+  })
+
+  it("is not ready when the station identity request fails (e.g. expired token)", async () => {
+    const d = deps({}, { "/api/v1/stations/me": res(401, {}) })
+    const record = await runOfflineSetup(d)
+
+    expect(record.ready).toBe(false)
+    expect(record.failures).toContain("/api/v1/stations/me")
   })
 
   it("is not ready when a shell asset fails to cache", async () => {
@@ -109,6 +122,7 @@ describe("runOfflineSetup", () => {
         precache: vi.fn(async (urls: string[]) =>
           urls.map((u) => ({ url: u, ok: u !== "/_next/static/a.js", status: u !== "/_next/static/a.js" ? 200 : 404 }))
         ),
+        cacheStatus: vi.fn(async () => ({ version: "comanda-station-v4", missing: [] })),
       },
     })
     const record = await runOfflineSetup(d)
@@ -122,6 +136,7 @@ describe("runOfflineSetup", () => {
       sw: {
         version: vi.fn(async () => "comanda-station-v4"),
         precache: vi.fn(async (urls: string[]) => urls.map((u) => ({ url: u, ok: !u.startsWith("https://") }))),
+        cacheStatus: vi.fn(async () => ({ version: "comanda-station-v4", missing: [] })),
       },
     })
     const record = await runOfflineSetup(d)
@@ -168,21 +183,24 @@ describe("collectShellAssets", () => {
     added.push(l)
   }
 
-  it("includes the static shell, dedups same-origin chunks, and drops everything else", () => {
+  it("includes the static shell + brand assets, dedups same-origin chunks, and drops everything else", () => {
     const origin = window.location.origin
     addScript(`${origin}/_next/static/chunks/a.js`)
     addScript(`${origin}/_next/static/chunks/a.js`) // duplicate
     addScript("https://cdn.other.example/x.js") // cross-origin
     addScript(`${origin}/some/other.js`) // not a static chunk
     addStylesheet(`${origin}/_next/static/css/app.css`)
+    addStylesheet(`${origin}/assets/brand.css`) // same-origin brand asset
 
     const assets = collectShellAssets()
 
     expect(assets).toContain("/station")
     expect(assets).toContain("/station.webmanifest")
     expect(assets).toContain("/icons/station-192.png")
+    expect(assets).toContain("/assets/fonts/Lovelo-Black.otf")
     expect(assets).toContain("/_next/static/chunks/a.js")
     expect(assets).toContain("/_next/static/css/app.css")
+    expect(assets).toContain("/assets/brand.css")
     expect(assets.filter((u) => u === "/_next/static/chunks/a.js")).toHaveLength(1)
     expect(assets.some((u) => u.includes("cdn.other.example"))).toBe(false)
     expect(assets).not.toContain("/some/other.js")

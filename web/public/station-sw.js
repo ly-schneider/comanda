@@ -3,8 +3,8 @@
 // Caching split that the "Ready for offline" setup ritual relies on:
 //   - App-shell document (`/station`): network-first, falls back to the cached
 //     shell so the app boots with no signal.
-//   - Hashed Next.js chunks (`/_next/static/*`) + the static shell list:
-//     cache-first; immutable, so a hit is always safe.
+//   - Hashed Next.js chunks (`/_next/static/*`), brand assets (`/assets/*`) +
+//     the static shell list: cache-first; immutable, so a hit is always safe.
 //   - Cross-origin product images (R2): served from cache when precached,
 //     otherwise passed through. Fetched no-cors during precache so the opaque
 //     response can be cached without R2 CORS headers.
@@ -20,10 +20,21 @@ const SHELL = [
   "/icons/station-192.png",
   "/icons/station-512.png",
   "/apple-touch-icon.png",
+  "/assets/fonts/Lovelo-Black.otf",
 ]
 
+// Same-origin paths safe to serve cache-first: hashed Next.js build output and
+// the immutable brand assets under /assets (e.g. the display font the station
+// UI renders its headings in).
 function isStaticAsset(pathname) {
-  return pathname.startsWith("/_next/static/")
+  return pathname.startsWith("/_next/static/") || pathname.startsWith("/assets/")
+}
+
+function putInCache(request, res) {
+  if (res && res.ok) {
+    const copy = res.clone()
+    caches.open(VERSION).then((c) => c.put(request, copy))
+  }
 }
 
 self.addEventListener("install", (event) => {
@@ -48,20 +59,14 @@ async function cacheFirst(request) {
   const cached = await caches.match(request)
   if (cached) return cached
   const res = await fetch(request)
-  if (res && res.ok) {
-    const copy = res.clone()
-    caches.open(VERSION).then((c) => c.put(request, copy))
-  }
+  putInCache(request, res)
   return res
 }
 
 async function networkFirst(request) {
   try {
     const res = await fetch(request)
-    if (res && res.ok) {
-      const copy = res.clone()
-      caches.open(VERSION).then((c) => c.put(request, copy))
-    }
+    putInCache(request, res)
     return res
   } catch (err) {
     const cached = await caches.match(request)
@@ -95,26 +100,35 @@ self.addEventListener("fetch", (event) => {
   // API calls and everything else hit the network directly.
 })
 
+async function precacheOne(cache, u) {
+  try {
+    const crossOrigin = new URL(u, self.location.origin).origin !== self.location.origin
+    const request = new Request(u, crossOrigin ? { mode: "no-cors" } : { cache: "reload" })
+    const res = await fetch(request)
+    const ok = res && (res.ok || res.type === "opaque")
+    if (ok) {
+      await cache.put(u, res.clone())
+      return { url: u, ok: true }
+    }
+    return { url: u, ok: false, status: res ? res.status : 0 }
+  } catch (err) {
+    return { url: u, ok: false, error: String((err && err.message) || err) }
+  }
+}
+
 async function precache(urls) {
   const cache = await caches.open(VERSION)
-  const results = []
-  for (const u of urls) {
-    try {
-      const crossOrigin = new URL(u, self.location.origin).origin !== self.location.origin
-      const request = new Request(u, crossOrigin ? { mode: "no-cors" } : { cache: "reload" })
-      const res = await fetch(request)
-      const ok = res && (res.ok || res.type === "opaque")
-      if (ok) {
-        await cache.put(u, res.clone())
-        results.push({ url: u, ok: true })
-      } else {
-        results.push({ url: u, ok: false, status: res ? res.status : 0 })
-      }
-    } catch (err) {
-      results.push({ url: u, ok: false, error: String((err && err.message) || err) })
-    }
-  }
-  return results
+  // Fetch concurrently; the browser's per-host connection pool bounds the real
+  // parallelism, so a long shell + image list doesn't serialize end to end.
+  return Promise.all(urls.map((u) => precacheOne(cache, u)))
+}
+
+async function cacheStatus(urls) {
+  const cache = await caches.open(VERSION)
+  const checks = await Promise.all(
+    urls.map((u) => cache.match(u, { ignoreVary: true }).then((hit) => (hit ? null : u)))
+  )
+  return checks.filter((u) => u !== null)
 }
 
 self.addEventListener("message", (event) => {
@@ -143,6 +157,16 @@ self.addEventListener("message", (event) => {
     event.waitUntil(
       precache(urls).then((results) => {
         if (port) port.postMessage({ type: "station-precache", results })
+      })
+    )
+    return
+  }
+
+  if (data.type === "station-cache-status") {
+    const urls = Array.isArray(data.urls) ? data.urls : []
+    event.waitUntil(
+      cacheStatus(urls).then((missing) => {
+        if (port) port.postMessage({ type: "station-cache-status", version: VERSION, missing })
       })
     )
     return

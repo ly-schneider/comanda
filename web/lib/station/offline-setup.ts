@@ -19,8 +19,13 @@ export const QR_CONFIG_KEY = "qrConfig"
 export const CATALOG_KEY = "catalog"
 
 const QR_CONFIG_URL = "/api/v1/qr-config"
-const CATALOG_URL = "/api/v1/public/products"
+const CATALOG_URL = "/api/v1/products"
 const STATION_ME_URL = "/api/v1/stations/me"
+
+// Same-origin paths whose contents are immutable enough to cache-first and
+// precache: hashed Next.js build output and the static brand assets under
+// /assets (e.g. the display font the station UI renders headings in).
+const SHELL_ASSET_PREFIXES = ["/_next/static/", "/assets/"]
 
 const STATIC_SHELL = [
   "/station",
@@ -28,6 +33,7 @@ const STATIC_SHELL = [
   "/icons/station-192.png",
   "/icons/station-512.png",
   "/apple-touch-icon.png",
+  "/assets/fonts/Lovelo-Black.otf",
 ]
 
 export interface QRConfig {
@@ -53,6 +59,11 @@ export interface ReadinessRecord {
   shellCached: number
   imageCached: number
   failures: string[]
+  // Every asset this record asserts is cached. Used to re-verify against the
+  // live SW cache on load — the cache is wiped on every SW version bump, while
+  // this record (in IndexedDB) survives, so "ready" must be re-checked, not
+  // trusted blindly.
+  assets: string[]
 }
 
 interface ProductDTO {
@@ -76,9 +87,10 @@ export interface SetupDeps {
 
 /**
  * Same-origin shell assets the booted `/station` page depends on: the static
- * list plus every Next.js chunk already loaded into this document. Restricting
- * to `/_next/static/` keeps analytics and other third-party requests out of the
- * cache. Robust on first load too, where the SW didn't yet intercept chunks.
+ * list plus every Next.js chunk and brand asset already loaded into this
+ * document. Restricting to `SHELL_ASSET_PREFIXES` keeps analytics and other
+ * third-party requests out of the cache. Robust on first load too, where the
+ * SW didn't yet intercept chunks.
  */
 export function collectShellAssets(): string[] {
   const urls = new Set<string>(STATIC_SHELL)
@@ -89,7 +101,7 @@ export function collectShellAssets(): string[] {
     if (!raw) return
     try {
       const u = new URL(raw, origin)
-      if (u.origin === origin && u.pathname.startsWith("/_next/static/")) {
+      if (u.origin === origin && SHELL_ASSET_PREFIXES.some((p) => u.pathname.startsWith(p))) {
         urls.add(u.pathname + u.search)
       }
     } catch {
@@ -130,13 +142,19 @@ async function loadCatalog(deps: SetupDeps): Promise<{ entries: CatalogEntry[]; 
   return { entries, products }
 }
 
-async function loadAssignedProductIds(deps: SetupDeps): Promise<string[]> {
+/**
+ * Resolves the station's assigned product ids. `ok` is false only when a token
+ * was present but the request failed — an expired/revoked token must block
+ * readiness rather than masquerade as a station with no assignments (which is
+ * the legitimate empty case when there is no token, or an empty product list).
+ */
+async function loadAssignedProductIds(deps: SetupDeps): Promise<{ ids: string[]; ok: boolean }> {
   const token = deps.getToken()
-  if (!token) return []
+  if (!token) return { ids: [], ok: true }
   const res = await deps.fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) return []
+  if (!res.ok) return { ids: [], ok: false }
   const body = (await res.json()) as StationMeDTO
-  return (body.products ?? []).map((p) => p.productId)
+  return { ids: (body.products ?? []).map((p) => p.productId), ok: true }
 }
 
 function buildDefaultDeps(overrides?: Partial<SetupDeps>): SetupDeps {
@@ -156,14 +174,17 @@ export async function runOfflineSetup(overrides?: Partial<SetupDeps>): Promise<R
 
   const swVersion = await deps.sw.version()
 
-  const [qrConfig, catalog] = await Promise.all([
+  // None of these depend on each other, so fire them concurrently.
+  const [qrConfig, catalog, assigned] = await Promise.all([
     loadQRConfig(deps).catch(() => null),
     loadCatalog(deps).catch(() => null),
+    loadAssignedProductIds(deps).catch(() => ({ ids: [] as string[], ok: false })),
   ])
   if (!qrConfig) failures.push(QR_CONFIG_URL)
   if (!catalog) failures.push(CATALOG_URL)
+  if (!assigned.ok) failures.push(STATION_ME_URL)
 
-  const assignedIds = await loadAssignedProductIds(deps).catch(() => [])
+  const assignedIds = assigned.ids
   const assignedSet = new Set(assignedIds)
   const imageUrls = (catalog?.products ?? [])
     .filter((p) => assignedSet.has(p.id) && !!p.image)
@@ -207,6 +228,7 @@ export async function runOfflineSetup(overrides?: Partial<SetupDeps>): Promise<R
     shellCached,
     imageCached,
     failures,
+    assets: ready ? precacheList : [],
   }
   await deps.store.set<ReadinessRecord>(READINESS_KEY, record)
   return record

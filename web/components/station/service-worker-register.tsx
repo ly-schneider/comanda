@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { STATION_SW_SCOPE } from "@/lib/station/sw-client"
 import { appEnvFromHost } from "@/lib/tenant"
 
 export function ServiceWorkerRegister() {
@@ -9,7 +10,7 @@ export function ServiceWorkerRegister() {
     if (!("serviceWorker" in navigator)) return
 
     const register = () => {
-      navigator.serviceWorker.register("/station-sw.js", { scope: "/station" }).catch(() => {})
+      navigator.serviceWorker.register("/station-sw.js", { scope: STATION_SW_SCOPE }).catch(() => {})
     }
 
     if (document.readyState === "complete") register()

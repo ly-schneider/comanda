@@ -36,20 +36,41 @@ function openDB(): Promise<IDBDatabase> {
   })
 }
 
+// One connection, reused across operations — a setup run does several reads and
+// writes, and reopening the database for each one is pure overhead. The handle
+// is dropped if the connection closes or another tab upgrades it, so the next
+// call re-opens cleanly.
+let dbPromise: Promise<IDBDatabase> | null = null
+
+function getDB(): Promise<IDBDatabase> {
+  if (!dbPromise) {
+    dbPromise = openDB()
+      .then((db) => {
+        db.onclose = () => {
+          dbPromise = null
+        }
+        db.onversionchange = () => {
+          db.close()
+          dbPromise = null
+        }
+        return db
+      })
+      .catch((err) => {
+        dbPromise = null
+        throw err
+      })
+  }
+  return dbPromise
+}
+
 function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest): Promise<T> {
-  return openDB().then(
+  return getDB().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
         const transaction = db.transaction(KV_STORE, mode)
         const request = run(transaction.objectStore(KV_STORE))
-        transaction.oncomplete = () => {
-          db.close()
-          resolve(request.result as T)
-        }
-        transaction.onerror = () => {
-          db.close()
-          reject(transaction.error)
-        }
+        transaction.oncomplete = () => resolve(request.result as T)
+        transaction.onerror = () => reject(transaction.error)
       })
   )
 }
