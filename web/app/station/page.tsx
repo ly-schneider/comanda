@@ -8,6 +8,7 @@ import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
+import { OfflineReadiness } from "@/components/station/offline-readiness"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -601,6 +602,8 @@ export default function StationPage() {
 
       {status?.status === "approved" && (
         <div className="mx-auto flex w-full flex-col items-center gap-8 sm:max-w-xl">
+          <OfflineReadiness />
+
           {!scannerActive && (
             <div className="bg-card w-full rounded-2xl p-6">
               <div className="bg-primary/10 text-primary mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
