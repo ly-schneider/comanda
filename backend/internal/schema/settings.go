@@ -125,13 +125,12 @@ func (Settings) Fields() []ent.Field {
 		field.Time("plunk_configured_at").
 			Optional().
 			Nillable(),
-		// AES-256-GCM ciphertext (base64) of the 32-byte Ed25519 private seed used
-		// to sign offline-verifiable pickup QR tokens. Plaintext seed is never stored.
+		// AES-256-GCM ciphertext (base64) of the 32-byte Ed25519 private seed;
+		// the plaintext seed is never stored.
 		field.Text("ed25519_private_seed_enc").
 			Optional().
 			Nillable(),
-		// base64url(no-pad) of the 32-byte Ed25519 public key. Public by design;
-		// published unauthenticated at GET /v1/qr-config so stations can verify offline.
+		// base64url(no-pad) Ed25519 public key; public by design, served at /v1/qr-config.
 		field.Text("ed25519_public_key").
 			Optional().
 			Nillable(),

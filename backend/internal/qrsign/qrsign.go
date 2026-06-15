@@ -18,26 +18,18 @@ import (
 const Version = 1
 
 var (
-	// ErrMalformed is returned when the token is not valid base64url or is too
-	// short to contain a 64-byte signature.
-	ErrMalformed = errors.New("qrsign: malformed token")
-	// ErrBadSignature is returned when the signature does not verify against the
-	// given public key (tampering, wrong key, or truncation).
+	ErrMalformed    = errors.New("qrsign: malformed token")
 	ErrBadSignature = errors.New("qrsign: signature verification failed")
-	// ErrBadPayload is returned when the signed prefix is not valid payload JSON.
-	ErrBadPayload = errors.New("qrsign: invalid payload json")
+	ErrBadPayload   = errors.New("qrsign: invalid payload json")
 )
 
-// Line is one redeemable product line: a product id and the redeemed quantity.
 type Line struct {
 	ProductID string `json:"p"`
 	Quantity  int    `json:"q"`
 }
 
-// Payload is the signed body. Field order is fixed by the struct definition and
-// must never be reordered — the verifier checks the literal signed bytes, and
-// downstream JSON consumers in other languages rely on the canonical key order
-// "v","t","o","i","l".
+// Field order must never be reordered: the verifier checks the literal signed
+// bytes and cross-language readers rely on the canonical key order v,t,o,i,l.
 type Payload struct {
 	Version  int    `json:"v"`
 	TenantID string `json:"t"`
@@ -46,8 +38,8 @@ type Payload struct {
 	Lines    []Line `json:"l"`
 }
 
-// Sign canonically marshals p, signs the exact JSON bytes with priv, and returns
-// base64url(no-pad) of payloadJSON||sig (sig is the trailing 64 bytes).
+// Sign returns base64url(no-pad) of the canonical payload JSON followed by its
+// trailing 64-byte Ed25519 signature.
 func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
 	body, err := json.Marshal(p)
 	if err != nil {
@@ -60,17 +52,15 @@ func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(token), nil
 }
 
-// Verify decodes token, splits the trailing 64 bytes as the signature, verifies
-// the literal prefix bytes against pub (never re-serializing), and only then
-// unmarshals the prefix into a Payload. Verifying the literal bytes avoids any
-// JSON canonicalization drift between signer and verifier.
+// Verify checks the signature over the literal decoded body bytes before
+// unmarshaling — never re-serializing, which would risk JSON canonicalization
+// drift between signer and verifier.
 func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
 		return Payload{}, ErrMalformed
 	}
-	// Require at least one body byte before the 64-byte signature; an
-	// exactly-64-byte token (empty body) must fail here, not reach Verify.
+	// <= not <: an exactly-64-byte token is an empty body and must be rejected.
 	if len(raw) <= ed25519.SignatureSize {
 		return Payload{}, ErrMalformed
 	}

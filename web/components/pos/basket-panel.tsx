@@ -221,8 +221,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       }
     })
   }, [cart.items])
-  // Prefer the server's signed, offline-verifiable QR token; fall back to the
-  // order URL only when the backend did not return one (older API/dev).
   const generatePickupQr = useCallback((order: QueuedOrder) => {
     if (order.serverQrPayload) return order.serverQrPayload
     return `${window.location.origin}/o/${order.serverId}`

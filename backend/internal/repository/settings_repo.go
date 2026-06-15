@@ -35,7 +35,6 @@ type SettingsRepository interface {
 	// GetQRSigningKey returns the tenant's stored Ed25519 keypair material, or
 	// ErrNotFound when none has been generated yet.
 	GetQRSigningKey(ctx context.Context) (*QRSigningKey, error)
-	// UpsertQRSigningKey persists the tenant's Ed25519 keypair material.
 	UpsertQRSigningKey(ctx context.Context, k QRSigningKey) error
 }
 

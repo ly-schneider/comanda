@@ -89,8 +89,7 @@ type CheckoutPreparation struct {
 	CustomerEmail *string
 	UserID        *string
 	Order         *ent.Order
-	// QRPayload is the signed, self-contained pickup QR token (see internal/qrsign).
-	QRPayload string
+	QRPayload     string
 }
 
 type paymentService struct {
@@ -393,9 +392,8 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		s.publishInventoryUpdates(ctx, inventoryEntries, preloadedStock)
 	}
 
-	// Sign a self-contained, offline-verifiable pickup QR token and persist it on
-	// the order so reprints don't re-sign. Required for offline redemption, so a
-	// signing or persist failure fails the order (the request tx rolls back).
+	// An order is redeemed offline from its signed token, so one without a token
+	// is unredeemable: a signing or persist failure must fail the order (tx rolls back).
 	qrToken, err := s.signOrderQR(ctx, ord.ID, orderLines)
 	if err != nil {
 		return nil, fmt.Errorf("sign order qr: %w", err)
@@ -432,11 +430,8 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}, nil
 }
 
-// signOrderQR builds and signs the pickup QR token from the order's redeemable
-// parent lines (one entry per simple/bundle line). Signing is required: offline
-// redemption replaces online lookup, so an order without a token is unredeemable
-// at a stand. Any failure is returned and fails the order (rolling back the
-// request tx) rather than silently producing a dead order.
+// signOrderQR signs the pickup token over the order's redeemable parent lines
+// (one entry per simple/bundle line; child lines are skipped).
 func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) (string, error) {
 	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
 	defer finish()

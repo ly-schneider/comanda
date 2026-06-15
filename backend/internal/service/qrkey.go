@@ -11,12 +11,11 @@ import (
 	"backend/internal/repository"
 )
 
-// QRKeyService manages the per-tenant Ed25519 keypair used to sign offline-
-// verifiable pickup QR tokens. The private seed is stored AES-256-GCM-encrypted;
-// the public key is stored plaintext (it is published at GET /v1/qr-config).
+// QRKeyService manages the per-tenant Ed25519 keypair that signs offline-
+// verifiable pickup QR tokens.
 type QRKeyService interface {
-	// EnsureTenantKey returns the current tenant's signing key, generating and
-	// persisting one on first use. Idempotent: repeated calls return the same key.
+	// EnsureTenantKey returns the tenant's signing key, generating and persisting
+	// one on first use. Idempotent: repeated calls return the same key.
 	EnsureTenantKey(ctx context.Context) (ed25519.PrivateKey, ed25519.PublicKey, error)
 }
 
@@ -60,9 +59,8 @@ func (s *qrKeyService) EnsureTenantKey(ctx context.Context) (ed25519.PrivateKey,
 		return nil, nil, fmt.Errorf("qr signing key: persist: %w", err)
 	}
 
-	// Re-read so a racing caller that won the COALESCE upsert wins here too: we
-	// always return whichever key actually landed in the row, never a key we
-	// generated but failed to commit.
+	// Re-read so we return whichever key actually landed in the row: a racing
+	// caller may have won the COALESCE upsert with a different key.
 	stored, err := s.settings.GetQRSigningKey(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("qr signing key: reload: %w", err)

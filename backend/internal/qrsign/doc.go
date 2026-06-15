@@ -1,4 +1,4 @@
-// Package qrsign — wire format contract (LEY-324)
+// Package qrsign — wire format contract
 //
 // This is the authoritative description of the signed QR token. The web P4
 // verifier (@noble/ed25519) and the Android client MUST mirror it exactly.

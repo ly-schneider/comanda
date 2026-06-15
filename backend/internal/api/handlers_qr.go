@@ -12,10 +12,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// GetQRConfig returns the tenant's public Ed25519 verification key and the QR
-// payload format metadata so a station/PWA can verify pickup tokens offline. No
-// auth; tenant is resolved from the host. Ensures the keypair exists so setup
-// always yields a usable key.
+// GetQRConfig publishes the tenant's public Ed25519 verification key and payload
+// metadata for offline pickup-token verification. No auth; tenant is resolved
+// from the host. Ensures the keypair exists so setup always yields a usable key.
 // (GET /qr-config)
 func (h *Handlers) GetQRConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
