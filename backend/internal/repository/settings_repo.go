@@ -32,6 +32,18 @@ type SettingsRepository interface {
 	UpsertPlunkCredentials(ctx context.Context, c PlunkCredentials) error
 	// GetPlunkCredentials returns ErrNotFound when the tenant has none configured.
 	GetPlunkCredentials(ctx context.Context) (*PlunkCredentials, error)
+	// GetQRSigningKey returns the tenant's stored Ed25519 keypair material, or
+	// ErrNotFound when none has been generated yet.
+	GetQRSigningKey(ctx context.Context) (*QRSigningKey, error)
+	UpsertQRSigningKey(ctx context.Context, k QRSigningKey) error
+}
+
+// QRSigningKey carries the per-tenant Ed25519 signing material. PrivateSeedEnc
+// is AES-256-GCM ciphertext (base64) of the 32-byte seed; PublicKey is
+// base64url(no-pad) of the 32-byte public key (plaintext, public by design).
+type QRSigningKey struct {
+	PrivateSeedEnc string
+	PublicKey      string
 }
 
 // PayrexxCredentials carries the per-tenant Payrexx connection. Instance is
@@ -433,6 +445,51 @@ func (r *settingsRepo) GetPayrexxCredentials(ctx context.Context) (*PayrexxCrede
 		WebhookSecretEnc: *e.PayrexxWebhookSecretEnc,
 		WebhookToken:     token,
 	}, nil
+}
+
+func (r *settingsRepo) GetQRSigningKey(ctx context.Context) (*QRSigningKey, error) {
+	id := r.settingsID(ctx)
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	if e.Ed25519PrivateSeedEnc == nil || e.Ed25519PublicKey == nil {
+		return nil, ErrNotFound
+	}
+	return &QRSigningKey{
+		PrivateSeedEnc: *e.Ed25519PrivateSeedEnc,
+		PublicKey:      *e.Ed25519PublicKey,
+	}, nil
+}
+
+func (r *settingsRepo) UpsertQRSigningKey(ctx context.Context, k QRSigningKey) error {
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
+
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetEd25519PrivateSeedEnc(k.PrivateSeedEnc).
+		SetEd25519PublicKey(k.PublicKey)
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+
+	// COALESCE keeps any key already stored so a concurrent caller can't clobber
+	// a keypair that was already handed out (the public key is committed-to).
+	err := create.
+		OnConflict(
+			sql.ConflictColumns(settings.FieldID),
+			sql.ResolveWith(func(u *sql.UpdateSet) {
+				u.Set(settings.FieldEd25519PrivateSeedEnc, sql.Expr(
+					"COALESCE("+settings.Table+"."+settings.FieldEd25519PrivateSeedEnc+", EXCLUDED."+settings.FieldEd25519PrivateSeedEnc+")",
+				))
+				u.Set(settings.FieldEd25519PublicKey, sql.Expr(
+					"COALESCE("+settings.Table+"."+settings.FieldEd25519PublicKey+", EXCLUDED."+settings.FieldEd25519PublicKey+")",
+				))
+			}),
+		).
+		Exec(ctx)
+	return translateError(err)
 }
 
 func (r *settingsRepo) UpsertPlunkCredentials(ctx context.Context, c PlunkCredentials) error {

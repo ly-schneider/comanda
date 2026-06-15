@@ -54,7 +54,8 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 
 ## Orchestration rules (for the lead session)
 
-- Run **one phase at a time**, gated on human review; parallelize only where the graph allows (P2 ∥ P5), each parallel agent in **its own git worktree**.
+- **One task → one branch, checked out in the normal repo dir** (`/Users/levyn/Developer/comanda`), based off `main`. Do **not** create separate worktree directories — work the branch in place so tests run against the installed toolchain (pnpm/`node_modules`, DB, lint) and the human can test it directly without switching dirs.
+- Run **one phase at a time**, gated on human review. Sequential by default (the in-place branch holds one task at a time); this trades the old P2 ∥ P5 parallelism for autonomous verifiability.
 - Spawn risky phases (**P1, P4, P6**) in **plan mode** — agent proposes a plan, STOPS for approval, then implements.
 - Pass the **Linear ticket ID** into every subagent prompt: it sets `In Progress` on start, posts a progress comment, flips to `In Review` with a summary when done. The lead flips the epic LEY-308.
 - After **P1** and **P4**, run `rls-security-auditor` before advancing.
@@ -62,7 +63,8 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 ## Git conventions
 
 - **Commits are GPG-signed.** This repo inherits the global `commit.gpgsign = true`; the key is reachable in the dev/agent environment. **Do not** set `commit.gpgsign false` locally (a past bootstrap did this and left unsigned, unverified commits). If a non-interactive run genuinely can't reach the key, fix the agent's key access rather than disabling signing.
-- **Agents never push to origin.** Implementation agents commit on their **own worktree branch** only; the lead does all rebase-onto-main / merge / push, with the human's explicit OK. Agents must not operate on `main` or rewrite shared history.
+- **Never push to origin.** Work commits on the **task branch** (checked out in the main repo dir); the human does merge-to-`main` / push after review. Never commit feature work straight to `main` or rewrite shared history.
+- **Branch naming:** `ley-<ticket#>-<slug>` (e.g. `ley-324-backend-ed25519-qr-signing`). No `levynschneider/` (or any user) prefix. **No separate worktree dirs** — older phases used `../comanda-ley-*` worktrees; new tasks are branches checked out in place.
 - **Commit messages:** conventional-commit subject line, kept terse. No `Co-Authored-By` trailer.
 
 ## Dev / build commands (carried over; paths update after P0)

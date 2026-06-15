@@ -112,6 +112,7 @@ func (e *rlsEnv) buildWebhookRouter(t *testing.T, enc *crypto.Encryptor) http.Ha
 		nil,
 		nil,
 		repos.Settings,
+		service.NewQRKeyService(repos.Settings, enc),
 		appClient,
 		zap.NewNop(),
 	)

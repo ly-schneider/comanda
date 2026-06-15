@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/crypto"
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/device"
@@ -275,13 +276,36 @@ func NewFixtures(repos *Repositories) *Fixtures {
 	return &Fixtures{repos: repos, ctx: context.Background()}
 }
 
-// NewPaymentSvc builds a PaymentService with a nil provider factory/encryptor;
-// cross-tenant payment isolation is covered by the dedicated RLS tests.
+// testQREncryptor is a fixed-key AES-256-GCM encryptor used so the payment
+// service can generate/persist per-tenant QR signing keys in tests. The key is
+// non-secret (test-only).
+func testQREncryptor() *crypto.Encryptor {
+	key := make([]byte, crypto.KeySize)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	enc, err := crypto.NewEncryptor(key)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// NewQRKeySvc builds a QRKeyService over the test repositories using the shared
+// test encryptor, so a test can verify the public key the payment service signed
+// with.
+func NewQRKeySvc(repos *Repositories) service.QRKeyService {
+	return service.NewQRKeyService(repos.Settings, testQREncryptor())
+}
+
+// NewPaymentSvc builds a PaymentService with a nil provider factory; it wires a
+// real QRKeyService (fixed test key) so created orders get a signed qr_payload.
+// Cross-tenant payment isolation is covered by the dedicated RLS tests.
 func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.ProductService) service.PaymentService {
 	return service.NewPaymentService(
 		cfg,
 		nil, // provider factory
-		nil, // encryptor
+		testQREncryptor(),
 		repos.Order,
 		repos.OrderLine,
 		repos.OrderPayment,
@@ -291,6 +315,7 @@ func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.Prod
 		nil, // inventory hub
 		nil, // email service
 		repos.Settings,
+		NewQRKeySvc(repos),
 		nil, // app db
 		zap.NewNop(),
 	)

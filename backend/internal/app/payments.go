@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"backend/internal/config"
 	"backend/internal/crypto"
 	"backend/internal/payment"
@@ -9,16 +11,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// NewEncryptor returns a nil encryptor when no master key is set (provider use
-// then fails closed), but treats a set-but-invalid key as a fatal error.
+// NewEncryptor builds the AES-256-GCM encryptor from the master key. The key is
+// mandatory and the app refuses to start without it: besides per-tenant
+// payment/email credentials, it protects the Ed25519 QR signing seeds that every
+// order is signed with, so a missing key would fail all order creation at request
+// time. Fail fast at boot instead.
 func NewEncryptor(cfg config.Config, logger *zap.Logger) (*crypto.Encryptor, error) {
 	if cfg.Payments.MasterKey == "" {
-		logger.Warn("PAYMENTS_MASTER_KEY not set; per-tenant payment/email credentials are disabled")
-		return nil, nil
+		return nil, fmt.Errorf("PAYMENTS_MASTER_KEY is required: it encrypts payment/email credentials and the per-tenant QR signing keys")
 	}
 	enc, err := crypto.NewEncryptorFromBase64(cfg.Payments.MasterKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid PAYMENTS_MASTER_KEY: %w", err)
 	}
 	logger.Info("payments encryptor initialized")
 	return enc, nil

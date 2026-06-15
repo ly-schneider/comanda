@@ -19,6 +19,7 @@ import (
 	"backend/internal/inventory"
 	"backend/internal/payment"
 	"backend/internal/payrexx"
+	"backend/internal/qrsign"
 	"backend/internal/repository"
 	"backend/internal/trace"
 
@@ -88,6 +89,7 @@ type CheckoutPreparation struct {
 	CustomerEmail *string
 	UserID        *string
 	Order         *ent.Order
+	QRPayload     string
 }
 
 type paymentService struct {
@@ -103,6 +105,7 @@ type paymentService struct {
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
 	settingsRepo     repository.SettingsRepository
+	qrKeys           QRKeyService
 	appDB            *database.AppClient
 	logger           *zap.Logger
 }
@@ -120,6 +123,7 @@ func NewPaymentService(
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
 	settingsRepo repository.SettingsRepository,
+	qrKeys QRKeyService,
 	appDB *database.AppClient,
 	logger *zap.Logger,
 ) PaymentService {
@@ -136,6 +140,7 @@ func NewPaymentService(
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
 		settingsRepo:     settingsRepo,
+		qrKeys:           qrKeys,
 		appDB:            appDB,
 		logger:           logger,
 	}
@@ -387,6 +392,17 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		s.publishInventoryUpdates(ctx, inventoryEntries, preloadedStock)
 	}
 
+	// An order is redeemed offline from its signed token, so one without a token
+	// is unredeemable: a signing or persist failure must fail the order (tx rolls back).
+	qrToken, err := s.signOrderQR(ctx, ord.ID, orderLines)
+	if err != nil {
+		return nil, fmt.Errorf("sign order qr: %w", err)
+	}
+	if err := s.orderRepo.SetQRPayload(ctx, ord.ID, qrToken); err != nil {
+		return nil, fmt.Errorf("persist qr payload: %w", err)
+	}
+	ord.QrPayload = &qrToken
+
 	// Prepare provider line items from the params (we have all the data we need)
 	lineItems := make([]payment.LineItem, 0)
 	for _, line := range orderLines {
@@ -410,7 +426,63 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		CustomerEmail: in.CustomerEmail,
 		UserID:        userID,
 		Order:         ord,
+		QRPayload:     qrToken,
 	}, nil
+}
+
+// signOrderQR signs the pickup token over the order's redeemable physical items:
+// simple products and the chosen menu components — the items actually handed
+// over and tracked in inventory. A configured menu's bundle parent is a grouping
+// row with no stock of its own, so it is omitted; its components carry the items.
+// A degenerate bundle with no components falls back to the parent so the item is
+// never lost from the token.
+func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines []repository.OrderLineCreateParams) (string, error) {
+	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
+	defer finish()
+
+	if s.qrKeys == nil {
+		return "", fmt.Errorf("qr signing not configured")
+	}
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok {
+		return "", fmt.Errorf("qr sign: no tenant in context")
+	}
+
+	hasComponents := make(map[string]bool, len(lines))
+	for _, l := range lines {
+		if l.ParentLineID != nil {
+			hasComponents[*l.ParentLineID] = true
+		}
+	}
+
+	redeemable := make([]qrsign.Line, 0, len(lines))
+	for _, l := range lines {
+		switch l.LineType {
+		case orderline.LineTypeSimple, orderline.LineTypeComponent:
+			redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+		case orderline.LineTypeBundle:
+			if l.ID == nil || !hasComponents[*l.ID] {
+				redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+			}
+		}
+	}
+
+	priv, _, err := s.qrKeys.EnsureTenantKey(ctx)
+	if err != nil {
+		return "", fmt.Errorf("qr sign: ensure tenant key: %w", err)
+	}
+
+	token, err := qrsign.Sign(priv, qrsign.Payload{
+		Version:  qrsign.Version,
+		TenantID: tenantID,
+		OrderID:  orderID,
+		IssuedAt: time.Now().Unix(),
+		Lines:    redeemable,
+	})
+	if err != nil {
+		return "", fmt.Errorf("qr sign: sign payload: %w", err)
+	}
+	return token, nil
 }
 
 func (s *paymentService) CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error) {

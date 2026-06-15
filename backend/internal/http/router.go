@@ -103,6 +103,10 @@ func NewRouter(
 		// storefront can render branding even when the tenant is disabled.
 		v1.Get("/branding", wrapper.GetBranding)
 
+		// Public QR signing config (no auth). Exempt from RequireEnabled so a
+		// station/PWA can fetch the verification key at setup time.
+		v1.Get("/qr-config", wrapper.GetQRConfig)
+
 		// ── Public routes (no auth, blocked when system disabled) ─
 		v1.Group(func(pub chi.Router) {
 			pub.Use(systemMw.RequireEnabled)

@@ -67,7 +67,7 @@ func TestPOSService_CreateOrder(t *testing.T) {
 	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
 
 	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
-	ctx := context.Background()
+	ctx := tenantCtx()
 
 	// Setup test products
 	category := fixtures.CreateCategory("Drinks", 1, true)
