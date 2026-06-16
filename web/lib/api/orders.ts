@@ -61,6 +61,8 @@ export interface PublicOrderDetailsDTO {
   createdAt: string
   lines?: OrderLineDTO[]
   payments?: OrderPaymentSummaryDTO[]
+  /** Signed, self-contained Ed25519 pickup token (offline-verifiable at the stand). */
+  qrPayload?: string | null
 }
 
 export async function getOrderPublicById(orderId: string) {

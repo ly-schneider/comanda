@@ -28,6 +28,8 @@
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@next/bundle-analyzer": "^16.2.9",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
     "@radix-ui/react-accordion": "^1.2.13",
     "@radix-ui/react-alert-dialog": "^1.1.16",
     "@radix-ui/react-aspect-ratio": "^1.1.9",
@@ -131,6 +133,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-storybook": "^9.1.20",
     "eslint-plugin-tailwindcss": "^3.18.3",
+    "fake-indexeddb": "^6.2.5",
     "fetch-mock": "^12.6.0",
     "gzip-size": "7.0.0",
     "jsdom": "^29.1.1",
