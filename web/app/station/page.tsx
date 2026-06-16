@@ -8,6 +8,7 @@ import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
+import { OfflineReadiness } from "@/components/station/offline-readiness"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -601,6 +602,8 @@ export default function StationPage() {
 
       {status?.status === "approved" && (
         <div className="mx-auto flex w-full flex-col items-center gap-8 sm:max-w-xl">
+          <OfflineReadiness />
+
           {!scannerActive && (
             <div className="bg-card w-full rounded-2xl p-6">
               <div className="bg-primary/10 text-primary mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
@@ -847,11 +850,14 @@ function ConsolidatedItemCard({ item, redeemed }: { item: ConsolidatedItem; rede
       <div className="flex items-center gap-3">
         {item.productImage ? (
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
+            {/* Unoptimized so the request hits the raw R2 URL the offline
+                precache stored — the /_next/image optimizer URL is never cached. */}
             <Image
               src={item.productImage}
               alt={item.title}
               fill
               sizes="64px"
+              unoptimized
               className="h-full w-full rounded-[11px] object-cover"
             />
           </div>
@@ -884,11 +890,14 @@ function LineGroupCard({ group, redeemed }: { group: LineGroup; redeemed: boolea
       <div className="flex items-center gap-3">
         {parent.productImage ? (
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
+            {/* Unoptimized so the request hits the raw R2 URL the offline
+                precache stored — the /_next/image optimizer URL is never cached. */}
             <Image
               src={parent.productImage}
               alt={parent.title}
               fill
               sizes="64px"
+              unoptimized
               className="h-full w-full rounded-[11px] object-cover"
             />
           </div>
