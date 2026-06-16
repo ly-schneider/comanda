@@ -61,8 +61,6 @@ export interface ResolveSessionDeps {
   now: () => number
 }
 
-// Offline: resolve from cache without any network request. Online: the server
-// is authoritative, but an unreachable server falls back to the cached identity.
 export async function resolveStationSession(deps: ResolveSessionDeps): Promise<SessionResolution> {
   const { token, online, fetchFn, store } = deps
 
@@ -79,8 +77,6 @@ export async function resolveStationSession(deps: ResolveSessionDeps): Promise<S
   try {
     res = await fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
   } catch {
-    // Server unreachable (network partition): replay the cached identity so
-    // redemption isn't blocked on connectivity.
     return fromCache()
   }
 
@@ -89,10 +85,8 @@ export async function resolveStationSession(deps: ResolveSessionDeps): Promise<S
     await clearCachedStationSession(store).catch(() => {})
     return { kind: "unauthorized" }
   }
-  // The server answered but not authoritatively (5xx, an unexpected status, or
-  // an unparseable body). Don't mint a fresh identity from it — degrade to the
-  // cached one rather than masking the error as a clean resolve. Only an
-  // explicit 401/403 above ever revokes the cached identity.
+  // A non-OK response isn't authoritative — degrade to the cached identity
+  // instead of minting a fresh one. Only the 401/403 above revokes the cache.
   if (!res.ok) return fromCache()
 
   let status: StationStatus

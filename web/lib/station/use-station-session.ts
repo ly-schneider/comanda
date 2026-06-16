@@ -24,8 +24,7 @@ export function useStationSession(): StationSession {
   const [state, setState] = useState<StationSessionPhase>({ phase: "loading" })
   const [token, setToken] = useState<string | null>(() => getDeviceToken())
 
-  // A single resolve covers both mount and every connectivity change. The
-  // `cancelled` guard drops a stale in-flight resolution so a slow request can't
+  // `cancelled` drops a stale in-flight resolution so a slow request can't
   // overwrite a newer one when connectivity flaps.
   useEffect(() => {
     let cancelled = false

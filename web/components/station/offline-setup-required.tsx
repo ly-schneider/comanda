@@ -1,7 +1,6 @@
 import { WifiOff } from "lucide-react"
 
-// Shown offline with no usable identity: pairing/setup both need the network,
-// so we say so rather than showing a pairing code that can't be approved offline.
+// Pairing/setup need the network, so offline we show this instead of a code.
 export function OfflineSetupRequired() {
   return (
     <div role="status" className="bg-card w-full rounded-2xl p-6">
