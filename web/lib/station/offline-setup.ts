@@ -12,7 +12,7 @@
 
 import { getDeviceToken } from "@/lib/device-auth"
 import { idbKVStore, type StationKVStore } from "@/lib/station/offline-db"
-import { cacheStationSession, STATION_ME_URL, type StationStatus } from "@/lib/station/station-session"
+import { resolveStationSession, STATION_ME_URL } from "@/lib/station/station-session"
 import { type PrecacheResult, type StationSWClient, stationSWClient } from "@/lib/station/sw-client"
 
 export const READINESS_KEY = "readiness"
@@ -139,21 +139,26 @@ async function loadCatalog(deps: SetupDeps): Promise<{ entries: CatalogEntry[]; 
 }
 
 /**
- * Resolves the station's assigned product ids and caches the full identity so
- * the scanner can render offline without a `/stations/me` round-trip. `ok`
- * is false only when a token was present but the request failed — an
- * expired/revoked token must block readiness rather than masquerade as a
- * station with no assignments (the legitimate empty case is no token, or an
- * empty product list).
+ * Resolves the station's assigned product ids through the session module — the
+ * single owner of the cached identity — so the scanner can render offline
+ * without a `/stations/me` round-trip and revocation clears the cache the same
+ * way it does at runtime. `ok` is false only when a token was present but the
+ * identity couldn't be resolved (an expired/revoked token must block readiness
+ * rather than masquerade as a station with no assignments — the legitimate empty
+ * case is no token, or an empty product list).
  */
 async function loadAssignedProductIds(deps: SetupDeps): Promise<{ ids: string[]; ok: boolean }> {
   const token = deps.getToken()
   if (!token) return { ids: [], ok: true }
-  const res = await deps.fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) return { ids: [], ok: false }
-  const body = (await res.json()) as StationStatus
-  await cacheStationSession(body, deps.now(), deps.store).catch(() => {})
-  return { ids: (body.products ?? []).map((p) => p.productId), ok: true }
+  const resolution = await resolveStationSession({
+    token,
+    online: true,
+    fetchFn: deps.fetchFn,
+    store: deps.store,
+    now: deps.now,
+  })
+  if (resolution.kind !== "resolved") return { ids: [], ok: false }
+  return { ids: (resolution.status.products ?? []).map((p) => p.productId), ok: true }
 }
 
 function buildDefaultDeps(overrides?: Partial<SetupDeps>): SetupDeps {

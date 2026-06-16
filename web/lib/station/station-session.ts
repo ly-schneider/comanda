@@ -62,30 +62,45 @@ export interface ResolveSessionDeps {
 }
 
 // Offline: resolve from cache without any network request. Online: the server
-// is authoritative, but a network failure falls back to the cached identity.
+// is authoritative, but an unreachable server falls back to the cached identity.
 export async function resolveStationSession(deps: ResolveSessionDeps): Promise<SessionResolution> {
   const { token, online, fetchFn, store } = deps
 
   if (!isStationTokenUsableOffline(token)) return { kind: "no-token" }
 
-  if (!online) {
+  const fromCache = async (): Promise<SessionResolution> => {
     const cached = await getCachedStationSession(store).catch(() => null)
     return cached ? { kind: "resolved", status: cached.status, source: "cache" } : { kind: "offline-unprepared" }
   }
 
+  if (!online) return fromCache()
+
+  let res: Response
   try {
-    const res = await fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
-    if (res.status === 503) return { kind: "system-disabled" }
-    if (res.status === 401 || res.status === 403) {
-      await clearCachedStationSession(store).catch(() => {})
-      return { kind: "unauthorized" }
-    }
-    if (!res.ok) throw new Error(`stations/me ${res.status}`)
-    const status = (await res.json()) as StationStatus
-    await cacheStationSession(status, deps.now(), store).catch(() => {})
-    return { kind: "resolved", status, source: "network" }
+    res = await fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
   } catch {
-    const cached = await getCachedStationSession(store).catch(() => null)
-    return cached ? { kind: "resolved", status: cached.status, source: "cache" } : { kind: "offline-unprepared" }
+    // Server unreachable (network partition): replay the cached identity so
+    // redemption isn't blocked on connectivity.
+    return fromCache()
   }
+
+  if (res.status === 503) return { kind: "system-disabled" }
+  if (res.status === 401 || res.status === 403) {
+    await clearCachedStationSession(store).catch(() => {})
+    return { kind: "unauthorized" }
+  }
+  // The server answered but not authoritatively (5xx, an unexpected status, or
+  // an unparseable body). Don't mint a fresh identity from it — degrade to the
+  // cached one rather than masking the error as a clean resolve. Only an
+  // explicit 401/403 above ever revokes the cached identity.
+  if (!res.ok) return fromCache()
+
+  let status: StationStatus
+  try {
+    status = (await res.json()) as StationStatus
+  } catch {
+    return fromCache()
+  }
+  await cacheStationSession(status, deps.now(), store).catch(() => {})
+  return { kind: "resolved", status, source: "network" }
 }

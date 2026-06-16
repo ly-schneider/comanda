@@ -3,7 +3,7 @@
 import type { Html5Qrcode } from "html5-qrcode"
 import { AlertCircle, CheckCircle2, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
 import Image from "next/image"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-import { getDeviceToken } from "@/lib/device-auth"
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
 import { useStationSession } from "@/lib/station/use-station-session"
 import { parseScan } from "@/lib/station-scan"
@@ -164,9 +163,17 @@ const STATUS_STYLES: Record<ScanStatus, StatusMeta> = {
 export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
-  const { state: sessionState, online } = useStationSession()
+  const { state: sessionState, online, token } = useStationSession()
   const status = sessionState.phase === "active" ? sessionState.status : null
   const approved = status?.status === "approved"
+  // Keyed on the stable id list so a resolve that returns a new `status` object
+  // with the same assignments doesn't rebuild the set (which would churn the
+  // scan callbacks and restart the camera). Product ids are comma-free nanoids.
+  const assignedProductKey = (status?.products ?? []).map((p) => p.productId).join(",")
+  const assignedProductIds = useMemo(
+    () => new Set(assignedProductKey ? assignedProductKey.split(",") : []),
+    [assignedProductKey]
+  )
   const systemDisabled = sessionState.phase === "system-disabled"
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
@@ -179,8 +186,7 @@ export default function StationPage() {
   const recentScanIdsRef = useRef<Map<string, number>>(new Map())
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [sessionToken] = useState<string | null>(() => getDeviceToken())
-  const bearerToken = sessionToken || ""
+  const bearerToken = token ?? ""
 
   useEffect(() => {
     if (!approved) {
@@ -457,7 +463,6 @@ export default function StationPage() {
         }
         const orderData = (await orderRes.json()) as { id: string; lines?: OrderLine[] }
         const allLines = orderData.lines || []
-        const assignedProductIds = new Set((status?.products || []).map((p) => p.productId))
         const matchedBundleIds = new Set(
           allLines.filter((l) => assignedProductIds.has(l.productId) && l.lineType === "bundle").map((l) => l.id)
         )
@@ -504,7 +509,7 @@ export default function StationPage() {
         scheduleResume()
       }
     },
-    [bearerToken, fireRedeem, pushScan, scheduleResume, status, updateScan]
+    [assignedProductIds, bearerToken, fireRedeem, pushScan, scheduleResume, updateScan]
   )
 
   const handleDecoded = useCallback(
@@ -550,8 +555,12 @@ export default function StationPage() {
   const history = scans.slice(1)
 
   const loading = sessionState.phase === "loading"
-  const needsOnlineSetup = !loading && !online && !approved
-  const showPairing = !loading && online && !approved
+  // `offline-unprepared` means we positively failed to resolve an identity
+  // (offline, or the server was unreachable while navigator.onLine still read
+  // true). Never offer a pairing code we can't complete in that state.
+  const unresolvedOffline = sessionState.phase === "offline-unprepared"
+  const needsOnlineSetup = !loading && !approved && (!online || unresolvedOffline)
+  const showPairing = !loading && !approved && online && !unresolvedOffline
 
   return (
     <div className="bg-background text-foreground flex flex-1 flex-col gap-6 px-3 pt-6 pb-10 sm:px-6 sm:pt-8">

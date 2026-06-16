@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { clearDeviceToken, getDeviceToken } from "@/lib/device-auth"
 import { idbKVStore } from "@/lib/station/offline-db"
 import { resolveStationSession, type StationStatus } from "@/lib/station/station-session"
+import { useOnline } from "@/lib/station/use-online"
 
 export type StationSessionPhase =
   | { phase: "loading" }
@@ -15,66 +16,57 @@ export type StationSessionPhase =
 export interface StationSession {
   state: StationSessionPhase
   online: boolean
-}
-
-function useOnline(): boolean {
-  const [online, setOnline] = useState(true)
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine)
-    update()
-    window.addEventListener("online", update)
-    window.addEventListener("offline", update)
-    return () => {
-      window.removeEventListener("online", update)
-      window.removeEventListener("offline", update)
-    }
-  }, [])
-  return online
+  token: string | null
 }
 
 export function useStationSession(): StationSession {
   const online = useOnline()
   const [state, setState] = useState<StationSessionPhase>({ phase: "loading" })
+  const [token, setToken] = useState<string | null>(() => getDeviceToken())
 
-  const resolve = useCallback(async () => {
-    const result = await resolveStationSession({
-      // Fresh each time: an authoritative rejection clears it, so the next
+  // A single resolve covers both mount and every connectivity change. The
+  // `cancelled` guard drops a stale in-flight resolution so a slow request can't
+  // overwrite a newer one when connectivity flaps.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      // Re-read fresh: an authoritative rejection clears the token, so the next
       // resolve falls into the no-token branch instead of re-hitting the network.
-      token: getDeviceToken(),
-      online: typeof navigator === "undefined" ? true : navigator.onLine,
-      fetchFn: (...args) => fetch(...args),
-      store: idbKVStore(),
-      now: () => Date.now(),
-    })
-    switch (result.kind) {
-      case "unauthorized":
-        clearDeviceToken()
-        setState({ phase: "needs-pairing" })
-        break
-      case "no-token":
-        setState({ phase: "needs-pairing" })
-        break
-      case "system-disabled":
-        setState({ phase: "system-disabled" })
-        break
-      case "offline-unprepared":
-        setState({ phase: "offline-unprepared" })
-        break
-      case "resolved":
-        setState({ phase: "active", status: result.status })
-        break
+      const current = getDeviceToken()
+      setToken(current)
+      const result = await resolveStationSession({
+        token: current,
+        online,
+        fetchFn: (...args) => fetch(...args),
+        store: idbKVStore(),
+        now: () => Date.now(),
+      })
+      if (cancelled) return
+      switch (result.kind) {
+        case "unauthorized":
+          clearDeviceToken()
+          setToken(null)
+          setState({ phase: "needs-pairing" })
+          break
+        case "no-token":
+          setToken(null)
+          setState({ phase: "needs-pairing" })
+          break
+        case "system-disabled":
+          setState({ phase: "system-disabled" })
+          break
+        case "offline-unprepared":
+          setState({ phase: "offline-unprepared" })
+          break
+        case "resolved":
+          setState({ phase: "active", status: result.status })
+          break
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-  }, [])
+  }, [online])
 
-  useEffect(() => {
-    void resolve()
-  }, [resolve])
-
-  // Re-resolve when connectivity returns to refresh the identity.
-  useEffect(() => {
-    if (!online) return
-    void resolve()
-  }, [online, resolve])
-
-  return { state, online }
+  return { state, online, token }
 }

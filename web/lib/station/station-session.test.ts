@@ -103,6 +103,51 @@ describe("resolveStationSession", () => {
     expect(result).toEqual({ kind: "offline-unprepared" })
   })
 
+  it("degrades to the cached identity on a 5xx without re-minting it as a network resolve", async () => {
+    const store = memoryKVStore()
+    await cacheStationSession(APPROVED, 5, store)
+    const result = await resolveStationSession({
+      token: TOKEN,
+      online: true,
+      fetchFn: (async () => res(500, {})) as unknown as typeof fetch,
+      store,
+      now: () => 9,
+    })
+    expect(result).toEqual({ kind: "resolved", status: APPROVED, source: "cache" })
+    // A 5xx must not clear the cached identity — only an explicit 401/403 does.
+    expect(await getCachedStationSession(store)).toEqual({ status: APPROVED, cachedAt: 5 })
+  })
+
+  it("reports offline-unprepared on a 5xx when nothing is cached", async () => {
+    const result = await resolveStationSession({
+      token: TOKEN,
+      online: true,
+      fetchFn: (async () => res(502, {})) as unknown as typeof fetch,
+      store: memoryKVStore(),
+      now: () => 1,
+    })
+    expect(result).toEqual({ kind: "offline-unprepared" })
+  })
+
+  it("falls back to cache when a 200 body is unparseable", async () => {
+    const store = memoryKVStore()
+    await cacheStationSession(APPROVED, 3, store)
+    const result = await resolveStationSession({
+      token: TOKEN,
+      online: true,
+      fetchFn: (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new SyntaxError("Unexpected token")
+        },
+      })) as unknown as typeof fetch,
+      store,
+      now: () => 9,
+    })
+    expect(result).toEqual({ kind: "resolved", status: APPROVED, source: "cache" })
+  })
+
   it("resolves from cache offline and makes zero network calls", async () => {
     const store = memoryKVStore()
     await cacheStationSession(APPROVED, 7, store)
