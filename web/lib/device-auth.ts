@@ -71,3 +71,10 @@ export function parseDeviceTokenClaims(token: string): { sub: string; device_typ
     return null
   }
 }
+
+// The token is an opaque server-side credential with no client-verifiable
+// claims, so offline its mere presence authorizes scanning; server-side
+// revocation reasserts on the next online request.
+export function isStationTokenUsableOffline(token: string | null): boolean {
+  return typeof token === "string" && token.length > 0
+}

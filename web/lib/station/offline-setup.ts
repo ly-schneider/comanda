@@ -12,6 +12,7 @@
 
 import { getDeviceToken } from "@/lib/device-auth"
 import { idbKVStore, type StationKVStore } from "@/lib/station/offline-db"
+import { resolveStationSession, STATION_ME_URL } from "@/lib/station/station-session"
 import { type PrecacheResult, type StationSWClient, stationSWClient } from "@/lib/station/sw-client"
 
 export const READINESS_KEY = "readiness"
@@ -20,7 +21,6 @@ export const CATALOG_KEY = "catalog"
 
 const QR_CONFIG_URL = "/api/v1/qr-config"
 const CATALOG_URL = "/api/v1/products"
-const STATION_ME_URL = "/api/v1/stations/me"
 
 // Same-origin paths whose contents are immutable enough to cache-first and
 // precache: hashed Next.js build output and the static brand assets under
@@ -70,10 +70,6 @@ interface ProductDTO {
   id: string
   name: string
   image?: string | null
-}
-
-interface StationMeDTO {
-  products?: { productId: string }[]
 }
 
 export interface SetupDeps {
@@ -143,18 +139,26 @@ async function loadCatalog(deps: SetupDeps): Promise<{ entries: CatalogEntry[]; 
 }
 
 /**
- * Resolves the station's assigned product ids. `ok` is false only when a token
- * was present but the request failed — an expired/revoked token must block
- * readiness rather than masquerade as a station with no assignments (which is
- * the legitimate empty case when there is no token, or an empty product list).
+ * Resolves the station's assigned product ids through the session module — the
+ * single owner of the cached identity — so the scanner can render offline
+ * without a `/stations/me` round-trip and revocation clears the cache the same
+ * way it does at runtime. `ok` is false only when a token was present but the
+ * identity couldn't be resolved (an expired/revoked token must block readiness
+ * rather than masquerade as a station with no assignments — the legitimate empty
+ * case is no token, or an empty product list).
  */
 async function loadAssignedProductIds(deps: SetupDeps): Promise<{ ids: string[]; ok: boolean }> {
   const token = deps.getToken()
   if (!token) return { ids: [], ok: true }
-  const res = await deps.fetchFn(STATION_ME_URL, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) return { ids: [], ok: false }
-  const body = (await res.json()) as StationMeDTO
-  return { ids: (body.products ?? []).map((p) => p.productId), ok: true }
+  const resolution = await resolveStationSession({
+    token,
+    online: true,
+    fetchFn: deps.fetchFn,
+    store: deps.store,
+    now: deps.now,
+  })
+  if (resolution.kind !== "resolved") return { ids: [], ok: false }
+  return { ids: (resolution.status.products ?? []).map((p) => p.productId), ok: true }
 }
 
 function buildDefaultDeps(overrides?: Partial<SetupDeps>): SetupDeps {

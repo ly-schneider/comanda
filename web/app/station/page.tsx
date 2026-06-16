@@ -3,32 +3,25 @@
 import type { Html5Qrcode } from "html5-qrcode"
 import { AlertCircle, CheckCircle2, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
 import Image from "next/image"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
 import { OfflineReadiness } from "@/components/station/offline-readiness"
+import { OfflineSetupRequired } from "@/components/station/offline-setup-required"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-import { getDeviceToken } from "@/lib/device-auth"
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
+import { useStationSession } from "@/lib/station/use-station-session"
 import { parseScan } from "@/lib/station-scan"
 
 const SCAN_RESUME_DELAY_MS = 1400
 const DUPLICATE_SCAN_WINDOW_MS = 5000
 const HISTORY_LIMIT = 8
-
-type StationProduct = { productId: string; name?: string }
-type StationStatus = {
-  id: string
-  status: "pending" | "approved" | "rejected" | "revoked"
-  name?: string
-  products?: StationProduct[]
-}
 
 type OrderLine = {
   id: string
@@ -170,8 +163,18 @@ const STATUS_STYLES: Record<ScanStatus, StatusMeta> = {
 export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
-  const [status, setStatus] = useState<StationStatus | null>(null)
-  const [systemDisabled, setSystemDisabled] = useState(false)
+  const { state: sessionState, online, token } = useStationSession()
+  const status = sessionState.phase === "active" ? sessionState.status : null
+  const approved = status?.status === "approved"
+  // Keyed on the stable id list so a resolve that returns a new `status` object
+  // with the same assignments doesn't rebuild the set (which would churn the
+  // scan callbacks and restart the camera). Product ids are comma-free nanoids.
+  const assignedProductKey = (status?.products ?? []).map((p) => p.productId).join(",")
+  const assignedProductIds = useMemo(
+    () => new Set(assignedProductKey ? assignedProductKey.split(",") : []),
+    [assignedProductKey]
+  )
+  const systemDisabled = sessionState.phase === "system-disabled"
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null)
@@ -183,44 +186,16 @@ export default function StationPage() {
   const recentScanIdsRef = useRef<Map<string, number>>(new Map())
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [sessionToken] = useState<string | null>(() => getDeviceToken())
-  const bearerToken = sessionToken || ""
+  const bearerToken = token ?? ""
 
   useEffect(() => {
-    if (!sessionToken) {
-      setStatus(null)
-      return
-    }
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/v1/stations/me`, {
-          headers: { Authorization: `Bearer ${sessionToken}` },
-        })
-        if (res.status === 503) {
-          setSystemDisabled(true)
-          return
-        }
-        if (res.status === 401 || res.status === 403) {
-          setStatus(null)
-          return
-        }
-        setSystemDisabled(false)
-        const json = await res.json()
-        setStatus(json as StationStatus)
-      } catch {
-        setStatus(null)
-      }
-    })()
-  }, [sessionToken])
-
-  useEffect(() => {
-    if (status?.status !== "approved") {
+    if (!approved) {
       setCameraPermission("idle")
       setScannerActive(false)
       setDevices([])
       setDeviceId("")
     }
-  }, [status?.status])
+  }, [approved])
 
   const loadDevices = useCallback(async () => {
     try {
@@ -237,7 +212,7 @@ export default function StationPage() {
   }, [])
 
   useEffect(() => {
-    if (status?.status !== "approved") return
+    if (!approved) return
     let cancelled = false
     let permissionStatus: PermissionStatus | null = null
 
@@ -280,7 +255,7 @@ export default function StationPage() {
       cancelled = true
       permissionStatus?.removeEventListener("change", handleChange)
     }
-  }, [loadDevices, status?.status])
+  }, [loadDevices, approved])
 
   useEffect(() => {
     return () => {
@@ -488,7 +463,6 @@ export default function StationPage() {
         }
         const orderData = (await orderRes.json()) as { id: string; lines?: OrderLine[] }
         const allLines = orderData.lines || []
-        const assignedProductIds = new Set((status?.products || []).map((p) => p.productId))
         const matchedBundleIds = new Set(
           allLines.filter((l) => assignedProductIds.has(l.productId) && l.lineType === "bundle").map((l) => l.id)
         )
@@ -535,7 +509,7 @@ export default function StationPage() {
         scheduleResume()
       }
     },
-    [bearerToken, fireRedeem, pushScan, scheduleResume, status, updateScan]
+    [assignedProductIds, bearerToken, fireRedeem, pushScan, scheduleResume, updateScan]
   )
 
   const handleDecoded = useCallback(
@@ -559,7 +533,6 @@ export default function StationPage() {
         if (!res.ok) return
         const data = (await res.json()) as { enabled: boolean }
         if (data.enabled) {
-          setSystemDisabled(false)
           window.location.reload()
         }
       } catch {}
@@ -581,6 +554,14 @@ export default function StationPage() {
   const latest = scans[0] ?? null
   const history = scans.slice(1)
 
+  const loading = sessionState.phase === "loading"
+  // `offline-unprepared` means we positively failed to resolve an identity
+  // (offline, or the server was unreachable while navigator.onLine still read
+  // true). Never offer a pairing code we can't complete in that state.
+  const unresolvedOffline = sessionState.phase === "offline-unprepared"
+  const needsOnlineSetup = !loading && !approved && (!online || unresolvedOffline)
+  const showPairing = !loading && !approved && online && !unresolvedOffline
+
   return (
     <div className="bg-background text-foreground flex flex-1 flex-col gap-6 px-3 pt-6 pb-10 sm:px-6 sm:pt-8">
       <header className="mx-auto flex w-full max-w-xl items-center justify-between gap-3">
@@ -591,7 +572,19 @@ export default function StationPage() {
         </div>
       </header>
 
-      {(!status || status.status !== "approved") && (
+      {loading && (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" aria-hidden />
+        </div>
+      )}
+
+      {needsOnlineSetup && (
+        <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center">
+          <OfflineSetupRequired />
+        </div>
+      )}
+
+      {showPairing && (
         <div className="flex flex-1 flex-col items-center">
           <p className="text-muted-foreground mt-2 max-w-md text-center">Scanne Abhol-QR-Codes hier</p>
           <div className="flex w-full flex-1 items-center justify-center">
@@ -600,7 +593,7 @@ export default function StationPage() {
         </div>
       )}
 
-      {status?.status === "approved" && (
+      {approved && (
         <div className="mx-auto flex w-full flex-col items-center gap-8 sm:max-w-xl">
           <OfflineReadiness />
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { idbKVStore } from "@/lib/station/offline-db"
 import { getReadiness, runOfflineSetup } from "@/lib/station/offline-setup"
 import { stationSWClient } from "@/lib/station/sw-client"
+import { useOnline } from "@/lib/station/use-online"
 import { appEnvFromHost } from "@/lib/tenant"
 
 export type ReadinessState =
@@ -19,21 +20,6 @@ export interface OfflineReadiness {
   state: ReadinessState
   online: boolean
   prepare: () => void
-}
-
-function useOnline(): boolean {
-  const [online, setOnline] = useState(true)
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine)
-    update()
-    window.addEventListener("online", update)
-    window.addEventListener("offline", update)
-    return () => {
-      window.removeEventListener("online", update)
-      window.removeEventListener("offline", update)
-    }
-  }, [])
-  return online
 }
 
 export function useOfflineReadiness(): OfflineReadiness {
