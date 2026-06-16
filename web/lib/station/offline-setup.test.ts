@@ -9,6 +9,7 @@ import {
   runOfflineSetup,
   type SetupDeps,
 } from "@/lib/station/offline-setup"
+import { getCachedStationSession } from "@/lib/station/station-session"
 import type { PrecacheResult } from "@/lib/station/sw-client"
 
 type FakeResponse = { ok: boolean; status: number; json: () => Promise<unknown> }
@@ -87,6 +88,16 @@ describe("runOfflineSetup", () => {
     ])
     const stored = (await d.store.get<ReadinessRecord>(READINESS_KEY))!
     expect(stored.ready).toBe(true)
+  })
+
+  it("caches the station session so the scanner can render offline after setup", async () => {
+    const d = deps()
+    await runOfflineSetup(d)
+
+    expect(await getCachedStationSession(d.store)).toEqual({
+      status: { products: [{ productId: "p1" }] },
+      cachedAt: 1000,
+    })
   })
 
   it("is not ready when the signing key is unprovisioned (503)", async () => {
