@@ -60,7 +60,7 @@ describe("idbLedger persistence", () => {
     // Open an independent connection, bypassing the module's cached handle, to
     // prove the entry is durably in IndexedDB and not just in process memory.
     const fromDisk = await new Promise<LedgerEntry | undefined>((resolve, reject) => {
-      const req = indexedDB.open("comanda-station", 2)
+      const req = indexedDB.open("comanda-station", 3)
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("ledger", "readonly")

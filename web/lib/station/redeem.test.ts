@@ -33,15 +33,14 @@ function makeDeps(over: Partial<RedeemDeps> = {}): RedeemDeps {
     assignedProductIds: new Set(["pA"]),
     catalog: new Map([["pA", { name: "Pommes", image: "https://r2.example/pA.png" }]]),
     ledger: memoryLedger(),
-    online: true,
-    persist: vi.fn(),
+    enqueue: vi.fn(async () => {}),
     now: () => 5000,
     ...over,
   }
 }
 
 describe("redeemScan", () => {
-  it("redeems a valid, unredeemed code: writes the ledger and saves to the server when online", async () => {
+  it("redeems a valid, unredeemed code: writes the ledger and queues the server write", async () => {
     const deps = makeDeps()
     const result = await redeemScan(token(payload()), deps)
 
@@ -52,7 +51,7 @@ describe("redeemScan", () => {
       { productId: "pA", title: "Pommes", productImage: "https://r2.example/pA.png", quantity: 2, redeemedAt: 5000 },
     ])
     expect(await deps.ledger.get("order_abc123", "pA")).toMatchObject({ quantity: 2, tenantId: "tenant_seed1" })
-    expect(deps.persist).toHaveBeenCalledWith("order_abc123", ["pA"])
+    expect(deps.enqueue).toHaveBeenCalledWith("order_abc123", ["pA"], "tenant_seed1")
   })
 
   it("rejects a bad signature as invalid and writes nothing", async () => {
@@ -62,7 +61,7 @@ describe("redeemScan", () => {
 
     expect(result.kind).toBe("invalid")
     expect(await deps.ledger.list()).toHaveLength(0)
-    expect(deps.persist).not.toHaveBeenCalled()
+    expect(deps.enqueue).not.toHaveBeenCalled()
   })
 
   it("rejects a token for another tenant as wrong-event and writes nothing", async () => {
@@ -71,20 +70,20 @@ describe("redeemScan", () => {
 
     expect(result.kind).toBe("wrong-event")
     expect(await deps.ledger.list()).toHaveLength(0)
-    expect(deps.persist).not.toHaveBeenCalled()
+    expect(deps.enqueue).not.toHaveBeenCalled()
   })
 
-  it("reports already-redeemed on a second scan without duplicating the ledger or re-saving", async () => {
+  it("reports already-redeemed on a second scan without duplicating the ledger or re-queueing", async () => {
     const deps = makeDeps()
     await redeemScan(token(payload()), deps)
-    ;(deps.persist as ReturnType<typeof vi.fn>).mockClear()
+    ;(deps.enqueue as ReturnType<typeof vi.fn>).mockClear()
 
     const result = await redeemScan(token(payload()), deps)
     expect(result.kind).toBe("already-redeemed")
     if (result.kind !== "already-redeemed") return
     expect(result.lines[0]).toMatchObject({ productId: "pA", redeemedAt: 5000 })
     expect(await deps.ledger.list()).toHaveLength(1)
-    expect(deps.persist).not.toHaveBeenCalled()
+    expect(deps.enqueue).not.toHaveBeenCalled()
   })
 
   it("reports not-for-stand when no line matches an assigned product", async () => {
@@ -93,7 +92,7 @@ describe("redeemScan", () => {
 
     expect(result.kind).toBe("not-for-stand")
     expect(await deps.ledger.list()).toHaveLength(0)
-    expect(deps.persist).not.toHaveBeenCalled()
+    expect(deps.enqueue).not.toHaveBeenCalled()
   })
 
   it("multi-product: redeeming one product's line leaves the others redeemable at their own stands", async () => {
@@ -125,15 +124,18 @@ describe("redeemScan", () => {
     expect((await redeemScan(token(multi), standA)).kind).toBe("already-redeemed")
   })
 
-  it("offline produces the same ledger state but does not save to the server", async () => {
-    const deps = makeDeps({ online: false })
+  it("queues every fresh redemption exactly once; a repeat scan is deduped and not re-queued", async () => {
+    const deps = makeDeps()
     const result = await redeemScan(token(payload()), deps)
 
     expect(result.kind).toBe("redeemed")
     expect(await deps.ledger.get("order_abc123", "pA")).toMatchObject({ quantity: 2 })
-    expect(deps.persist).not.toHaveBeenCalled()
-    // A later scan of the same code is deduped from the ledger, exactly as online.
+    expect(deps.enqueue).toHaveBeenCalledTimes(1)
+
+    // A later scan of the same code is deduped from the ledger and not re-queued;
+    // the connectivity of the actual upload is the flusher's concern.
     expect((await redeemScan(token(payload()), deps)).kind).toBe("already-redeemed")
+    expect(deps.enqueue).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to the product id for the title when the catalog has no entry", async () => {
