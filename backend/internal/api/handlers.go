@@ -34,17 +34,20 @@ type Handlers struct {
 	club100       service.Club100Service
 	volunteers    service.VolunteerService
 	androidUpdate service.AndroidUpdateService
+	domains       service.DomainService
 	verification  repository.VerificationRepository
 	idempotency   repository.IdempotencyRepository
 	blobStore     *blobstore.Client
 	inventoryHub  *inventory.Hub
 
 	// privileged resolves {tenantToken} -> tenant before context exists; appDB
-	// opens the RLS-bound tenant tx for the webhook path.
+	// opens the RLS-bound tenant tx for the webhook path. The trusted-origins
+	// feed also reads tenant_domain cross-tenant on the privileged client.
 	privileged *ent.Client
 	appDB      *database.AppClient
 	providers  *payment.Factory
 
+	config config.Config
 	logger *zap.Logger
 }
 
@@ -70,6 +73,7 @@ type HandlersDeps struct {
 	Club100       service.Club100Service
 	Volunteers    service.VolunteerService
 	AndroidUpdate service.AndroidUpdateService
+	Domains       service.DomainService
 	Verification  repository.VerificationRepository
 	Idempotency   repository.IdempotencyRepository
 	BlobStore     *blobstore.Client `optional:"true"`
@@ -98,6 +102,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		club100:       deps.Club100,
 		volunteers:    deps.Volunteers,
 		androidUpdate: deps.AndroidUpdate,
+		domains:       deps.Domains,
 		verification:  deps.Verification,
 		idempotency:   deps.Idempotency,
 		blobStore:     deps.BlobStore,
@@ -105,6 +110,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		privileged:    deps.Privileged.Client,
 		appDB:         deps.AppDB,
 		providers:     deps.Providers,
+		config:        deps.Config,
 		logger:        deps.Logger,
 	}
 }

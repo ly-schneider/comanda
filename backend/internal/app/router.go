@@ -25,6 +25,7 @@ func NewRouter(
 	isDev := cfg.App.AppEnv == "dev"
 
 	return httpRouter.NewRouter(
+		cfg,
 		apiHandlers,
 		betterAuthMw, deviceAuthMw, securityMw, systemMw, tenantMw,
 		logger, isDev,

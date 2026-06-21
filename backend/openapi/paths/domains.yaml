@@ -1,0 +1,203 @@
+collection:
+  get:
+    tags: [Domains]
+    summary: List custom domains
+    description: Returns the tenant's custom domains and their verification/cert status.
+    operationId: listDomains
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Domain list
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/Domain"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  post:
+    tags: [Domains]
+    summary: Add a custom domain
+    description: |
+      Registers a custom domain for the tenant and returns the DNS records the
+      tenant must publish to prove ownership: a CNAME pointing at the platform,
+      and a TXT verification record. The domain stays unverified until the
+      background verifier observes both records.
+    operationId: createDomain
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [hostname]
+            properties:
+              hostname:
+                type: string
+                example: shop.example.com
+    responses:
+      "201":
+        description: Domain created
+        content:
+          application/json:
+            schema:
+              $ref: "#/DomainWithInstructions"
+      "400":
+        description: Invalid or disallowed hostname
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Hostname already registered
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+item:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  delete:
+    tags: [Domains]
+    summary: Remove a custom domain
+    operationId: deleteDomain
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "204":
+        description: Domain removed
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Domain not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+verify:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Domains]
+    summary: Re-check domain verification now
+    description: Runs the CNAME + TXT ownership check immediately for the domain.
+    operationId: verifyDomain
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Current domain state after the check
+        content:
+          application/json:
+            schema:
+              $ref: "#/Domain"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Domain not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+Domain:
+  type: object
+  required: [id, hostname, isPrimary, certStatus, createdAt]
+  properties:
+    id:
+      type: string
+    hostname:
+      type: string
+    isPrimary:
+      type: boolean
+    verifiedAt:
+      type: string
+      format: date-time
+      nullable: true
+    certStatus:
+      type: string
+      enum: [none, pending, active, failed]
+    createdAt:
+      type: string
+      format: date-time
+
+DomainWithInstructions:
+  type: object
+  required: [domain, cnameTarget, txtName, txtValue]
+  properties:
+    domain:
+      $ref: "#/Domain"
+    cnameTarget:
+      type: string
+      description: Value to set the domain's CNAME record to.
+    txtName:
+      type: string
+      description: Name of the TXT record to publish.
+    txtValue:
+      type: string
+      description: Value of the TXT record to publish.
