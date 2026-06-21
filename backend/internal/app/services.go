@@ -29,6 +29,7 @@ func NewServices() fx.Option {
 			service.NewClub100Service,
 			service.NewVolunteerService,
 			service.NewAndroidUpdateService,
+			service.NewDomainService,
 		),
 	)
 }
