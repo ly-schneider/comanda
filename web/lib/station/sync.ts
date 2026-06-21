@@ -67,14 +67,25 @@ async function run(deps: FlushDeps): Promise<FlushSummary> {
     return { synced: 0, failed: 0, skipped: items.length, remaining: items.length }
   }
 
+  // Once the device token is rejected, every remaining item would fail the same
+  // way: stop hitting the server and leave them queued for the next flush (after
+  // the operator re-pairs). The fetch wrapper handles clearing the token and
+  // redirecting to setup; bumping backoff for an auth error would be pointless.
+  let authRejected = false
+
   for (const item of items) {
     const now = deps.now()
     if (item.nextAttemptAt != null && item.nextAttemptAt > now) {
       skipped++
       continue
     }
+    if (authRejected) {
+      failed++
+      continue
+    }
 
     let ok = false
+    let authError = false
     try {
       const res = await deps.fetch(endpoint, {
         method: "POST",
@@ -86,6 +97,7 @@ async function run(deps: FlushDeps): Promise<FlushSummary> {
         body: JSON.stringify({ orderId: item.orderId }),
       })
       ok = res.ok
+      authError = res.status === 401 || res.status === 403
     } catch {
       ok = false
     }
@@ -93,6 +105,9 @@ async function run(deps: FlushDeps): Promise<FlushSummary> {
     if (ok) {
       await deps.outbox.remove(item.orderId)
       synced++
+    } else if (authError) {
+      authRejected = true
+      failed++
     } else {
       const attempts = item.attempts + 1
       await deps.outbox.put({

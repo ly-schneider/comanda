@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useDeviceFetch } from "@/hooks/use-device-fetch"
 
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
 import { idbLedger, type StationLedger } from "@/lib/station/ledger"
@@ -212,6 +213,13 @@ export default function StationPage() {
   useEffect(() => {
     tokenRef.current = bearerToken
   }, [bearerToken])
+  // Same ref trick for the device-fetch wrapper: triggerFlush stays stable, but a
+  // flush still routes 401/403 through clear-token-and-redirect to /station/setup.
+  const deviceFetch = useDeviceFetch("station")
+  const deviceFetchRef = useRef(deviceFetch)
+  useEffect(() => {
+    deviceFetchRef.current = deviceFetch
+  }, [deviceFetch])
 
   // Replay the public key, tenant id, and product catalog cached by the
   // offline-setup ritual so a scan verifies and renders with zero network.
@@ -384,7 +392,7 @@ export default function StationPage() {
     if (typeof navigator !== "undefined" && !navigator.onLine) return
     void flushOutbox({
       outbox: outboxRef.current!,
-      fetch: (input, init) => fetch(input, init),
+      fetch: (input, init) => deviceFetchRef.current(input, init),
       token: () => tokenRef.current || null,
       now: () => Date.now(),
     })
@@ -400,8 +408,6 @@ export default function StationPage() {
     [triggerFlush]
   )
 
-  // Flush on mount and whenever connectivity returns; the interval retries
-  // items still in backoff after a failed upload.
   useEffect(() => {
     if (!approved) return
     triggerFlush()

@@ -5,15 +5,16 @@ import { memoryOutbox, type StationOutbox } from "./sync-queue"
 type FetchCall = { url: string; init: RequestInit }
 
 // Minimal fetch double: records calls and returns a configurable outcome.
-// `ok` may be a boolean or a per-orderId map; `throws` simulates a network drop.
-function fakeFetch(outcome: { ok?: boolean | Record<string, boolean>; throws?: boolean }) {
+// `ok` may be a boolean or a per-orderId map; `throws` simulates a network drop;
+// `status` overrides the response status (defaults to 200 ok / 500 otherwise).
+function fakeFetch(outcome: { ok?: boolean | Record<string, boolean>; throws?: boolean; status?: number }) {
   const calls: FetchCall[] = []
   const fn = vi.fn(async (url: string, init: RequestInit) => {
     calls.push({ url, init })
     if (outcome.throws) throw new Error("network down")
     const body = JSON.parse(String(init.body)) as { orderId: string }
     const ok = typeof outcome.ok === "object" ? (outcome.ok[body.orderId] ?? false) : (outcome.ok ?? true)
-    return { ok } as Response
+    return { ok, status: outcome.status ?? (ok ? 200 : 500) } as Response
   })
   return { fetch: fn as unknown as typeof fetch, calls }
 }
@@ -103,6 +104,23 @@ describe("flushOutbox", () => {
     expect(summary).toMatchObject({ synced: 0, skipped: 1, remaining: 1 })
     expect(calls).toHaveLength(0)
     expect(await outbox.list()).toHaveLength(1)
+  })
+
+  it("auth rejection is terminal: stops the pass and leaves items queued without bumping backoff", async () => {
+    const outbox = memoryOutbox()
+    await seed(outbox, [{ orderId: "o1" }, { orderId: "o2" }])
+    const { fetch, calls } = fakeFetch({ ok: false, status: 401 })
+
+    const summary = await flushOutbox({ outbox, fetch, token: () => "stale", now: () => 2000 })
+
+    // The first 401 short-circuits the rest of the pass — no further requests are
+    // made with the rejected token (the fetch wrapper redirects to re-pair).
+    expect(calls).toHaveLength(1)
+    expect(summary).toMatchObject({ synced: 0, failed: 2, remaining: 2 })
+    // Both items remain, immediately due (no backoff), to flush after re-pairing.
+    const remaining = await outbox.list()
+    expect(remaining.map((i) => i.orderId).sort()).toEqual(["o1", "o2"])
+    expect(remaining.every((i) => i.attempts === 0)).toBe(true)
   })
 
   it("is re-entrant: overlapping triggers share one pass instead of double-sending", async () => {
