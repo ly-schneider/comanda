@@ -4,6 +4,34 @@ import { Pool } from "pg"
 import { ac, adminRole, customerRole } from "./auth/permissions"
 import { getAppEnv } from "./env"
 
+// Module-level cache for the trusted-origins fetch. Refreshes every 60 s so a
+// backend blip never permanently breaks auth, and a newly-verified domain shows
+// up without a restart.
+let _customOriginsCache: { hostnames: string[]; fetchedAt: number } | null = null
+const CUSTOM_ORIGINS_TTL_MS = 60_000
+
+async function fetchCustomOrigins(): Promise<string[]> {
+  const now = Date.now()
+  if (_customOriginsCache && now - _customOriginsCache.fetchedAt < CUSTOM_ORIGINS_TTL_MS) {
+    return _customOriginsCache.hostnames
+  }
+
+  const backendUrl = process.env.BACKEND_INTERNAL_URL
+  const token = process.env.INTERNAL_API_TOKEN
+  if (!backendUrl || !token) return []
+
+  const res = await fetch(`${backendUrl}/internal/trusted-origins`, {
+    headers: { Authorization: `Bearer ${token}` },
+    // Use a short timeout so a slow backend doesn't stall auth handling.
+    signal: AbortSignal.timeout(3_000),
+  })
+  if (!res.ok) return []
+  const data = (await res.json()) as { hostnames?: string[] }
+  const hostnames = Array.isArray(data.hostnames) ? data.hostnames : []
+  _customOriginsCache = { hostnames, fetchedAt: now }
+  return hostnames
+}
+
 // OTP types supported by the backend
 type OTPType = "sign-in" | "email-verification" | "forget-password"
 
@@ -176,7 +204,6 @@ export const auth = betterAuth({
   // is the real isolation boundary. Note: better-auth matches host-only globs
   // (no "://") against the host *including the port*, so dev needs scheme+port
   // globs while prod (no port) can use bare host globs.
-  // TODO(P6): include verified custom-domain origins fetched from the backend.
   trustedOrigins: async (_request?: Request): Promise<string[]> => {
     const appEnv = getAppEnv()
     const isDev = appEnv === "dev"
@@ -204,6 +231,18 @@ export const auth = betterAuth({
     const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL
     if (appUrl) {
       origins.push(appUrl)
+    }
+
+    // Append verified custom-domain origins. Falls back silently if the token
+    // is unset or the internal endpoint is unreachable (fail-open for origins,
+    // not fail-closed — the real tenant isolation boundary is the backend RLS).
+    try {
+      const customHostnames = await fetchCustomOrigins()
+      for (const h of customHostnames) {
+        origins.push(`https://${h}`)
+      }
+    } catch {
+      // Ignore — the static origins above are still returned.
     }
 
     return origins
