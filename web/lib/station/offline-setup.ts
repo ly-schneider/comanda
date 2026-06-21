@@ -46,6 +46,7 @@ export interface QRConfig {
 export interface CatalogEntry {
   id: string
   name: string
+  image?: string | null
 }
 
 export interface ReadinessRecord {
@@ -133,7 +134,9 @@ async function loadCatalog(deps: SetupDeps): Promise<{ entries: CatalogEntry[]; 
   if (!res.ok) return null
   const body = (await res.json()) as { items?: ProductDTO[] }
   const products = body.items ?? []
-  const entries: CatalogEntry[] = products.map((p) => ({ id: p.id, name: p.name }))
+  // Carry the image URL too: the bytes are SW-precached separately, but the
+  // station needs the URL to render the scan card fully offline.
+  const entries: CatalogEntry[] = products.map((p) => ({ id: p.id, name: p.name, image: p.image ?? null }))
   await deps.store.set<CatalogEntry[]>(CATALOG_KEY, entries)
   return { entries, products }
 }

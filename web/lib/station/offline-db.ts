@@ -1,15 +1,17 @@
 /**
- * Station offline key-value store.
+ * Station offline IndexedDB: a small key-value store plus the redemption ledger.
  *
- * The signed-QR public key and the lightweight catalog must survive service
- * worker upgrades — the SW wipes Cache Storage on every version bump — so they
- * live in IndexedDB, which the SW never touches. Product images go to the SW
- * cache instead (see the precache ritual), so this store stays small JSON.
+ * Everything here must survive service worker upgrades — the SW wipes Cache
+ * Storage on every version bump — so it lives in IndexedDB, which the SW never
+ * touches. The KV store holds the signed-QR public key and the lightweight
+ * catalog; the ledger holds the append-only (orderId, productId) redemptions.
+ * Product image bytes go to the SW cache instead (see the precache ritual).
  */
 
 const DB_NAME = "comanda-station"
-const DB_VERSION = 1
+const DB_VERSION = 2
 const KV_STORE = "kv"
+export const LEDGER_STORE = "ledger"
 
 export interface StationKVStore {
   get<T>(key: string): Promise<T | null>
@@ -30,6 +32,11 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(KV_STORE)) {
         db.createObjectStore(KV_STORE)
       }
+      if (!db.objectStoreNames.contains(LEDGER_STORE)) {
+        // Compound key (orderId, productId): the dedup identity of a redemption,
+        // and what makes the store inherently append-once per item.
+        db.createObjectStore(LEDGER_STORE, { keyPath: ["orderId", "productId"] })
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -42,7 +49,7 @@ function openDB(): Promise<IDBDatabase> {
 // call re-opens cleanly.
 let dbPromise: Promise<IDBDatabase> | null = null
 
-function getDB(): Promise<IDBDatabase> {
+export function getStationDB(): Promise<IDBDatabase> {
   if (!dbPromise) {
     dbPromise = openDB()
       .then((db) => {
@@ -63,16 +70,33 @@ function getDB(): Promise<IDBDatabase> {
   return dbPromise
 }
 
-function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest): Promise<T> {
-  return getDB().then(
+export function stationHasIndexedDB(): boolean {
+  return hasIndexedDB()
+}
+
+/**
+ * Runs `run` inside a single-store transaction and resolves with the request
+ * result on commit. The store name is explicit so both the KV store and the
+ * ledger reuse the same connection and version.
+ */
+export function runStationTx<T>(
+  storeName: string,
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest
+): Promise<T> {
+  return getStationDB().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const transaction = db.transaction(KV_STORE, mode)
-        const request = run(transaction.objectStore(KV_STORE))
+        const transaction = db.transaction(storeName, mode)
+        const request = run(transaction.objectStore(storeName))
         transaction.oncomplete = () => resolve(request.result as T)
         transaction.onerror = () => reject(transaction.error)
       })
   )
+}
+
+function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest): Promise<T> {
+  return runStationTx<T>(KV_STORE, mode, run)
 }
 
 /**

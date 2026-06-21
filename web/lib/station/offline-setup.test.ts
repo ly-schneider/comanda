@@ -77,14 +77,14 @@ describe("runOfflineSetup", () => {
     expect(d.sw.precache).toHaveBeenCalledWith(["/station", "/_next/static/a.js", "https://r2.example/p1.png"])
   })
 
-  it("persists the public key, a lightweight catalog (no images), and the record", async () => {
+  it("persists the public key, a lightweight catalog (id, name, image url), and the record", async () => {
     const d = deps()
     await runOfflineSetup(d)
 
     expect(await d.store.get(QR_CONFIG_KEY)).toMatchObject({ publicKey: "PK", payloadVersion: 1 })
     expect(await d.store.get(CATALOG_KEY)).toEqual([
-      { id: "p1", name: "Pommes" },
-      { id: "p2", name: "Cola" },
+      { id: "p1", name: "Pommes", image: "https://r2.example/p1.png" },
+      { id: "p2", name: "Cola", image: null },
     ])
     const stored = (await d.store.get<ReadinessRecord>(READINESS_KEY))!
     expect(stored.ready).toBe(true)

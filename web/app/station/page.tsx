@@ -16,6 +16,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
+import { idbLedger, type StationLedger } from "@/lib/station/ledger"
+import { idbKVStore } from "@/lib/station/offline-db"
+import { CATALOG_KEY, type CatalogEntry, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
+import { verifyQrToken } from "@/lib/station/qr-verify"
+import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
 import { useStationSession } from "@/lib/station/use-station-session"
 import { parseScan } from "@/lib/station-scan"
 
@@ -50,7 +55,6 @@ type ScanResult = {
   scannedAt: Date
   orderId?: string
   lines: OrderLine[]
-  bundleParents?: Record<string, OrderLine>
 }
 
 type LineGroup = { key: string; parent: OrderLine; children: OrderLine[] }
@@ -187,6 +191,42 @@ export default function StationPage() {
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const bearerToken = token ?? ""
+
+  // Verification material + catalog and the connectivity flag are read through
+  // refs, not deps, so loading them never changes the scan-callback identity
+  // (which would restart the camera).
+  const offlineRef = useRef<{
+    publicKey: string | null
+    tenantId: string | null
+    catalog: Map<string, CatalogProduct>
+  }>({ publicKey: null, tenantId: null, catalog: new Map() })
+  const ledgerRef = useRef<StationLedger | null>(null)
+  if (!ledgerRef.current) ledgerRef.current = idbLedger()
+  const onlineRef = useRef(online)
+  useEffect(() => {
+    onlineRef.current = online
+  }, [online])
+
+  // Replay the public key, tenant id, and product catalog cached by the
+  // offline-setup ritual so a scan verifies and renders with zero network.
+  useEffect(() => {
+    if (!approved) return
+    let cancelled = false
+    void (async () => {
+      const store = idbKVStore()
+      const [cfg, catalog] = await Promise.all([
+        store.get<QRConfig>(QR_CONFIG_KEY).catch(() => null),
+        store.get<CatalogEntry[]>(CATALOG_KEY).catch(() => null),
+      ])
+      if (cancelled) return
+      const map = new Map<string, CatalogProduct>()
+      for (const entry of catalog ?? []) map.set(entry.id, { name: entry.name, image: entry.image })
+      offlineRef.current = { publicKey: cfg?.publicKey ?? null, tenantId: cfg?.tenantId ?? null, catalog: map }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [approved])
 
   useEffect(() => {
     if (!approved) {
@@ -358,12 +398,12 @@ export default function StationPage() {
       }
 
       const now = Date.now()
-      const last = recentScanIdsRef.current.get(parsed.id)
+      const last = recentScanIdsRef.current.get(parsed.token)
       if (last && now - last < DUPLICATE_SCAN_WINDOW_MS) {
         scheduleResume()
         return
       }
-      recentScanIdsRef.current.set(parsed.id, now)
+      recentScanIdsRef.current.set(parsed.token, now)
       if (recentScanIdsRef.current.size > 32) {
         const cutoff = now - DUPLICATE_SCAN_WINDOW_MS * 4
         recentScanIdsRef.current.forEach((t, k) => {
@@ -372,10 +412,10 @@ export default function StationPage() {
       }
 
       setError(null)
-      const key = `${parsed.id}-${now}`
+      const key = `${parsed.kind}-${now}`
       pushScan({
         key,
-        scanId: parsed.id,
+        scanId: parsed.token,
         kind: parsed.kind,
         status: "loading",
         scannedAt: new Date(),
@@ -392,7 +432,7 @@ export default function StationPage() {
               Authorization: `Bearer ${bearerToken}`,
               "Idempotency-Key": idem,
             },
-            body: JSON.stringify({ claimToken: parsed.id }),
+            body: JSON.stringify({ claimToken: parsed.token }),
           })
           type Problem = { detail?: string; message?: string }
           if (!res.ok) {
@@ -453,54 +493,70 @@ export default function StationPage() {
           return
         }
 
-        const orderRes = await fetch(`/api/v1/orders/${encodeURIComponent(parsed.id)}`, {
-          headers: { Authorization: `Bearer ${bearerToken}` },
+        const offline = offlineRef.current
+        if (!offline.publicKey || !offline.tenantId) {
+          updateScan(key, { status: "error", message: "Offline-Einrichtung erforderlich" })
+          playScanSound("error")
+          scheduleResume()
+          return
+        }
+
+        const result = await redeemScan(parsed.token, {
+          verify: (t) => verifyQrToken(t, offline.publicKey),
+          stationTenantId: offline.tenantId,
+          assignedProductIds,
+          catalog: offline.catalog,
+          ledger: ledgerRef.current!,
+          online: onlineRef.current,
+          persist: (orderId) => fireRedeem(orderId),
+          now: () => Date.now(),
         })
-        type Problem = { detail?: string }
-        if (!orderRes.ok) {
-          const j = (await orderRes.json().catch(() => ({}))) as Problem
-          throw new Error(j.detail || `Fehler ${orderRes.status}`)
-        }
-        const orderData = (await orderRes.json()) as { id: string; lines?: OrderLine[] }
-        const allLines = orderData.lines || []
-        const matchedBundleIds = new Set(
-          allLines.filter((l) => assignedProductIds.has(l.productId) && l.lineType === "bundle").map((l) => l.id)
-        )
-        const stationLines = allLines.filter(
-          (l) =>
-            (assignedProductIds.has(l.productId) && l.lineType !== "bundle") ||
-            (l.parentLineId != null && matchedBundleIds.has(l.parentLineId))
-        )
-        const referencedParentIds = new Set<string>()
-        for (const l of stationLines) {
-          if (l.parentLineId) referencedParentIds.add(l.parentLineId)
-        }
-        const bundleParents: Record<string, OrderLine> = {}
-        for (const l of allLines) {
-          if (referencedParentIds.has(l.id)) bundleParents[l.id] = l
-        }
-        const unredeemed = stationLines.filter((l) => !l.redemption)
-        let nextStatus: ScanStatus
-        if (stationLines.length === 0) {
-          nextStatus = "no-items"
-        } else if (unredeemed.length === 0) {
-          nextStatus = "already-redeemed"
-        } else {
-          nextStatus = "success"
-        }
 
-        if (nextStatus === "success") {
-          fireRedeem(orderData.id)
-          const redeemedAt = new Date().toISOString()
-          const optimisticLines = stationLines.map((l) =>
-            l.redemption ? l : { ...l, redemption: { id: l.id, redeemedAt } }
-          )
-          updateScan(key, { status: nextStatus, orderId: orderData.id, lines: optimisticLines, bundleParents })
-        } else {
-          updateScan(key, { status: nextStatus, orderId: orderData.id, lines: stationLines, bundleParents })
-        }
+        const toLines = (orderId: string, views: RedeemLineView[]): OrderLine[] =>
+          views.map((v) => ({
+            id: `${orderId}:${v.productId}`,
+            orderId,
+            productId: v.productId,
+            title: v.title,
+            quantity: v.quantity,
+            unitPriceCents: 0,
+            productImage: v.productImage,
+            redemption:
+              v.redeemedAt != null
+                ? { id: `${orderId}:${v.productId}`, redeemedAt: new Date(v.redeemedAt).toISOString() }
+                : null,
+          }))
 
-        playScanSound(nextStatus === "success" ? "success" : "warning")
+        switch (result.kind) {
+          case "invalid":
+            updateScan(key, { status: "error", message: "Ungültiger Code" })
+            playScanSound("error")
+            break
+          case "wrong-event":
+            updateScan(key, { status: "error", message: "Falscher Event" })
+            playScanSound("error")
+            break
+          case "not-for-stand":
+            updateScan(key, { status: "no-items" })
+            playScanSound("warning")
+            break
+          case "already-redeemed":
+            updateScan(key, {
+              status: "already-redeemed",
+              orderId: result.orderId,
+              lines: toLines(result.orderId, result.lines),
+            })
+            playScanSound("warning")
+            break
+          case "redeemed":
+            updateScan(key, {
+              status: "success",
+              orderId: result.orderId,
+              lines: toLines(result.orderId, result.lines),
+            })
+            playScanSound("success")
+            break
+        }
         scheduleResume()
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : "Scan fehlgeschlagen"

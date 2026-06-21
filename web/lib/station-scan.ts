@@ -1,10 +1,12 @@
 export const ENTITY_ID_RE = /^[1-9A-HKMNP-Za-hkmnp-z_-]{12}$/
 
 const CAMPAIGN_PREFIX = "CAMP:"
-// Anchored to /o/<id> at end-of-string so it won’t match 12-char substrings inside hostnames.
-const ORDER_URL_RE = /\/o\/([1-9A-HKMNP-Za-hkmnp-z_-]{12})\/?$/
 
-export type ParsedScan = { kind: "order" | "campaign"; id: string }
+// `campaign` claims still redeem online (they need the server's redemption
+// counter). `order` carries the self-contained signed pickup token verbatim —
+// offline Ed25519 verification decides whether it is genuine, so anything that
+// isn't a campaign claim is routed here as an order-token candidate.
+export type ParsedScan = { kind: "campaign"; token: string } | { kind: "order"; token: string }
 
 export function parseScan(raw: string): ParsedScan | null {
   const trimmed = (raw ?? "").trim()
@@ -12,11 +14,8 @@ export function parseScan(raw: string): ParsedScan | null {
 
   if (trimmed.toUpperCase().startsWith(CAMPAIGN_PREFIX)) {
     const token = trimmed.slice(CAMPAIGN_PREFIX.length).trim()
-    return ENTITY_ID_RE.test(token) ? { kind: "campaign", id: token } : null
+    return ENTITY_ID_RE.test(token) ? { kind: "campaign", token } : null
   }
 
-  const orderId = trimmed.match(ORDER_URL_RE)?.[1]
-  if (orderId) return { kind: "order", id: orderId }
-
-  return ENTITY_ID_RE.test(trimmed) ? { kind: "order", id: trimmed } : null
+  return { kind: "order", token: trimmed }
 }
