@@ -36,9 +36,52 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          # Appended to the reviewer's system prompt so it applies for the whole
+          # review regardless of how the slash command is processed. Keep this in
+          # sync with the prose in .github/claude-review-guidelines.md.
+          claude_args:
+            "--append-system-prompt 'Project review context for Comanda, a
+            multi-tenant ordering platform running as one tenant on a shared
+            Hetzner K3s cluster. Apply this on every review.
+
+            STACK: Go + Ent + Chi backend (Clean Architecture, Uber FX DI) on
+            Postgres, with Row-Level Security as the tenant-isolation boundary;
+            Next.js 16 / React 19 web using Better Auth and host-based tenant
+            resolution (proxy.ts is the active middleware, not middleware.ts);
+            a single neutral Kotlin Android POS app with dynamic in-app
+            branding; infra is Hetzner K3s via ArgoCD gitops with images pinned
+            by commit SHA (no Azure).
+
+            SECURITY INVARIANTS, treat any violation as a blocking finding:
+            (1) RLS is THE isolation boundary, with two DB roles, a privileged
+            owner that bypasses RLS for migrations and an RLS-scoped app role
+            for request traffic; every request runs a single pgx transaction
+            that sets app.tenant_id via set_config before any query.
+            (2) Every tenant-scoped table must have an RLS policy and no query
+            path may read or write across tenants.
+            (3) Payment provider secrets (Payrexx) are AES-256-GCM encrypted
+            with the master key from Doppler; only ciphertext is stored, never
+            plaintext.
+            (4) Webhooks are routed per tenant via a tenant token in the path,
+            because verifying against the wrong tenant misattributes payments.
+
+            METHOD: explain the why behind every finding, not just the what; tie
+            each finding to one of these invariants or to a concrete
+            correctness, security, or data-loss risk; match each sub-project
+            existing conventions instead of imposing new ones; flag missing RLS
+            tests or cross-tenant leak risk on any change to data access.
+
+            COMMENT POLICY, enforce strictly: flag every code comment that
+            merely restates what the code already says, narrates the steps, or
+            labels an obvious block. A comment is justified only when it
+            explains something that cannot be read from the code itself, namely
+            a non-obvious why, a gotcha, an external constraint, or a subtle
+            invariant. Prefer clear names over explanatory comments; when in
+            doubt the comment should be removed. Also flag transitional or
+            historical comments and leftover ticket references such as LEY-000,
+            since code should read as if the feature was always there.'"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
-
