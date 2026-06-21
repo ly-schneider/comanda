@@ -68,6 +68,7 @@ func main() {
 			app.SetupSentry,
 			app.SeedProviderCredentials,
 			app.EnsureBootstrapQRKey,
+			app.StartDomainVerifier,
 			app.StartHTTPServer,
 		),
 	).Run()
