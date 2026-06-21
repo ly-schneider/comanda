@@ -3,11 +3,12 @@
  *
  * Verification and the local ledger are always the on-device source of truth:
  * decode + Ed25519-verify, enforce tenant scoping, match this station's
- * assigned products, dedup against the append-only ledger, then write it. The
- * server write is the only online/offline difference — online persists
- * immediately; offline the ledger stands alone until a later sync flush.
+ * assigned products, dedup against the append-only ledger, then write it. Every
+ * fresh redemption is also enqueued for an idempotent server write; the only
+ * online/offline difference is when that queue is flushed (immediately when
+ * online, opportunistically otherwise), which lives in the sync flusher.
  *
- * Pure orchestration with injected effects (verify, ledger, persist) so every
+ * Pure orchestration with injected effects (verify, ledger, enqueue) so every
  * rejection branch is unit-testable without a browser.
  */
 
@@ -41,9 +42,12 @@ export interface RedeemDeps {
   assignedProductIds: Set<string>
   catalog: Map<string, CatalogProduct>
   ledger: StationLedger
-  online: boolean
-  /** Online direct-save; the offline sync flush is wired separately. */
-  persist: (orderId: string, productIds: string[]) => void
+  /**
+   * Queues a fresh redemption for an idempotent server write. Always called on
+   * a redemption; the online/offline timing of the actual upload is the
+   * flusher's concern, not this orchestration's.
+   */
+  enqueue: (orderId: string, productIds: string[], tenantId: string) => Promise<void>
   now: () => number
 }
 
@@ -90,11 +94,11 @@ export async function redeemScan(token: string, deps: RedeemDeps): Promise<Redee
     })
   }
 
-  if (deps.online)
-    deps.persist(
-      payload.o,
-      fresh.map((l) => l.p)
-    )
+  await deps.enqueue(
+    payload.o,
+    fresh.map((l) => l.p),
+    payload.t
+  )
 
   const lines = views.map((v) => (v.redeemedAt != null ? v : { ...v, redeemedAt }))
   return { kind: "redeemed", orderId: payload.o, lines }

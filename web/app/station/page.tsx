@@ -21,6 +21,8 @@ import { idbKVStore } from "@/lib/station/offline-db"
 import { CATALOG_KEY, type CatalogEntry, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
+import { flushOutbox } from "@/lib/station/sync"
+import { idbOutbox, type StationOutbox } from "@/lib/station/sync-queue"
 import { useStationSession } from "@/lib/station/use-station-session"
 import { parseScan } from "@/lib/station-scan"
 
@@ -202,10 +204,14 @@ export default function StationPage() {
   }>({ publicKey: null, tenantId: null, catalog: new Map() })
   const ledgerRef = useRef<StationLedger | null>(null)
   if (!ledgerRef.current) ledgerRef.current = idbLedger()
-  const onlineRef = useRef(online)
+  const outboxRef = useRef<StationOutbox | null>(null)
+  if (!outboxRef.current) outboxRef.current = idbOutbox()
+  // Read through a ref so a token refresh never rebuilds the scan callbacks
+  // (which would restart the camera); the sync flush reads the latest value.
+  const tokenRef = useRef(bearerToken)
   useEffect(() => {
-    onlineRef.current = online
-  }, [online])
+    tokenRef.current = bearerToken
+  }, [bearerToken])
 
   // Replay the public key, tenant id, and product catalog cached by the
   // offline-setup ritual so a scan verifies and renders with zero network.
@@ -371,21 +377,42 @@ export default function StationPage() {
     setScans((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)))
   }, [])
 
-  const fireRedeem = useCallback(
-    (orderId: string) => {
-      const idem = `idem_${Date.now()}_${Math.random().toString(36).slice(2)}`
-      fetch(`/api/v1/stations/redeem`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${bearerToken}`,
-          "Idempotency-Key": idem,
-        },
-        body: JSON.stringify({ orderId }),
-      }).catch(() => {})
+  // Drains queued redemptions to the server. A no-op when offline; the flush
+  // itself is idempotent and re-entrancy-safe, so firing it on every trigger
+  // (scan, reconnect, interval) is cheap.
+  const triggerFlush = useCallback(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return
+    void flushOutbox({
+      outbox: outboxRef.current!,
+      fetch: (input, init) => fetch(input, init),
+      token: () => tokenRef.current || null,
+      now: () => Date.now(),
+    })
+  }, [])
+
+  // Queue first (durable before we report success), then flush — immediate when
+  // online, deferred to a later trigger when offline.
+  const handleEnqueue = useCallback(
+    async (orderId: string, productIds: string[], tenantId: string) => {
+      await outboxRef.current!.enqueue({ orderId, productIds, tenantId }, Date.now())
+      triggerFlush()
     },
-    [bearerToken]
+    [triggerFlush]
   )
+
+  // Flush on mount and whenever connectivity returns; the interval retries
+  // items still in backoff after a failed upload.
+  useEffect(() => {
+    if (!approved) return
+    triggerFlush()
+    const onOnline = () => triggerFlush()
+    window.addEventListener("online", onOnline)
+    const interval = setInterval(triggerFlush, 30_000)
+    return () => {
+      window.removeEventListener("online", onOnline)
+      clearInterval(interval)
+    }
+  }, [approved, triggerFlush])
 
   const handleScanned = useCallback(
     async (code: string) => {
@@ -507,8 +534,7 @@ export default function StationPage() {
           assignedProductIds,
           catalog: offline.catalog,
           ledger: ledgerRef.current!,
-          online: onlineRef.current,
-          persist: (orderId) => fireRedeem(orderId),
+          enqueue: handleEnqueue,
           now: () => Date.now(),
         })
 
@@ -565,7 +591,7 @@ export default function StationPage() {
         scheduleResume()
       }
     },
-    [assignedProductIds, bearerToken, fireRedeem, pushScan, scheduleResume, updateScan]
+    [assignedProductIds, bearerToken, handleEnqueue, pushScan, scheduleResume, updateScan]
   )
 
   const handleDecoded = useCallback(

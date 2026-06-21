@@ -1,17 +1,20 @@
 /**
- * Station offline IndexedDB: a small key-value store plus the redemption ledger.
+ * Station offline IndexedDB: a small key-value store, the redemption ledger,
+ * and the server-sync outbox.
  *
  * Everything here must survive service worker upgrades — the SW wipes Cache
  * Storage on every version bump — so it lives in IndexedDB, which the SW never
  * touches. The KV store holds the signed-QR public key and the lightweight
- * catalog; the ledger holds the append-only (orderId, productId) redemptions.
+ * catalog; the ledger holds the append-only (orderId, productId) redemptions;
+ * the outbox holds redemptions still pending an idempotent server write.
  * Product image bytes go to the SW cache instead (see the precache ritual).
  */
 
 const DB_NAME = "comanda-station"
-const DB_VERSION = 2
+const DB_VERSION = 3
 const KV_STORE = "kv"
 export const LEDGER_STORE = "ledger"
+export const OUTBOX_STORE = "outbox"
 
 export interface StationKVStore {
   get<T>(key: string): Promise<T | null>
@@ -36,6 +39,12 @@ function openDB(): Promise<IDBDatabase> {
         // Compound key (orderId, productId): the dedup identity of a redemption,
         // and what makes the store inherently append-once per item.
         db.createObjectStore(LEDGER_STORE, { keyPath: ["orderId", "productId"] })
+      }
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+        // Keyed by orderId: the server redeems every station-assigned line of an
+        // order in one idempotent call, so there is at most one outbox row per
+        // order and re-enqueueing the same order coalesces rather than duplicates.
+        db.createObjectStore(OUTBOX_STORE, { keyPath: "orderId" })
       }
     }
     req.onsuccess = () => resolve(req.result)
