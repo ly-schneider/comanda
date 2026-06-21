@@ -117,9 +117,16 @@ func (m *TenantMiddleware) resolve(ctx context.Context, r *http.Request) (resolu
 	host := requestHost(r)
 
 	// (2) Host -> tenant via tenant_domain (privileged: no GUC set yet).
+	// Only verified rows resolve: a BYO custom domain must prove ownership
+	// (CNAME + TXT) before it routes, otherwise a tenant could claim a host it
+	// does not control and have traffic attributed to it. Platform-assigned
+	// hosts are verified by construction (see the backfill migration).
 	if host != "" {
 		d, err := m.privileged.TenantDomain.Query().
-			Where(tenantdomain.HostnameEQ(host)).
+			Where(
+				tenantdomain.HostnameEQ(host),
+				tenantdomain.VerifiedAtNotNil(),
+			).
 			Only(ctx)
 		if err == nil {
 			return resolution{tenantID: d.TenantID, hasTenant: true}, nil
