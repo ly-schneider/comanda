@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -94,6 +94,7 @@ jobs:
             invariant. Prefer clear names. Flag transitional or historical
             comments and leftover ticket or phase references (LEY-000, (P4),
             TODO(P#)) in new or edited code; code should read as if the feature
-            was always there.'"
+            was always there.'
+            --allowedTools 'mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)'"
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
