@@ -1,4 +1,4 @@
-h1:6imkMzZeTJ1zZZXhAOPL+5nGYKgQCLMKMUVZfPvAsRk=
+h1:dKF06giwfCKUKjwvRYUiblNEeKxeH1tjmqlYyb86Qlg=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -16,3 +16,4 @@ h1:6imkMzZeTJ1zZZXhAOPL+5nGYKgQCLMKMUVZfPvAsRk=
 20260614000000_qr_ed25519_signing.sql h1:4V6eWS9rm4cRmFkiXuXmE3VEMIx2U9pz1h/Juf4PxEE=
 20260616000000_add_domain_verification_token.sql h1:QOqMVYvCPCFMhelNZtcwV4VPutq3pGUciD0uVMUBFWI=
 20260617000000_verify_platform_assigned_domains.sql h1:i95pDMTnSKOwcfJWewrIaZ2mxs5MxMH4Y/QR8YOCBYs=
+20260622000000_branding_secondary_font_radius.sql h1:OAq3ByFHZibg2FLiZxNVv2VOpDgN92vHIwI4XsCQOnc=

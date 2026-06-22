@@ -68,8 +68,11 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 			DisplayName:     body.DisplayName,
 			ColorPrimary:    body.ColorPrimary,
 			ColorPrimaryFg:  body.ColorPrimaryForeground,
+			ColorSecondary:  body.ColorSecondary,
 			ColorBackground: body.ColorBackground,
 			ColorForeground: body.ColorForeground,
+			FontKey:         body.FontKey,
+			RadiusKey:       body.RadiusKey,
 			ContactEmail:    body.ContactEmail,
 			ContactPhone:    body.ContactPhone,
 			LegalName:       body.LegalName,
@@ -123,8 +126,11 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 		FaviconUrl:             e.FaviconURL,
 		ColorPrimary:           ptr(e.ColorPrimary),
 		ColorPrimaryForeground: ptr(e.ColorPrimaryForeground),
+		ColorSecondary:         ptr(e.ColorSecondary),
 		ColorBackground:        ptr(e.ColorBackground),
 		ColorForeground:        ptr(e.ColorForeground),
+		FontKey:                ptr(e.FontKey),
+		RadiusKey:              ptr(e.RadiusKey),
 		ContactEmail:           e.ContactEmail,
 		ContactPhone:           e.ContactPhone,
 		LegalName:              e.LegalName,
@@ -156,8 +162,11 @@ func brandingPresent(b *generated.SettingsUpdate) bool {
 	return b.DisplayName != nil ||
 		b.ColorPrimary != nil ||
 		b.ColorPrimaryForeground != nil ||
+		b.ColorSecondary != nil ||
 		b.ColorBackground != nil ||
 		b.ColorForeground != nil ||
+		b.FontKey != nil ||
+		b.RadiusKey != nil ||
 		b.ContactEmail != nil ||
 		b.ContactPhone != nil ||
 		b.LegalName != nil ||

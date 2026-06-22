@@ -38,10 +38,19 @@ Settings:
       description: Hex color "#RRGGBB" or "#RRGGBBAA"
     colorPrimaryForeground:
       type: string
+    colorSecondary:
+      type: string
+      description: Supporting accent color (hex)
     colorBackground:
       type: string
     colorForeground:
       type: string
+    fontKey:
+      type: string
+      description: Curated font key (allow-listed)
+    radiusKey:
+      type: string
+      description: Corner style key (none | rounded | pill)
     contactEmail:
       type: string
       nullable: true
@@ -88,9 +97,15 @@ SettingsUpdate:
       type: string
     colorPrimaryForeground:
       type: string
+    colorSecondary:
+      type: string
     colorBackground:
       type: string
     colorForeground:
+      type: string
+    fontKey:
+      type: string
+    radiusKey:
       type: string
     contactEmail:
       type: string
@@ -114,7 +129,7 @@ SettingsUpdate:
 
 Branding:
   type: object
-  required: [displayName, colors, contact, legal, currency]
+  required: [displayName, colors, contact, legal, currency, fontKey, radiusKey]
   properties:
     displayName:
       type: string
@@ -126,6 +141,12 @@ Branding:
       nullable: true
     colors:
       $ref: "#/BrandingColors"
+    fontKey:
+      type: string
+      description: Curated font key (allow-listed)
+    radiusKey:
+      type: string
+      description: Corner style key (none | rounded | pill)
     contact:
       $ref: "#/BrandingContact"
     legal:
@@ -135,11 +156,13 @@ Branding:
 
 BrandingColors:
   type: object
-  required: [primary, primaryForeground, background, foreground]
+  required: [primary, primaryForeground, secondary, background, foreground]
   properties:
     primary:
       type: string
     primaryForeground:
+      type: string
+    secondary:
       type: string
     background:
       type: string
