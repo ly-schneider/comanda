@@ -72,6 +72,16 @@ export default function ManageTenantPage() {
     )
   }
 
+  // The tenant's own admin lives on its subdomain, derived from the platform
+  // host the operator is on (env-agnostic: localhost / staging / prod).
+  const tenantBaseUrl =
+    typeof window !== "undefined" ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
+  const onboardingSteps = [
+    { label: "Branding einrichten", href: `${tenantBaseUrl}/admin/branding` },
+    { label: "Payrexx verbinden", href: `${tenantBaseUrl}/admin/settings` },
+    { label: "Eigene Domain", href: `${tenantBaseUrl}/admin/domains` },
+  ]
+
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
@@ -114,6 +124,35 @@ export default function ManageTenantPage() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Onboarding</CardTitle>
+          <p className="text-muted-foreground text-sm">Im Admin des Tenants abschliessen.</p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {onboardingSteps.map((step) => (
+            <a
+              key={step.href}
+              href={step.href}
+              target="_blank"
+              rel="noreferrer"
+              className="border-border hover:bg-accent flex items-center justify-between rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-colors"
+            >
+              <span>{step.label}</span>
+              <span className="text-muted-foreground">↗</span>
+            </a>
+          ))}
+          <a
+            href={`${tenantBaseUrl}/food`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground inline-block pt-1 text-sm underline-offset-4 hover:underline"
+          >
+            Storefront öffnen ↗
+          </a>
         </CardContent>
       </Card>
     </div>
