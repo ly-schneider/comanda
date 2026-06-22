@@ -27,7 +27,6 @@ func (h *Handlers) requirePlatformContext(w http.ResponseWriter, r *http.Request
 	return true
 }
 
-// ListTenants returns every tenant. (GET /platform/tenants)
 func (h *Handlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 	if !h.requirePlatformContext(w, r) {
 		return
@@ -44,7 +43,6 @@ func (h *Handlers) ListTenants(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-// CreateTenant provisions a new tenant. (POST /platform/tenants)
 func (h *Handlers) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	if !h.requirePlatformContext(w, r) {
 		return
@@ -71,7 +69,6 @@ func (h *Handlers) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusCreated, toAPITenant(created))
 }
 
-// GetTenant returns one tenant. (GET /platform/tenants/{tenantId})
 func (h *Handlers) GetTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if !h.requirePlatformContext(w, r) {
 		return
@@ -84,7 +81,6 @@ func (h *Handlers) GetTenant(w http.ResponseWriter, r *http.Request, tenantID st
 	response.WriteJSON(w, http.StatusOK, toAPITenant(t))
 }
 
-// UpdateTenant activates or suspends a tenant. (PATCH /platform/tenants/{tenantId})
 func (h *Handlers) UpdateTenant(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if !h.requirePlatformContext(w, r) {
 		return

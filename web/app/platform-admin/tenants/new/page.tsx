@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,12 @@ export default function NewTenantPage() {
   const [name, setName] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The new tenant's subdomain is <slug> under the platform host the operator is
+  // on, so the preview stays correct across dev / staging / prod.
+  const [platformHost, setPlatformHost] = useState("")
+  useEffect(() => {
+    setPlatformHost(window.location.host)
+  }, [])
 
   async function submit() {
     setError(null)
@@ -79,7 +85,9 @@ export default function NewTenantPage() {
               placeholder="acme"
               maxLength={63}
             />
-            <p className="text-muted-foreground text-xs">Subdomain: {slug || "<slug>"}.comanda.leys.ch</p>
+            <p className="text-muted-foreground text-xs">
+              Subdomain: {slug || "<slug>"}.{platformHost || "…"}
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => router.back()} disabled={saving}>

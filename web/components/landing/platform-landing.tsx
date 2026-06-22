@@ -2,7 +2,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 // Minimal, informational landing for the platform host (comanda.leys.ch).
-// No self-serve signup (deferred) — login + a request-access contact link.
 export function PlatformLanding() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-20 text-center">

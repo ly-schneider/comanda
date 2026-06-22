@@ -17,5 +17,4 @@ const ibmPlexSans = IBM_Plex_Sans({
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono", display: "swap" })
 const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap" })
 
-// Space-joined className that registers every curated font variable on <html>.
 export const FONT_VARS = [inter, geist, spaceGrotesk, ibmPlexSans, jetbrainsMono, lora].map((f) => f.variable).join(" ")
