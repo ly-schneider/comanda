@@ -1,18 +1,13 @@
 import "styles/tailwind.css"
 import type { Metadata } from "next"
-import { Golos_Text } from "next/font/google"
 import AnalyticsWrapper from "@/components/analytics-wrapper"
 import { AuthProvider } from "@/contexts/auth-context"
 import { TenantBrandingProvider } from "@/contexts/branding-context"
+import { buildThemeCss } from "@/lib/branding-theme"
+import { FONT_VARS } from "@/lib/fonts"
 import { getBranding } from "@/lib/server/branding"
 
 export const dynamic = "force-dynamic"
-
-const golosText = Golos_Text({
-  weight: ["500"],
-  subsets: ["latin"],
-  variable: "--font-golos-text",
-})
 
 // noindex for staging/dev is set at runtime via X-Robots-Tag in proxy.ts.
 export async function generateMetadata(): Promise<Metadata> {
@@ -39,28 +34,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const branding = await getBranding()
-  const { primary, primaryForeground, background, foreground } = branding.colors
 
-  // Hex color values from backend are validated (/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/)
-  // so interpolating them into a CSS string is safe.
-  const themeStyle = [
-    ":root,",
-    ".dark {",
-    `  --primary: ${primary};`,
-    `  --primary-hover: ${primary};`,
-    `  --primary-foreground: ${primaryForeground};`,
-    `  --background: ${background};`,
-    `  --foreground: ${foreground};`,
-    `  --ring: ${primary};`,
-    `  --chart-1: ${primary};`,
-    `  --sidebar-accent: ${primary};`,
-    `  --sidebar-accent-foreground: ${primaryForeground};`,
-    `  --sidebar-ring: ${primary};`,
-    "}",
-  ].join("\n")
+  // Per-tenant accents, font, and corner radii injected over the fixed white
+  // base. Values are backend-validated hex / allow-listed keys (see buildThemeCss).
+  const themeStyle = buildThemeCss(branding)
 
   return (
-    <html lang="de" className={golosText.variable}>
+    <html lang="de" className={FONT_VARS}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: themeStyle }} />
       </head>

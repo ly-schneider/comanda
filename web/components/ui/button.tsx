@@ -9,15 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-background rounded-[7px] hover:bg-primary-hover cursor-pointer",
-        primary: "bg-primary text-primary-background rounded-[9999px] hover:bg-primary-hover",
-        destructive: "bg-destructive text-white rounded-[7px] hover:bg-destructive-hover",
-        success: "bg-success text-success-foreground rounded-[7px] hover:bg-success-hover",
+        default:
+          "bg-primary text-primary-foreground rounded-[var(--radius-control)] hover:bg-primary-hover cursor-pointer",
+        primary: "bg-primary text-primary-foreground rounded-[var(--radius-cta)] hover:bg-primary-hover",
+        destructive: "bg-destructive text-white rounded-[var(--radius-control)] hover:bg-destructive-hover",
+        success: "bg-success text-success-foreground rounded-[var(--radius-control)] hover:bg-success-hover",
         outline:
-          "border border-border bg-card text-card-foreground rounded-[7px] hover:bg-accent-hover hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground rounded-[7px] hover:bg-secondary-hover",
-        selected: "bg-selected text-primary-foreground rounded-[7px] hover:bg-selected-hover",
-        ghost: "hover:bg-accent-hover hover:text-accent-foreground rounded-[7px]",
+          "border border-border bg-card text-card-foreground rounded-[var(--radius-control)] hover:bg-accent-hover hover:text-accent-foreground",
+        secondary: "bg-secondary text-secondary-foreground rounded-[var(--radius-control)] hover:bg-secondary-hover",
+        selected: "bg-selected text-primary-foreground rounded-[var(--radius-control)] hover:bg-selected-hover",
+        ghost: "hover:bg-accent-hover hover:text-accent-foreground rounded-[var(--radius-control)]",
         link: "text-primary underline-offset-4 hover:underline !p-0",
       },
       size: {

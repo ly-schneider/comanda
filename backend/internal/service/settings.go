@@ -33,6 +33,20 @@ var (
 	currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 )
 
+// allowedFontKeys / allowedRadiusKeys gate the curated branding choices. The web
+// maps each key to a constant (a next/font variable, a radius value); the raw
+// string never reaches the CSS-var injection, so the allow-list is the security
+// boundary. Keep in sync with web/lib/fonts.ts and the corner-style picker.
+var (
+	allowedFontKeys = map[string]struct{}{
+		"inter": {}, "geist": {}, "space-grotesk": {},
+		"ibm-plex-sans": {}, "jetbrains-mono": {}, "lora": {},
+	}
+	allowedRadiusKeys = map[string]struct{}{
+		"none": {}, "rounded": {}, "pill": {},
+	}
+)
+
 // BrandingView is the resolved public branding for a tenant. DisplayName is
 // already resolved (settings.display_name, else tenant name). Nil string fields
 // map to JSON null.
@@ -42,8 +56,11 @@ type BrandingView struct {
 	FaviconURL             *string
 	ColorPrimary           string
 	ColorPrimaryForeground string
+	ColorSecondary         string
 	ColorBackground        string
 	ColorForeground        string
+	FontKey                string
+	RadiusKey              string
 	ContactEmail           *string
 	ContactPhone           *string
 	LegalName              *string
@@ -53,14 +70,17 @@ type BrandingView struct {
 }
 
 // PlatformBrandingDefaults is the neutral branding returned on a platform host
-// (no tenant). It never touches the database.
+// (no tenant). It never touches the database; it mirrors the fixed white base.
 func PlatformBrandingDefaults() *BrandingView {
 	return &BrandingView{
 		DisplayName:            "Comanda",
-		ColorPrimary:           "#f87778",
-		ColorPrimaryForeground: "#fdfdfd",
-		ColorBackground:        "#e9e7e6",
-		ColorForeground:        "#000000",
+		ColorPrimary:           "#0a0a0a",
+		ColorPrimaryForeground: "#ffffff",
+		ColorSecondary:         "#f5f5f5",
+		ColorBackground:        "#ffffff",
+		ColorForeground:        "#0a0a0a",
+		FontKey:                "inter",
+		RadiusKey:              "rounded",
 		Currency:               "CHF",
 	}
 }
@@ -74,8 +94,11 @@ type BrandingInput struct {
 	FaviconURL      *string
 	ColorPrimary    *string
 	ColorPrimaryFg  *string
+	ColorSecondary  *string
 	ColorBackground *string
 	ColorForeground *string
+	FontKey         *string
+	RadiusKey       *string
 	ContactEmail    *string
 	ContactPhone    *string
 	LegalName       *string
@@ -209,13 +232,23 @@ func validateBrandingColor(v *string) error {
 }
 
 func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) error {
-	for _, c := range []*string{in.ColorPrimary, in.ColorPrimaryFg, in.ColorBackground, in.ColorForeground} {
+	for _, c := range []*string{in.ColorPrimary, in.ColorPrimaryFg, in.ColorSecondary, in.ColorBackground, in.ColorForeground} {
 		if err := validateBrandingColor(c); err != nil {
 			return err
 		}
 	}
 	if in.Currency != nil && !currencyPattern.MatchString(*in.Currency) {
 		return ErrInvalidBranding
+	}
+	if in.FontKey != nil {
+		if _, ok := allowedFontKeys[*in.FontKey]; !ok {
+			return ErrInvalidBranding
+		}
+	}
+	if in.RadiusKey != nil {
+		if _, ok := allowedRadiusKeys[*in.RadiusKey]; !ok {
+			return ErrInvalidBranding
+		}
 	}
 
 	return s.settings.UpdateBranding(ctx, repository.BrandingUpdate{
@@ -224,8 +257,11 @@ func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) 
 		FaviconURL:             in.FaviconURL,
 		ColorPrimary:           in.ColorPrimary,
 		ColorPrimaryForeground: in.ColorPrimaryFg,
+		ColorSecondary:         in.ColorSecondary,
 		ColorBackground:        in.ColorBackground,
 		ColorForeground:        in.ColorForeground,
+		FontKey:                in.FontKey,
+		RadiusKey:              in.RadiusKey,
 		ContactEmail:           in.ContactEmail,
 		ContactPhone:           in.ContactPhone,
 		LegalName:              in.LegalName,
@@ -264,8 +300,11 @@ func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error
 		FaviconURL:             e.FaviconURL,
 		ColorPrimary:           e.ColorPrimary,
 		ColorPrimaryForeground: e.ColorPrimaryForeground,
+		ColorSecondary:         e.ColorSecondary,
 		ColorBackground:        e.ColorBackground,
 		ColorForeground:        e.ColorForeground,
+		FontKey:                e.FontKey,
+		RadiusKey:              e.RadiusKey,
 		ContactEmail:           e.ContactEmail,
 		ContactPhone:           e.ContactPhone,
 		LegalName:              e.LegalName,

@@ -45,8 +45,17 @@ export async function proxy(request: NextRequest) {
     })
   }
 
+  // The platform-admin control plane lives only on the platform host; on a
+  // tenant or custom-domain host it does not exist, so bounce to the storefront.
+  if (pathname.startsWith("/platform-admin") && tenantResult.type !== "platform") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    url.search = ""
+    return NextResponse.redirect(url)
+  }
+
   // Checkout and Orders are intentionally NOT protected to allow guest flows
-  const protectedPrefixes = ["/profile", "/admin"]
+  const protectedPrefixes = ["/profile", "/admin", "/platform-admin"]
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p))
   if (isProtected) {
     // Check for Better Auth session cookie (secure prefix in prod, without in dev)

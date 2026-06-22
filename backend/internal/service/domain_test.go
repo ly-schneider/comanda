@@ -96,6 +96,8 @@ func TestValidateHostname(t *testing.T) {
 	invalid := []string{
 		"",                   // empty
 		"nodot",              // single label
+		"localhost",          // single label, no dot
+		"127.0.0.1",          // IP literal, not issuable by a public CA
 		"-bad.example.com",   // leading hyphen
 		"bad-.example.com",   // trailing hyphen
 		"sp ace.example.com", // space

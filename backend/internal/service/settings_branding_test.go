@@ -87,9 +87,15 @@ func TestUpdateBrandingValidation(t *testing.T) {
 		{"missing hash", BrandingInput{ColorPrimary: strptr("A1B2C3")}, true},
 		{"too short", BrandingInput{ColorPrimary: strptr("#ABC")}, true},
 		{"non-hex char", BrandingInput{ColorBackground: strptr("#GGGGGG")}, true},
+		{"valid secondary hex", BrandingInput{ColorSecondary: strptr("#FF8800")}, false},
+		{"invalid secondary hex", BrandingInput{ColorSecondary: strptr("orange")}, true},
 		{"valid currency", BrandingInput{Currency: strptr("EUR")}, false},
 		{"lowercase currency", BrandingInput{Currency: strptr("eur")}, true},
 		{"4-letter currency", BrandingInput{Currency: strptr("EURO")}, true},
+		{"valid font key", BrandingInput{FontKey: strptr("geist")}, false},
+		{"unknown font key", BrandingInput{FontKey: strptr("comic-sans")}, true},
+		{"valid radius key", BrandingInput{RadiusKey: strptr("pill")}, false},
+		{"unknown radius key", BrandingInput{RadiusKey: strptr("squircle")}, true},
 		{"nil colors ok", BrandingInput{DisplayName: strptr("Acme")}, false},
 	}
 	for _, tt := range tests {
@@ -132,7 +138,7 @@ func TestGetBrandingPlatformShortCircuit(t *testing.T) {
 	if view.Currency != "CHF" {
 		t.Fatalf("Currency = %q, want CHF", view.Currency)
 	}
-	if view.ColorPrimary != "#f87778" {
+	if view.ColorPrimary != "#0a0a0a" {
 		t.Fatalf("ColorPrimary = %q, want default", view.ColorPrimary)
 	}
 	if view.LogoURL != nil || view.FaviconURL != nil {

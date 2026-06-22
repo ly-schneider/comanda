@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"backend/internal/dnsname"
 	"backend/internal/generated/ent/tenantdomain"
 
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -63,6 +64,23 @@ func (r *reconciler) Reconcile(ctx context.Context) error {
 func (r *reconciler) reconcileDomains(ctx context.Context, domains []domain) error {
 	live := make(map[string]struct{}, len(domains))
 	for _, d := range domains {
+		// Defense-in-depth: the API validates hostnames on create, but a row can
+		// reach a verified state by other paths (seed data, manual SQL). Never ask
+		// a public CA to issue for a non-public name like "localhost" or an IP —
+		// ACME hard-rejects it ("needs at least one dot"), leaving a Certificate
+		// stuck un-issued forever (and tripping the platform cert-expiry alert).
+		// Leaving the id out of `live` also makes collectGarbage tear down any
+		// doomed objects a prior reconcile already created for it.
+		if !dnsname.IsPublicFQDN(d.hostname) {
+			r.logger.Warn("k8singress: skipping non-issuable hostname; not requesting a certificate",
+				zap.String("domainId", d.id),
+				zap.String("hostname", d.hostname))
+			if err := r.writeCertStatus(ctx, d, tenantdomain.CertStatusFailed); err != nil {
+				r.logger.Warn("k8singress: cert status write failed",
+					zap.String("domainId", d.id), zap.Error(err))
+			}
+			continue
+		}
 		live[d.id] = struct{}{}
 		if err := r.applyDomain(ctx, d); err != nil {
 			r.logger.Warn("k8singress: apply domain failed",

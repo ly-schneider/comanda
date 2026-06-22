@@ -51,16 +51,27 @@ func (Settings) Fields() []ent.Field {
 			Nillable(),
 		field.String("color_primary").
 			MaxLen(9).
-			Default("#f87778"),
+			Default("#0a0a0a"),
 		field.String("color_primary_foreground").
 			MaxLen(9).
-			Default("#fdfdfd"),
+			Default("#ffffff"),
+		field.String("color_secondary").
+			MaxLen(9).
+			Default("#f5f5f5"),
 		field.String("color_background").
 			MaxLen(9).
-			Default("#e9e7e6"),
+			Default("#ffffff"),
 		field.String("color_foreground").
 			MaxLen(9).
-			Default("#000000"),
+			Default("#0a0a0a"),
+		// Curated font + corner-style keys; validated against an allow-list in the
+		// service before the web maps each key to a constant (never raw CSS).
+		field.String("font_key").
+			MaxLen(32).
+			Default("inter"),
+		field.String("radius_key").
+			MaxLen(16).
+			Default("rounded"),
 		field.String("contact_email").
 			MaxLen(255).
 			Optional().

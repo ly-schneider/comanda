@@ -6,10 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"net"
-	"regexp"
 	"strings"
 
 	"backend/internal/config"
+	"backend/internal/dnsname"
 	"backend/internal/generated/ent"
 	"backend/internal/repository"
 )
@@ -29,10 +29,6 @@ var (
 // verifyTXTPrefix is the DNS label the ownership TXT record lives under:
 // _comanda-verify.<hostname> -> <verification_token>.
 const verifyTXTPrefix = "_comanda-verify."
-
-// hostnamePattern matches a lowercase FQDN: 2+ dot-separated labels, each 1-63
-// chars of [a-z0-9-] without leading/trailing hyphen.
-var hostnamePattern = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
 // DNSResolver is the subset of DNS lookups the verifier needs. Factored behind
 // an interface so the ownership decision is unit-testable without real DNS.
@@ -110,10 +106,7 @@ func normalizeHostname(raw string) string {
 // validateHostname checks the hostname is a plausible FQDN and not under the
 // platform base domain.
 func (s *domainService) validateHostname(hostname string) error {
-	if len(hostname) == 0 || len(hostname) > 253 {
-		return ErrInvalidHostname
-	}
-	if !hostnamePattern.MatchString(hostname) {
+	if !dnsname.IsPublicFQDN(hostname) {
 		return ErrInvalidHostname
 	}
 	if base := s.cfg.CustomDomain.BaseDomain; base != "" {

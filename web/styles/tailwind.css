@@ -1,14 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@font-face {
-  font-family: "Lovelo Black";
-  src: url("/assets/fonts/Lovelo-Black.otf") format("opentype");
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
 /*
   ---break---
 */
@@ -28,7 +20,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+    border-color: var(--color-neutral-200, currentColor);
   }
 }
 /*
@@ -42,8 +34,13 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-button: 7px;
-  --radius-modal: 11px;
+  /* Corner-style knobs (overridable per-tenant at runtime): controls,
+     surfaces, and the primary CTA. The named utilities below follow them. */
+  --radius-control: var(--control-radius);
+  --radius-surface: var(--surface-radius);
+  --radius-cta: var(--cta-radius);
+  --radius-button: var(--control-radius);
+  --radius-modal: var(--surface-radius);
   --radius-pill: 9999px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -85,99 +82,66 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-family-primary: "Lovelo Black", ui-sans-serif, system-ui, sans-serif;
-  --font-family-secondary: var(--font-golos-text), ui-sans-serif, system-ui, sans-serif;
+  --font-family-primary: var(--font-family-base);
+  --font-family-secondary: var(--font-family-base);
 }
 /*
   ---break---
+*/
+/*
+  Fixed white / monochrome base (xAI/Grok design language in light mode).
+  Color is absent by default — the tenant's brand colors are injected at
+  runtime over these tokens in app/layout.tsx. Corner radii and the active
+  font are likewise overridden per-tenant there.
 */
 :root {
-  --radius: 0.4375rem;
-  --background: #e9e7e6;
-  --foreground: #000000;
-  --card: #fdfdfd;
-  --card-foreground: #000000;
-  --popover: #fdfdfd;
-  --popover-foreground: #000000;
-  --primary: #f87778;
-  --primary-foreground: #fdfdfd;
-  --primary-hover: #f66969;
-  --secondary: #fdfdfd;
-  --secondary-foreground: #000000;
-  --secondary-hover: #f3f3f3;
-  --muted: #fdfdfd;
-  --muted-foreground: #7b7b7b;
-  --accent: #fdfdfd;
-  --accent-foreground: #000000;
-  --accent-hover: #f3f3f3;
-  --destructive: #fc6666;
-  --destructive-hover: #f85454;
-  --success: #4caf50;
-  --success-hover: #43a047;
-  --success-foreground: #fdfdfd;
-  --selected: #353535;
-  --selected-hover: #2e2e2e;
-  --border: #d7d7d7;
-  --input: #fdfdfd;
-  --ring: #f87778;
-  --chart-1: #f87778;
-  --chart-2: #fc6666;
-  --chart-3: #d7d7d7;
-  --chart-4: #7b7b7b;
-  --chart-5: #000000;
-  --sidebar: #fdfdfd;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #353535;
-  --sidebar-primary-foreground: #fdfdfd;
-  --sidebar-accent: #f87778;
-  --sidebar-accent-foreground: #fdfdfd;
-  --sidebar-border: #d7d7d7;
-  --sidebar-ring: #f87778;
-}
-/*
-  ---break---
-*/
-.dark {
-  --background: #e9e7e6;
-  --foreground: #000000;
-  --card: #fdfdfd;
-  --card-foreground: #000000;
-  --popover: #fdfdfd;
-  --popover-foreground: #000000;
-  --primary: #f87778;
-  --primary-foreground: #fdfdfd;
-  --primary-hover: #f66969;
-  --secondary: #fdfdfd;
-  --secondary-foreground: #000000;
-  --secondary-hover: #f3f3f3;
-  --muted: #fdfdfd;
-  --muted-foreground: #7b7b7b;
-  --accent: #fdfdfd;
-  --accent-foreground: #000000;
-  --accent-hover: #f3f3f3;
-  --destructive: #fc6666;
-  --destructive-hover: #f85454;
-  --success: #4caf50;
-  --success-hover: #43a047;
-  --success-foreground: #fdfdfd;
-  --selected: #353535;
-  --selected-hover: #2e2e2e;
-  --border: #d7d7d7;
-  --input: #fdfdfd;
-  --ring: #f87778;
-  --chart-1: #f87778;
-  --chart-2: #fc6666;
-  --chart-3: #d7d7d7;
-  --chart-4: #7b7b7b;
-  --chart-5: #000000;
-  --sidebar: #fdfdfd;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #353535;
-  --sidebar-primary-foreground: #fdfdfd;
-  --sidebar-accent: #f87778;
-  --sidebar-accent-foreground: #fdfdfd;
-  --sidebar-border: #d7d7d7;
-  --sidebar-ring: #f87778;
+  --radius: 0.625rem;
+  --control-radius: var(--radius);
+  --surface-radius: calc(var(--radius) * 1.6);
+  --cta-radius: 9999px;
+
+  --font-family-base: var(--font-inter, ui-sans-serif), system-ui, sans-serif;
+
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --primary-hover: #262626;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #0a0a0a;
+  --secondary-hover: #ebebeb;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --accent-hover: #ebebeb;
+  --destructive: #dc2626;
+  --destructive-hover: #b91c1c;
+  --success: #16a34a;
+  --success-hover: #15803d;
+  --success-foreground: #ffffff;
+  --selected: #0a0a0a;
+  --selected-hover: #262626;
+  --border: #e5e5e5;
+  --input: #ffffff;
+  --ring: var(--primary);
+  --chart-1: #0a0a0a;
+  --chart-2: #525252;
+  --chart-3: #a3a3a3;
+  --chart-4: #d4d4d4;
+  --chart-5: #737373;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #0a0a0a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: var(--primary);
 }
 /*
   ---break---
@@ -189,6 +153,8 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-family-secondary);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   h1,
   h2,
@@ -197,6 +163,7 @@
   h5,
   h6 {
     font-family: var(--font-family-primary);
+    letter-spacing: -0.02em;
   }
 }
 
@@ -206,5 +173,13 @@
   }
   .font-secondary {
     font-family: var(--font-family-secondary);
+  }
+  /* xAI-style small uppercase section label. */
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
   }
 }

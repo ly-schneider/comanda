@@ -70,8 +70,11 @@ type BrandingUpdate struct {
 	FaviconURL             *string
 	ColorPrimary           *string
 	ColorPrimaryForeground *string
+	ColorSecondary         *string
 	ColorBackground        *string
 	ColorForeground        *string
+	FontKey                *string
+	RadiusKey              *string
 	ContactEmail           *string
 	ContactPhone           *string
 	LegalName              *string
@@ -112,10 +115,13 @@ func defaultSettings(id string) *ent.Settings {
 		PosMode:                settings.PosModeQR_CODE,
 		SystemEnabled:          true,
 		Club100MaxRedemptions:  2,
-		ColorPrimary:           "#f87778",
-		ColorPrimaryForeground: "#fdfdfd",
-		ColorBackground:        "#e9e7e6",
-		ColorForeground:        "#000000",
+		ColorPrimary:           "#0a0a0a",
+		ColorPrimaryForeground: "#ffffff",
+		ColorSecondary:         "#f5f5f5",
+		ColorBackground:        "#ffffff",
+		ColorForeground:        "#0a0a0a",
+		FontKey:                "inter",
+		RadiusKey:              "rounded",
 		Currency:               "CHF",
 		PaymentProvider:        "payrexx",
 	}
@@ -317,6 +323,15 @@ func (r *settingsRepo) UpdateBranding(ctx context.Context, b BrandingUpdate) err
 	addRequired(b.ColorForeground,
 		func(s string) { create.SetColorForeground(s) },
 		func(s string) { up.SetColorForeground(s) })
+	addRequired(b.ColorSecondary,
+		func(s string) { create.SetColorSecondary(s) },
+		func(s string) { up.SetColorSecondary(s) })
+	addRequired(b.FontKey,
+		func(s string) { create.SetFontKey(s) },
+		func(s string) { up.SetFontKey(s) })
+	addRequired(b.RadiusKey,
+		func(s string) { create.SetRadiusKey(s) },
+		func(s string) { up.SetRadiusKey(s) })
 	addRequired(b.Currency,
 		func(s string) { create.SetCurrency(s) },
 		func(s string) { up.SetCurrency(s) })

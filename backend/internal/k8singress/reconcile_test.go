@@ -158,6 +158,55 @@ func TestReconcileGarbageCollectsOrphans(t *testing.T) {
 	}
 }
 
+func TestReconcileSkipsNonIssuableHostname(t *testing.T) {
+	store := newRecordingStore()
+	r, k8s, cm := newTestReconciler(store)
+	ctx := context.Background()
+
+	// A row that escaped API validation (e.g. seeded) requests a cert for a
+	// non-public name. It must never reach cert-manager.
+	bad := domain{id: "localhost___1", tenantID: "tenant______1", hostname: "localhost", certStatus: tenantdomain.CertStatusPending}
+	if err := r.reconcileDomains(ctx, []domain{bad}); err != nil {
+		t.Fatalf("reconcileDomains: %v", err)
+	}
+
+	name := resourceName(bad.id)
+	if _, err := cm.CertmanagerV1().Certificates(testNamespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		t.Errorf("certificate was created for non-issuable hostname")
+	}
+	if _, err := k8s.NetworkingV1().Ingresses(testNamespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		t.Errorf("ingress was created for non-issuable hostname")
+	}
+	if got := store.writes[bad.id]; got != tenantdomain.CertStatusFailed {
+		t.Errorf("expected failed status write, got %q", got)
+	}
+}
+
+func TestReconcileCollectsCertForNowInvalidHostname(t *testing.T) {
+	store := newRecordingStore()
+	r, k8s, cm := newTestReconciler(store)
+	ctx := context.Background()
+
+	// First reconcile with a valid hostname creates the objects, then the same
+	// id comes back with a non-issuable hostname: the prior objects must be GC'd.
+	d := domain{id: "flip________1", tenantID: "tenant______1", hostname: "shop.example.com"}
+	if err := r.reconcileDomains(ctx, []domain{d}); err != nil {
+		t.Fatalf("seed reconcile: %v", err)
+	}
+	d.hostname = "localhost"
+	if err := r.reconcileDomains(ctx, []domain{d}); err != nil {
+		t.Fatalf("gc reconcile: %v", err)
+	}
+
+	name := resourceName(d.id)
+	if _, err := cm.CertmanagerV1().Certificates(testNamespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		t.Errorf("certificate was not collected after hostname became non-issuable")
+	}
+	if _, err := k8s.NetworkingV1().Ingresses(testNamespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		t.Errorf("ingress was not collected after hostname became non-issuable")
+	}
+}
+
 func TestReconcileStatusFeedback(t *testing.T) {
 	d := domain{id: "status______1", tenantID: "tenant______1", hostname: "ready.example.com", certStatus: tenantdomain.CertStatusPending}
 	name := resourceName(d.id)

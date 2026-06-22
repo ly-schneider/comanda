@@ -1,15 +1,8 @@
 import type { Metadata } from "next"
-import { Golos_Text } from "next/font/google"
 import Footer from "@/components/layout/footer"
 import Header from "@/components/layout/header"
 import { CartProvider } from "@/contexts/cart-context"
 import { getBranding } from "@/lib/server/branding"
-
-const golosText = Golos_Text({
-  weight: ["500"],
-  subsets: ["latin"],
-  variable: "--font-golos-text",
-})
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = await getBranding()
@@ -24,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${golosText.variable} flex min-h-screen flex-col overflow-x-hidden`}>
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
       <CartProvider>
         <Header />
         <main className="flex-1">{children}</main>

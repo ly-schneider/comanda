@@ -254,6 +254,24 @@ func NewRouter(
 			admin.Post("/staff-meals/{campaignId}/rotate-token", apiHandlers.RotateVolunteerCampaignToken)
 			admin.Get("/staff-meals/{campaignId}/print.pdf", apiHandlers.PrintStaffMealSlips)
 		})
+
+		// ── Platform-admin routes (cross-tenant; platform host only) ──
+		// Served on the no-tenant platform context. RequireAuth flips the
+		// app.is_platform_admin GUC on the request tx (RLS uses it to bypass
+		// tenant scoping); RequirePlatformAdmin 403s non-admins; CSRF guards the
+		// mutations. The handlers also assert the platform context so a platform
+		// admin on a tenant host can't drive these against a single tenant.
+		v1.Group(func(pa chi.Router) {
+			pa.Use(betterAuthMw.RequireAuth())
+			pa.Use(betterAuthMw.RequirePlatformAdmin())
+			csrf := middleware.NewCSRFMiddleware()
+			pa.Use(csrf.Require)
+
+			pa.Get("/platform/tenants", wrapper.ListTenants)
+			pa.Post("/platform/tenants", wrapper.CreateTenant)
+			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
+			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
+		})
 	})
 
 	// Compose: SSE bypasses main middleware, everything else uses full stack

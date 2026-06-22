@@ -69,6 +69,7 @@ function mapBetterAuthUserToUser(betterAuthUser: Record<string, unknown> | null 
     isDisabled: betterAuthUser.banned === true,
     disabledReason: typeof betterAuthUser.banReason === "string" ? betterAuthUser.banReason : null,
     isClub100: betterAuthUser.isClub100 === true,
+    isPlatformAdmin: betterAuthUser.isPlatformAdmin === true,
     createdAt,
     updatedAt,
   }

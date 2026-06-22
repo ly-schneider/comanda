@@ -35,9 +35,12 @@ func toAPIBranding(v *service.BrandingView) generated.Branding {
 		Colors: generated.BrandingColors{
 			Primary:           v.ColorPrimary,
 			PrimaryForeground: v.ColorPrimaryForeground,
+			Secondary:         v.ColorSecondary,
 			Background:        v.ColorBackground,
 			Foreground:        v.ColorForeground,
 		},
+		FontKey:   v.FontKey,
+		RadiusKey: v.RadiusKey,
 		Contact: generated.BrandingContact{
 			Email: v.ContactEmail,
 			Phone: v.ContactPhone,
