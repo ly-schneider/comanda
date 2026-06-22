@@ -1,0 +1,10 @@
+# squawk lints new migrations in CI (.github/workflows/ci-backend.yml).
+# These rules conflict with this repo's Atlas/Ent migration style and are
+# excluded so the gate stays meaningful without rejecting every migration:
+#   - prefer-text-field: columns are intentionally bounded VARCHAR(n), generated
+#     from the Ent schema's MaxLen; unbounded TEXT is not wanted.
+#   - require-timeout-settings / prefer-robust-stmts: Atlas runs each migration
+#     file in a single transaction (txmode=file) and records applied revisions,
+#     so per-statement IF NOT EXISTS and manual lock/statement timeouts are
+#     redundant. Every existing migration trips these; they are false positives.
+excluded_rules = ["prefer-text-field", "require-timeout-settings", "prefer-robust-stmts"]
