@@ -220,6 +220,7 @@ func NewRouter(
 
 			admin.Get("/domains", wrapper.ListDomains)
 			admin.Post("/domains", wrapper.CreateDomain)
+			admin.Get("/domains/{id}", wrapper.GetDomain)
 			admin.Delete("/domains/{id}", wrapper.DeleteDomain)
 			admin.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 

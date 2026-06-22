@@ -20,6 +20,10 @@ var (
 	// ErrPlatformSubdomain signals a 400: the hostname is under the platform's
 	// own base domain, so it is a platform subdomain, not a BYO custom domain.
 	ErrPlatformSubdomain = errors.New("platform_subdomain")
+	// ErrPlatformDomain signals a 400: the row is a platform-assigned domain
+	// (seeded, no verification token) and must not be removed by a tenant admin,
+	// since deleting it would route all the tenant's traffic to a 404.
+	ErrPlatformDomain = errors.New("platform_domain")
 )
 
 // verifyTXTPrefix is the DNS label the ownership TXT record lives under:
@@ -69,6 +73,10 @@ type DomainView struct {
 type DomainService interface {
 	Create(ctx context.Context, hostname string) (*DomainView, error)
 	List(ctx context.Context) ([]*ent.TenantDomain, error)
+	// GetView loads one of the tenant's own domains and enriches it with its DNS
+	// instructions, so an admin can recover the CNAME/TXT records after navigating
+	// away from the create response.
+	GetView(ctx context.Context, id string) (*DomainView, error)
 	Delete(ctx context.Context, id string) error
 	SetPrimary(ctx context.Context, id string) error
 	// VerifyNow runs the CNAME+TXT ownership check for one domain immediately and
@@ -148,7 +156,24 @@ func (s *domainService) List(ctx context.Context) ([]*ent.TenantDomain, error) {
 	return s.domains.List(ctx)
 }
 
+func (s *domainService) GetView(ctx context.Context, id string) (*DomainView, error) {
+	d, err := s.domains.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.View(d), nil
+}
+
 func (s *domainService) Delete(ctx context.Context, id string) error {
+	d, err := s.domains.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	// Platform-assigned domains are seeded without a verification token; removing
+	// one would point the tenant's traffic at a 404 and lock them out.
+	if d.VerificationToken == "" {
+		return ErrPlatformDomain
+	}
 	return s.domains.Delete(ctx, id)
 }
 
@@ -161,6 +186,9 @@ func (s *domainService) VerifyNow(ctx context.Context, id string) (*ent.TenantDo
 	if err != nil {
 		return nil, err
 	}
+	// Re-checking an already-verified domain is intentionally a no-op: there is no
+	// downgrade/revocation path, so the manual verify button can never un-verify a
+	// domain (e.g. on a transient DNS blip).
 	if d.VerifiedAt != nil {
 		return d, nil
 	}
@@ -231,6 +259,8 @@ func cnameMatches(resolved, target string) bool {
 	if t == "" {
 		return false
 	}
+	// A sub-host under the ingress target is intentionally accepted: edge/anycast
+	// records (e.g. edge.<target>) still route to the platform host.
 	return r == t || strings.HasSuffix(r, "."+t)
 }
 

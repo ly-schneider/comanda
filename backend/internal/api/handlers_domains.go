@@ -41,6 +41,27 @@ func (h *Handlers) ListDomains(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func toAPIDomainWithInstructions(view *service.DomainView) generated.DomainWithInstructions {
+	return generated.DomainWithInstructions{
+		Domain:      toAPIDomain(view.Domain),
+		CnameTarget: view.CNAMETarget,
+		TxtName:     view.TXTName,
+		TxtValue:    view.TXTValue,
+	}
+}
+
+// GetDomain returns one domain with its DNS instructions so an admin can recover
+// the CNAME/TXT records after navigating away from the create response.
+// (GET /domains/{id})
+func (h *Handlers) GetDomain(w http.ResponseWriter, r *http.Request, id string) {
+	view, err := h.domains.GetView(r.Context(), id)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, toAPIDomainWithInstructions(view))
+}
+
 // CreateDomain registers a custom domain and returns the DNS records to publish.
 // (POST /domains)
 func (h *Handlers) CreateDomain(w http.ResponseWriter, r *http.Request) {
@@ -63,19 +84,19 @@ func (h *Handlers) CreateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusCreated, generated.DomainWithInstructions{
-		Domain:      toAPIDomain(view.Domain),
-		CnameTarget: view.CNAMETarget,
-		TxtName:     view.TXTName,
-		TxtValue:    view.TXTValue,
-	})
+	response.WriteJSON(w, http.StatusCreated, toAPIDomainWithInstructions(view))
 }
 
 // DeleteDomain removes a custom domain.
 // (DELETE /domains/{id})
 func (h *Handlers) DeleteDomain(w http.ResponseWriter, r *http.Request, id string) {
 	if err := h.domains.Delete(r.Context(), id); err != nil {
-		writeEntError(w, err)
+		switch {
+		case errors.Is(err, service.ErrPlatformDomain):
+			writeError(w, http.StatusBadRequest, "platform_domain", "Platform-assigned domains cannot be removed.")
+		default:
+			writeEntError(w, err)
+		}
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

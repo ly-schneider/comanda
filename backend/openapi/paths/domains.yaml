@@ -95,6 +95,42 @@ item:
       required: true
       schema:
         type: string
+  get:
+    tags: [Domains]
+    summary: Get a custom domain with DNS instructions
+    description: |
+      Returns one of the tenant's custom domains together with the DNS records
+      to publish, so an admin can recover the CNAME/TXT instructions after
+      navigating away from the create response.
+    operationId: getDomain
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Domain with DNS instructions
+        content:
+          application/json:
+            schema:
+              $ref: "#/DomainWithInstructions"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Domain not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
   delete:
     tags: [Domains]
     summary: Remove a custom domain

@@ -2,12 +2,56 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
 	"backend/internal/config"
+	"backend/internal/generated/ent"
 	"backend/internal/repository"
 )
+
+// fakeDomainRepo is a minimal TenantDomainRepository for service-level tests
+// that don't need a database: it serves one preloaded row and records deletes.
+type fakeDomainRepo struct {
+	row     *ent.TenantDomain
+	getErr  error
+	deleted bool
+}
+
+func (f *fakeDomainRepo) GetByID(context.Context, string) (*ent.TenantDomain, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	return f.row, nil
+}
+func (f *fakeDomainRepo) Delete(context.Context, string) error {
+	f.deleted = true
+	return nil
+}
+func (f *fakeDomainRepo) Create(context.Context, string, string) (*ent.TenantDomain, error) {
+	return f.row, nil
+}
+func (f *fakeDomainRepo) List(context.Context) ([]*ent.TenantDomain, error) { return nil, nil }
+func (f *fakeDomainRepo) SetPrimary(context.Context, string) error          { return nil }
+func (f *fakeDomainRepo) MarkVerified(context.Context, string) (*ent.TenantDomain, error) {
+	return f.row, nil
+}
+func (f *fakeDomainRepo) ListUnverified(context.Context, *ent.Client) ([]*ent.TenantDomain, error) {
+	return nil, nil
+}
+func (f *fakeDomainRepo) ListVerified(context.Context, *ent.Client) ([]*ent.TenantDomain, error) {
+	return nil, nil
+}
+func (f *fakeDomainRepo) ListAllVerifiedHostnames(context.Context, *ent.Client) ([]string, error) {
+	return nil, nil
+}
+
+func newServiceWithRepo(repo repository.TenantDomainRepository, cnameTarget string) *domainService {
+	cfg := config.Config{}
+	cfg.CustomDomain.CNAMETarget = cnameTarget
+	return &domainService{domains: repo, cfg: cfg}
+}
 
 func newTestDomainService(base, cnameTarget string) *domainService {
 	cfg := config.Config{}
@@ -227,5 +271,48 @@ func TestCnameMatches(t *testing.T) {
 		if got := cnameMatches(c.resolved, c.target); got != c.want {
 			t.Errorf("cnameMatches(%q,%q) = %v, want %v", c.resolved, c.target, got, c.want)
 		}
+	}
+}
+
+func TestDeletePlatformDomainRejected(t *testing.T) {
+	repo := &fakeDomainRepo{row: &ent.TenantDomain{ID: "d1", Hostname: "shop.example.com", VerificationToken: ""}}
+	svc := newServiceWithRepo(repo, "ingress.comanda.leys.ch")
+
+	if err := svc.Delete(context.Background(), "d1"); !errors.Is(err, ErrPlatformDomain) {
+		t.Fatalf("Delete platform domain = %v, want ErrPlatformDomain", err)
+	}
+	if repo.deleted {
+		t.Error("platform domain must not be deleted")
+	}
+}
+
+func TestDeleteBYODomainAllowed(t *testing.T) {
+	repo := &fakeDomainRepo{row: &ent.TenantDomain{ID: "d2", Hostname: "shop.example.com", VerificationToken: "tok"}}
+	svc := newServiceWithRepo(repo, "ingress.comanda.leys.ch")
+
+	if err := svc.Delete(context.Background(), "d2"); err != nil {
+		t.Fatalf("Delete BYO domain = %v, want nil", err)
+	}
+	if !repo.deleted {
+		t.Error("BYO domain should be deleted")
+	}
+}
+
+func TestGetViewBuildsInstructions(t *testing.T) {
+	repo := &fakeDomainRepo{row: &ent.TenantDomain{ID: "d3", Hostname: "shop.example.com", VerificationToken: "tok-abc"}}
+	svc := newServiceWithRepo(repo, "ingress.comanda.leys.ch")
+
+	view, err := svc.GetView(context.Background(), "d3")
+	if err != nil {
+		t.Fatalf("GetView = %v, want nil", err)
+	}
+	if view.CNAMETarget != "ingress.comanda.leys.ch" {
+		t.Errorf("CNAMETarget = %q", view.CNAMETarget)
+	}
+	if view.TXTName != "_comanda-verify.shop.example.com" {
+		t.Errorf("TXTName = %q", view.TXTName)
+	}
+	if view.TXTValue != "tok-abc" {
+		t.Errorf("TXTValue = %q", view.TXTValue)
 	}
 }
