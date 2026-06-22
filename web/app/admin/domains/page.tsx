@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ClipboardCopy, RefreshCw, Trash2 } from "lucide-react"
+import { Check, ClipboardCopy, Info, RefreshCw, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,12 +21,15 @@ type Domain = {
   createdAt: string
 }
 
-type AddDomainResult = {
-  domain: Domain
+type DnsInstructions = {
   cnameTarget: string
   txtName: string
   txtValue: string
 }
+
+type AddDomainResult = {
+  domain: Domain
+} & DnsInstructions
 
 function CertBadge({ status }: { status: CertStatus }) {
   const map: Record<CertStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -82,8 +85,13 @@ export default function AdminDomainsPage() {
   const [addResult, setAddResult] = useState<AddDomainResult | null>(null)
 
   const [verifying, setVerifying] = useState<Record<string, boolean>>({})
+  const [verifyError, setVerifyError] = useState<Record<string, string>>({})
   const [removing, setRemoving] = useState<Record<string, boolean>>({})
+  const [removeError, setRemoveError] = useState<Record<string, string>>({})
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+
+  const [dnsLoading, setDnsLoading] = useState<Record<string, boolean>>({})
+  const [dnsInstructions, setDnsInstructions] = useState<Record<string, DnsInstructions>>({})
 
   async function load() {
     setLoading(true)
@@ -138,17 +146,25 @@ export default function AdminDomainsPage() {
 
   async function verify(id: string) {
     setVerifying((prev) => ({ ...prev, [id]: true }))
+    setVerifyError((prev) => {
+      const n = { ...prev }
+      delete n[id]
+      return n
+    })
     try {
       const csrf = getCSRFToken()
       const res = await fetchAuth(`/api/v1/domains/${id}/verify`, {
         method: "POST",
         headers: { "X-CSRF": csrf || "" },
       })
-      if (!res.ok) throw new Error(`Fehler ${res.status}`)
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
+        throw new Error(j.message || j.detail || `Prüfung fehlgeschlagen (${res.status})`)
+      }
       const updated = (await res.json()) as Domain
       setDomains((prev) => prev.map((d) => (d.id === id ? updated : d)))
-    } catch {
-      // Non-fatal — the list still shows the current state
+    } catch (e) {
+      setVerifyError((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : "Prüfung fehlgeschlagen" }))
     } finally {
       setVerifying((prev) => ({ ...prev, [id]: false }))
     }
@@ -156,6 +172,11 @@ export default function AdminDomainsPage() {
 
   async function remove(id: string) {
     setRemoving((prev) => ({ ...prev, [id]: true }))
+    setRemoveError((prev) => {
+      const n = { ...prev }
+      delete n[id]
+      return n
+    })
     setConfirmRemove(null)
     try {
       const csrf = getCSRFToken()
@@ -166,11 +187,44 @@ export default function AdminDomainsPage() {
       if (res.ok || res.status === 204) {
         setDomains((prev) => prev.filter((d) => d.id !== id))
         if (addResult?.domain.id === id) setAddResult(null)
+        setDnsInstructions((prev) => {
+          const n = { ...prev }
+          delete n[id]
+          return n
+        })
+      } else {
+        const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
+        throw new Error(j.message || j.detail || `Entfernen fehlgeschlagen (${res.status})`)
       }
-    } catch {
-      // Non-fatal — item remains in the list
+    } catch (e) {
+      setRemoveError((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : "Entfernen fehlgeschlagen" }))
     } finally {
       setRemoving((prev) => ({ ...prev, [id]: false }))
+    }
+  }
+
+  async function loadDnsInstructions(id: string) {
+    if (dnsInstructions[id]) {
+      setDnsInstructions((prev) => {
+        const n = { ...prev }
+        delete n[id]
+        return n
+      })
+      return
+    }
+    setDnsLoading((prev) => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetchAuth(`/api/v1/domains/${id}`)
+      if (!res.ok) throw new Error(`Fehler ${res.status}`)
+      const data = (await res.json()) as { domain: Domain; cnameTarget: string; txtName: string; txtValue: string }
+      setDnsInstructions((prev) => ({
+        ...prev,
+        [id]: { cnameTarget: data.cnameTarget, txtName: data.txtName, txtValue: data.txtValue },
+      }))
+    } catch {
+      // silently ignore — button stays available to retry
+    } finally {
+      setDnsLoading((prev) => ({ ...prev, [id]: false }))
     }
   }
 
@@ -247,71 +301,113 @@ export default function AdminDomainsPage() {
             <p className="text-muted-foreground text-sm">Noch keine Domains registriert.</p>
           ) : (
             <div className="divide-y">
-              {domains.map((domain) => (
-                <div key={domain.id} className="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-0">
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-medium">{domain.hostname}</span>
-                      {domain.isPrimary && (
-                        <Badge variant="secondary" className="text-xs">
-                          Primär
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <VerifiedBadge verifiedAt={domain.verifiedAt} />
-                      <CertBadge status={domain.certStatus} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!domain.verifiedAt && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl"
-                        onClick={() => verify(domain.id)}
-                        disabled={verifying[domain.id]}
-                      >
-                        <RefreshCw className={`size-4 ${verifying[domain.id] ? "animate-spin" : ""}`} />
-                        Jetzt prüfen
-                      </Button>
-                    )}
-                    {confirmRemove === domain.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground text-xs">Wirklich?</span>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="rounded-xl"
-                          onClick={() => remove(domain.id)}
-                          disabled={removing[domain.id]}
-                        >
-                          {removing[domain.id] ? "Entfernen…" : "Ja, entfernen"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl"
-                          onClick={() => setConfirmRemove(null)}
-                        >
-                          Abbrechen
-                        </Button>
+              {domains.map((domain) => {
+                const dns = dnsInstructions[domain.id]
+                return (
+                  <div key={domain.id} className="space-y-2 py-4 first:pt-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-medium">{domain.hostname}</span>
+                          {domain.isPrimary && (
+                            <Badge variant="secondary" className="text-xs">
+                              Primär
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <VerifiedBadge verifiedAt={domain.verifiedAt} />
+                          <CertBadge status={domain.certStatus} />
+                        </div>
                       </div>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl"
-                        onClick={() => setConfirmRemove(domain.id)}
-                        disabled={!!removing[domain.id]}
-                        aria-label={`${domain.hostname} entfernen`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {!domain.verifiedAt && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => loadDnsInstructions(domain.id)}
+                              disabled={dnsLoading[domain.id]}
+                              aria-label="DNS-Einträge anzeigen"
+                            >
+                              <Info className="size-4" />
+                              DNS-Einträge
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => verify(domain.id)}
+                              disabled={verifying[domain.id]}
+                            >
+                              <RefreshCw className={`size-4 ${verifying[domain.id] ? "animate-spin" : ""}`} />
+                              Jetzt prüfen
+                            </Button>
+                          </>
+                        )}
+                        {confirmRemove === domain.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs">Wirklich?</span>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => remove(domain.id)}
+                              disabled={removing[domain.id]}
+                            >
+                              {removing[domain.id] ? "Entfernen…" : "Ja, entfernen"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => setConfirmRemove(null)}
+                            >
+                              Abbrechen
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => setConfirmRemove(domain.id)}
+                            disabled={!!removing[domain.id]}
+                            aria-label={`${domain.hostname} entfernen`}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {verifyError[domain.id] && (
+                      <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
+                        {verifyError[domain.id]}
+                      </div>
+                    )}
+                    {removeError[domain.id] && (
+                      <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
+                        {removeError[domain.id]}
+                      </div>
+                    )}
+                    {dns && (
+                      <div className="bg-muted space-y-4 rounded-xl p-4">
+                        <p className="text-sm font-medium">
+                          Erstelle die folgenden DNS-Einträge und klicke dann auf <strong>Jetzt prüfen</strong>.
+                        </p>
+                        <CopyField label="CNAME-Ziel" value={dns.cnameTarget} />
+                        <CopyField label="TXT-Eintragsname" value={dns.txtName} />
+                        <CopyField label="TXT-Wert" value={dns.txtValue} />
+                        <p className="text-muted-foreground text-xs">
+                          DNS-Änderungen können bis zu 48 Stunden dauern. Die automatische Prüfung erfolgt regelmässig
+                          im Hintergrund.
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
