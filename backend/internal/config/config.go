@@ -54,7 +54,10 @@ type IngressConfig struct {
 	WebService     string
 	WebServicePort int
 	ReconcileEvery time.Duration
-	Kubeconfig     string
+	// ReconcileTimeout bounds a single reconcile pass; a slow/hung cluster call
+	// must not stall the ticker indefinitely.
+	ReconcileTimeout time.Duration
+	Kubeconfig       string
 }
 
 type SentryConfig struct {
@@ -220,14 +223,15 @@ func Load() Config {
 			InternalAPIToken: getEnvOptional("INTERNAL_API_TOKEN"),
 		},
 		Ingress: IngressConfig{
-			Enabled:        getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),
-			Namespace:      getEnvOptional("INGRESS_NAMESPACE"),
-			ClassName:      getEnvWithDefault("INGRESS_CLASS_NAME", "traefik"),
-			HTTP01Issuer:   getEnvOptional("INGRESS_HTTP01_ISSUER"),
-			WebService:     getEnvWithDefault("INGRESS_WEB_SERVICE", "comanda-web"),
-			WebServicePort: getEnvIntWithDefault("INGRESS_WEB_SERVICE_PORT", 80),
-			ReconcileEvery: getEnvDurationWithDefault("INGRESS_RECONCILE_INTERVAL", 60*time.Second),
-			Kubeconfig:     getEnvOptional("KUBECONFIG"),
+			Enabled:          getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),
+			Namespace:        getEnvOptional("INGRESS_NAMESPACE"),
+			ClassName:        getEnvWithDefault("INGRESS_CLASS_NAME", "traefik"),
+			HTTP01Issuer:     getEnvOptional("INGRESS_HTTP01_ISSUER"),
+			WebService:       getEnvWithDefault("INGRESS_WEB_SERVICE", "comanda-web"),
+			WebServicePort:   getEnvIntWithDefault("INGRESS_WEB_SERVICE_PORT", 80),
+			ReconcileEvery:   getEnvDurationWithDefault("INGRESS_RECONCILE_INTERVAL", 60*time.Second),
+			ReconcileTimeout: getEnvDurationWithDefault("INGRESS_RECONCILE_TIMEOUT", 30*time.Second),
+			Kubeconfig:       getEnvOptional("KUBECONFIG"),
 		},
 	}
 

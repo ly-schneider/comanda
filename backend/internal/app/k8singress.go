@@ -38,11 +38,16 @@ func StartIngressReconciler(
 		interval = 60 * time.Second
 	}
 
+	passTimeout := cfg.Ingress.ReconcileTimeout
+	if passTimeout <= 0 {
+		passTimeout = 30 * time.Second
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	runPass := func() {
-		passCtx, passCancel := context.WithTimeout(ctx, 30*time.Second)
+		passCtx, passCancel := context.WithTimeout(ctx, passTimeout)
 		defer passCancel()
 		if err := reconciler.Reconcile(passCtx); err != nil {
 			logger.Warn("ingress reconcile pass failed", zap.Error(err))
