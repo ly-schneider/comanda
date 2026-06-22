@@ -50,18 +50,22 @@ async function fetchCustomOrigins(): Promise<string[]> {
 // OTP types supported by the backend
 type OTPType = "sign-in" | "email-verification" | "forget-password"
 
-// Notify Go backend to look up the OTP from the database and send the email
-async function sendOTPEmailViaBackend(email: string, type: OTPType): Promise<void> {
+// Notify Go backend to look up the OTP from the database and send the email.
+// host is the tenant's request host, forwarded so the backend's host-based
+// resolver scopes the lookup + sender to the right tenant — this server-to-server
+// call otherwise carries only the internal service host (→ 404 "unknown host").
+async function sendOTPEmailViaBackend(email: string, type: OTPType, host?: string): Promise<void> {
   const backendUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_BASE_URL
   if (!backendUrl) {
     throw new Error("BACKEND_INTERNAL_URL or NEXT_PUBLIC_API_BASE_URL is required")
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (host) headers["X-Forwarded-Host"] = host
+
   const response = await fetch(`${backendUrl}/v1/auth/otp-email`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({ email, type }),
   })
 
@@ -146,10 +150,14 @@ export const auth = betterAuth({
     emailOTP({
       otpLength: 6,
       expiresIn: 300, // 5 minutes
-      sendVerificationOTP: async ({ email, type }: { email: string; otp: string; type: string }) => {
-        // OTP is not sent over the network — the backend reads it
-        // directly from the verification table by email (identifier)
-        await sendOTPEmailViaBackend(email, type as OTPType)
+      sendVerificationOTP: async ({ email, type }, ctx) => {
+        // OTP is not sent over the network — the backend reads it directly from
+        // the verification table by email (identifier). We forward the tenant
+        // host from the originating request so the backend can resolve the tenant.
+        const reqHeaders = ctx as { request?: Request; headers?: Headers } | undefined
+        const h = reqHeaders?.request?.headers ?? reqHeaders?.headers
+        const host = h?.get("x-comanda-host") || h?.get("x-forwarded-host") || h?.get("host") || undefined
+        await sendOTPEmailViaBackend(email, type as OTPType, host)
       },
     }),
 
