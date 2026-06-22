@@ -40,6 +40,7 @@ func NewRepositories() fx.Option {
 			repository.NewVolunteerCampaignRepository,
 			repository.NewVolunteerRedemptionRepository,
 			repository.NewTenantDomainRepository,
+			repository.NewTenantRepository,
 		),
 	)
 }

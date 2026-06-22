@@ -1,0 +1,204 @@
+collection:
+  get:
+    tags: [Platform]
+    summary: List all tenants
+    description: Platform-admin only. Lists every tenant across the platform.
+    operationId: listTenants
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Tenant list
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/Tenant"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  post:
+    tags: [Platform]
+    summary: Create a tenant
+    description: |
+      Platform-admin only. Provisions a new tenant: creates the tenant row, its
+      settings singleton, and — when a platform base domain is configured — a
+      verified primary subdomain (<slug>.<base>).
+    operationId: createTenant
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/TenantCreate"
+    responses:
+      "201":
+        description: Tenant created
+        content:
+          application/json:
+            schema:
+              $ref: "#/Tenant"
+      "400":
+        description: Invalid slug or name
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Slug already taken
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+item:
+  parameters:
+    - name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Platform]
+    summary: Get a tenant
+    operationId: getTenant
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Tenant
+        content:
+          application/json:
+            schema:
+              $ref: "#/Tenant"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+  patch:
+    tags: [Platform]
+    summary: Update a tenant's status
+    description: Platform-admin only. Activates or suspends a tenant.
+    operationId: updateTenant
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/TenantStatusUpdate"
+    responses:
+      "200":
+        description: Updated tenant
+        content:
+          application/json:
+            schema:
+              $ref: "#/Tenant"
+      "400":
+        description: Invalid status
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+Tenant:
+  type: object
+  required: [id, slug, name, status, createdAt]
+  properties:
+    id:
+      type: string
+    slug:
+      type: string
+    name:
+      type: string
+    status:
+      type: string
+      description: "active | suspended"
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+TenantCreate:
+  type: object
+  required: [slug, name]
+  properties:
+    slug:
+      type: string
+      description: Lowercase DNS label; becomes the tenant's subdomain.
+      example: acme
+    name:
+      type: string
+      example: Acme Bistro
+
+TenantStatusUpdate:
+  type: object
+  required: [status]
+  properties:
+    status:
+      type: string
+      description: "active | suspended"

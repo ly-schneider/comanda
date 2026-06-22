@@ -117,6 +117,13 @@ migrate *args:
 bootstrap-rls:
     psql "$DATABASE_URL" -f db/provisioning/bootstrap-rls-roles.sql
 
+# Grant platform-admin to a Leys operator by email. There is intentionally no
+# HTTP path to set is_platform_admin (it would be a privilege-escalation vector);
+# Leys provisions platform admins out of band via the DB owner.
+[group('db')]
+grant-platform-admin email:
+    psql "$DATABASE_URL" -c "UPDATE \"user\" SET is_platform_admin = true WHERE email = '{{email}}'"
+
 # Generate a new migration from Ent schema diff
 [group('db')]
 migrate-diff name:

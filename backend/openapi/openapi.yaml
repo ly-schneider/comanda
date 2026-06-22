@@ -52,6 +52,8 @@ tags:
     description: Application settings (POS mode, Club100 configuration)
   - name: Domains
     description: Per-tenant custom domains (ownership verification, TLS status)
+  - name: Platform
+    description: Platform admin (cross-tenant tenant provisioning and management)
 
 paths:
   /auth/otp-email:
@@ -146,6 +148,11 @@ paths:
     $ref: "paths/domains.yaml#/item"
   /domains/{id}/verify:
     $ref: "paths/domains.yaml#/verify"
+
+  /platform/tenants:
+    $ref: "paths/platform.yaml#/collection"
+  /platform/tenants/{tenantId}:
+    $ref: "paths/platform.yaml#/item"
 
   /branding:
     $ref: "paths/branding.yaml#/collection"
