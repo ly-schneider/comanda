@@ -45,6 +45,11 @@ func (TenantDomain) Fields() []ent.Field {
 			Values("none", "pending", "active", "failed").
 			Default("none").
 			StorageKey("cert_status"),
+		// Random url-safe token the tenant publishes as a TXT record at
+		// _comanda-verify.<hostname> to prove ownership before a cert is issued.
+		field.String("verification_token").
+			Optional().
+			Sensitive(),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),

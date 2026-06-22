@@ -55,6 +55,7 @@ func main() {
 			app.NewSessionMiddleware,
 			app.NewRouter,
 			app.NewBlobStore,
+			app.NewIngressReconciler,
 		),
 		fx.WithLogger(func(lc fx.Lifecycle, l *zap.Logger) fxevent.Logger {
 			return &fxevent.ZapLogger{Logger: l}
@@ -68,6 +69,8 @@ func main() {
 			app.SetupSentry,
 			app.SeedProviderCredentials,
 			app.EnsureBootstrapQRKey,
+			app.StartDomainVerifier,
+			app.StartIngressReconciler,
 			app.StartHTTPServer,
 		),
 	).Run()

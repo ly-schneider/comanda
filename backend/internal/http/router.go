@@ -5,6 +5,7 @@ import (
 
 	"backend/internal/api"
 	"backend/internal/auth"
+	"backend/internal/config"
 	"backend/internal/generated/api/generated"
 	"backend/internal/middleware"
 
@@ -15,6 +16,7 @@ import (
 )
 
 func NewRouter(
+	cfg config.Config,
 	apiHandlers *api.Handlers,
 	betterAuthMw *auth.SessionMiddleware,
 	deviceAuthMw *auth.DeviceAuthMiddleware,
@@ -73,6 +75,15 @@ func NewRouter(
 	r.Post("/v1/payments/webhooks/payrexx/{tenantToken}", func(w http.ResponseWriter, req *http.Request) {
 		apiHandlers.HandlePayrexxWebhook(w, req, chi.URLParam(req, "tenantToken"))
 	})
+
+	// ── Trusted-origins feed (cross-tenant, internal, no Host, no auth UI) ──
+	// The web tier consumes this to seed Better Auth's trustedOrigins with every
+	// verified custom domain. It reads cross-tenant on the privileged client, so
+	// it sits outside the /v1 tenant-tx group and is gated by a shared internal
+	// token. Only registered when that token is configured (fail closed).
+	if cfg.CustomDomain.InternalAPIToken != "" {
+		r.Get("/internal/trusted-origins", apiHandlers.HandleTrustedOrigins)
+	}
 
 	// ── API documentation (Scalar) ───────────────────────────────────
 	r.Get("/docs", DocsScalarHandler())
@@ -206,6 +217,12 @@ func NewRouter(
 			admin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
 			admin.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
 			admin.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
+
+			admin.Get("/domains", wrapper.ListDomains)
+			admin.Post("/domains", wrapper.CreateDomain)
+			admin.Get("/domains/{id}", wrapper.GetDomain)
+			admin.Delete("/domains/{id}", wrapper.DeleteDomain)
+			admin.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 
 			admin.Get("/jetons", wrapper.ListJetons)
 			admin.Post("/jetons", wrapper.CreateJeton)

@@ -12,17 +12,52 @@ import (
 )
 
 type Config struct {
-	App         AppConfig
-	Postgres    PostgresConfig
-	Logger      LoggerConfig
-	Security    SecurityConfig
-	Payments    PaymentsConfig
-	Payrexx     PayrexxConfig
-	Plunk       PlunkConfig
-	BlobStorage BlobStorageConfig
-	Elvanto     ElvantoConfig
-	Sentry      SentryConfig
-	Android     AndroidConfig
+	App          AppConfig
+	Postgres     PostgresConfig
+	Logger       LoggerConfig
+	Security     SecurityConfig
+	Payments     PaymentsConfig
+	Payrexx      PayrexxConfig
+	Plunk        PlunkConfig
+	BlobStorage  BlobStorageConfig
+	Elvanto      ElvantoConfig
+	Sentry       SentryConfig
+	Android      AndroidConfig
+	CustomDomain CustomDomainConfig
+	Ingress      IngressConfig
+}
+
+// CustomDomainConfig drives bring-your-own custom domains: the DNS records a
+// tenant must publish, and the background ownership verifier.
+type CustomDomainConfig struct {
+	// BaseDomain is the platform's own apex (e.g. comanda.leys.ch). Hostnames at
+	// or under it are platform subdomains, not BYO domains, and are rejected.
+	BaseDomain string
+	// CNAMETarget is the value tenants point their custom domain's CNAME at, and
+	// the host the ownership check requires the CNAME to resolve to.
+	CNAMETarget string
+	// VerifyInterval is how often the background verifier re-checks DNS for
+	// not-yet-verified domains.
+	VerifyInterval time.Duration
+	// InternalAPIToken gates the cross-tenant trusted-origins feed. When empty
+	// the feed is not exposed at all (fail closed).
+	InternalAPIToken string
+}
+
+// IngressConfig drives the Kubernetes ingress + cert-manager reconciler that
+// provisions TLS for verified custom domains.
+type IngressConfig struct {
+	Enabled        bool
+	Namespace      string
+	ClassName      string
+	HTTP01Issuer   string
+	WebService     string
+	WebServicePort int
+	ReconcileEvery time.Duration
+	// ReconcileTimeout bounds a single reconcile pass; a slow/hung cluster call
+	// must not stall the ticker indefinitely.
+	ReconcileTimeout time.Duration
+	Kubeconfig       string
 }
 
 type SentryConfig struct {
@@ -181,6 +216,23 @@ func Load() Config {
 		Android: AndroidConfig{
 			GitHubRepo: getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
 		},
+		CustomDomain: CustomDomainConfig{
+			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
+			CNAMETarget:      strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_CNAME_TARGET"))),
+			VerifyInterval:   getEnvDurationWithDefault("CUSTOM_DOMAIN_VERIFY_INTERVAL", 60*time.Second),
+			InternalAPIToken: getEnvOptional("INTERNAL_API_TOKEN"),
+		},
+		Ingress: IngressConfig{
+			Enabled:          getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),
+			Namespace:        getEnvOptional("INGRESS_NAMESPACE"),
+			ClassName:        getEnvWithDefault("INGRESS_CLASS_NAME", "traefik"),
+			HTTP01Issuer:     getEnvOptional("INGRESS_HTTP01_ISSUER"),
+			WebService:       getEnvWithDefault("INGRESS_WEB_SERVICE", "comanda-web"),
+			WebServicePort:   getEnvIntWithDefault("INGRESS_WEB_SERVICE_PORT", 80),
+			ReconcileEvery:   getEnvDurationWithDefault("INGRESS_RECONCILE_INTERVAL", 60*time.Second),
+			ReconcileTimeout: getEnvDurationWithDefault("INGRESS_RECONCILE_TIMEOUT", 30*time.Second),
+			Kubeconfig:       getEnvOptional("KUBECONFIG"),
+		},
 	}
 
 	return cfg
@@ -275,6 +327,28 @@ func getCommaListOptional(key string) []string {
 func getEnvWithDefault(key, def string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return def
+}
+
+// getEnvIntWithDefault parses an integer env var, falling back to def when unset
+// or unparseable.
+func getEnvIntWithDefault(key string, def int) int {
+	if value := os.Getenv(key); value != "" {
+		if n, err := strconv.Atoi(value); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+// getEnvDurationWithDefault parses a Go duration (e.g. "60s", "5m") env var,
+// falling back to def when unset or unparseable.
+func getEnvDurationWithDefault(key string, def time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if d, err := time.ParseDuration(value); err == nil {
+			return d
+		}
 	}
 	return def
 }

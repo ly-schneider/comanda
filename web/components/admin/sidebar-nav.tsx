@@ -3,6 +3,7 @@ import {
   Circle,
   ClipboardList,
   CreditCard,
+  Globe,
   Grid2x2,
   Hamburger,
   Home,
@@ -44,6 +45,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" /> },
     { href: "/admin/staff-meals", label: "Mitarbeiter-Essen", icon: <Ticket className="size-5" /> },
     { href: "/admin/branding", label: "Branding", icon: <Paintbrush className="size-5" /> },
+    { href: "/admin/domains", label: "Domains", icon: <Globe className="size-5" /> },
     { href: "/admin/settings", label: "Einstellungen", icon: <Settings className="size-5" /> },
   ]
 
