@@ -1,8 +1,23 @@
 import { betterAuth } from "better-auth"
 import { admin, emailOTP, organization } from "better-auth/plugins"
 import { Pool } from "pg"
+import { readFileSync } from "node:fs"
 import { ac, adminRole, customerRole } from "./auth/permissions"
 import { getAppEnv } from "./env"
+
+// Scaleway managed PG presents a private per-instance CA that isn't in Node's
+// system roots. The DSN is sslmode=verify-full with no sslrootcert, so pin the
+// mounted CA onto the pool (mirrors the backend's pgx pinning); without it the
+// TLS handshake fails with DEPTH_ZERO_SELF_SIGNED_CERT. Unset locally
+// (sslmode=disable).
+function createAuthPool(): Pool {
+  const connectionString = process.env.DATABASE_URL
+  const caPath = process.env.DATABASE_CA_PATH
+  if (caPath) {
+    return new Pool({ connectionString, ssl: { ca: readFileSync(caPath, "utf8") } })
+  }
+  return new Pool({ connectionString })
+}
 
 // Module-level cache for the trusted-origins fetch. Refreshes every 60 s so a
 // backend blip never permanently breaks auth, and a newly-verified domain shows
@@ -57,9 +72,7 @@ async function sendOTPEmailViaBackend(email: string, type: OTPType): Promise<voi
 }
 
 export const auth = betterAuth({
-  database: new Pool({
-    connectionString: process.env.DATABASE_URL,
-  }),
+  database: createAuthPool(),
 
   secret: process.env.BETTER_AUTH_SECRET,
 
