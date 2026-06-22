@@ -93,6 +93,7 @@ type AppConfig struct {
 type PostgresConfig struct {
 	DSN             string
 	AppDSN          string
+	CAPath          string
 	AllowSingleDSN  bool
 	MaxConns        int
 	MinConns        int
@@ -168,6 +169,7 @@ func Load() Config {
 		Postgres: PostgresConfig{
 			DSN:             getEnvOptional("DATABASE_URL"),
 			AppDSN:          getEnvOptional("DATABASE_URL_APP"),
+			CAPath:          getEnvOptional("DATABASE_CA_PATH"),
 			AllowSingleDSN:  getEnvBoolOptional("ALLOW_SINGLE_DSN"),
 			MaxConns:        75,
 			MinConns:        2,

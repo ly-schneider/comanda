@@ -1,8 +1,10 @@
 package database
 
 import (
+	"crypto/x509"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"backend/internal/config"
 	"backend/internal/enttenant"
@@ -11,7 +13,8 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
@@ -32,15 +35,51 @@ type AppClient struct {
 }
 
 func openPool(dsn string, cfg config.Config) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+	connConfig, err := buildConnConfig(dsn, cfg.Postgres.CAPath)
 	if err != nil {
 		return nil, err
 	}
+	db := stdlib.OpenDB(*connConfig)
 	db.SetMaxOpenConns(cfg.Postgres.MaxConns)
 	db.SetMaxIdleConns(cfg.Postgres.MinConns)
 	db.SetConnMaxLifetime(cfg.Postgres.MaxConnLifetime)
 	db.SetConnMaxIdleTime(cfg.Postgres.MaxConnIdleTime)
 	return db, nil
+}
+
+// buildConnConfig parses the DSN and, when caPath is set, pins that CA onto the
+// connection's TLS config.
+//
+// Scaleway managed PG presents a per-instance, self-signed CA that isn't in the
+// system roots. The DSN carries sslmode=verify-full but no sslrootcert (the CA
+// is shipped as a mounted file instead), so without pinning it here verify-full
+// fails with "certificate signed by unknown authority".
+func buildConnConfig(dsn, caPath string) (*pgx.ConnConfig, error) {
+	connConfig, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse database DSN: %w", err)
+	}
+	if caPath == "" {
+		return connConfig, nil
+	}
+
+	pem, err := os.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("read database CA %q: %w", caPath, err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("database CA %q: no certificates parsed", caPath)
+	}
+	if connConfig.TLSConfig != nil {
+		connConfig.TLSConfig.RootCAs = roots
+	}
+	for _, fb := range connConfig.Fallbacks {
+		if fb.TLSConfig != nil {
+			fb.TLSConfig.RootCAs = roots
+		}
+	}
+	return connConfig, nil
 }
 
 // NewPrivilegedClient opens the owner pool (DATABASE_URL).
