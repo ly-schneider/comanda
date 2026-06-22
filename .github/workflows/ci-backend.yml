@@ -16,7 +16,9 @@ jobs:
 
       - name: Lint
         working-directory: backend
-        run: go tool golangci-lint run --timeout=3m ./...
+        # The k8s client-go + cert-manager deps enlarged the typecheck surface, so
+        # 3m trips on a cold lint cache (lint itself reports 0 issues). Give it room.
+        run: go tool golangci-lint run --timeout=10m ./...
 
   test:
     name: Backend Tests
