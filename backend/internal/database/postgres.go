@@ -1,8 +1,10 @@
 package database
 
 import (
+	"crypto/x509"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"backend/internal/config"
 	"backend/internal/enttenant"
@@ -11,7 +13,8 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
@@ -32,10 +35,36 @@ type AppClient struct {
 }
 
 func openPool(dsn string, cfg config.Config) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+	connConfig, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse database DSN: %w", err)
 	}
+
+	// Scaleway managed PG presents a per-instance, self-signed CA that isn't in
+	// the system roots. The DSN carries sslmode=verify-full but no sslrootcert
+	// (the CA is shipped as a mounted file instead), so pin it onto the pool's
+	// TLS config here — without this, verify-full fails with "certificate signed
+	// by unknown authority". Empty CAPath (local dev, sslmode=disable) is a no-op.
+	if path := cfg.Postgres.CAPath; path != "" {
+		pem, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read database CA %q: %w", path, err)
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("database CA %q: no certificates parsed", path)
+		}
+		if connConfig.TLSConfig != nil {
+			connConfig.TLSConfig.RootCAs = roots
+		}
+		for _, fb := range connConfig.Fallbacks {
+			if fb.TLSConfig != nil {
+				fb.TLSConfig.RootCAs = roots
+			}
+		}
+	}
+
+	db := stdlib.OpenDB(*connConfig)
 	db.SetMaxOpenConns(cfg.Postgres.MaxConns)
 	db.SetMaxIdleConns(cfg.Postgres.MinConns)
 	db.SetConnMaxLifetime(cfg.Postgres.MaxConnLifetime)
