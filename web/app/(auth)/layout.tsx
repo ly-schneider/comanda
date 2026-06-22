@@ -1,12 +1,5 @@
 import type { Metadata } from "next"
-import { Golos_Text } from "next/font/google"
 import AuthFooter from "@/components/layout/auth-footer"
-
-const golosText = Golos_Text({
-  weight: ["500"],
-  subsets: ["latin"],
-  variable: "--font-golos-text",
-})
 
 export const metadata: Metadata = {
   other: {
@@ -18,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${golosText.variable} flex min-h-screen flex-col overflow-x-hidden`}>
+    <div className="flex min-h-screen flex-col overflow-x-hidden">
       <main className="flex-1">{children}</main>
       <AuthFooter />
     </div>

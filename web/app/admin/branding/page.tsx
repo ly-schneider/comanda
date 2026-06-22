@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
+import { DEFAULT_FONT_KEY, DEFAULT_RADIUS_KEY, FONT_OPTIONS, RADIUS_OPTIONS } from "@/lib/branding-theme"
 import { getCSRFToken } from "@/lib/csrf"
 
 type BrandingSettings = {
@@ -15,9 +17,9 @@ type BrandingSettings = {
   logoUrl?: string | null
   faviconUrl?: string | null
   colorPrimary?: string
-  colorPrimaryForeground?: string
-  colorBackground?: string
-  colorForeground?: string
+  colorSecondary?: string
+  fontKey?: string
+  radiusKey?: string
   contactEmail?: string | null
   contactPhone?: string | null
   legalName?: string | null
@@ -58,10 +60,10 @@ export default function AdminBrandingPage() {
           displayName: data.displayName ?? "",
           logoUrl: data.logoUrl ?? null,
           faviconUrl: data.faviconUrl ?? null,
-          colorPrimary: data.colorPrimary ?? "#f87778",
-          colorPrimaryForeground: data.colorPrimaryForeground ?? "#fdfdfd",
-          colorBackground: data.colorBackground ?? "#e9e7e6",
-          colorForeground: data.colorForeground ?? "#000000",
+          colorPrimary: data.colorPrimary ?? "#0a0a0a",
+          colorSecondary: data.colorSecondary ?? "#f5f5f5",
+          fontKey: data.fontKey ?? DEFAULT_FONT_KEY,
+          radiusKey: data.radiusKey ?? DEFAULT_RADIUS_KEY,
           contactEmail: data.contactEmail ?? "",
           contactPhone: data.contactPhone ?? "",
           legalName: data.legalName ?? "",
@@ -86,9 +88,9 @@ export default function AdminBrandingPage() {
       const body: Record<string, string | null | undefined> = {
         displayName: settings.displayName,
         colorPrimary: settings.colorPrimary,
-        colorPrimaryForeground: settings.colorPrimaryForeground,
-        colorBackground: settings.colorBackground,
-        colorForeground: settings.colorForeground,
+        colorSecondary: settings.colorSecondary,
+        fontKey: settings.fontKey,
+        radiusKey: settings.radiusKey,
         contactEmail: settings.contactEmail || null,
         contactPhone: settings.contactPhone || null,
         legalName: settings.legalName || null,
@@ -97,7 +99,7 @@ export default function AdminBrandingPage() {
         currency: settings.currency,
       }
 
-      const hexFields = ["colorPrimary", "colorPrimaryForeground", "colorBackground", "colorForeground"] as const
+      const hexFields = ["colorPrimary", "colorSecondary"] as const
       for (const f of hexFields) {
         const v = body[f]
         if (v && !isValidHex(v)) {
@@ -205,7 +207,7 @@ export default function AdminBrandingPage() {
               value={settings.displayName ?? ""}
               onChange={(e) => field("displayName")(e.target.value)}
               className="rounded-xl"
-              placeholder="z. B. BlessThun Food"
+              placeholder="z. B. Comanda"
             />
           </div>
           <div className="space-y-2">
@@ -314,15 +316,15 @@ export default function AdminBrandingPage() {
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle>Farben</CardTitle>
-          <p className="text-muted-foreground text-sm">Hex-Farbwerte (z. B. #f87778).</p>
+          <p className="text-muted-foreground text-sm">
+            Akzentfarben über dem festen, hellen Grunddesign. Hex-Werte (z. B. #0a0a0a).
+          </p>
         </CardHeader>
         <CardContent className="max-w-lg space-y-4">
           {(
             [
               { key: "colorPrimary", label: "Primärfarbe" },
-              { key: "colorPrimaryForeground", label: "Primärfarbe Vordergrund" },
-              { key: "colorBackground", label: "Hintergrund" },
-              { key: "colorForeground", label: "Vordergrund" },
+              { key: "colorSecondary", label: "Sekundärfarbe" },
             ] as const
           ).map(({ key, label }) => (
             <div key={key} className="flex items-center gap-3">
@@ -348,6 +350,46 @@ export default function AdminBrandingPage() {
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <CardTitle>Darstellung</CardTitle>
+          <p className="text-muted-foreground text-sm">Schriftart und Eckenstil.</p>
+        </CardHeader>
+        <CardContent className="max-w-lg space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="fontKey">Schriftart</Label>
+            <Select value={settings.fontKey ?? DEFAULT_FONT_KEY} onValueChange={(v) => field("fontKey")(v)}>
+              <SelectTrigger id="fontKey" className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FONT_OPTIONS.map((o) => (
+                  <SelectItem key={o.key} value={o.key}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Eckenstil</Label>
+            <div className="flex flex-wrap gap-2">
+              {RADIUS_OPTIONS.map((o) => (
+                <Button
+                  key={o.key}
+                  type="button"
+                  variant={(settings.radiusKey ?? DEFAULT_RADIUS_KEY) === o.key ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => field("radiusKey")(o.key)}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
