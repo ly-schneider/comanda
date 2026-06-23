@@ -82,7 +82,6 @@ type BrandingUpdate struct {
 	ContactPhone           *string
 	LegalName              *string
 	LegalAddress           *string
-	LegalText              *string
 	Currency               *string
 	PaymentProvider        *string
 }
@@ -329,10 +328,6 @@ func (r *settingsRepo) UpdateBranding(ctx context.Context, b BrandingUpdate) err
 		func(s string) { create.SetLegalAddress(s) },
 		func(s string) { up.SetLegalAddress(s) },
 		func() { up.ClearLegalAddress() })
-	addNillable(b.LegalText,
-		func(s string) { create.SetLegalText(s) },
-		func(s string) { up.SetLegalText(s) },
-		func() { up.ClearLegalText() })
 
 	addRequired(b.ColorPrimary,
 		func(s string) { create.SetColorPrimary(s) },

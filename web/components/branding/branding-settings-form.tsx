@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { DEFAULT_FONT_KEY, DEFAULT_RADIUS_KEY, FONT_OPTIONS, RADIUS_OPTIONS } from "@/lib/branding-theme"
 import { getCSRFToken } from "@/lib/csrf"
@@ -24,7 +23,6 @@ export type BrandingSettings = {
   contactPhone?: string | null
   legalName?: string | null
   legalAddress?: string | null
-  legalText?: string | null
   currency?: string
 }
 
@@ -73,7 +71,6 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
           contactPhone: data.contactPhone ?? "",
           legalName: data.legalName ?? "",
           legalAddress: data.legalAddress ?? "",
-          legalText: data.legalText ?? "",
           currency: data.currency ?? "CHF",
         })
       }
@@ -100,7 +97,6 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
         contactPhone: settings.contactPhone || null,
         legalName: settings.legalName || null,
         legalAddress: settings.legalAddress || null,
-        legalText: settings.legalText || null,
         currency: settings.currency,
       }
 
@@ -454,17 +450,6 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
               onChange={(e) => field("legalAddress")(e.target.value)}
               className="rounded-xl"
               placeholder="Musterstrasse 1, 3000 Bern"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="legalText">Zusätzlicher Rechtstext</Label>
-            <Textarea
-              id="legalText"
-              value={settings.legalText ?? ""}
-              onChange={(e) => field("legalText")(e.target.value)}
-              className="rounded-xl"
-              placeholder="Optionaler Freitext für die Datenschutzerklärung…"
-              rows={5}
             />
           </div>
         </CardContent>

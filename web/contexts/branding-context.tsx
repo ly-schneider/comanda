@@ -17,7 +17,7 @@ const DEFAULTS: Branding = {
   fontKey: "inter",
   radiusKey: "rounded",
   contact: { email: null, phone: null },
-  legal: { name: null, address: null, text: null },
+  legal: { name: null, address: null },
   currency: "CHF",
 }
 

@@ -65,7 +65,6 @@ type BrandingView struct {
 	ContactPhone           *string
 	LegalName              *string
 	LegalAddress           *string
-	LegalText              *string
 	Currency               string
 }
 
@@ -103,7 +102,6 @@ type BrandingInput struct {
 	ContactPhone    *string
 	LegalName       *string
 	LegalAddress    *string
-	LegalText       *string
 	Currency        *string
 	PaymentProvider *string
 }
@@ -271,7 +269,6 @@ func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) 
 		ContactPhone:           in.ContactPhone,
 		LegalName:              in.LegalName,
 		LegalAddress:           in.LegalAddress,
-		LegalText:              in.LegalText,
 		Currency:               in.Currency,
 		PaymentProvider:        in.PaymentProvider,
 	})
@@ -314,7 +311,6 @@ func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error
 		ContactPhone:           e.ContactPhone,
 		LegalName:              e.LegalName,
 		LegalAddress:           e.LegalAddress,
-		LegalText:              e.LegalText,
 		Currency:               e.Currency,
 	}, nil
 }

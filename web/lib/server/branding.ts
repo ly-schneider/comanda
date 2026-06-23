@@ -22,7 +22,6 @@ export type Branding = {
   legal: {
     name: string | null
     address: string | null
-    text: string | null
   }
   currency: string
 }
@@ -41,7 +40,7 @@ const DEFAULTS: Branding = {
   fontKey: "inter",
   radiusKey: "rounded",
   contact: { email: null, phone: null },
-  legal: { name: null, address: null, text: null },
+  legal: { name: null, address: null },
   currency: "CHF",
 }
 

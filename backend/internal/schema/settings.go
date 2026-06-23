@@ -87,9 +87,6 @@ func (Settings) Fields() []ent.Field {
 		field.Text("legal_address").
 			Optional().
 			Nillable(),
-		field.Text("legal_text").
-			Optional().
-			Nillable(),
 		field.String("currency").
 			MaxLen(3).
 			Default("CHF"),

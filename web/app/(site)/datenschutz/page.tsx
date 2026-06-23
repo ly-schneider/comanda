@@ -29,12 +29,6 @@ export default async function PrivacyPolicyPage() {
           </p>
         </section>
 
-        {branding.legal.text ? (
-          <section>
-            <div className="whitespace-pre-wrap">{branding.legal.text}</div>
-          </section>
-        ) : null}
-
         <section>
           <h2 className="mb-3 text-lg font-semibold">1. Verantwortliche Stelle</h2>
           <p>Verantwortlich für die Datenbearbeitung ist:</p>

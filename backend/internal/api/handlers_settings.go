@@ -77,7 +77,6 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 			ContactPhone:    body.ContactPhone,
 			LegalName:       body.LegalName,
 			LegalAddress:    body.LegalAddress,
-			LegalText:       body.LegalText,
 			Currency:        body.Currency,
 			PaymentProvider: body.PaymentProvider,
 		}
@@ -135,7 +134,6 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 		ContactPhone:           e.ContactPhone,
 		LegalName:              e.LegalName,
 		LegalAddress:           e.LegalAddress,
-		LegalText:              e.LegalText,
 		Currency:               ptr(e.Currency),
 		PaymentProvider:        ptr(e.PaymentProvider),
 		UpdatedAt:              ptr(e.UpdatedAt),
@@ -171,7 +169,6 @@ func brandingPresent(b *generated.SettingsUpdate) bool {
 		b.ContactPhone != nil ||
 		b.LegalName != nil ||
 		b.LegalAddress != nil ||
-		b.LegalText != nil ||
 		b.Currency != nil ||
 		b.PaymentProvider != nil
 }

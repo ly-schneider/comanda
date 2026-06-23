@@ -48,7 +48,6 @@ func toAPIBranding(v *service.BrandingView) generated.Branding {
 		Legal: generated.BrandingLegal{
 			Name:    v.LegalName,
 			Address: v.LegalAddress,
-			Text:    v.LegalText,
 		},
 		Currency: v.Currency,
 	}
