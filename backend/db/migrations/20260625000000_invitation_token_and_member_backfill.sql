@@ -55,18 +55,11 @@ WHERE ai.status = 'accepted' AND t.organization_id IS NOT NULL
 ON CONFLICT (organization_id, user_id) DO NOTHING;
 
 -- The bootstrap tenant's owner has no admin_invite row to derive from (there is
--- no SQL-seeded admin user), so their membership cannot be backfilled
--- automatically. Confirm the owner email at deploy time and run the insert below.
---
--- DEPLOY: set the bootstrap owner email, then uncomment.
--- INSERT INTO "member" (id, organization_id, user_id, role, created_at)
--- SELECT (
---          SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',
---                                   (floor(random()*55))::int + 1, 1), '')
---          FROM generate_series(1, 12)
---        ),
---        t.organization_id, u.id, 'owner', now()
--- FROM tenant t
--- JOIN "user" u ON lower(u.email) = lower('OWNER_EMAIL_HERE')
--- WHERE t.id = 'tenant_seed1' AND t.organization_id IS NOT NULL
--- ON CONFLICT (organization_id, user_id) DO NOTHING;
+-- no SQL-seeded admin user), so it is seeded explicitly. A no-op until that user
+-- row exists (e.g. after their first sign-in); idempotent via member_org_user_key.
+INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+SELECT pg_temp.nanoid(), t.organization_id, u.id, 'owner', now()
+FROM tenant t
+JOIN "user" u ON lower(u.email) = lower('levyn.schneider@leys.ch')
+WHERE t.id = 'tenant_seed1' AND t.organization_id IS NOT NULL
+ON CONFLICT (organization_id, user_id) DO NOTHING;
