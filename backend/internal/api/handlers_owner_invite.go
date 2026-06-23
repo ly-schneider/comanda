@@ -93,6 +93,10 @@ func (h *Handlers) VerifyOwnerInvite(w http.ResponseWriter, r *http.Request) {
 // AcceptOwnerInvite makes the logged-in user the owner of the invite's
 // organization and binds it as their active organization.
 func (h *Handlers) AcceptOwnerInvite(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePlatformContext(w, r) {
+		return
+	}
+
 	ctx := r.Context()
 
 	userID, ok := auth.GetUserID(ctx)
