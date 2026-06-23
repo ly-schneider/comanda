@@ -13,9 +13,9 @@ export const authLocalizationDe = {
   // Email OTP
   emailOtp: "E-Mail-Code",
   emailOtpSendAction: "Code senden",
-  emailOtpVerifyAction: "Code bestaetigen",
+  emailOtpVerifyAction: "Code bestätigen",
   emailOtpDescription: "Gib deine E-Mail-Adresse ein, um einen Code zu erhalten",
-  emailOtpVerificationSent: "Bitte ueberpruefe deine E-Mails fuer den Bestaetigungscode.",
+  emailOtpVerificationSent: "Bitte überprüfe deine E-Mails für den Bestätigungscode.",
 
   // Sign in/out
   signIn: "Anmelden",
@@ -27,7 +27,7 @@ export const authLocalizationDe = {
 
   // Actions
   continue: "Weiter",
-  goBack: "Zurueck",
+  goBack: "Zurück",
   resendCode: "Code erneut senden",
 
   // Errors

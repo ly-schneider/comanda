@@ -88,7 +88,7 @@ function PrepareButton({ online, onClick, label }: { online: boolean; onClick: (
       {!online && (
         <p className="text-muted-foreground inline-flex items-center justify-center gap-1.5 text-xs">
           <WifiOff className="h-3.5 w-3.5" aria-hidden />
-          Mit dem Internet verbinden, um die Vorbereitung abzuschließen.
+          Mit dem Internet verbinden, um die Vorbereitung abzuschliessen.
         </p>
       )}
     </div>

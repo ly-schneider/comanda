@@ -102,7 +102,7 @@ func renderInviteHTML(data InviteEmailData) string {
                   </tr>
                 </table>
                 <p style="margin:16px 0 0 0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Diese Einladung ist gueltig bis: %s
+                  Diese Einladung ist gültig bis: %s
                 </p>
                 <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
                   <tr><td height="1" style="line-height:1px;font-size:1px;background:#D7D7D7;">&nbsp;</td></tr>
@@ -139,7 +139,7 @@ Du wurdest eingeladen, als Administrator bei %s beizutreten.
 Einladung annehmen:
 %s
 
-Diese Einladung ist gueltig bis: %s
+Diese Einladung ist gültig bis: %s
 
 Wenn du diese Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.
 `, data.Brand, data.Brand, data.InviteURL, data.ExpiresAt)

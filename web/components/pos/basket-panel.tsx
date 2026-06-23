@@ -1154,7 +1154,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                   </Button>
                 ))}
               {!hasPosBridge && (
-                <div className="text-muted-foreground text-xs">Kartenzahlung außerhalb der Android-App deaktiviert</div>
+                <div className="text-muted-foreground text-xs">
+                  Kartenzahlung ausserhalb der Android-App deaktiviert
+                </div>
               )}
             </div>
           )}

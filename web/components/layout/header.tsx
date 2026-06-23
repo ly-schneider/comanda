@@ -49,7 +49,7 @@ export default function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon" className="h-12 w-12 rounded-full">
                 <TextAlignEnd className="size-5.5 h-5.5 w-5.5" />
-                <span className="sr-only">Menu oeffnen</span>
+                <span className="sr-only">Menü öffnen</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48 rounded-2xl">

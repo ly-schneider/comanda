@@ -188,7 +188,7 @@ export default function LoginClient() {
           ) : (
             <form onSubmit={handleOtpSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="otp">Bestaetigungscode</Label>
+                <Label htmlFor="otp">Bestätigungscode</Label>
                 <p className="text-muted-foreground text-sm">Wir haben einen Code an {email} gesendet.</p>
                 <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={loading} autoFocus>
                   <InputOTPGroup>
@@ -202,7 +202,7 @@ export default function LoginClient() {
                 </InputOTP>
               </div>
               <Button type="submit" className="h-11 w-full rounded-full" disabled={loading || otp.length < 6}>
-                {loading ? "Pruefe..." : "Anmelden"}
+                {loading ? "Prüfe..." : "Anmelden"}
               </Button>
               <div className="flex justify-between text-sm">
                 <button

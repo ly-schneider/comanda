@@ -56,7 +56,7 @@ export default function AcceptInviteClient() {
         }
       } catch {
         if (!cancelled) {
-          setError("Verifizierung fehlgeschlagen. Bitte spaeter erneut versuchen.")
+          setError("Verifizierung fehlgeschlagen. Bitte später erneut versuchen.")
           setLoading(false)
         }
       }
@@ -118,7 +118,7 @@ export default function AcceptInviteClient() {
 
         <div className="mt-12 space-y-4">
           {loading ? (
-            <p>Pruefe Einladung...</p>
+            <p>Prüfe Einladung...</p>
           ) : (
             <div className="space-y-3">
               <div className="flex flex-col gap-2">
