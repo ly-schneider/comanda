@@ -296,6 +296,9 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 		ctx = WithUserName(ctx, session.Name)
 	}
 	ctx = WithIsPlatformAdmin(ctx, session.IsPlatformAdmin)
+	if session.ActiveOrganizationID != nil && *session.ActiveOrganizationID != "" {
+		ctx = WithActiveOrgID(ctx, *session.ActiveOrganizationID)
+	}
 
 	trace.IdentifyUser(ctx, session.UserID, session.Email, session.Name)
 

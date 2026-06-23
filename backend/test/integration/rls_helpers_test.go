@@ -157,6 +157,7 @@ func (e *rlsEnv) appPlatformTx(t *testing.T, isPlatformAdmin bool) (context.Cont
 	enttenant.Register(client)
 
 	ctx = repository.ContextWithClient(ctx, client)
+	ctx = repository.ContextWithRequestTx(ctx, tx)
 	ctx = enttenant.WithPlatform(ctx)
 
 	cleanup := func() {
@@ -226,6 +227,7 @@ func (e *rlsEnv) appRequestTx(t *testing.T, tenantID string) (context.Context, *
 	enttenant.Register(client)
 
 	ctx = repository.ContextWithClient(ctx, client)
+	ctx = repository.ContextWithRequestTx(ctx, tx)
 	ctx = repository.ContextWithTenantID(ctx, tenantID)
 	ctx = enttenant.WithTenant(ctx, tenantID)
 

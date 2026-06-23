@@ -272,6 +272,19 @@ func NewRouter(
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
 		})
+
+		// ── Account routes (vendor self-service; platform host only) ──
+		// The platform host carries no tenant Host, so ResolveVendorTenant binds
+		// the vendor's tenant from the session's active organization (membership
+		// verified) under RLS, with no platform-admin bypass.
+		v1.Group(func(account chi.Router) {
+			account.Use(betterAuthMw.RequireAuth())
+			account.Use(tenantMw.ResolveVendorTenant)
+			csrf := middleware.NewCSRFMiddleware()
+			account.Use(csrf.Require)
+
+			account.Get("/account/tenant", apiHandlers.GetAccountTenant)
+		})
 	})
 
 	// Compose: SSE bypasses main middleware, everything else uses full stack

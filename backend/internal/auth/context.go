@@ -23,6 +23,9 @@ const (
 	// PlatformContextKey marks a request on a platform host that resolved to no
 	// tenant. Set by the tenant resolver.
 	PlatformContextKey contextKey = "platformContext"
+	// ActiveOrgIDKey carries the session's active_organization_id, read by the
+	// user→tenant resolver to scope a platform-host request to the vendor's tenant.
+	ActiveOrgIDKey contextKey = "activeOrgID"
 )
 
 type AuthType string
@@ -72,6 +75,17 @@ func WithIsPlatformAdmin(ctx context.Context, v bool) context.Context {
 func IsPlatformAdmin(ctx context.Context) bool {
 	v, ok := ctx.Value(IsPlatformAdminKey).(bool)
 	return ok && v
+}
+
+func WithActiveOrgID(ctx context.Context, orgID string) context.Context {
+	return context.WithValue(ctx, ActiveOrgIDKey, orgID)
+}
+
+// GetActiveOrgID reports false when the session has no active organization
+// (key unset or empty).
+func GetActiveOrgID(ctx context.Context) (string, bool) {
+	orgID, ok := ctx.Value(ActiveOrgIDKey).(string)
+	return orgID, ok && orgID != ""
 }
 
 // WithPlatformContext marks the request as running on a platform host that

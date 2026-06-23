@@ -113,6 +113,12 @@ func IsPlatform(ctx context.Context) bool {
 	return ok && v
 }
 
+// WithoutPlatform clears the platform marker after the user→tenant resolver
+// binds a concrete tenant mid-request, so IsPlatform reflects the rebound state.
+func WithoutPlatform(ctx context.Context) context.Context {
+	return context.WithValue(ctx, platformCtxKey{}, false)
+}
+
 // Interceptor injects the tenant predicate on reads of scoped entities and
 // fails closed when no tenant is present.
 func Interceptor() ent.Interceptor {

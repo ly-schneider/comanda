@@ -27,8 +27,11 @@ func (e *rlsEnv) privClient() *ent.Client {
 // seedDomain registers a hostname -> tenant mapping via the privileged pool.
 func (e *rlsEnv) seedDomain(t *testing.T, tenantID string, hostname string) {
 	t.Helper()
+	// verified_at must be set: the resolver only routes verified rows (an
+	// unverified BYO host must not attract traffic), so an unverified seed would
+	// never resolve.
 	e.privExec(t,
-		`INSERT INTO tenant_domain (id, tenant_id, hostname) VALUES ($1, $2, $3)`,
+		`INSERT INTO tenant_domain (id, tenant_id, hostname, verified_at) VALUES ($1, $2, $3, now())`,
 		nanoid.New(), tenantID, hostname,
 	)
 }
@@ -61,7 +64,7 @@ func categoryHandler(w http.ResponseWriter, r *http.Request) {
 // using the given platform hosts + header-trusted flag.
 func (e *rlsEnv) buildResolverStack(platformHosts []string, headerTrusted bool) http.Handler {
 	mw := middleware.NewTenantMiddleware(
-		e.app, e.privClient(), "", platformHosts, headerTrusted, zap.NewNop(),
+		e.app, e.privClient(), e.priv, "", platformHosts, headerTrusted, zap.NewNop(),
 	)
 	h := http.HandlerFunc(categoryHandler)
 	return mw.Resolve(mw.Tx(h))
@@ -185,7 +188,7 @@ func TestPlatformHostContext(t *testing.T) {
 	}
 
 	stack := func(isAdmin bool) http.Handler {
-		mw := middleware.NewTenantMiddleware(env.app, env.privClient(), "", []string{platformHost}, false, zap.NewNop())
+		mw := middleware.NewTenantMiddleware(env.app, env.privClient(), env.priv, "", []string{platformHost}, false, zap.NewNop())
 		return mw.Resolve(mw.Tx(adminGUCHandler(isAdmin)))
 	}
 

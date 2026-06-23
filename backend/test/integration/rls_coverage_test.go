@@ -53,12 +53,11 @@ func TestRLSCoverage(t *testing.T) {
 // globalPermissiveTables are auth-plane tables whose RLS is enabled for
 // uniformity but permissive (USING true). Isolation for these is the
 // privileged-role split + app routing, not tenant_id/platform-admin. The Better
-// Auth organization-plugin tables (organization/member/invitation) join this
-// set: org is the tenant identity carrier on the auth plane; tenant-data
-// isolation lives in the scoped tables, not here.
+// Auth organization-plugin tables (organization/member/invitation) are NOT here:
+// once the org↔tenant link exists they carry org-keyed policies (see
+// orgScopedRLSTables / TestOrgScopedRLSPolicies).
 var globalPermissiveTables = []string{
 	"user", "session", "account", "verification", "jwks", "api_key",
-	"organization", "member", "invitation",
 }
 
 // TestRLSGlobalPermissive asserts the auth-plane tables carry a permissive
@@ -102,6 +101,37 @@ func TestRLSGlobalPermissive(t *testing.T) {
 		require.NoError(t, rows.Err())
 		_ = rows.Close()
 		require.GreaterOrEqualf(t, policyCount, 1, "global table %q must have a policy", table)
+	}
+}
+
+// orgScopedRLSTables are the Better Auth org-plugin tables. Their isolation
+// policy keys on the current tenant's organization (app_current_org_id()) with
+// the platform-admin bypass — distinct from the tenant_id-keyed scoped tables.
+var orgScopedRLSTables = []string{"organization", "member", "invitation"}
+
+// TestOrgScopedRLSPolicies asserts each org-plugin table carries an _isolation
+// policy gated on app_current_org_id() with the platform-admin bypass on both
+// USING and WITH CHECK. This pins the hardened classification so a regression
+// back to USING(true) (or a wrong key) fails loudly.
+func TestOrgScopedRLSPolicies(t *testing.T) {
+	env := newRLSEnv(t)
+
+	for _, table := range orgScopedRLSTables {
+		var qual, withCheck *string
+		err := env.priv.QueryRow(`
+			SELECT qual, with_check
+			FROM pg_policies
+			WHERE schemaname = 'public' AND tablename = $1 AND policyname = $2
+		`, table, table+"_isolation").Scan(&qual, &withCheck)
+		require.NoErrorf(t, err, "policy %s_isolation not found", table)
+
+		for _, clause := range []*string{qual, withCheck} {
+			require.NotNilf(t, clause, "policy %s_isolation missing a USING/WITH CHECK clause", table)
+			require.Containsf(t, *clause, "app_current_org_id()",
+				"policy %s_isolation must key on the current org", table)
+			require.Containsf(t, *clause, "app_is_platform_admin()",
+				"policy %s_isolation must include the platform-admin bypass", table)
+		}
 	}
 }
 

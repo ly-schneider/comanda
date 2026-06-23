@@ -38,6 +38,7 @@ func NewTenantMiddleware(
 	return middleware.NewTenantMiddleware(
 		app.DB,
 		privileged.Client,
+		privileged.DB,
 		cfg.App.BootstrapTenantSlug,
 		cfg.App.PlatformHosts,
 		cfg.App.TenantHeaderTrusted,
