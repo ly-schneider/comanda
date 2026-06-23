@@ -3,6 +3,7 @@ package auth
 import (
 	"backend/internal/generated/ent/devicebinding"
 	"backend/internal/repository"
+	"backend/internal/response"
 	"backend/internal/trace"
 	"context"
 	"errors"
@@ -212,6 +213,54 @@ func (m *SessionMiddleware) RequirePermission(perm Permission) func(http.Handler
 	}
 }
 
+// RequireTenantRole gates the subdomain /admin surface on the tenant-scoped org
+// membership. It runs after RequireAuth, inside the per-request tenant tx, and
+// reads member.role through the app pool — org-keyed RLS already pins the lookup
+// to the host-resolved tenant's organization, so a member of another tenant gets
+// no row and is refused, closing the cross-tenant gap the global user.role gate
+// left open. A platform admin bypasses, consistent with the RLS bypass.
+func (m *SessionMiddleware) RequireTenantRole(min TenantTier) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			if IsPlatformAdmin(ctx) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if _, ok := GetUserID(ctx); !ok {
+				writeTenantRoleError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+				return
+			}
+
+			role, ok, err := tenantMemberRole(ctx)
+			if err != nil {
+				m.logger.Error("require tenant role: member lookup", zap.Error(err))
+				writeTenantRoleError(w, http.StatusInternalServerError, "internal_error", "internal error")
+				return
+			}
+			if !ok {
+				writeTenantRoleError(w, http.StatusForbidden, "tenant_access_denied",
+					"You are not a member of this organization")
+				return
+			}
+
+			if !memberRoleSatisfies(role, min) {
+				writeTenantRoleError(w, http.StatusForbidden, "insufficient_role",
+					"Your role does not permit this action")
+				return
+			}
+
+			next.ServeHTTP(w, r.WithContext(WithMemberRole(ctx, role)))
+		})
+	}
+}
+
+func writeTenantRoleError(w http.ResponseWriter, status int, code, message string) {
+	response.WriteJSON(w, status, map[string]string{"code": code, "message": message})
+}
+
 // extractSessionToken extracts the session token from the request.
 // Checks cookies first (browser), then falls back to Authorization: Bearer header.
 func (m *SessionMiddleware) extractSessionToken(r *http.Request) (string, error) {
@@ -286,6 +335,9 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 
 	ctx := r.Context()
 	ctx = WithUserID(ctx, session.UserID)
+	if session.SessionID != "" {
+		ctx = WithSessionID(ctx, session.SessionID)
+	}
 	if session.Role != "" {
 		ctx = WithUserRole(ctx, string(session.Role))
 	}

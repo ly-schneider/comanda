@@ -37,7 +37,7 @@ type AdminInviteService interface {
 	// Admin operations (requires auth)
 	List(ctx context.Context, status *string, email *string) ([]*ent.AdminInvite, int64, error)
 	GetByID(ctx context.Context, id string) (*ent.AdminInvite, error)
-	Create(ctx context.Context, inviterID, email string, expiresInSec *int) (*ent.AdminInvite, error)
+	Create(ctx context.Context, inviterID, email string, memberRole admininvite.MemberRole, expiresInSec *int) (*ent.AdminInvite, error)
 	Delete(ctx context.Context, id string) error
 	Revoke(ctx context.Context, id string) error
 	Resend(ctx context.Context, id string) error
@@ -100,9 +100,13 @@ func (s *adminInviteService) List(ctx context.Context, status *string, email *st
 	return invites, total, nil
 }
 
-func (s *adminInviteService) Create(ctx context.Context, inviterID, email string, expiresInSec *int) (*ent.AdminInvite, error) {
+func (s *adminInviteService) Create(ctx context.Context, inviterID, email string, memberRole admininvite.MemberRole, expiresInSec *int) (*ent.AdminInvite, error) {
 	// Normalize email
 	email = strings.ToLower(strings.TrimSpace(email))
+
+	if memberRole == "" {
+		memberRole = admininvite.MemberRoleOps
+	}
 
 	// Calculate expiry
 	ttl := defaultInviteTTL
@@ -120,7 +124,7 @@ func (s *adminInviteService) Create(ctx context.Context, inviterID, email string
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	invite, err := s.inviteRepo.Create(ctx, inviterID, email, tokenHash, admininvite.StatusPending, expiresAt)
+	invite, err := s.inviteRepo.Create(ctx, inviterID, email, tokenHash, admininvite.StatusPending, memberRole, expiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -263,20 +267,45 @@ func (s *adminInviteService) Accept(ctx context.Context, token, firstName, lastN
 		return err
 	}
 
+	var userID string
 	if existingUser != nil {
-		// Update existing user to admin role
 		if err := s.userRepo.UpdateRoleAndName(ctx, existingUser.ID, user.RoleAdmin, name); err != nil {
 			return err
 		}
+		userID = existingUser.ID
 	} else {
-		// Create new user with admin role
-		if _, err := s.userRepo.CreateAdminUser(ctx, email, name); err != nil {
+		created, err := s.userRepo.CreateAdminUser(ctx, email, name)
+		if err != nil {
 			return err
 		}
+		userID = created.ID
+	}
+
+	if err := s.linkMember(ctx, userID, invite.MemberRole); err != nil {
+		return err
 	}
 
 	// Mark invite as accepted
 	return s.inviteRepo.MarkAccepted(ctx, invite.ID)
+}
+
+// linkMember records the accepting user as a member of the bound tenant's
+// organization, at the invite's tier. It runs on the request tx (app pool) and
+// is guarded so it never inserts a NULL org for an unlinked tenant. Idempotent:
+// re-accepting upgrades the existing membership to the invite's role.
+func (s *adminInviteService) linkMember(ctx context.Context, userID string, role admininvite.MemberRole) error {
+	tx, ok := repository.RequestTxFromContext(ctx)
+	if !ok {
+		return errors.New("admin invite: no request tx in context for member insert")
+	}
+	_, err := tx.ExecContext(ctx,
+		`INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+		 SELECT $1, app_current_org_id(), $2, $3, now()
+		 WHERE app_current_org_id() IS NOT NULL
+		 ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		nanoid.New(), userID, string(role),
+	)
+	return err
 }
 
 func (s *adminInviteService) buildInviteURL(token string) string {

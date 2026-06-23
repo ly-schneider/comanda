@@ -1,4 +1,4 @@
-h1:hje96uiAUGsIoe/p+2Npli5ImnG1eKfPx/YAWZfX9vg=
+h1:pbgTX+zXSKcyrX51pNyADsn881ZcvbdPxEmjXgWds7o=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -19,3 +19,4 @@ h1:hje96uiAUGsIoe/p+2Npli5ImnG1eKfPx/YAWZfX9vg=
 20260622000000_branding_secondary_font_radius.sql h1:AzNLljIrRhF69pszNYQDhBG16CHfXrZY9cVWmaEKh3o=
 20260623000000_grant_better_auth_tables_app_role.sql h1:HBJ6p0BSqwRbYc6wSnp+A4KOKc/urvQFFst9wQGoRP0=
 20260624000000_link_organization_to_tenant.sql h1:kbuf+AuKkhprq8wP+WhAFNI4dZX5e1hsYpD+D0bG33k=
+20260625000000_invitation_token_and_member_backfill.sql h1:1E3SA7BvrD4/C6n/YY/ZaNaQLse4A+bhCAr1c22byss=

@@ -13,6 +13,7 @@ import (
 )
 
 type SessionWithUser struct {
+	SessionID            string
 	UserID               string
 	Role                 user.Role
 	Email                string
@@ -63,6 +64,7 @@ func (r *sessionRepo) GetByToken(ctx context.Context, token string) (*SessionWit
 	}
 
 	return &SessionWithUser{
+		SessionID:            e.ID,
 		UserID:               e.UserID,
 		Role:                 u.Role,
 		Email:                email,

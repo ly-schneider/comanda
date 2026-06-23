@@ -49,6 +49,11 @@ InvitePublic:
       type: string
       format: date-time
 
+MemberRole:
+  type: string
+  enum: [admin, ops]
+  description: Tenant membership tier granted on acceptance. Defaults to ops.
+
 InviteCreate:
   type: object
   required: [email]
@@ -56,6 +61,8 @@ InviteCreate:
     email:
       type: string
       format: email
+    memberRole:
+      $ref: "#/MemberRole"
 
 InviteTokenRequest:
   type: object

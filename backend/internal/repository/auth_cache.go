@@ -149,8 +149,28 @@ func (r *cachedSessionRepo) CreateSession(ctx context.Context, userID string, ex
 	return r.inner.CreateSession(ctx, userID, expiresIn)
 }
 
+// InvalidateUser drops every cached session for a user so a change written
+// directly to the session row (e.g. active_organization_id on owner-invite
+// accept) is re-read on the next request instead of waiting out the TTL. The
+// cache is keyed by token, so it scans for the user's entries.
+func (r *cachedSessionRepo) InvalidateUser(userID string) {
+	r.cache.mu.Lock()
+	for k, v := range r.cache.entries {
+		if v.value != nil && v.value.UserID == userID {
+			delete(r.cache.entries, k)
+		}
+	}
+	r.cache.mu.Unlock()
+}
+
 type AsyncSessionRefresher interface {
 	RefreshSessionAsync(token string, expiresIn time.Duration, logger *zap.Logger)
+}
+
+// SessionInvalidator lets a caller drop a user's cached sessions after writing
+// directly to the session row.
+type SessionInvalidator interface {
+	InvalidateUser(userID string)
 }
 
 type cachedDeviceBindingRepo struct {

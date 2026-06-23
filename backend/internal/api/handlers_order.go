@@ -23,16 +23,23 @@ const (
 	idempotencyTTL          = 24 * time.Hour
 )
 
-// ListOrders returns orders with optional filtering.
-// Admins see all orders; regular users see only their own.
+// ListOrders returns orders with optional filtering. A tenant member (ops tier
+// or above) of the bound tenant — or a platform admin — sees all of the tenant's
+// orders; everyone else sees only their own. The full listing is gated on
+// tenant-scoped membership, not the global user.role, so the role cannot be
+// replayed against another tenant's host.
 // (GET /orders)
 func (h *Handlers) ListOrders(w http.ResponseWriter, r *http.Request, params generated.ListOrdersParams) {
 	ctx := r.Context()
 
-	role, _ := auth.GetUserRole(ctx)
+	isAdmin, err := auth.HasTenantTier(ctx, auth.TierOps)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "An unexpected error occurred.")
+		return
+	}
 	scopeMine := params.Scope != nil && *params.Scope == generated.Mine
 
-	if role != string(auth.RoleAdmin) || scopeMine {
+	if !isAdmin || scopeMine {
 		uid, ok := auth.GetUserID(ctx)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
