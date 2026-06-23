@@ -324,7 +324,6 @@ func toAPIUser(e *ent.User) generated.User {
 		Image:         e.Image,
 		EmailVerified: ptr(e.EmailVerified),
 		IsAnonymous:   ptr(e.IsAnonymous),
-		Role:          generated.UserRole(e.Role),
 		CreatedAt:     e.CreatedAt,
 		UpdatedAt:     ptr(e.UpdatedAt),
 	}

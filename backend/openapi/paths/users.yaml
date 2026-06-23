@@ -6,12 +6,6 @@ collection:
     security:
       - sessionAuth: []
     x-required-permissions: [users:read]
-    parameters:
-      - name: role
-        in: query
-        description: Filter by role
-        schema:
-          $ref: "../schemas/users.yaml#/UserRole"
     responses:
       "200":
         description: User list
@@ -65,7 +59,7 @@ item:
   patch:
     tags: [Users]
     summary: Update user
-    description: Update user role or ban status.
+    description: Update a user's name.
     operationId: updateUser
     security:
       - sessionAuth: []
@@ -77,14 +71,10 @@ item:
           schema:
             $ref: "../schemas/users.yaml#/UserUpdate"
           examples:
-            promote_to_admin:
-              summary: Promote to admin
+            rename:
+              summary: Rename
               value:
-                role: admin
-            demote_to_customer:
-              summary: Demote to customer
-              value:
-                role: customer
+                name: Jane Doe
     responses:
       "200":
         description: User updated

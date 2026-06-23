@@ -52,6 +52,7 @@ InvitePublic:
 MemberRole:
   type: string
   enum: [admin, ops]
+  x-enum-varnames: [MemberRoleAdmin, MemberRoleOps]
   description: Tenant membership tier granted on acceptance. Defaults to ops.
 
 InviteCreate:

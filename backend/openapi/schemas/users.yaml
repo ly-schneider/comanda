@@ -1,10 +1,6 @@
-UserRole:
-  type: string
-  enum: [admin, customer]
-
 User:
   type: object
-  required: [id, email, role, createdAt]
+  required: [id, email, createdAt]
   properties:
     id:
       type: string
@@ -20,8 +16,6 @@ User:
     image:
       type: string
       nullable: true
-    role:
-      $ref: "#/UserRole"
     isAnonymous:
       type: boolean
     banned:
@@ -43,8 +37,6 @@ User:
 UserUpdate:
   type: object
   properties:
-    role:
-      $ref: "#/UserRole"
     name:
       type: string
 

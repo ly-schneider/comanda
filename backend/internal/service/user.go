@@ -11,9 +11,8 @@ import (
 )
 
 type UserService interface {
-	List(ctx context.Context, role *string) ([]*ent.User, int64, error)
+	List(ctx context.Context) ([]*ent.User, int64, error)
 	GetByID(ctx context.Context, id string) (*ent.User, error)
-	UpdateRole(ctx context.Context, id string, role string) error
 	UpdateName(ctx context.Context, id string, name string) error
 	Delete(ctx context.Context, id string) error
 }
@@ -33,11 +32,8 @@ func NewUserService(
 	}
 }
 
-func (s *userService) List(ctx context.Context, role *string) ([]*ent.User, int64, error) {
+func (s *userService) List(ctx context.Context) ([]*ent.User, int64, error) {
 	q := s.client.User.Query()
-	if role != nil && *role != "" {
-		q = q.Where(user.RoleEQ(user.Role(*role)))
-	}
 
 	total, err := q.Clone().Count(ctx)
 	if err != nil {
@@ -54,10 +50,6 @@ func (s *userService) List(ctx context.Context, role *string) ([]*ent.User, int6
 
 func (s *userService) GetByID(ctx context.Context, id string) (*ent.User, error) {
 	return s.userRepo.GetByID(ctx, id)
-}
-
-func (s *userService) UpdateRole(ctx context.Context, id string, role string) error {
-	return s.userRepo.UpdateRole(ctx, id, user.Role(role))
 }
 
 func (s *userService) UpdateName(ctx context.Context, id string, name string) error {
