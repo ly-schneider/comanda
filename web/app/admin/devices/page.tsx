@@ -14,11 +14,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useAuth } from "@/contexts/auth-context"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
-import { hasPermission } from "@/lib/auth/rbac"
+import { useMemberTier } from "@/hooks/use-member-tier"
 import { getCSRFToken } from "@/lib/csrf"
-import type { UserRole } from "@/types"
 
 type Device = {
   id: string
@@ -36,14 +34,12 @@ type Device = {
 
 export default function AdminDevicesPage() {
   const fetchAuth = useAuthorizedFetch()
-  const { user: currentUser } = useAuth()
+  const { isTenantAdmin: canRevoke } = useMemberTier()
   const [items, setItems] = useState<Device[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
   const [confirmRevoke, setConfirmRevoke] = useState<{ id: string; name: string } | null>(null)
-
-  const canRevoke = hasPermission(currentUser?.role as UserRole, "devices:revoke")
 
   async function load() {
     setLoading(true)
@@ -82,7 +78,6 @@ export default function AdminDevicesPage() {
         headers: { "X-CSRF": csrf || "" },
       })
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
-      // Remove the revoked device from the list
       setItems((prev) => prev.filter((d) => d.id !== id))
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Gerät konnte nicht gesperrt werden"

@@ -1,21 +1,17 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { canAccessAdmin } from "@/lib/auth/rbac"
-import type { UserRole } from "@/types"
+import { useMemberTier } from "@/hooks/use-member-tier"
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { isMember, isLoading } = useMemberTier()
   const router = useRouter()
 
-  const hasAccess = user ? canAccessAdmin(user.role as UserRole) : false
-
   useEffect(() => {
-    if (!isLoading && !hasAccess) {
+    if (!isLoading && !isMember) {
       router.replace("/")
     }
-  }, [isLoading, hasAccess, router])
+  }, [isLoading, isMember, router])
 
   if (isLoading) {
     return (
@@ -25,7 +21,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!hasAccess) return null
+  if (!isMember) return null
 
   return <>{children}</>
 }
