@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const plunkSendEndpoint = "https://api.useplunk.com/v1/send"
+const plunkSendEndpoint = "https://next-api.useplunk.com/v1/send"
 
 type PlunkSendRequest struct {
 	To         string            `json:"to"`
