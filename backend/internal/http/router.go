@@ -297,7 +297,29 @@ func NewRouter(
 			csrf := middleware.NewCSRFMiddleware()
 			account.Use(csrf.Require)
 
+			// Any member: the tenant summary and the branding that themes the
+			// hub chrome (resolved to the vendor's tenant, not platform defaults).
 			account.Get("/account/tenant", apiHandlers.GetAccountTenant)
+			account.Get("/account/branding", wrapper.GetBranding)
+
+			// Tenant administration (owner/admin): the same branding and custom-
+			// domain surfaces as the subdomain /admin tadmin group, rebound to the
+			// vendor's tenant. Reuses the audited handlers — they read the tenant
+			// from context, which ResolveVendorTenant has bound.
+			account.Group(func(mgmt chi.Router) {
+				mgmt.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
+
+				mgmt.Get("/account/settings", wrapper.GetSettings)
+				mgmt.Patch("/account/settings", wrapper.UpdateSettings)
+				mgmt.Post("/account/settings/logo", wrapper.UploadBrandingLogo)
+				mgmt.Delete("/account/settings/logo", wrapper.DeleteBrandingLogo)
+
+				mgmt.Get("/account/domains", wrapper.ListDomains)
+				mgmt.Post("/account/domains", wrapper.CreateDomain)
+				mgmt.Get("/account/domains/{id}", wrapper.GetDomain)
+				mgmt.Delete("/account/domains/{id}", wrapper.DeleteDomain)
+				mgmt.Post("/account/domains/{id}/verify", wrapper.VerifyDomain)
+			})
 		})
 
 		// ── Owner-invite acceptance (authed; not yet a member) ──
