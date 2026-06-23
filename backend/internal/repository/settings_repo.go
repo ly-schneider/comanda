@@ -21,6 +21,9 @@ type SettingsRepository interface {
 	UpdateClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
+	// SetOnboardingCompleted stamps (completed=true) or clears the onboarding
+	// completion time. Per-step progress is derived elsewhere from real data.
+	SetOnboardingCompleted(ctx context.Context, completed bool) error
 	UpdateBranding(ctx context.Context, b BrandingUpdate) error
 	// TenantName returns the current tenant's name (RLS scopes it to one row).
 	TenantName(ctx context.Context) (string, error)
@@ -79,7 +82,6 @@ type BrandingUpdate struct {
 	ContactPhone           *string
 	LegalName              *string
 	LegalAddress           *string
-	LegalText              *string
 	Currency               *string
 	PaymentProvider        *string
 }
@@ -233,6 +235,26 @@ func (r *settingsRepo) SetSystemEnabled(ctx context.Context, enabled bool) error
 	return translateError(err)
 }
 
+func (r *settingsRepo) SetOnboardingCompleted(ctx context.Context, completed bool) error {
+	id := r.settingsID(ctx)
+	create := r.ec(ctx).Settings.Create().SetID(id)
+	if tenantID, ok := TenantIDFromContext(ctx); ok {
+		create = create.SetTenantID(tenantID)
+	}
+	if completed {
+		now := time.Now()
+		create = create.SetOnboardingCompletedAt(now)
+		return translateError(create.
+			OnConflictColumns(settings.FieldID).
+			Update(func(u *ent.SettingsUpsert) { u.SetOnboardingCompletedAt(now) }).
+			Exec(ctx))
+	}
+	return translateError(create.
+		OnConflictColumns(settings.FieldID).
+		Update(func(u *ent.SettingsUpsert) { u.ClearOnboardingCompletedAt() }).
+		Exec(ctx))
+}
+
 func (r *settingsRepo) TenantName(ctx context.Context) (string, error) {
 	tenantID, ok := TenantIDFromContext(ctx)
 	if !ok {
@@ -306,10 +328,6 @@ func (r *settingsRepo) UpdateBranding(ctx context.Context, b BrandingUpdate) err
 		func(s string) { create.SetLegalAddress(s) },
 		func(s string) { up.SetLegalAddress(s) },
 		func() { up.ClearLegalAddress() })
-	addNillable(b.LegalText,
-		func(s string) { create.SetLegalText(s) },
-		func(s string) { up.SetLegalText(s) },
-		func() { up.ClearLegalText() })
 
 	addRequired(b.ColorPrimary,
 		func(s string) { create.SetColorPrimary(s) },

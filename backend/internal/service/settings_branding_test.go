@@ -38,8 +38,9 @@ func (f *fakeSettingsRepo) Upsert(context.Context, settings.PosMode) error { ret
 func (f *fakeSettingsRepo) UpdateClub100Settings(context.Context, []string, int) error {
 	return nil
 }
-func (f *fakeSettingsRepo) IsSystemEnabled(context.Context) (bool, error) { return true, nil }
-func (f *fakeSettingsRepo) SetSystemEnabled(context.Context, bool) error  { return nil }
+func (f *fakeSettingsRepo) IsSystemEnabled(context.Context) (bool, error)      { return true, nil }
+func (f *fakeSettingsRepo) SetSystemEnabled(context.Context, bool) error       { return nil }
+func (f *fakeSettingsRepo) SetOnboardingCompleted(context.Context, bool) error { return nil }
 func (f *fakeSettingsRepo) UpdateBranding(_ context.Context, b repository.BrandingUpdate) error {
 	f.branding = &b
 	return nil

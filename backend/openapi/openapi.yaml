@@ -54,6 +54,10 @@ tags:
     description: Per-tenant custom domains (ownership verification, TLS status)
   - name: Platform
     description: Platform admin (cross-tenant tenant provisioning and management)
+  - name: Account
+    description: Vendor account hub (self-service, scoped to the vendor's tenant)
+  - name: OwnerInvites
+    description: Owner-invite registration (platform-host invite → tenant owner)
 
 paths:
   /auth/otp-email:
@@ -153,6 +157,20 @@ paths:
     $ref: "paths/platform.yaml#/collection"
   /platform/tenants/{tenantId}:
     $ref: "paths/platform.yaml#/item"
+  /platform/tenants/{tenantId}/owner-invite:
+    $ref: "paths/platform.yaml#/owner-invite"
+
+  /account/tenant:
+    $ref: "paths/account.yaml#/tenant"
+  /account/onboarding:
+    $ref: "paths/account.yaml#/onboarding"
+  /account/onboarding/complete:
+    $ref: "paths/account.yaml#/onboarding-complete"
+
+  /owner-invites/verify:
+    $ref: "paths/owner-invites.yaml#/verify"
+  /owner-invites/accept:
+    $ref: "paths/owner-invites.yaml#/accept"
 
   /branding:
     $ref: "paths/branding.yaml#/collection"

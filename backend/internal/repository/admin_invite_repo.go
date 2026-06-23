@@ -10,7 +10,7 @@ import (
 )
 
 type AdminInviteRepository interface {
-	Create(ctx context.Context, invitedByUserID, inviteeEmail, tokenHash string, status admininvite.Status, expiresAt time.Time) (*ent.AdminInvite, error)
+	Create(ctx context.Context, invitedByUserID, inviteeEmail, tokenHash string, status admininvite.Status, memberRole admininvite.MemberRole, expiresAt time.Time) (*ent.AdminInvite, error)
 	GetByID(ctx context.Context, id string) (*ent.AdminInvite, error)
 	GetByTokenHash(ctx context.Context, tokenHash string) (*ent.AdminInvite, error)
 	List(ctx context.Context, status *admininvite.Status, email *string) ([]*ent.AdminInvite, int64, error)
@@ -32,12 +32,13 @@ func (r *adminInviteRepo) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
-func (r *adminInviteRepo) Create(ctx context.Context, invitedByUserID, inviteeEmail, tokenHash string, status admininvite.Status, expiresAt time.Time) (*ent.AdminInvite, error) {
+func (r *adminInviteRepo) Create(ctx context.Context, invitedByUserID, inviteeEmail, tokenHash string, status admininvite.Status, memberRole admininvite.MemberRole, expiresAt time.Time) (*ent.AdminInvite, error) {
 	created, err := r.ec(ctx).AdminInvite.Create().
 		SetInvitedByUserID(invitedByUserID).
 		SetInviteeEmail(inviteeEmail).
 		SetTokenHash(tokenHash).
 		SetStatus(status).
+		SetMemberRole(memberRole).
 		SetExpiresAt(expiresAt).
 		Save(ctx)
 	if err != nil {

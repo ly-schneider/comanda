@@ -24,15 +24,18 @@ const (
 )
 
 // ListOrders returns orders with optional filtering.
-// Admins see all orders; regular users see only their own.
 // (GET /orders)
 func (h *Handlers) ListOrders(w http.ResponseWriter, r *http.Request, params generated.ListOrdersParams) {
 	ctx := r.Context()
 
-	role, _ := auth.GetUserRole(ctx)
+	isAdmin, err := auth.HasTenantTier(ctx, auth.TierOps)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "An unexpected error occurred.")
+		return
+	}
 	scopeMine := params.Scope != nil && *params.Scope == generated.Mine
 
-	if role != string(auth.RoleAdmin) || scopeMine {
+	if !isAdmin || scopeMine {
 		uid, ok := auth.GetUserID(ctx)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")

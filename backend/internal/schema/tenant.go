@@ -30,6 +30,12 @@ func (Tenant) Fields() []ent.Field {
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
+		// 1:1 link to the tenant's Better Auth organization. Its FK, unique index,
+		// and org-keyed RLS live in the migration (organization is not an Ent type).
+		field.String("organization_id").
+			Optional().
+			Nillable().
+			Immutable(),
 		field.Enum("status").
 			Values("active", "suspended").
 			Default("active").

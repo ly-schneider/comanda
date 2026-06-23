@@ -22,6 +22,7 @@ func NewServices() fx.Option {
 			repository.NewIdempotencyRepository,
 			service.NewEmailService,
 			service.NewAdminInviteService,
+			service.NewOwnerInviteService,
 			service.NewUserService,
 			service.NewDeviceService,
 			inventory.NewHub,

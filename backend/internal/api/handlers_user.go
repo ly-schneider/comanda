@@ -8,20 +8,12 @@ import (
 	"backend/internal/response"
 )
 
-// ListUsers returns users, optionally filtered by role.
+// ListUsers returns the users.
 // (GET /users)
-func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request, params generated.ListUsersParams) {
+func (h *Handlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var roleFilter *string
-	if params.Role != nil {
-		s := string(*params.Role)
-		roleFilter = &s
-	}
-
-	// After Task 6, a UserService will expose List/Get/Update/Delete
-	// that return ent.User types. For now this calls the future interface.
-	users, _, err := h.users.List(ctx, roleFilter)
+	users, _, err := h.users.List(ctx)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -52,13 +44,6 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request, userId str
 	}
 
 	ctx := r.Context()
-
-	if body.Role != nil {
-		if err := h.users.UpdateRole(ctx, userId, string(*body.Role)); err != nil {
-			writeEntError(w, err)
-			return
-		}
-	}
 
 	if body.Name != nil {
 		if err := h.users.UpdateName(ctx, userId, *body.Name); err != nil {

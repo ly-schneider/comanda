@@ -12,9 +12,8 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*ent.User, error)
 	GetByID(ctx context.Context, id string) (*ent.User, error)
 	List(ctx context.Context, limit, offset int) ([]*ent.User, int64, error)
-	UpdateRole(ctx context.Context, id string, role user.Role) error
-	UpdateRoleAndName(ctx context.Context, id string, role user.Role, name string) error
-	CreateAdminUser(ctx context.Context, email, name string) (*ent.User, error)
+	UpdateName(ctx context.Context, id string, name string) error
+	CreateInvitedUser(ctx context.Context, email, name string) (*ent.User, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -66,24 +65,9 @@ func (r *userRepo) List(ctx context.Context, limit, offset int) ([]*ent.User, in
 	return rows, int64(total), nil
 }
 
-func (r *userRepo) UpdateRole(ctx context.Context, id string, role user.Role) error {
+func (r *userRepo) UpdateName(ctx context.Context, id string, name string) error {
 	n, err := r.ec(ctx).User.Update().
 		Where(user.IDEQ(id)).
-		SetRole(role).
-		Save(ctx)
-	if err != nil {
-		return translateError(err)
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (r *userRepo) UpdateRoleAndName(ctx context.Context, id string, role user.Role, name string) error {
-	n, err := r.ec(ctx).User.Update().
-		Where(user.IDEQ(id)).
-		SetRole(role).
 		SetName(name).
 		Save(ctx)
 	if err != nil {
@@ -95,14 +79,17 @@ func (r *userRepo) UpdateRoleAndName(ctx context.Context, id string, role user.R
 	return nil
 }
 
-func (r *userRepo) CreateAdminUser(ctx context.Context, email, name string) (*ent.User, error) {
+// CreateInvitedUser creates the user backing an accepted staff invite. The user
+// is a global customer; their tenant tier comes from the member row written in
+// the same accept, so the global user.role grants nothing cross-tenant.
+func (r *userRepo) CreateInvitedUser(ctx context.Context, email, name string) (*ent.User, error) {
 	e, err := r.ec(ctx).User.Create().
 		SetID(generateUserID()).
 		SetEmail(email).
 		SetName(name).
 		SetEmailVerified(true).
 		SetIsAnonymous(false).
-		SetRole(user.RoleAdmin).
+		SetRole(user.RoleCustomer).
 		Save(ctx)
 	if err != nil {
 		return nil, translateError(err)

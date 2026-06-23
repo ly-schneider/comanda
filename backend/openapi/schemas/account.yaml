@@ -1,0 +1,34 @@
+AccountTenant:
+  type: object
+  required: [id, slug, name]
+  properties:
+    id:
+      type: string
+    slug:
+      type: string
+    name:
+      type: string
+
+OnboardingStatus:
+  type: object
+  required: [completedAt, steps]
+  properties:
+    completedAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: When the vendor finished or dismissed the wizard; null while open.
+    steps:
+      $ref: "#/OnboardingSteps"
+
+OnboardingSteps:
+  type: object
+  required: [brand, payments, domain]
+  description: Per-step completion derived from tenant data.
+  properties:
+    brand:
+      type: boolean
+    payments:
+      type: boolean
+    domain:
+      type: boolean

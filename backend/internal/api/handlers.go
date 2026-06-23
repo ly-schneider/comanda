@@ -28,6 +28,7 @@ type Handlers struct {
 	settings      service.SettingsService
 	stations      service.StationService
 	invites       service.AdminInviteService
+	ownerInvites  service.OwnerInviteService
 	email         service.EmailService
 	users         service.UserService
 	devices       service.DeviceService
@@ -68,6 +69,7 @@ type HandlersDeps struct {
 	Settings      service.SettingsService
 	Stations      service.StationService
 	Invites       service.AdminInviteService
+	OwnerInvites  service.OwnerInviteService
 	Email         service.EmailService
 	Users         service.UserService
 	Devices       service.DeviceService
@@ -98,6 +100,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		settings:      deps.Settings,
 		stations:      deps.Stations,
 		invites:       deps.Invites,
+		ownerInvites:  deps.OwnerInvites,
 		email:         deps.Email,
 		users:         deps.Users,
 		devices:       deps.Devices,

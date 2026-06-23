@@ -63,9 +63,6 @@ Settings:
     legalAddress:
       type: string
       nullable: true
-    legalText:
-      type: string
-      nullable: true
     currency:
       type: string
       description: ISO 4217 currency code (3 uppercase letters)
@@ -117,9 +114,6 @@ SettingsUpdate:
       type: string
       nullable: true
     legalAddress:
-      type: string
-      nullable: true
-    legalText:
       type: string
       nullable: true
     currency:

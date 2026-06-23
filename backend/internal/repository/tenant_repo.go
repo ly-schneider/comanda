@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/tenant"
+	nanoid "backend/internal/id"
 )
 
 // TenantRepository manages the platform's tenant roster plus the per-tenant rows
@@ -39,11 +41,33 @@ func (r *tenantRepo) ec(ctx context.Context) *ent.Client {
 }
 
 func (r *tenantRepo) Create(ctx context.Context, slug, name string) (*ent.Tenant, error) {
+	// The organization must exist before the tenant references it (FK), and both
+	// run in the one request tx so a partial failure rolls the pair back.
+	orgID := nanoid.New()
+	if err := r.seedOrganization(ctx, orgID, name, slug); err != nil {
+		return nil, err
+	}
 	created, err := r.ec(ctx).Tenant.Create().
 		SetSlug(slug).
 		SetName(name).
+		SetOrganizationID(orgID).
 		Save(ctx)
 	return created, translateError(err)
+}
+
+// seedOrganization inserts the tenant's organization on the request tx as raw
+// SQL — organization is owned by Better Auth, not Ent. The insert passes RLS
+// because provisioning runs in the platform-admin context.
+func (r *tenantRepo) seedOrganization(ctx context.Context, orgID, name, slug string) error {
+	tx, ok := RequestTxFromContext(ctx)
+	if !ok {
+		return errors.New("tenant repo: no request tx in context for organization insert")
+	}
+	_, err := tx.ExecContext(ctx,
+		`INSERT INTO "organization" (id, name, slug, created_at) VALUES ($1, $2, $3, now())`,
+		orgID, name, slug,
+	)
+	return translateError(err)
 }
 
 func (r *tenantRepo) List(ctx context.Context) ([]*ent.Tenant, error) {

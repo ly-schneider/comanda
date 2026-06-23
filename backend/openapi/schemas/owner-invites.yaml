@@ -1,0 +1,33 @@
+OwnerInvite:
+  type: object
+  required: [email, status, expiresAt]
+  properties:
+    email:
+      type: string
+    status:
+      type: string
+    expiresAt:
+      type: string
+      format: date-time
+
+OwnerInviteCreate:
+  type: object
+  required: [email]
+  properties:
+    email:
+      type: string
+      format: email
+
+OwnerInviteTokenRequest:
+  type: object
+  required: [token]
+  properties:
+    token:
+      type: string
+
+OwnerInviteAcceptResult:
+  type: object
+  required: [organizationId]
+  properties:
+    organizationId:
+      type: string

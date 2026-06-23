@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react"
 import type { Branding } from "@/lib/server/branding"
 
 // Curated font set. Keys MUST match the backend allow-list (allowedFontKeys in
@@ -67,12 +68,12 @@ export function pickForeground(hex: string): string {
   return luminance > 0.6 ? "#0a0a0a" : "#ffffff"
 }
 
-// buildThemeCss renders the per-tenant :root overrides injected into <head>.
-// It overrides only the accent colors, the active font, and the corner radii —
-// the white/monochrome base (background, foreground, cards, borders) stays
-// fixed. Colors are backend-validated hex; font/radius come from allow-listed
-// keys mapped to constants here, so nothing untrusted is interpolated into CSS.
-export function buildThemeCss(branding: Branding): string {
+// resolveThemeVars maps a branding into the CSS custom properties we override.
+// It touches only the accent colors, the active font, and the corner radii — the
+// white/monochrome base (background, foreground, cards, borders) stays fixed.
+// Colors are backend-validated hex; font/radius come from allow-listed keys
+// mapped to constants here, so nothing untrusted is interpolated.
+function resolveThemeVars(branding: Branding): Record<string, string> {
   const primary = safeColor(branding.colors.primary, "#0a0a0a")
   const secondary = safeColor(branding.colors.secondary, "#f5f5f5")
   const primaryForeground = pickForeground(primary)
@@ -81,24 +82,38 @@ export function buildThemeCss(branding: Branding): string {
   const radius = RADIUS_KEY_TO_VALUES[branding.radiusKey] ?? { control: "0.625rem", surface: "1rem", cta: "9999px" }
   const fontFamily = `var(${fontVar}), ui-sans-serif, system-ui, sans-serif`
 
-  return [
-    ":root {",
-    `  --primary: ${primary};`,
-    `  --primary-hover: ${primary};`,
-    `  --primary-foreground: ${primaryForeground};`,
-    `  --secondary: ${secondary};`,
-    `  --secondary-hover: ${secondary};`,
-    `  --secondary-foreground: ${secondaryForeground};`,
-    `  --ring: ${primary};`,
-    `  --chart-1: ${primary};`,
-    `  --sidebar-accent: ${primary};`,
-    `  --sidebar-accent-foreground: ${primaryForeground};`,
-    `  --sidebar-ring: ${primary};`,
-    `  --font-family-primary: ${fontFamily};`,
-    `  --font-family-secondary: ${fontFamily};`,
-    `  --control-radius: ${radius.control};`,
-    `  --surface-radius: ${radius.surface};`,
-    `  --cta-radius: ${radius.cta};`,
-    "}",
-  ].join("\n")
+  return {
+    "--primary": primary,
+    "--primary-hover": primary,
+    "--primary-foreground": primaryForeground,
+    "--secondary": secondary,
+    "--secondary-hover": secondary,
+    "--secondary-foreground": secondaryForeground,
+    "--ring": primary,
+    "--chart-1": primary,
+    "--sidebar-accent": primary,
+    "--sidebar-accent-foreground": primaryForeground,
+    "--sidebar-ring": primary,
+    "--font-family-primary": fontFamily,
+    "--font-family-secondary": fontFamily,
+    "--control-radius": radius.control,
+    "--surface-radius": radius.surface,
+    "--cta-radius": radius.cta,
+  }
+}
+
+// buildThemeCss renders the per-tenant :root overrides injected into <head>,
+// used by the host-resolved root layout where the tenant is known at SSR time.
+export function buildThemeCss(branding: Branding): string {
+  const lines = Object.entries(resolveThemeVars(branding)).map(([k, v]) => `  ${k}: ${v};`)
+  return [":root {", ...lines, "}"].join("\n")
+}
+
+// buildThemeStyle returns the same overrides as an inline style object. The
+// account hub on the platform host resolves its tenant client-side, so it can't
+// inject a :root <style> at SSR — instead it sets these custom properties on a
+// wrapper element, scoping the vendor theme to that subtree (custom properties
+// inherit, so descendants pick them up).
+export function buildThemeStyle(branding: Branding): CSSProperties {
+  return resolveThemeVars(branding) as CSSProperties
 }

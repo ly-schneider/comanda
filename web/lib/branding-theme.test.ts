@@ -23,7 +23,7 @@ function branding(overrides: Partial<Branding> = {}): Branding {
     fontKey: "inter",
     radiusKey: "rounded",
     contact: { email: null, phone: null },
-    legal: { name: null, address: null, text: null },
+    legal: { name: null, address: null },
     currency: "CHF",
     ...overrides,
   }

@@ -6,6 +6,7 @@ import (
 
 	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
+	"backend/internal/generated/ent/admininvite"
 	"backend/internal/response"
 )
 
@@ -47,7 +48,12 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := h.invites.Create(ctx, userID, string(body.Email), nil)
+	memberRole := admininvite.MemberRoleOps
+	if body.MemberRole != nil && *body.MemberRole == generated.MemberRoleAdmin {
+		memberRole = admininvite.MemberRoleAdmin
+	}
+
+	invite, err := h.invites.Create(ctx, userID, string(body.Email), memberRole, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invite_failed", err.Error())
 		return

@@ -163,6 +163,67 @@ item:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+owner-invite:
+  parameters:
+    - name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Platform]
+    summary: Invite a vendor owner for a tenant
+    description: >
+      Platform-admin only. Issues an owner invite (token + email) for a
+      pre-created tenant. The invitee registers on the platform host and becomes
+      the tenant's organization owner.
+    operationId: createOwnerInvite
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/owner-invites.yaml#/OwnerInviteCreate"
+    responses:
+      "201":
+        description: Owner invite created and email sent
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/owner-invites.yaml#/OwnerInvite"
+      "400":
+        description: A valid email is required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Tenant has no organization or already has an owner
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 Tenant:
   type: object
   required: [id, slug, name, status, createdAt]

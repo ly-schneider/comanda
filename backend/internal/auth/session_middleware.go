@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent/devicebinding"
 	"backend/internal/repository"
+	"backend/internal/response"
 	"backend/internal/trace"
 	"context"
 	"errors"
@@ -149,20 +151,6 @@ func (m *SessionMiddleware) OptionalAuth() func(http.Handler) http.Handler {
 	}
 }
 
-// RequireRole returns middleware that requires a specific role.
-func (m *SessionMiddleware) RequireRole(role string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userRole, ok := GetUserRole(r.Context())
-			if !ok || userRole != role {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // RequirePlatformAdmin returns middleware that requires a platform-admin user
 // (user.is_platform_admin). Gate platform-only routes with this. No platform
 // routes are wired in P2; the gate is provided for P7 admin tooling.
@@ -178,38 +166,52 @@ func (m *SessionMiddleware) RequirePlatformAdmin() func(http.Handler) http.Handl
 	}
 }
 
-// RequirePermission returns middleware that checks the user has a specific permission.
-// Uses the RBAC role->permission mapping from rbac.go.
-func (m *SessionMiddleware) RequirePermission(perm Permission) func(http.Handler) http.Handler {
+// RequireTenantRole gates the subdomain /admin surface on the tenant-scoped org
+// membership. It runs after RequireAuth, inside the per-request tenant tx, and
+// reads member.role through the app pool — org-keyed RLS already pins the lookup
+// to the host-resolved tenant's organization, so a member of another tenant gets
+// no row and is refused, closing the cross-tenant gap the global user.role gate
+// left open. A platform admin bypasses, consistent with the RLS bypass.
+func (m *SessionMiddleware) RequireTenantRole(min TenantTier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userRole, ok := GetUserRole(r.Context())
+			ctx := r.Context()
+
+			if IsPlatformAdmin(ctx) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if _, ok := GetUserID(ctx); !ok {
+				writeTenantRoleError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+				return
+			}
+
+			role, ok, err := tenantMemberRole(ctx)
+			if err != nil {
+				m.logger.Error("require tenant role: member lookup", zap.Error(err))
+				writeTenantRoleError(w, http.StatusInternalServerError, "internal_error", "internal error")
+				return
+			}
 			if !ok {
-				trace.Breadcrumb(r.Context(), "auth.rbac", "no role found", map[string]any{
-					"permission": string(perm),
-				})
-				http.Error(w, "Forbidden: no role", http.StatusForbidden)
+				writeTenantRoleError(w, http.StatusForbidden, "tenant_access_denied",
+					"You are not a member of this organization")
 				return
 			}
-			if !HasPermission(Role(userRole), perm) {
-				trace.Breadcrumb(r.Context(), "auth.rbac", "permission denied", map[string]any{
-					"role":       userRole,
-					"permission": string(perm),
-				})
-				m.logger.Debug("permission denied",
-					zap.String("role", userRole),
-					zap.String("permission", string(perm)),
-				)
-				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+
+			if !memberRoleSatisfies(role, min) {
+				writeTenantRoleError(w, http.StatusForbidden, "insufficient_role",
+					"Your role does not permit this action")
 				return
 			}
-			trace.Breadcrumb(r.Context(), "auth.rbac", "permission granted", map[string]any{
-				"role":       userRole,
-				"permission": string(perm),
-			})
-			next.ServeHTTP(w, r)
+
+			next.ServeHTTP(w, r.WithContext(WithMemberRole(ctx, role)))
 		})
 	}
+}
+
+func writeTenantRoleError(w http.ResponseWriter, status int, code, message string) {
+	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
 // extractSessionToken extracts the session token from the request.
@@ -286,6 +288,9 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 
 	ctx := r.Context()
 	ctx = WithUserID(ctx, session.UserID)
+	if session.SessionID != "" {
+		ctx = WithSessionID(ctx, session.SessionID)
+	}
 	if session.Role != "" {
 		ctx = WithUserRole(ctx, string(session.Role))
 	}
@@ -296,6 +301,9 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 		ctx = WithUserName(ctx, session.Name)
 	}
 	ctx = WithIsPlatformAdmin(ctx, session.IsPlatformAdmin)
+	if session.ActiveOrganizationID != nil && *session.ActiveOrganizationID != "" {
+		ctx = WithActiveOrgID(ctx, *session.ActiveOrganizationID)
+	}
 
 	trace.IdentifyUser(ctx, session.UserID, session.Email, session.Name)
 
@@ -321,15 +329,19 @@ func (m *SessionMiddleware) syncPlatformAdminGUC(ctx context.Context, isPlatform
 	}
 }
 
-// IsAdmin checks whether the request carries a valid admin session.
-// Returns false on any error or if the user is not an admin.
+// IsAdmin reports whether the request may bypass maintenance mode: a member of
+// the bound tenant at ops tier or above, or a platform admin. Authorization is
+// membership-based (HasTenantTier), not the global user.role.
 func (m *SessionMiddleware) IsAdmin(r *http.Request) bool {
 	ctx, err := m.validateAndRefresh(r.Context(), r)
 	if err != nil {
 		return false
 	}
-	role, ok := GetUserRole(ctx)
-	return ok && HasPermission(Role(role), PermAdminAccess)
+	ok, err := HasTenantTier(ctx, TierOps)
+	if err != nil {
+		return false
+	}
+	return ok
 }
 
 func (m *SessionMiddleware) handleAuthError(w http.ResponseWriter, err error) {

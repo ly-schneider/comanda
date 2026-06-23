@@ -65,7 +65,6 @@ type BrandingView struct {
 	ContactPhone           *string
 	LegalName              *string
 	LegalAddress           *string
-	LegalText              *string
 	Currency               string
 }
 
@@ -103,7 +102,6 @@ type BrandingInput struct {
 	ContactPhone    *string
 	LegalName       *string
 	LegalAddress    *string
-	LegalText       *string
 	Currency        *string
 	PaymentProvider *string
 }
@@ -131,6 +129,7 @@ type SettingsService interface {
 	SetClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions *int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
+	SetOnboardingCompleted(ctx context.Context, completed bool) error
 	UpdateBranding(ctx context.Context, in BrandingInput) error
 	GetBranding(ctx context.Context) (*BrandingView, error)
 	ListJetons(ctx context.Context) ([]*ent.Jeton, error)
@@ -221,6 +220,10 @@ func (s *settingsService) SetSystemEnabled(ctx context.Context, enabled bool) er
 	return nil
 }
 
+func (s *settingsService) SetOnboardingCompleted(ctx context.Context, completed bool) error {
+	return s.settings.SetOnboardingCompleted(ctx, completed)
+}
+
 func validateBrandingColor(v *string) error {
 	if v == nil {
 		return nil
@@ -266,7 +269,6 @@ func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) 
 		ContactPhone:           in.ContactPhone,
 		LegalName:              in.LegalName,
 		LegalAddress:           in.LegalAddress,
-		LegalText:              in.LegalText,
 		Currency:               in.Currency,
 		PaymentProvider:        in.PaymentProvider,
 	})
@@ -309,7 +311,6 @@ func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error
 		ContactPhone:           e.ContactPhone,
 		LegalName:              e.LegalName,
 		LegalAddress:           e.LegalAddress,
-		LegalText:              e.LegalText,
 		Currency:               e.Currency,
 	}, nil
 }

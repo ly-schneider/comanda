@@ -30,6 +30,18 @@ func TestPlatformAdminProvisionsTenant(t *testing.T) {
 	require.NotEmpty(t, created.ID)
 	require.Equal(t, slug, created.Slug)
 
+	// Read the org on the same request tx — the create is uncommitted.
+	require.NotNil(t, created.OrganizationID)
+	require.NotEmpty(t, *created.OrganizationID)
+	tx, ok := repository.RequestTxFromContext(ctx)
+	require.True(t, ok)
+	var orgName, orgSlug string
+	require.NoError(t, tx.QueryRow(
+		`SELECT name, slug FROM "organization" WHERE id = $1`, *created.OrganizationID,
+	).Scan(&orgName, &orgSlug))
+	require.Equal(t, "Provisioned Co", orgName)
+	require.Equal(t, slug, orgSlug)
+
 	// Settings singleton seeded (PK = tenant id, neutral white-base defaults).
 	settings, err := client.Settings.Get(ctx, created.ID)
 	require.NoError(t, err)

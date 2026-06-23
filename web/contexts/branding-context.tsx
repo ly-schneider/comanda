@@ -17,11 +17,21 @@ const DEFAULTS: Branding = {
   fontKey: "inter",
   radiusKey: "rounded",
   contact: { email: null, phone: null },
-  legal: { name: null, address: null, text: null },
+  legal: { name: null, address: null },
   currency: "CHF",
 }
 
 const BrandingContext = createContext<Branding>(DEFAULTS)
+
+export const BRANDING_DEFAULTS: Branding = DEFAULTS
+
+// mergeBranding merges a raw backend branding payload over the neutral defaults,
+// mirroring getBranding()'s server-side merge but usable in client components
+// (importing the server getBranding would pull next/headers into the bundle).
+export function mergeBranding(data: Partial<Branding> | null | undefined): Branding {
+  if (!data) return DEFAULTS
+  return { ...DEFAULTS, ...data, colors: { ...DEFAULTS.colors, ...(data.colors ?? {}) } }
+}
 
 export function TenantBrandingProvider({ branding, children }: { branding: Branding; children: React.ReactNode }) {
   return <BrandingContext.Provider value={branding}>{children}</BrandingContext.Provider>

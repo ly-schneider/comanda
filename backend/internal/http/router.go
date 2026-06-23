@@ -32,9 +32,12 @@ func NewRouter(
 	// for the low number of admin dashboards in P1.
 	sseRouter := chi.NewRouter()
 	sseRouter.Use(securityMw.CORS)
-	sseRouter.Use(systemMw.RequireEnabled)
+	// Resolve + bind the tenant tx before the maintenance gate, mirroring the
+	// main /v1 stack: RequireEnabled reads the tenant's system setting and its
+	// admin bypass (IsAdmin → HasTenantTier) both need the bound tenant tx.
 	sseRouter.Use(tenantMw.Resolve)
 	sseRouter.Use(tenantMw.Tx)
+	sseRouter.Use(systemMw.RequireEnabled)
 	sseRouter.Get("/v1/inventory/stream", apiHandlers.StreamInventory)
 
 	// ── Main router with full middleware stack ────────────────────────
@@ -107,6 +110,7 @@ func NewRouter(
 		v1.Get("/devices/pairings/{code}", wrapper.GetDevicePairing)
 		v1.Post("/invites/verify", wrapper.VerifyInvite)
 		v1.Post("/invites/accept", wrapper.AcceptInvite)
+		v1.Post("/owner-invites/verify", wrapper.VerifyOwnerInvite)
 		v1.Get("/payments/{paymentId}", wrapper.GetPayment)
 		v1.Post("/auth/otp-email", wrapper.SendOtpEmail)
 
@@ -168,91 +172,103 @@ func NewRouter(
 			authed.Get("/orders", wrapper.ListOrders)
 		})
 
-		// ── Admin routes (auth + admin RBAC + CSRF, NOT blocked) ─
-		v1.Group(func(admin chi.Router) {
-			admin.Use(betterAuthMw.RequireAuth())
-			admin.Use(betterAuthMw.RequirePermission(auth.PermAdminAccess))
+		// ── Ops routes (auth + ops membership + CSRF, NOT blocked) ─
+		// The subdomain /admin surface is gated by the tenant-scoped org member
+		// role, not the global user.role. Ops is the day-to-day operational tier.
+		v1.Group(func(ops chi.Router) {
+			ops.Use(betterAuthMw.RequireAuth())
+			ops.Use(betterAuthMw.RequireTenantRole(auth.TierOps))
 			csrf := middleware.NewCSRFMiddleware()
-			admin.Use(csrf.Require)
+			ops.Use(csrf.Require)
 
-			admin.Post("/products", wrapper.CreateProduct)
-			admin.Patch("/products/{productId}", wrapper.UpdateProduct)
-			admin.Delete("/products/{productId}", wrapper.DeleteProduct)
-			admin.Post("/products/{productId}/image", wrapper.UploadProductImage)
-			admin.Delete("/products/{productId}/image", wrapper.DeleteProductImage)
-			admin.Get("/products/{productId}/inventory", wrapper.GetProductInventory)
-			admin.Get("/products/{productId}/inventory/history", wrapper.GetProductInventoryHistory)
-			admin.Patch("/products/{productId}/inventory", wrapper.AdjustProductInventory)
+			ops.Post("/products", wrapper.CreateProduct)
+			ops.Patch("/products/{productId}", wrapper.UpdateProduct)
+			ops.Delete("/products/{productId}", wrapper.DeleteProduct)
+			ops.Post("/products/{productId}/image", wrapper.UploadProductImage)
+			ops.Delete("/products/{productId}/image", wrapper.DeleteProductImage)
+			ops.Get("/products/{productId}/inventory", wrapper.GetProductInventory)
+			ops.Get("/products/{productId}/inventory/history", wrapper.GetProductInventoryHistory)
+			ops.Patch("/products/{productId}/inventory", wrapper.AdjustProductInventory)
 
-			admin.Post("/categories", wrapper.CreateCategory)
-			admin.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
-			admin.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
+			ops.Post("/categories", wrapper.CreateCategory)
+			ops.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
+			ops.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
 
-			admin.Post("/menus", wrapper.CreateMenu)
-			admin.Patch("/menus/{menuId}", wrapper.UpdateMenu)
-			admin.Delete("/menus/{menuId}", wrapper.DeleteMenu)
-			admin.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
-			admin.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
-			admin.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
-			admin.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
-			admin.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
-			admin.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
+			ops.Post("/menus", wrapper.CreateMenu)
+			ops.Patch("/menus/{menuId}", wrapper.UpdateMenu)
+			ops.Delete("/menus/{menuId}", wrapper.DeleteMenu)
+			ops.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
+			ops.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
+			ops.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
+			ops.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
+			ops.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
+			ops.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
 
-			admin.Patch("/orders/{orderId}", wrapper.UpdateOrderStatus)
+			ops.Patch("/orders/{orderId}", wrapper.UpdateOrderStatus)
 
-			admin.Get("/stations", wrapper.ListStations)
-			admin.Get("/stations/{stationId}", wrapper.GetStation)
-			admin.Patch("/stations/{stationId}", wrapper.RenameStation)
-			admin.Get("/stations/{stationId}/products", wrapper.ListStationProducts)
-			admin.Put("/stations/{stationId}/products", wrapper.SetStationProducts)
-			admin.Post("/stations/{stationId}/products/{productId}", wrapper.AddStationProduct)
-			admin.Delete("/stations/{stationId}/products/{productId}", wrapper.RemoveStationProduct)
-			admin.Delete("/stations/{stationId}", wrapper.RevokeStation)
+			ops.Get("/stations", wrapper.ListStations)
+			ops.Get("/stations/{stationId}", wrapper.GetStation)
+			ops.Patch("/stations/{stationId}", wrapper.RenameStation)
+			ops.Get("/stations/{stationId}/products", wrapper.ListStationProducts)
+			ops.Put("/stations/{stationId}/products", wrapper.SetStationProducts)
+			ops.Post("/stations/{stationId}/products/{productId}", wrapper.AddStationProduct)
+			ops.Delete("/stations/{stationId}/products/{productId}", wrapper.RemoveStationProduct)
+			ops.Delete("/stations/{stationId}", wrapper.RevokeStation)
 
-			admin.Get("/pos/devices", wrapper.ListPosDevices)
+			ops.Get("/pos/devices", wrapper.ListPosDevices)
 
-			admin.Get("/settings", wrapper.GetSettings)
-			admin.Patch("/settings", wrapper.UpdateSettings)
-			admin.Post("/settings/logo", wrapper.UploadBrandingLogo)
-			admin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
-			admin.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
-			admin.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
+			ops.Get("/jetons", wrapper.ListJetons)
+			ops.Post("/jetons", wrapper.CreateJeton)
+			ops.Patch("/jetons/{jetonId}", wrapper.UpdateJeton)
+			ops.Delete("/jetons/{jetonId}", wrapper.DeleteJeton)
 
-			admin.Get("/domains", wrapper.ListDomains)
-			admin.Post("/domains", wrapper.CreateDomain)
-			admin.Get("/domains/{id}", wrapper.GetDomain)
-			admin.Delete("/domains/{id}", wrapper.DeleteDomain)
-			admin.Post("/domains/{id}/verify", wrapper.VerifyDomain)
+			ops.Get("/devices", wrapper.ListDevices)
+			ops.Get("/devices/{deviceId}", wrapper.GetDevice)
+			ops.Delete("/devices/{deviceId}", wrapper.RevokeDevice)
+			ops.Post("/devices/pairings/{code}", wrapper.CompleteDevicePairing)
 
-			admin.Get("/jetons", wrapper.ListJetons)
-			admin.Post("/jetons", wrapper.CreateJeton)
-			admin.Patch("/jetons/{jetonId}", wrapper.UpdateJeton)
-			admin.Delete("/jetons/{jetonId}", wrapper.DeleteJeton)
+			ops.Get("/events", wrapper.ListEvents)
 
-			admin.Get("/users", wrapper.ListUsers)
-			admin.Get("/users/{userId}", wrapper.GetUser)
-			admin.Patch("/users/{userId}", wrapper.UpdateUser)
-			admin.Delete("/users/{userId}", wrapper.DeleteUser)
+			ops.Post("/staff-meals", apiHandlers.CreateVolunteerCampaign)
+			ops.Get("/staff-meals", apiHandlers.ListVolunteerCampaigns)
+			ops.Get("/staff-meals/{campaignId}", apiHandlers.GetVolunteerCampaign)
+			ops.Patch("/staff-meals/{campaignId}", apiHandlers.UpdateVolunteerCampaign)
+			ops.Post("/staff-meals/{campaignId}/end", apiHandlers.EndVolunteerCampaign)
+			ops.Post("/staff-meals/{campaignId}/rotate-token", apiHandlers.RotateVolunteerCampaignToken)
+			ops.Get("/staff-meals/{campaignId}/print.pdf", apiHandlers.PrintStaffMealSlips)
+		})
 
-			admin.Get("/devices", wrapper.ListDevices)
-			admin.Get("/devices/{deviceId}", wrapper.GetDevice)
-			admin.Delete("/devices/{deviceId}", wrapper.RevokeDevice)
-			admin.Post("/devices/pairings/{code}", wrapper.CompleteDevicePairing)
+		// ── Tenant-admin routes (auth + tenant-admin membership + CSRF) ─
+		// The tenant administration tier (owner/admin): settings, payments,
+		// branding, domains, users, and staff invites — strictly above ops.
+		v1.Group(func(tadmin chi.Router) {
+			tadmin.Use(betterAuthMw.RequireAuth())
+			tadmin.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
+			csrf := middleware.NewCSRFMiddleware()
+			tadmin.Use(csrf.Require)
 
-			admin.Get("/invites", wrapper.ListInvites)
-			admin.Post("/invites", wrapper.CreateInvite)
-			admin.Get("/invites/{inviteId}", wrapper.GetInvite)
-			admin.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
+			tadmin.Get("/settings", wrapper.GetSettings)
+			tadmin.Patch("/settings", wrapper.UpdateSettings)
+			tadmin.Post("/settings/logo", wrapper.UploadBrandingLogo)
+			tadmin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
+			tadmin.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
+			tadmin.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
 
-			admin.Get("/events", wrapper.ListEvents)
+			tadmin.Get("/domains", wrapper.ListDomains)
+			tadmin.Post("/domains", wrapper.CreateDomain)
+			tadmin.Get("/domains/{id}", wrapper.GetDomain)
+			tadmin.Delete("/domains/{id}", wrapper.DeleteDomain)
+			tadmin.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 
-			admin.Post("/staff-meals", apiHandlers.CreateVolunteerCampaign)
-			admin.Get("/staff-meals", apiHandlers.ListVolunteerCampaigns)
-			admin.Get("/staff-meals/{campaignId}", apiHandlers.GetVolunteerCampaign)
-			admin.Patch("/staff-meals/{campaignId}", apiHandlers.UpdateVolunteerCampaign)
-			admin.Post("/staff-meals/{campaignId}/end", apiHandlers.EndVolunteerCampaign)
-			admin.Post("/staff-meals/{campaignId}/rotate-token", apiHandlers.RotateVolunteerCampaignToken)
-			admin.Get("/staff-meals/{campaignId}/print.pdf", apiHandlers.PrintStaffMealSlips)
+			tadmin.Get("/users", wrapper.ListUsers)
+			tadmin.Get("/users/{userId}", wrapper.GetUser)
+			tadmin.Patch("/users/{userId}", wrapper.UpdateUser)
+			tadmin.Delete("/users/{userId}", wrapper.DeleteUser)
+
+			tadmin.Get("/invites", wrapper.ListInvites)
+			tadmin.Post("/invites", wrapper.CreateInvite)
+			tadmin.Get("/invites/{inviteId}", wrapper.GetInvite)
+			tadmin.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
 		})
 
 		// ── Platform-admin routes (cross-tenant; platform host only) ──
@@ -271,6 +287,62 @@ func NewRouter(
 			pa.Post("/platform/tenants", wrapper.CreateTenant)
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
+			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
+		})
+
+		// ── Account routes (vendor self-service; platform host only) ──
+		// The platform host carries no tenant Host, so ResolveVendorTenant binds
+		// the vendor's tenant from the session's active organization (membership
+		// verified) under RLS, with no platform-admin bypass.
+		v1.Group(func(account chi.Router) {
+			account.Use(betterAuthMw.RequireAuth())
+			account.Use(tenantMw.ResolveVendorTenant)
+			csrf := middleware.NewCSRFMiddleware()
+			account.Use(csrf.Require)
+
+			// Any member: the tenant summary and the branding that themes the
+			// hub chrome (resolved to the vendor's tenant, not platform defaults).
+			account.Get("/account/tenant", wrapper.GetAccountTenant)
+			account.Get("/account/branding", wrapper.GetBranding)
+			// Read-only onboarding checklist; staff members see it too, the steps
+			// themselves stay behind the tenant-admin routes below.
+			account.Get("/account/onboarding", wrapper.GetOnboardingStatus)
+
+			// Tenant administration (owner/admin): the same branding and custom-
+			// domain surfaces as the subdomain /admin tadmin group, rebound to the
+			// vendor's tenant. Reuses the audited handlers — they read the tenant
+			// from context, which ResolveVendorTenant has bound.
+			account.Group(func(mgmt chi.Router) {
+				mgmt.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
+
+				mgmt.Get("/account/settings", wrapper.GetSettings)
+				mgmt.Patch("/account/settings", wrapper.UpdateSettings)
+				mgmt.Post("/account/settings/logo", wrapper.UploadBrandingLogo)
+				mgmt.Delete("/account/settings/logo", wrapper.DeleteBrandingLogo)
+				mgmt.Get("/account/settings/payrexx", wrapper.GetPayrexxStatus)
+				mgmt.Put("/account/settings/payrexx", wrapper.ConfigurePayrexx)
+
+				mgmt.Get("/account/domains", wrapper.ListDomains)
+				mgmt.Post("/account/domains", wrapper.CreateDomain)
+				mgmt.Get("/account/domains/{id}", wrapper.GetDomain)
+				mgmt.Delete("/account/domains/{id}", wrapper.DeleteDomain)
+				mgmt.Post("/account/domains/{id}/verify", wrapper.VerifyDomain)
+
+				mgmt.Post("/account/onboarding/complete", wrapper.CompleteOnboarding)
+			})
+		})
+
+		// ── Owner-invite acceptance (authed; not yet a member) ──
+		// The accepting user has just registered via OTP and is not yet a member
+		// of any organization, so this runs RequireAuth + CSRF only — no
+		// platform-admin gate, no vendor-tenant resolution. The handler binds the
+		// membership and the session's active organization on the privileged pool.
+		v1.Group(func(onb chi.Router) {
+			onb.Use(betterAuthMw.RequireAuth())
+			csrf := middleware.NewCSRFMiddleware()
+			onb.Use(csrf.Require)
+
+			onb.Post("/owner-invites/accept", wrapper.AcceptOwnerInvite)
 		})
 	})
 

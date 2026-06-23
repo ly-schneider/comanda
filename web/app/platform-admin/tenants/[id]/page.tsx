@@ -5,10 +5,20 @@ import { useParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 
 type Tenant = { id: string; slug: string; name: string; status: string; createdAt: string }
+type OwnerInviteResult = { email: string; status: string; expiresAt: string } | null
+
+const OWNER_INVITE_ERRORS: Record<string, string> = {
+  owner_exists: "Für diesen Tenant existiert bereits ein Inhaber.",
+  tenant_not_linked: "Tenant ist noch nicht mit einer Organisation verknüpft.",
+  tenant_not_found: "Tenant nicht gefunden.",
+  invalid_email: "Ungültige E-Mail-Adresse.",
+}
 
 export default function ManageTenantPage() {
   const params = useParams<{ id: string }>()
@@ -18,6 +28,10 @@ export default function ManageTenantPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteResult, setInviteResult] = useState<OwnerInviteResult>(null)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -52,6 +66,38 @@ export default function ManageTenantPage() {
       setError(e instanceof Error ? e.message : "Aktualisieren fehlgeschlagen")
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function inviteOwner(e: React.FormEvent) {
+    e.preventDefault()
+    if (!id || !inviteEmail.trim()) return
+    setInviting(true)
+    setInviteError(null)
+    setInviteResult(null)
+    try {
+      const res = await fetchAuth(`/api/v1/platform/tenants/${id}/owner-invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF": getCSRFToken() || "" },
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        code?: string
+        email?: string
+        status?: string
+        expiresAt?: string
+      }
+      if (!res.ok) {
+        const code = body.code || ""
+        setInviteError(OWNER_INVITE_ERRORS[code] ?? "Einladung fehlgeschlagen.")
+        return
+      }
+      setInviteResult({ email: body.email!, status: body.status!, expiresAt: body.expiresAt! })
+      setInviteEmail("")
+    } catch {
+      setInviteError("Einladung fehlgeschlagen. Bitte erneut versuchen.")
+    } finally {
+      setInviting(false)
     }
   }
 
@@ -124,6 +170,49 @@ export default function ManageTenantPage() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Inhaber einladen</CardTitle>
+          <p className="text-muted-foreground text-sm">Sendet einen Registrierungslink an den Tenant-Inhaber.</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={inviteOwner} className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">E-Mail-Adresse</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="inhaber@beispiel.ch"
+                  disabled={inviting}
+                  required
+                />
+                <Button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? "Sende…" : "Einladen"}
+                </Button>
+              </div>
+            </div>
+            {inviteError && (
+              <div
+                role="alert"
+                className="text-destructive bg-destructive/10 rounded-[var(--radius-control)] px-3 py-2 text-sm"
+              >
+                {inviteError}
+              </div>
+            )}
+            {inviteResult && (
+              <div className="rounded-[var(--radius-control)] bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
+                Einladung gesendet an <span className="font-medium">{inviteResult.email}</span>
+                {" · "}gültig bis{" "}
+                {new Date(inviteResult.expiresAt).toLocaleString("de-CH", { dateStyle: "short", timeStyle: "short" })}
+              </div>
+            )}
+          </form>
         </CardContent>
       </Card>
 

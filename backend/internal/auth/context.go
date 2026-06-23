@@ -16,6 +16,8 @@ const (
 	DeviceIDKey    contextKey = "deviceID"
 	DeviceTypeKey  contextKey = "deviceType"
 	TenantIDKey    contextKey = "tenantID"
+	SessionIDKey   contextKey = "sessionID"
+	MemberRoleKey  contextKey = "memberRole"
 
 	// IsPlatformAdminKey carries whether the authenticated user is a platform
 	// admin (user.is_platform_admin). Set by the session middleware.
@@ -23,6 +25,9 @@ const (
 	// PlatformContextKey marks a request on a platform host that resolved to no
 	// tenant. Set by the tenant resolver.
 	PlatformContextKey contextKey = "platformContext"
+	// ActiveOrgIDKey carries the session's active_organization_id, read by the
+	// user→tenant resolver to scope a platform-host request to the vendor's tenant.
+	ActiveOrgIDKey contextKey = "activeOrgID"
 )
 
 type AuthType string
@@ -72,6 +77,42 @@ func WithIsPlatformAdmin(ctx context.Context, v bool) context.Context {
 func IsPlatformAdmin(ctx context.Context) bool {
 	v, ok := ctx.Value(IsPlatformAdminKey).(bool)
 	return ok && v
+}
+
+func WithActiveOrgID(ctx context.Context, orgID string) context.Context {
+	return context.WithValue(ctx, ActiveOrgIDKey, orgID)
+}
+
+// WithSessionID records the id of the session row backing the request. The
+// owner-invite accept flow uses it to set active_organization_id on the exact
+// session.
+func WithSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, SessionIDKey, sessionID)
+}
+
+// GetSessionID reports false when no session id is in context.
+func GetSessionID(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(SessionIDKey).(string)
+	return id, ok && id != ""
+}
+
+// WithMemberRole records the tenant-scoped org member.role resolved by
+// RequireTenantRole, for telemetry.
+func WithMemberRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, MemberRoleKey, role)
+}
+
+// GetMemberRole reports false when no member role is in context.
+func GetMemberRole(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(MemberRoleKey).(string)
+	return role, ok && role != ""
+}
+
+// GetActiveOrgID reports false when the session has no active organization
+// (key unset or empty).
+func GetActiveOrgID(ctx context.Context) (string, bool) {
+	orgID, ok := ctx.Value(ActiveOrgIDKey).(string)
+	return orgID, ok && orgID != ""
 }
 
 // WithPlatformContext marks the request as running on a platform host that

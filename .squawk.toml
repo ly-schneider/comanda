@@ -7,4 +7,20 @@
 #     file in a single transaction (txmode=file) and records applied revisions,
 #     so per-statement IF NOT EXISTS and manual lock/statement timeouts are
 #     redundant. Every existing migration trips these; they are false positives.
-excluded_rules = ["prefer-text-field", "require-timeout-settings", "prefer-robust-stmts"]
+#   - require-concurrent-index-creation: CREATE INDEX CONCURRENTLY cannot run
+#     inside a transaction, which the single-tx-per-file migrations always use.
+#   - constraint-missing-not-valid / adding-foreign-key-constraint: NOT VALID
+#     followed by a separate VALIDATE needs two transactions — impossible in a
+#     single migration file; at this scale the brief lock is acceptable.
+#   - ban-drop-column: column removals are deliberate schema changes shipped
+#     atomically with the web+backend in one deploy, so the stale-client risk
+#     the rule guards against does not apply here.
+excluded_rules = [
+  "prefer-text-field",
+  "require-timeout-settings",
+  "prefer-robust-stmts",
+  "require-concurrent-index-creation",
+  "constraint-missing-not-valid",
+  "adding-foreign-key-constraint",
+  "ban-drop-column",
+]

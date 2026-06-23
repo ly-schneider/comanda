@@ -32,6 +32,8 @@ func NewRepositories() fx.Option {
 			repository.NewOrderLineRedemptionRepository,
 			repository.NewInventoryLedgerRepository,
 			repository.NewAdminInviteRepository,
+			repository.NewOwnerInviteRepository,
+			repository.NewMemberRepository,
 			repository.NewUserRepository,
 			repository.NewVerificationRepository,
 			newCachedSessionRepository,
