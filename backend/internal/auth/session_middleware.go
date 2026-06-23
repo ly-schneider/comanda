@@ -150,20 +150,6 @@ func (m *SessionMiddleware) OptionalAuth() func(http.Handler) http.Handler {
 	}
 }
 
-// RequireRole returns middleware that requires a specific role.
-func (m *SessionMiddleware) RequireRole(role string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userRole, ok := GetUserRole(r.Context())
-			if !ok || userRole != role {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // RequirePlatformAdmin returns middleware that requires a platform-admin user
 // (user.is_platform_admin). Gate platform-only routes with this. No platform
 // routes are wired in P2; the gate is provided for P7 admin tooling.
@@ -174,40 +160,6 @@ func (m *SessionMiddleware) RequirePlatformAdmin() func(http.Handler) http.Handl
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// RequirePermission returns middleware that checks the user has a specific permission.
-// Uses the RBAC role->permission mapping from rbac.go.
-func (m *SessionMiddleware) RequirePermission(perm Permission) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userRole, ok := GetUserRole(r.Context())
-			if !ok {
-				trace.Breadcrumb(r.Context(), "auth.rbac", "no role found", map[string]any{
-					"permission": string(perm),
-				})
-				http.Error(w, "Forbidden: no role", http.StatusForbidden)
-				return
-			}
-			if !HasPermission(Role(userRole), perm) {
-				trace.Breadcrumb(r.Context(), "auth.rbac", "permission denied", map[string]any{
-					"role":       userRole,
-					"permission": string(perm),
-				})
-				m.logger.Debug("permission denied",
-					zap.String("role", userRole),
-					zap.String("permission", string(perm)),
-				)
-				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
-				return
-			}
-			trace.Breadcrumb(r.Context(), "auth.rbac", "permission granted", map[string]any{
-				"role":       userRole,
-				"permission": string(perm),
-			})
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -376,15 +328,19 @@ func (m *SessionMiddleware) syncPlatformAdminGUC(ctx context.Context, isPlatform
 	}
 }
 
-// IsAdmin checks whether the request carries a valid admin session.
-// Returns false on any error or if the user is not an admin.
+// IsAdmin reports whether the request may bypass maintenance mode: a member of
+// the bound tenant at ops tier or above, or a platform admin. Authorization is
+// membership-based (HasTenantTier), not the global user.role.
 func (m *SessionMiddleware) IsAdmin(r *http.Request) bool {
 	ctx, err := m.validateAndRefresh(r.Context(), r)
 	if err != nil {
 		return false
 	}
-	role, ok := GetUserRole(ctx)
-	return ok && HasPermission(Role(role), PermAdminAccess)
+	ok, err := HasTenantTier(ctx, TierOps)
+	if err != nil {
+		return false
+	}
+	return ok
 }
 
 func (m *SessionMiddleware) handleAuthError(w http.ResponseWriter, err error) {

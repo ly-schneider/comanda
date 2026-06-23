@@ -14,7 +14,6 @@ import (
 	"backend/internal/config"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/admininvite"
-	"backend/internal/generated/ent/user"
 	nanoid "backend/internal/id"
 	"backend/internal/repository"
 )
@@ -269,12 +268,12 @@ func (s *adminInviteService) Accept(ctx context.Context, token, firstName, lastN
 
 	var userID string
 	if existingUser != nil {
-		if err := s.userRepo.UpdateRoleAndName(ctx, existingUser.ID, user.RoleAdmin, name); err != nil {
+		if err := s.userRepo.UpdateName(ctx, existingUser.ID, name); err != nil {
 			return err
 		}
 		userID = existingUser.ID
 	} else {
-		created, err := s.userRepo.CreateAdminUser(ctx, email, name)
+		created, err := s.userRepo.CreateInvitedUser(ctx, email, name)
 		if err != nil {
 			return err
 		}

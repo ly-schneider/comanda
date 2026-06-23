@@ -32,9 +32,12 @@ func NewRouter(
 	// for the low number of admin dashboards in P1.
 	sseRouter := chi.NewRouter()
 	sseRouter.Use(securityMw.CORS)
-	sseRouter.Use(systemMw.RequireEnabled)
+	// Resolve + bind the tenant tx before the maintenance gate, mirroring the
+	// main /v1 stack: RequireEnabled reads the tenant's system setting and its
+	// admin bypass (IsAdmin → HasTenantTier) both need the bound tenant tx.
 	sseRouter.Use(tenantMw.Resolve)
 	sseRouter.Use(tenantMw.Tx)
+	sseRouter.Use(systemMw.RequireEnabled)
 	sseRouter.Get("/v1/inventory/stream", apiHandlers.StreamInventory)
 
 	// ── Main router with full middleware stack ────────────────────────
