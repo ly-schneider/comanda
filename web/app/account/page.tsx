@@ -1,37 +1,115 @@
 "use client"
 
+import { Check } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
+import { getCSRFToken } from "@/lib/csrf"
 
 type TenantInfo = { id: string; slug: string; name: string }
+type OnboardingStatus = {
+  completedAt: string | null
+  steps: { brand: boolean; payments: boolean; domain: boolean }
+}
+
+type Step = {
+  key: string
+  label: string
+  description: string
+  href: string
+  done: boolean
+  optional?: boolean
+}
 
 export default function AccountOverviewPage() {
   const fetchAuth = useAuthorizedFetch()
   const [tenant, setTenant] = useState<TenantInfo | null>(null)
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [finishing, setFinishing] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const [tenantRes, onbRes] = await Promise.all([
+        fetchAuth("/api/v1/account/tenant"),
+        fetchAuth("/api/v1/account/onboarding"),
+      ])
+      if (!tenantRes.ok) throw new Error(`Fehler ${tenantRes.status}`)
+      setTenant((await tenantRes.json()) as TenantInfo)
+      if (onbRes.ok) setOnboarding((await onbRes.json()) as OnboardingStatus)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Laden fehlgeschlagen")
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchAuth])
 
   useEffect(() => {
-    ;(async () => {
-      try {
-        const res = await fetchAuth("/api/v1/account/tenant")
-        if (!res.ok) throw new Error(`Fehler ${res.status}`)
-        setTenant((await res.json()) as TenantInfo)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Laden fehlgeschlagen")
-      } finally {
-        setLoading(false)
+    load()
+  }, [load])
+
+  async function finishOnboarding() {
+    setFinishing(true)
+    try {
+      const res = await fetchAuth("/api/v1/account/onboarding/complete", {
+        method: "POST",
+        headers: { "X-CSRF": getCSRFToken() || "" },
+      })
+      if (res.ok || res.status === 204) {
+        setOnboarding((prev) => (prev ? { ...prev, completedAt: new Date().toISOString() } : prev))
       }
-    })()
-  }, [fetchAuth])
+    } finally {
+      setFinishing(false)
+    }
+  }
 
   // The day-to-day ops admin lives on the tenant's subdomain, derived from the
   // platform host we're on (env-agnostic: localhost / staging / prod).
   const opsBaseUrl =
     typeof window !== "undefined" && tenant ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
+
+  const steps: Step[] = [
+    {
+      key: "tenant",
+      label: "Konto erstellt",
+      description: "Dein Auftritt ist live — Name und Subdomain sind eingerichtet.",
+      href: "",
+      done: true,
+    },
+    {
+      key: "brand",
+      label: "Marke & Rechtliches",
+      description: "Lade dein Logo hoch und hinterlege Farben, Kontakt und rechtliche Angaben.",
+      href: "/account/branding",
+      done: onboarding?.steps.brand ?? false,
+    },
+    {
+      key: "payments",
+      label: "Zahlungen verbinden",
+      description: "Verbinde dein Payrexx-Konto, damit Kunden online bezahlen können.",
+      href: "/account/payrexx",
+      done: onboarding?.steps.payments ?? false,
+    },
+    {
+      key: "domain",
+      label: "Eigene Domain",
+      description: "Optional: Verknüpfe eine eigene Domain mit deinem Auftritt.",
+      href: "/account/domains",
+      done: onboarding?.steps.domain ?? false,
+      optional: true,
+    },
+  ]
+
+  const doneCount = steps.filter((s) => s.done).length
+  const progressPct = Math.round((doneCount / steps.length) * 100)
+  const allDone = doneCount === steps.length
+  const dismissed = !!onboarding?.completedAt
+  const showWizard = !!onboarding && !dismissed && !allDone
 
   return (
     <div className="space-y-6">
@@ -49,6 +127,72 @@ export default function AccountOverviewPage() {
         >
           {error}
         </div>
+      )}
+
+      {showWizard && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Einrichtung</CardTitle>
+            <p className="text-muted-foreground text-sm">
+              Schliesse die Schritte ab, um das Beste aus deinem Auftritt zu holen. Du kannst jeden Schritt überspringen
+              und später fortsetzen.
+            </p>
+            <div className="space-y-1.5 pt-2">
+              <Progress value={progressPct} />
+              <p className="text-muted-foreground text-xs">
+                {doneCount} von {steps.length} Schritten erledigt
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {steps.map((step) => (
+              <div
+                key={step.key}
+                className="border-border flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border px-3 py-3"
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-xs ${
+                      step.done ? "bg-primary text-primary-foreground" : "border-border border"
+                    }`}
+                    aria-hidden
+                  >
+                    {step.done && <Check className="size-3.5" />}
+                  </span>
+                  <div className="space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{step.label}</span>
+                      {step.optional && (
+                        <Badge variant="outline" className="text-xs">
+                          Optional
+                        </Badge>
+                      )}
+                      {step.done && (
+                        <Badge variant="secondary" className="text-xs">
+                          Erledigt
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground text-sm">{step.description}</p>
+                  </div>
+                </div>
+                {step.href && (
+                  <Button asChild variant={step.done ? "outline" : "primary"} size="sm">
+                    <Link href={step.href}>{step.done ? "Bearbeiten" : "Einrichten"}</Link>
+                  </Button>
+                )}
+              </div>
+            ))}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              <p className="text-muted-foreground text-xs">
+                Pflicht für den Live-Betrieb sind nur Name und Subdomain — bereits erledigt.
+              </p>
+              <Button variant="ghost" size="sm" onClick={finishOnboarding} disabled={finishing}>
+                {finishing ? "Speichern…" : allDone ? "Fertig" : "Onboarding abschliessen"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Card>
@@ -78,7 +222,7 @@ export default function AccountOverviewPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Marke &amp; Rechtliches</CardTitle>
@@ -87,6 +231,17 @@ export default function AccountOverviewPage() {
           <CardContent>
             <Button asChild variant="outline">
               <Link href="/account/branding">Marke bearbeiten</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Zahlungen</CardTitle>
+            <p className="text-muted-foreground text-sm">Verbinde dein Payrexx-Konto für Online-Zahlungen.</p>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <Link href="/account/payrexx">Zahlungen verwalten</Link>
             </Button>
           </CardContent>
         </Card>

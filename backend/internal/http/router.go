@@ -304,6 +304,9 @@ func NewRouter(
 			// hub chrome (resolved to the vendor's tenant, not platform defaults).
 			account.Get("/account/tenant", apiHandlers.GetAccountTenant)
 			account.Get("/account/branding", wrapper.GetBranding)
+			// Read-only onboarding checklist; staff members see it too, the steps
+			// themselves stay behind the tenant-admin routes below.
+			account.Get("/account/onboarding", apiHandlers.GetOnboardingStatus)
 
 			// Tenant administration (owner/admin): the same branding and custom-
 			// domain surfaces as the subdomain /admin tadmin group, rebound to the
@@ -316,12 +319,16 @@ func NewRouter(
 				mgmt.Patch("/account/settings", wrapper.UpdateSettings)
 				mgmt.Post("/account/settings/logo", wrapper.UploadBrandingLogo)
 				mgmt.Delete("/account/settings/logo", wrapper.DeleteBrandingLogo)
+				mgmt.Get("/account/settings/payrexx", wrapper.GetPayrexxStatus)
+				mgmt.Put("/account/settings/payrexx", wrapper.ConfigurePayrexx)
 
 				mgmt.Get("/account/domains", wrapper.ListDomains)
 				mgmt.Post("/account/domains", wrapper.CreateDomain)
 				mgmt.Get("/account/domains/{id}", wrapper.GetDomain)
 				mgmt.Delete("/account/domains/{id}", wrapper.DeleteDomain)
 				mgmt.Post("/account/domains/{id}/verify", wrapper.VerifyDomain)
+
+				mgmt.Post("/account/onboarding/complete", apiHandlers.CompleteOnboarding)
 			})
 		})
 

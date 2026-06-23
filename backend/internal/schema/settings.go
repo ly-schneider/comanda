@@ -145,6 +145,12 @@ func (Settings) Fields() []ent.Field {
 		field.Text("ed25519_public_key").
 			Optional().
 			Nillable(),
+		// Set when the vendor finishes (or dismisses) the onboarding wizard. Per-step
+		// progress is derived from real data (brand/payments/domain); this single
+		// flag only records that the vendor is done, so the hub stops nudging.
+		field.Time("onboarding_completed_at").
+			Optional().
+			Nillable(),
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),

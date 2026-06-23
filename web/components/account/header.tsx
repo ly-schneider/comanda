@@ -10,6 +10,7 @@ import { useBranding } from "@/contexts/branding-context"
 const NAV = [
   { href: "/account", label: "Übersicht", exact: true },
   { href: "/account/branding", label: "Marke", exact: false },
+  { href: "/account/payrexx", label: "Zahlungen", exact: false },
   { href: "/account/domains", label: "Domains", exact: false },
 ]
 
