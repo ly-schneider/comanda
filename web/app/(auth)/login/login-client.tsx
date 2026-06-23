@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { Label } from "@/components/ui/label"
 import { authClient, emailOtp, signIn } from "@/lib/auth/client"
+import { postAuthPath } from "@/lib/post-auth"
 
 type LoginStep = "email" | "otp"
 
 export default function LoginClient() {
   const router = useRouter()
   const sp = useSearchParams()
-  const next = sp.get("next") || "/"
+  const next = sp.get("next")
   const { data: session, isPending } = authClient.useSession()
 
   const [step, setStep] = useState<LoginStep>("email")
@@ -23,10 +24,16 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Redirect to destination if already authenticated
   useEffect(() => {
     if (!isPending && session?.user) {
-      router.replace(next)
+      const destination = postAuthPath(
+        {
+          isPlatformAdmin: (session.user as Record<string, unknown>).isPlatformAdmin === true,
+          activeOrganizationId: session.session.activeOrganizationId,
+        },
+        next
+      )
+      router.replace(destination)
     }
   }, [session, isPending, router, next])
 
@@ -36,7 +43,7 @@ export default function LoginClient() {
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: next,
+        callbackURL: next ?? "/",
       })
     } catch {
       setError("Google-Anmeldung fehlgeschlagen. Bitte erneut versuchen.")

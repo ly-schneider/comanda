@@ -82,6 +82,8 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
     pathName.startsWith("/v1/health") ||
     pathName.startsWith("/v1/public/") ||
     pathName.startsWith("/v1/invites/") ||
+    // Public token-verify endpoint; no session exists yet at this point
+    pathName === "/v1/owner-invites/verify" ||
     pathName.startsWith("/v1/payments/webhooks/") ||
     pathName.startsWith("/v1/claim/")
 
