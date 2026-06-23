@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ClipboardCopy, Info, RefreshCw, Trash2 } from "lucide-react"
+import { Check, ClipboardCopy, ExternalLink, Info, RefreshCw, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,42 @@ function VerifiedBadge({ verifiedAt }: { verifiedAt: string | null }) {
     return <Badge variant="default">Verifiziert</Badge>
   }
   return <Badge variant="outline">Nicht verifiziert</Badge>
+}
+
+// Shown once a domain is verified (DNS ownership proven). Only an active TLS
+// certificate means HTTPS works, so the open links appear only then; while the
+// cert issues we explain the wait rather than offer a link that would error.
+function VerifiedDomainState({ hostname, certStatus }: { hostname: string; certStatus: CertStatus }) {
+  const base = `https://${hostname}`
+  if (certStatus === "active") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <a href={`${base}/food`} target="_blank" rel="noreferrer">
+            <ExternalLink className="size-4" /> Storefront öffnen
+          </a>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <a href={`${base}/admin`} target="_blank" rel="noreferrer">
+            <ExternalLink className="size-4" /> Admin öffnen
+          </a>
+        </Button>
+      </div>
+    )
+  }
+  if (certStatus === "failed") {
+    return (
+      <p className="text-destructive text-sm">
+        Zertifikat konnte nicht ausgestellt werden. Prüfe den CNAME-Eintrag und versuche es in Kürze erneut.
+      </p>
+    )
+  }
+  return (
+    <p className="text-muted-foreground text-sm">
+      Domain verifiziert. Das TLS-Zertifikat wird ausgestellt — deine Domain ist in wenigen Minuten über HTTPS unter{" "}
+      <span className="font-mono">{hostname}</span> erreichbar.
+    </p>
+  )
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -385,6 +421,9 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                         )}
                       </div>
                     </div>
+                    {domain.verifiedAt && (
+                      <VerifiedDomainState hostname={domain.hostname} certStatus={domain.certStatus} />
+                    )}
                     {verifyError[domain.id] && (
                       <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
                         {verifyError[domain.id]}
