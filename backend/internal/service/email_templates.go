@@ -130,21 +130,6 @@ func renderInviteHTML(data InviteEmailData) string {
 </html>`, data.Brand, data.Brand, data.Brand, data.Brand, data.InviteURL, data.ExpiresAt, data.InviteURL)
 }
 
-// renderInviteText generates the plain text version of the admin invite email.
-func renderInviteText(data InviteEmailData) string {
-	return fmt.Sprintf(`%s Admin-Einladung
-
-Du wurdest eingeladen, als Administrator bei %s beizutreten.
-
-Einladung annehmen:
-%s
-
-Diese Einladung ist gültig bis: %s
-
-Wenn du diese Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.
-`, data.Brand, data.Brand, data.InviteURL, data.ExpiresAt)
-}
-
 // OTPType represents the type of OTP being sent.
 type OTPType string
 
@@ -308,17 +293,4 @@ func renderOTPHTML(data OTPEmailData) string {
     </table>
   </body>
 </html>`, data.Brand, data.Brand, data.Code, data.CodeTTL, data.Brand, data.Code, data.CodeTTL, data.SupportNote)
-}
-
-// renderOTPText generates the plain text version of the OTP email.
-func renderOTPText(data OTPEmailData) string {
-	return fmt.Sprintf(`%s Anmeldung
-
-Dein Code (läuft in %s ab):
-  %s
-
-%s
-
-Wenn du dies nicht angefordert hast, kannst du diese E-Mail ignorieren.
-`, data.Brand, data.CodeTTL, data.Code, data.SupportNote)
 }

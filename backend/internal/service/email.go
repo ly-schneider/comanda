@@ -124,7 +124,6 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 	}
 
 	htmlBody := renderInviteHTML(data)
-	textBody := renderInviteText(data)
 
 	payload := PlunkSendRequest{
 		To:         to,
@@ -134,9 +133,6 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 		Name:       creds.fromName,
 		From:       creds.fromEmail,
 		Reply:      creds.replyTo,
-		Headers: map[string]string{
-			"X-Text-Version": textBody,
-		},
 	}
 
 	if err := s.send(ctx, creds, payload); err != nil {
@@ -203,7 +199,6 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 	}
 
 	htmlBody := renderOTPHTML(data)
-	textBody := renderOTPText(data)
 	subject := s.subject(getOTPSubject(otpType))
 
 	payload := PlunkSendRequest{
@@ -214,9 +209,6 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 		Name:       creds.fromName,
 		From:       creds.fromEmail,
 		Reply:      creds.replyTo,
-		Headers: map[string]string{
-			"X-Text-Version": textBody,
-		},
 	}
 
 	if err := s.send(ctx, creds, payload); err != nil {
@@ -242,7 +234,6 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 	}
 
 	htmlBody := renderReceiptHTML(data)
-	textBody := renderReceiptText(data)
 
 	payload := PlunkSendRequest{
 		To:         to,
@@ -252,9 +243,6 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 		Name:       creds.fromName,
 		From:       creds.fromEmail,
 		Reply:      creds.replyTo,
-		Headers: map[string]string{
-			"X-Text-Version": textBody,
-		},
 	}
 
 	if err := s.send(ctx, creds, payload); err != nil {

@@ -226,41 +226,6 @@ func renderReceiptHTML(data ReceiptEmailData) string {
 	)
 }
 
-func renderReceiptText(data ReceiptEmailData) string {
-	var lines strings.Builder
-	for _, item := range data.Items {
-		lineTotal := item.Cents * int64(item.Quantity)
-		lines.WriteString(fmt.Sprintf("  %s x%d  %s\n", item.Title, item.Quantity, formatCHF(lineTotal)))
-		for _, child := range item.Children {
-			lines.WriteString(fmt.Sprintf("    - %s\n", child.Title))
-		}
-	}
-
-	return fmt.Sprintf(`%s — Quittung
-
-Vielen Dank für deine Bestellung!
-
-Bestellnr.: %s
-Datum: %s
-Zahlungsart: %s
-
-Artikel:
-%s
-Total: %s
-Alle Preise in CHF inkl. MwSt.
-
-Bestellung & QR-Code anzeigen:
-%s
-
----
-Comanda
-Powered by Leys
-
-Dies ist eine automatisch generierte Quittung.
-Bitte bewahre diese E-Mail als Zahlungsbeleg auf.
-`, data.Brand, data.OrderID, data.OrderDate, data.Method, lines.String(), formatCHF(data.TotalCents), data.OrderURL)
-}
-
 func escHTML(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
