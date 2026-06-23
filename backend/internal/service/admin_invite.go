@@ -297,14 +297,20 @@ func (s *adminInviteService) linkMember(ctx context.Context, userID string, role
 	if !ok {
 		return errors.New("admin invite: no request tx in context for member insert")
 	}
-	_, err := tx.ExecContext(ctx,
+	res, err := tx.ExecContext(ctx,
 		`INSERT INTO "member" (id, organization_id, user_id, role, created_at)
 		 SELECT $1, app_current_org_id(), $2, $3, now()
 		 WHERE app_current_org_id() IS NOT NULL
 		 ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
 		nanoid.New(), userID, string(role),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return errors.New("admin invite: tenant is not linked to an organization")
+	}
+	return nil
 }
 
 func (s *adminInviteService) buildInviteURL(token string) string {

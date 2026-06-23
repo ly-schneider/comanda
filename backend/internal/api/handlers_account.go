@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"backend/internal/auth"
+	"backend/internal/generated/api/generated"
 	"backend/internal/response"
 )
 
@@ -21,9 +22,9 @@ func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request) {
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, map[string]any{
-		"id":   t.ID,
-		"slug": t.Slug,
-		"name": t.Name,
+	response.WriteJSON(w, http.StatusOK, generated.AccountTenant{
+		Id:   t.ID,
+		Slug: t.Slug,
+		Name: t.Name,
 	})
 }

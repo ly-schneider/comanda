@@ -1,0 +1,85 @@
+tenant:
+  get:
+    tags: [Account]
+    summary: Get the vendor's resolved tenant
+    description: >
+      Returns the tenant resolved from the logged-in vendor's active
+      organization (platform host only). Available to any member of the tenant.
+    operationId: getAccountTenant
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Tenant summary
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/account.yaml#/AccountTenant"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: No tenant resolved for this request
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+onboarding:
+  get:
+    tags: [Account]
+    summary: Get the onboarding checklist
+    description: >
+      Returns the vendor's onboarding progress, derived from tenant data plus the
+      persisted completed/dismissed flag. Available to any member of the tenant.
+    operationId: getOnboardingStatus
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Onboarding status
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/account.yaml#/OnboardingStatus"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: No tenant resolved for this request
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+onboarding-complete:
+  post:
+    tags: [Account]
+    summary: Mark onboarding as finished
+    description: >
+      Records that the vendor has finished or dismissed the wizard. The underlying
+      steps stay editable. Requires tenant-admin role.
+    operationId: completeOnboarding
+    security:
+      - sessionAuth: []
+    responses:
+      "204":
+        description: Onboarding marked complete
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient role or no tenant resolved
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

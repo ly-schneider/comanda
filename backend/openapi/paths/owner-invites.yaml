@@ -1,0 +1,83 @@
+verify:
+  post:
+    tags: [OwnerInvites]
+    summary: Verify an owner-invite token
+    description: >
+      Returns the public view of an owner invite by token, for the registration
+      page to show before the user accepts. Public; no membership yet.
+    operationId: verifyOwnerInvite
+    security:
+      - {}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/owner-invites.yaml#/OwnerInviteTokenRequest"
+    responses:
+      "200":
+        description: Token is valid
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/owner-invites.yaml#/OwnerInvite"
+      "400":
+        description: Invalid or expired invite
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+accept:
+  post:
+    tags: [OwnerInvites]
+    summary: Accept an owner invite
+    description: >
+      Makes the logged-in user the owner of the invite's organization and binds it
+      as their active organization. Requires authentication.
+    operationId: acceptOwnerInvite
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/owner-invites.yaml#/OwnerInviteTokenRequest"
+    responses:
+      "200":
+        description: Invite accepted; user is now the org owner
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/owner-invites.yaml#/OwnerInviteAcceptResult"
+      "400":
+        description: Invalid invite token
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Invite is for a different email
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Invite already used or organization already has an owner
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "410":
+        description: Invite expired
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

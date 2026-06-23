@@ -33,13 +33,6 @@ func NewUserService(
 	}
 }
 
-// The user table is a global Better Auth table (RLS USING(true)), so it is not
-// tenant-scoped on its own. The /v1/users surface is the tenant's people roster:
-// every operation is therefore confined to users who are members of the bound
-// tenant's organization, looked up through the org-keyed member table on the
-// per-request tx. Without this gate a tenant admin could read or mutate any user
-// platform-wide by ID.
-
 func (s *userService) List(ctx context.Context) ([]*ent.User, int64, error) {
 	ids, err := s.orgMemberUserIDs(ctx)
 	if err != nil {

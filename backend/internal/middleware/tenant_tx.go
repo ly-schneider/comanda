@@ -11,6 +11,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/database"
 	"backend/internal/enttenant"
+	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/tenant"
 	"backend/internal/generated/ent/tenantdomain"
@@ -188,7 +189,7 @@ var (
 )
 
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
-	response.WriteJSON(w, status, map[string]string{"code": code, "message": message})
+	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
 // ResolveVendorTenant scopes a platform-host request to the logged-in vendor's

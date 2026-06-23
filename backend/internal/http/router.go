@@ -110,7 +110,7 @@ func NewRouter(
 		v1.Get("/devices/pairings/{code}", wrapper.GetDevicePairing)
 		v1.Post("/invites/verify", wrapper.VerifyInvite)
 		v1.Post("/invites/accept", wrapper.AcceptInvite)
-		v1.Post("/owner-invites/verify", apiHandlers.VerifyOwnerInvite)
+		v1.Post("/owner-invites/verify", wrapper.VerifyOwnerInvite)
 		v1.Get("/payments/{paymentId}", wrapper.GetPayment)
 		v1.Post("/auth/otp-email", wrapper.SendOtpEmail)
 
@@ -287,7 +287,7 @@ func NewRouter(
 			pa.Post("/platform/tenants", wrapper.CreateTenant)
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
-			pa.Post("/platform/tenants/{tenantId}/owner-invite", apiHandlers.CreateOwnerInvite)
+			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
 		})
 
 		// ── Account routes (vendor self-service; platform host only) ──
@@ -302,11 +302,11 @@ func NewRouter(
 
 			// Any member: the tenant summary and the branding that themes the
 			// hub chrome (resolved to the vendor's tenant, not platform defaults).
-			account.Get("/account/tenant", apiHandlers.GetAccountTenant)
+			account.Get("/account/tenant", wrapper.GetAccountTenant)
 			account.Get("/account/branding", wrapper.GetBranding)
 			// Read-only onboarding checklist; staff members see it too, the steps
 			// themselves stay behind the tenant-admin routes below.
-			account.Get("/account/onboarding", apiHandlers.GetOnboardingStatus)
+			account.Get("/account/onboarding", wrapper.GetOnboardingStatus)
 
 			// Tenant administration (owner/admin): the same branding and custom-
 			// domain surfaces as the subdomain /admin tadmin group, rebound to the
@@ -328,7 +328,7 @@ func NewRouter(
 				mgmt.Delete("/account/domains/{id}", wrapper.DeleteDomain)
 				mgmt.Post("/account/domains/{id}/verify", wrapper.VerifyDomain)
 
-				mgmt.Post("/account/onboarding/complete", apiHandlers.CompleteOnboarding)
+				mgmt.Post("/account/onboarding/complete", wrapper.CompleteOnboarding)
 			})
 		})
 
@@ -342,7 +342,7 @@ func NewRouter(
 			csrf := middleware.NewCSRFMiddleware()
 			onb.Use(csrf.Require)
 
-			onb.Post("/owner-invites/accept", apiHandlers.AcceptOwnerInvite)
+			onb.Post("/owner-invites/accept", wrapper.AcceptOwnerInvite)
 		})
 	})
 

@@ -1,9 +1,6 @@
 package auth
 
-// Permission represents a specific action that can be authorized. User roles no
-// longer drive authorization: tenant access is membership-based (see
-// tenant_rbac.go) and platform access is the user.is_platform_admin flag.
-// Permissions remain only to model device capabilities (POS / Station terminals).
+// Permission is a capability granted to a device type (POS / Station terminals).
 type Permission string
 
 const (

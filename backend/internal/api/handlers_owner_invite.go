@@ -4,24 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"backend/internal/auth"
+	"backend/internal/generated/api/generated"
+	nanoid "backend/internal/id"
 	"backend/internal/repository"
 	"backend/internal/response"
 	"backend/internal/service"
-
-	"github.com/go-chi/chi/v5"
 )
 
-type ownerInviteResponse struct {
-	Email     string    `json:"email"`
-	Status    string    `json:"status"`
-	ExpiresAt time.Time `json:"expiresAt"`
-}
-
 // CreateOwnerInvite invites a vendor owner for a pre-created tenant.
-func (h *Handlers) CreateOwnerInvite(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) CreateOwnerInvite(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if !h.requirePlatformContext(w, r) {
 		return
 	}
@@ -33,7 +26,10 @@ func (h *Handlers) CreateOwnerInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := chi.URLParam(r, "tenantId")
+	if !nanoid.Valid(tenantID) {
+		writeError(w, http.StatusBadRequest, "invalid_tenant_id", "Invalid tenant ID")
+		return
+	}
 
 	var body struct {
 		Email string `json:"email"`
@@ -60,7 +56,7 @@ func (h *Handlers) CreateOwnerInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusCreated, ownerInviteResponse{
+	response.WriteJSON(w, http.StatusCreated, generated.OwnerInvite{
 		Email:     invite.Email,
 		Status:    invite.Status,
 		ExpiresAt: invite.ExpiresAt,
@@ -83,7 +79,7 @@ func (h *Handlers) VerifyOwnerInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, ownerInviteResponse{
+	response.WriteJSON(w, http.StatusOK, generated.OwnerInvite{
 		Email:     invite.Email,
 		Status:    invite.Status,
 		ExpiresAt: invite.ExpiresAt,
@@ -140,5 +136,5 @@ func (h *Handlers) AcceptOwnerInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, map[string]string{"organizationId": orgID})
+	response.WriteJSON(w, http.StatusOK, generated.OwnerInviteAcceptResult{OrganizationId: orgID})
 }

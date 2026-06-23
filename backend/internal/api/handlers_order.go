@@ -23,11 +23,7 @@ const (
 	idempotencyTTL          = 24 * time.Hour
 )
 
-// ListOrders returns orders with optional filtering. A tenant member (ops tier
-// or above) of the bound tenant — or a platform admin — sees all of the tenant's
-// orders; everyone else sees only their own. The full listing is gated on
-// tenant-scoped membership, not the global user.role, so the role cannot be
-// replayed against another tenant's host.
+// ListOrders returns orders with optional filtering.
 // (GET /orders)
 func (h *Handlers) ListOrders(w http.ResponseWriter, r *http.Request, params generated.ListOrdersParams) {
 	ctx := r.Context()

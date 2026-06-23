@@ -2,25 +2,17 @@ package api
 
 import (
 	"net/http"
-	"time"
 
 	"backend/internal/auth"
+	"backend/internal/generated/api/generated"
 	"backend/internal/response"
 )
 
-// onboardingStatus reports the vendor's onboarding progress. Per-step state is
-// derived from real data (a logo means branding is set, a Payrexx timestamp
-// means payments are wired, a verified domain means a custom domain is live), so
-// the wizard is inherently resumable: the data IS the progress. CompletedAt is
-// the one persisted flag, set when the vendor finishes or dismisses the wizard.
-type onboardingStatus struct {
-	CompletedAt *time.Time      `json:"completedAt"`
-	Steps       map[string]bool `json:"steps"`
-}
-
 // GetOnboardingStatus returns the derived onboarding checklist for the vendor's
-// tenant. Read-only and available to any member so the account overview renders
-// for staff too; the steps themselves are gated by the tenant-admin routes.
+// tenant. Per-step state is derived from real data (a logo, a Payrexx timestamp,
+// a verified domain), so the wizard is inherently resumable; CompletedAt is the
+// one persisted flag. Read-only and available to any member so the account
+// overview renders for staff too; the steps are gated by the tenant-admin routes.
 func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if _, ok := auth.GetTenantID(ctx); !ok {
@@ -47,12 +39,12 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response.WriteJSON(w, http.StatusOK, onboardingStatus{
+	response.WriteJSON(w, http.StatusOK, generated.OnboardingStatus{
 		CompletedAt: s.OnboardingCompletedAt,
-		Steps: map[string]bool{
-			"brand":    s.LogoURL != nil && *s.LogoURL != "",
-			"payments": s.PayrexxConfiguredAt != nil,
-			"domain":   hasVerifiedDomain,
+		Steps: generated.OnboardingSteps{
+			Brand:    s.LogoURL != nil && *s.LogoURL != "",
+			Payments: s.PayrexxConfiguredAt != nil,
+			Domain:   hasVerifiedDomain,
 		},
 	})
 }

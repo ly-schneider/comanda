@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent/devicebinding"
 	"backend/internal/repository"
 	"backend/internal/response"
@@ -210,7 +211,7 @@ func (m *SessionMiddleware) RequireTenantRole(min TenantTier) func(http.Handler)
 }
 
 func writeTenantRoleError(w http.ResponseWriter, status int, code, message string) {
-	response.WriteJSON(w, status, map[string]string{"code": code, "message": message})
+	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
 // extractSessionToken extracts the session token from the request.
