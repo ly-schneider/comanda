@@ -104,7 +104,7 @@ func (s *adminInviteService) Create(ctx context.Context, inviterID, email string
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	if memberRole == "" {
-		memberRole = admininvite.MemberRoleOps
+		memberRole = admininvite.MemberRoleStaff
 	}
 
 	// Calculate expiry

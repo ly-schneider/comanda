@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useMemo } from "react"
 import { authClient, signOut as authSignOut } from "@/lib/auth/client"
 import { clearOrders } from "@/lib/orders-storage"
-import type { User, UserRole } from "@/types"
+import type { User } from "@/types"
 
 type AuthContextType = {
   accessToken: string | null
@@ -14,9 +14,6 @@ type AuthContextType = {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-/** Valid user roles for the system */
-const VALID_ROLES: UserRole[] = ["customer", "admin"]
 
 /**
  * Maps Better Auth session user to our User type.
@@ -55,19 +52,12 @@ function mapBetterAuthUserToUser(betterAuthUser: Record<string, unknown> | null 
         ? betterAuthUser.updatedAt
         : new Date().toISOString()
 
-  // Parse role, defaulting to "customer" if not a valid role
-  const rawRole = typeof betterAuthUser.role === "string" ? betterAuthUser.role : ""
-  const role: UserRole = VALID_ROLES.includes(rawRole as UserRole) ? (rawRole as UserRole) : "customer"
-
   return {
     id,
     email,
     firstName,
     lastName,
-    role,
     isVerified,
-    isDisabled: betterAuthUser.banned === true,
-    disabledReason: typeof betterAuthUser.banReason === "string" ? betterAuthUser.banReason : null,
     isClub100: betterAuthUser.isClub100 === true,
     isPlatformAdmin: betterAuthUser.isPlatformAdmin === true,
     createdAt,

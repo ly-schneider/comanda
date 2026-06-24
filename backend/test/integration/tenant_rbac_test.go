@@ -72,10 +72,12 @@ func TestRequireTenantRole(t *testing.T) {
 	orgB := env.seedOrgForTenant(t, tenantB, "rbac-b-"+randSuffix())
 
 	owner := env.seedUser(t)
-	ops := env.seedUser(t)
+	staff := env.seedUser(t)
+	catalog := env.seedUser(t)
 	stranger := env.seedUser(t)
 	env.seedMember(t, orgA, owner, "owner")
-	env.seedMember(t, orgA, ops, "ops")
+	env.seedMember(t, orgA, staff, "staff")
+	env.seedMember(t, orgA, catalog, "catalog")
 	// owner is a member of org B too, to exercise the cross-tenant case from a
 	// real membership rather than a no-membership 403.
 	ownerOfB := env.seedUser(t)
@@ -89,16 +91,36 @@ func TestRequireTenantRole(t *testing.T) {
 		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, owner, false, auth.TierOps))
 	})
 
-	t.Run("ops role passes the ops tier", func(t *testing.T) {
-		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, ops, false, auth.TierOps))
+	t.Run("tenant-admin role passes the catalog tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, owner, false, auth.TierCatalog))
 	})
 
-	t.Run("ops role is blocked from the tenant-admin tier", func(t *testing.T) {
-		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, ops, false, auth.TierTenantAdmin))
+	t.Run("staff role passes the ops tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, staff, false, auth.TierOps))
+	})
+
+	t.Run("staff role passes the catalog tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, staff, false, auth.TierCatalog))
+	})
+
+	t.Run("staff role is blocked from the tenant-admin tier", func(t *testing.T) {
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, staff, false, auth.TierTenantAdmin))
+	})
+
+	t.Run("catalog role passes the catalog tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, catalog, false, auth.TierCatalog))
+	})
+
+	t.Run("catalog role is blocked from the ops tier", func(t *testing.T) {
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, catalog, false, auth.TierOps))
+	})
+
+	t.Run("catalog role is blocked from the tenant-admin tier", func(t *testing.T) {
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, catalog, false, auth.TierTenantAdmin))
 	})
 
 	t.Run("non-member is forbidden", func(t *testing.T) {
-		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, stranger, false, auth.TierOps))
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, stranger, false, auth.TierCatalog))
 	})
 
 	t.Run("cross-tenant member is forbidden", func(t *testing.T) {
@@ -118,17 +140,6 @@ func TestRequireTenantRole(t *testing.T) {
 		unlinked := env.seedTenant(t, "rbac-unlinked-"+randSuffix())
 		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, unlinked, owner, false, auth.TierOps))
 	})
-}
-
-// seedUserWithRole inserts a user carrying a global role (e.g. 'admin') and an
-// email, returning its id. Used to prove the global role grants nothing
-// cross-tenant for membership-driven data routes.
-func (e *rlsEnv) seedUserWithRole(t *testing.T, role string) string {
-	t.Helper()
-	uid := "usr_" + randSuffix()
-	e.privExec(t, `INSERT INTO "user" (id, email, role) VALUES ($1, $2, $3)`,
-		uid, uid+"@example.test", role)
-	return uid
 }
 
 // callHasTenantTier evaluates auth.HasTenantTier over a request tx bound to the
@@ -152,10 +163,10 @@ func (e *rlsEnv) callHasTenantTier(t *testing.T, tenantID, userID string, isPlat
 }
 
 // TestHasTenantTierOrdersGate proves the /orders admin-listing branch is
-// membership-driven: a tenant member (ops/owner) of the bound tenant — or a
-// platform admin — gets the full listing, while a user who is NOT a member of the
-// bound tenant gets only their own orders even when their global user.role is
-// 'admin'. This closes the cross-tenant /orders read.
+// membership-driven: a staff/owner member of the bound tenant — or a platform
+// admin — gets the full listing, while a catalog member, a member of another
+// tenant, and a non-member get only their own orders. This closes the
+// cross-tenant /orders read.
 func TestHasTenantTierOrdersGate(t *testing.T) {
 	env := newRLSEnv(t)
 
@@ -165,36 +176,42 @@ func TestHasTenantTierOrdersGate(t *testing.T) {
 	orgB := env.seedOrgForTenant(t, tenantB, "ordgate-b-"+randSuffix())
 
 	owner := env.seedUser(t)
-	ops := env.seedUser(t)
+	staff := env.seedUser(t)
+	catalog := env.seedUser(t)
 	env.seedMember(t, orgA, owner, "owner")
-	env.seedMember(t, orgA, ops, "ops")
+	env.seedMember(t, orgA, staff, "staff")
+	env.seedMember(t, orgA, catalog, "catalog")
 
-	// A global-admin who is a member of tenant B but NOT tenant A. Hitting tenant
-	// A's host, the global role must grant nothing.
-	globalAdminOfB := env.seedUserWithRole(t, "admin")
-	env.seedMember(t, orgB, globalAdminOfB, "admin")
+	// An admin of tenant B but NOT tenant A. Hitting tenant A's host, the
+	// membership of another tenant must grant nothing.
+	adminOfB := env.seedUser(t)
+	env.seedMember(t, orgB, adminOfB, "admin")
 
-	// A global-admin with no membership anywhere.
-	globalAdminNoMember := env.seedUserWithRole(t, "admin")
+	// A user with no membership anywhere.
+	noMember := env.seedUser(t)
 
 	t.Run("owner member gets the admin listing", func(t *testing.T) {
 		require.True(t, env.callHasTenantTier(t, tenantA, owner, false, auth.TierOps))
 	})
 
-	t.Run("ops member gets the admin listing", func(t *testing.T) {
-		require.True(t, env.callHasTenantTier(t, tenantA, ops, false, auth.TierOps))
+	t.Run("staff member gets the admin listing", func(t *testing.T) {
+		require.True(t, env.callHasTenantTier(t, tenantA, staff, false, auth.TierOps))
 	})
 
-	t.Run("global admin member of another tenant gets only own orders", func(t *testing.T) {
-		require.False(t, env.callHasTenantTier(t, tenantA, globalAdminOfB, false, auth.TierOps))
+	t.Run("catalog member gets only own orders", func(t *testing.T) {
+		require.False(t, env.callHasTenantTier(t, tenantA, catalog, false, auth.TierOps))
 	})
 
-	t.Run("global admin with no membership gets only own orders", func(t *testing.T) {
-		require.False(t, env.callHasTenantTier(t, tenantA, globalAdminNoMember, false, auth.TierOps))
+	t.Run("admin member of another tenant gets only own orders", func(t *testing.T) {
+		require.False(t, env.callHasTenantTier(t, tenantA, adminOfB, false, auth.TierOps))
+	})
+
+	t.Run("user with no membership gets only own orders", func(t *testing.T) {
+		require.False(t, env.callHasTenantTier(t, tenantA, noMember, false, auth.TierOps))
 	})
 
 	t.Run("platform admin gets the admin listing", func(t *testing.T) {
-		require.True(t, env.callHasTenantTier(t, tenantA, globalAdminNoMember, true, auth.TierOps))
+		require.True(t, env.callHasTenantTier(t, tenantA, noMember, true, auth.TierOps))
 	})
 }
 

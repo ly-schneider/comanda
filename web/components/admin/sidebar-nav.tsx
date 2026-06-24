@@ -20,34 +20,63 @@ import {
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { VersionLabel } from "@/components/layout/version-label"
+import { useMemberTier } from "@/hooks/use-member-tier"
+import type { MemberTier } from "@/lib/auth/rbac"
 
 type NavItem = {
   href: string
   label: string
   icon: React.ReactNode
   badge?: number
+  requiredTier: MemberTier
 }
 
 export function AdminSidebar({ badges, version }: { badges?: Partial<Record<string, number>>; version?: string }) {
   const pathname = usePathname()
-  const items: NavItem[] = [
-    { href: "/admin", label: "Home", icon: <Home className="size-5" /> },
-    { href: "/admin/users", label: "Benutzer", icon: <Users className="size-5" /> },
-    { href: "/admin/invites", label: "Einladungen", icon: <MailPlus className="size-5" />, badge: badges?.invites },
-    { href: "/admin/products", label: "Produkte", icon: <Hamburger className="size-5" /> },
-    { href: "/admin/menu", label: "Menus", icon: <UtensilsCrossed className="size-5" /> },
-    { href: "/admin/categories", label: "Kategorien", icon: <Grid2x2 className="size-5" /> },
-    { href: "/admin/orders", label: "Bestellungen", icon: <ReceiptText className="size-5" />, badge: badges?.orders },
-    { href: "/admin/inventory", label: "Inventar", icon: <ClipboardList className="size-5" /> },
-    { href: "/admin/devices", label: "Geräte", icon: <Smartphone className="size-5" /> },
-    { href: "/admin/stations", label: "Stationen", icon: <MonitorCheck className="size-5" /> },
-    { href: "/admin/pos", label: "POS", icon: <CreditCard className="size-5" /> },
-    { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" /> },
-    { href: "/admin/staff-meals", label: "Mitarbeiter-Essen", icon: <Ticket className="size-5" /> },
-    { href: "/admin/branding", label: "Branding", icon: <Paintbrush className="size-5" /> },
-    { href: "/admin/domains", label: "Domains", icon: <Globe className="size-5" /> },
-    { href: "/admin/settings", label: "Einstellungen", icon: <Settings className="size-5" /> },
+  const { tierAllows } = useMemberTier()
+
+  const allItems: NavItem[] = [
+    { href: "/admin", label: "Home", icon: <Home className="size-5" />, requiredTier: "catalog" },
+    { href: "/admin/users", label: "Benutzer", icon: <Users className="size-5" />, requiredTier: "admin" },
+    {
+      href: "/admin/invites",
+      label: "Einladungen",
+      icon: <MailPlus className="size-5" />,
+      badge: badges?.invites,
+      requiredTier: "admin",
+    },
+    { href: "/admin/products", label: "Produkte", icon: <Hamburger className="size-5" />, requiredTier: "catalog" },
+    { href: "/admin/menu", label: "Menus", icon: <UtensilsCrossed className="size-5" />, requiredTier: "catalog" },
+    { href: "/admin/categories", label: "Kategorien", icon: <Grid2x2 className="size-5" />, requiredTier: "catalog" },
+    {
+      href: "/admin/orders",
+      label: "Bestellungen",
+      icon: <ReceiptText className="size-5" />,
+      badge: badges?.orders,
+      requiredTier: "staff",
+    },
+    { href: "/admin/inventory", label: "Inventar", icon: <ClipboardList className="size-5" />, requiredTier: "staff" },
+    { href: "/admin/devices", label: "Geräte", icon: <Smartphone className="size-5" />, requiredTier: "staff" },
+    {
+      href: "/admin/stations",
+      label: "Stationen",
+      icon: <MonitorCheck className="size-5" />,
+      requiredTier: "staff",
+    },
+    { href: "/admin/pos", label: "POS", icon: <CreditCard className="size-5" />, requiredTier: "staff" },
+    { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" />, requiredTier: "staff" },
+    {
+      href: "/admin/staff-meals",
+      label: "Mitarbeiter-Essen",
+      icon: <Ticket className="size-5" />,
+      requiredTier: "staff",
+    },
+    { href: "/admin/branding", label: "Branding", icon: <Paintbrush className="size-5" />, requiredTier: "admin" },
+    { href: "/admin/domains", label: "Domains", icon: <Globe className="size-5" />, requiredTier: "admin" },
+    { href: "/admin/settings", label: "Einstellungen", icon: <Settings className="size-5" />, requiredTier: "admin" },
   ]
+
+  const items = allItems.filter((it) => tierAllows(it.requiredTier))
 
   return (
     <nav aria-label="Hauptnavigation" className="w-full">

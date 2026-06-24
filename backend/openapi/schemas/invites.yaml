@@ -5,7 +5,16 @@ InviteStatus:
 Invite:
   type: object
   description: Full invite (admin view)
-  required: [id, inviteeEmail, status, expiresAt, invitedByUserId, createdAt]
+  required:
+    [
+      id,
+      inviteeEmail,
+      status,
+      memberRole,
+      expiresAt,
+      invitedByUserId,
+      createdAt,
+    ]
   properties:
     id:
       type: string
@@ -14,6 +23,8 @@ Invite:
       format: email
     status:
       $ref: "#/InviteStatus"
+    memberRole:
+      $ref: "#/MemberRole"
     expiresAt:
       type: string
       format: date-time
@@ -51,9 +62,9 @@ InvitePublic:
 
 MemberRole:
   type: string
-  enum: [admin, ops]
-  x-enum-varnames: [MemberRoleAdmin, MemberRoleOps]
-  description: Tenant membership tier granted on acceptance. Defaults to ops.
+  enum: [admin, staff, catalog]
+  x-enum-varnames: [MemberRoleAdmin, MemberRoleStaff, MemberRoleCatalog]
+  description: Tenant membership tier granted on acceptance. Defaults to staff.
 
 InviteCreate:
   type: object

@@ -45,10 +45,6 @@ func (User) Fields() []ent.Field {
 			UpdateDefault(time.Now),
 		field.Bool("is_anonymous").
 			Default(false),
-		field.Enum("role").
-			Values("admin", "customer").
-			Default("customer").
-			StorageKey("role"),
 		field.Bool("is_club_100").
 			Default(false),
 		field.Bool("is_platform_admin").

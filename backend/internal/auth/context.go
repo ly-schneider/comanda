@@ -8,7 +8,6 @@ type contextKey string
 
 const (
 	UserIDKey      contextKey = "userID"
-	UserRoleKey    contextKey = "userRole"
 	UserEmailKey   contextKey = "userEmail"
 	UserNameKey    contextKey = "userName"
 	IsAnonymousKey contextKey = "isAnonymous"
@@ -143,27 +142,8 @@ func RequireUserID(ctx context.Context) string {
 	return userID
 }
 
-func GetUserRole(ctx context.Context) (string, bool) {
-	role, ok := ctx.Value(UserRoleKey).(string)
-	return role, ok
-}
-
-// RequireUserRole panics if the user role is not in context.
-// Only safe after auth middleware has validated the request.
-func RequireUserRole(ctx context.Context) string {
-	role, ok := GetUserRole(ctx)
-	if !ok {
-		panic("auth: user role not found in context - ensure auth middleware is applied")
-	}
-	return role
-}
-
 func WithUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, UserIDKey, userID)
-}
-
-func WithUserRole(ctx context.Context, role string) context.Context {
-	return context.WithValue(ctx, UserRoleKey, role)
 }
 
 func GetUserEmail(ctx context.Context) (string, bool) {

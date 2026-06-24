@@ -48,9 +48,19 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	memberRole := admininvite.MemberRoleOps
-	if body.MemberRole != nil && *body.MemberRole == generated.MemberRoleAdmin {
-		memberRole = admininvite.MemberRoleAdmin
+	memberRole := admininvite.MemberRoleStaff
+	if body.MemberRole != nil {
+		switch *body.MemberRole {
+		case generated.MemberRoleAdmin:
+			memberRole = admininvite.MemberRoleAdmin
+		case generated.MemberRoleStaff:
+			memberRole = admininvite.MemberRoleStaff
+		case generated.MemberRoleCatalog:
+			memberRole = admininvite.MemberRoleCatalog
+		default:
+			writeError(w, http.StatusBadRequest, "invalid_member_role", "Invalid member role")
+			return
+		}
 	}
 
 	invite, err := h.invites.Create(ctx, userID, string(body.Email), memberRole, nil)
