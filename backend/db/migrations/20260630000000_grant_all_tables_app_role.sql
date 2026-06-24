@@ -5,8 +5,7 @@
 -- where the default-privileges path never fired — the baseline Ent tables
 -- (product, "order", menu, category, jeton, station, ...) stay ungranted and
 -- every request that touches them fails with "permission denied for table X"
--- (42501), surfacing as an opaque 500. The 2026062{3,8,9} migrations patched
--- individual tables one at a time; this grants the whole schema in one shot and
+-- (42501), surfacing as an opaque 500. This grants the whole schema in one shot and
 -- re-asserts the default privileges so tables added by future migrations are
 -- covered automatically. Runs as comanda_privileged (the migrate DSN), which
 -- owns the tables, so the grants take effect. Role-guarded so the roleless CI
