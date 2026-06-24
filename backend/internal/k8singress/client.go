@@ -84,6 +84,9 @@ func New(priv *ent.Client, cfg config.IngressConfig, logger *zap.Logger) (Reconc
 	if cfg.HTTP01Issuer == "" {
 		return nil, fmt.Errorf("k8singress: INGRESS_HTTP01_ISSUER is required when the reconciler is enabled")
 	}
+	if cfg.ManagedZone != "" && cfg.DNS01Issuer == "" {
+		return nil, fmt.Errorf("k8singress: INGRESS_DNS01_ISSUER is required when INGRESS_MANAGED_ZONE is set")
+	}
 
 	restCfg, err := restConfig(cfg.Kubeconfig)
 	if err != nil {

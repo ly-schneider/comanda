@@ -47,10 +47,22 @@ type CustomDomainConfig struct {
 // IngressConfig drives the Kubernetes ingress + cert-manager reconciler that
 // provisions TLS for verified custom domains.
 type IngressConfig struct {
-	Enabled        bool
-	Namespace      string
-	ClassName      string
-	HTTP01Issuer   string
+	Enabled      bool
+	Namespace    string
+	ClassName    string
+	HTTP01Issuer string
+	// DNS01Issuer is the ClusterIssuer for hostnames at or under ManagedZone, where
+	// we control DNS; DNS-01 validates via TXT records and so works even when the name
+	// is proxied through Cloudflare (HTTP-01 cannot). Empty disables the DNS-01 path.
+	DNS01Issuer string
+	// ManagedZone is the apex DNS zone our cert-manager Cloudflare token controls
+	// (e.g. comanda.leys.ch). Verified domains at or under it issue via DNS01Issuer;
+	// genuine third-party domains use HTTP01Issuer.
+	ManagedZone string
+	// WildcardBase is the platform subdomain base already served by a *.{WildcardBase}
+	// wildcard cert (e.g. staging.comanda.leys.ch). Single-label subdomains of it are
+	// covered, so no redundant per-domain certificate is issued.
+	WildcardBase   string
 	WebService     string
 	WebServicePort int
 	ReconcileEvery time.Duration
@@ -229,6 +241,9 @@ func Load() Config {
 			Namespace:        getEnvOptional("INGRESS_NAMESPACE"),
 			ClassName:        getEnvWithDefault("INGRESS_CLASS_NAME", "traefik"),
 			HTTP01Issuer:     getEnvOptional("INGRESS_HTTP01_ISSUER"),
+			DNS01Issuer:      getEnvOptional("INGRESS_DNS01_ISSUER"),
+			ManagedZone:      strings.ToLower(strings.TrimSpace(getEnvOptional("INGRESS_MANAGED_ZONE"))),
+			WildcardBase:     strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
 			WebService:       getEnvWithDefault("INGRESS_WEB_SERVICE", "comanda-web"),
 			WebServicePort:   getEnvIntWithDefault("INGRESS_WEB_SERVICE_PORT", 80),
 			ReconcileEvery:   getEnvDurationWithDefault("INGRESS_RECONCILE_INTERVAL", 60*time.Second),
