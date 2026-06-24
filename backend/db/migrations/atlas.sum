@@ -1,4 +1,4 @@
-h1:/BkUkjQ7aBAZBw6+UBw88LUnZ7L4jVG6gT0Kg3eR4Ck=
+h1:/KBfhQfgsxShe2DJyJnfKLo26ogXCMx0kOht51qUH6U=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -24,3 +24,4 @@ h1:/BkUkjQ7aBAZBw6+UBw88LUnZ7L4jVG6gT0Kg3eR4Ck=
 20260627000000_settings_drop_legal_text.sql h1:Bo3BfT5tC1dKiiKJIjy081WUf6Nem7pvoqvzXi8JhCE=
 20260628000000_grant_better_auth_org_tables_app_role.sql h1:1/3uULFDcP62lELmnh0AOInNtx9xLmv3aOf3l8koEKA=
 20260629000000_grant_settings_app_role.sql h1:2w2o2Fre4lW0hxUzN6Fv1E7Yi24kzkGxe7UZElz5wC0=
+20260630000000_grant_all_tables_app_role.sql h1:3JWYnwWebv/++jF14ejKROq1ZgARDfOdsoXkEOhrtgU=
