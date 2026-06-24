@@ -81,8 +81,22 @@ func (r *reconciler) reconcileDomains(ctx context.Context, domains []domain) err
 			}
 			continue
 		}
+		// A hostname the platform's *.{base} wildcard already serves needs no
+		// per-domain Certificate: issuing one wastes Let's Encrypt quota, and for a
+		// Cloudflare-proxied platform subdomain the HTTP-01 solver can never validate,
+		// leaving it stuck. Report it active (the wildcard provides TLS) and leave it
+		// out of `live` so collectGarbage tears down any object a prior reconcile made.
+		plan := planFor(d.hostname, r.cfg)
+		if plan.skip {
+			if err := r.writeCertStatus(ctx, d, tenantdomain.CertStatusActive); err != nil {
+				r.logger.Warn("k8singress: cert status write failed",
+					zap.String("domainId", d.id), zap.Error(err))
+			}
+			continue
+		}
+
 		live[d.id] = struct{}{}
-		if err := r.applyDomain(ctx, d); err != nil {
+		if err := r.applyDomain(ctx, d, plan.issuer); err != nil {
 			r.logger.Warn("k8singress: apply domain failed",
 				zap.String("domainId", d.id),
 				zap.String("hostname", d.hostname),
@@ -107,11 +121,11 @@ func (r *reconciler) reconcileDomains(ctx context.Context, domains []domain) err
 // one domain. The Certificate is the single owner of certificate issuance — the
 // Ingress deliberately carries no cert-manager issuer annotation so ingress-shim
 // never creates a second, competing Certificate.
-func (r *reconciler) applyDomain(ctx context.Context, d domain) error {
+func (r *reconciler) applyDomain(ctx context.Context, d domain, issuer string) error {
 	if err := r.applyIngress(ctx, d); err != nil {
 		return fmt.Errorf("apply ingress: %w", err)
 	}
-	if err := r.applyCertificate(ctx, d); err != nil {
+	if err := r.applyCertificate(ctx, d, issuer); err != nil {
 		return fmt.Errorf("apply certificate: %w", err)
 	}
 	return nil
@@ -147,7 +161,7 @@ func (r *reconciler) applyIngress(ctx context.Context, d domain) error {
 	return err
 }
 
-func (r *reconciler) applyCertificate(ctx context.Context, d domain) error {
+func (r *reconciler) applyCertificate(ctx context.Context, d domain, issuer string) error {
 	name := resourceName(d.id)
 	secret := tlsSecretName(d.id)
 
@@ -158,7 +172,7 @@ func (r *reconciler) applyCertificate(ctx context.Context, d domain) error {
 			WithSecretName(secret).
 			WithDNSNames(d.hostname).
 			WithIssuerRef(cmmetaac.IssuerReference().
-				WithName(r.cfg.HTTP01Issuer).
+				WithName(issuer).
 				WithKind("ClusterIssuer").
 				WithGroup("cert-manager.io")))
 
