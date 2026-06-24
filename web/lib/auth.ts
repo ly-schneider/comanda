@@ -1,9 +1,9 @@
 import { betterAuth } from "better-auth"
-import { admin, emailOTP, organization } from "better-auth/plugins"
+import { emailOTP, organization } from "better-auth/plugins"
 import { Pool } from "pg"
 import { readFileSync } from "node:fs"
-import { ac, adminRole, customerRole } from "./auth/permissions"
 import { getAppEnv } from "./env"
+import { normalizeHost, parseTenantHost } from "./tenant"
 
 // Scaleway managed PG presents a private per-instance CA that isn't in Node's
 // system roots. The DSN is sslmode=verify-full with no sslrootcert, so pin the
@@ -17,6 +17,57 @@ function createAuthPool(): Pool {
     return new Pool({ connectionString, ssl: { ca: readFileSync(caPath, "utf8") } })
   }
   return new Pool({ connectionString })
+}
+
+// Better Auth owns this pool; we also use it to resolve the active organization
+// on session creation (see databaseHooks below). DATABASE_URL is the privileged
+// DSN (it owns the auth tables), so these reads bypass RLS — no tenant GUC is
+// bound here.
+const authPool = createAuthPool()
+
+// Resolve which organization a newly-created session should activate, based on
+// the host the user authenticated against. org == tenant, so a vendor signing in
+// on their tenant host (subdomain or verified custom domain) must land with that
+// tenant's org active — otherwise get-active-member returns NO_ACTIVE_ORGANIZATION
+// and the admin storefront is unreachable. Every branch is membership-gated: a
+// non-member (e.g. an end customer ordering on the tenant storefront) resolves to
+// null and stays org-less, which is correct.
+async function resolveActiveOrgForHost(userId: string, host: string | undefined): Promise<string | null> {
+  const tenant = parseTenantHost(host || "")
+
+  if (tenant.type === "tenant-subdomain") {
+    const { rows } = await authPool.query<{ organization_id: string }>(
+      `SELECT t.organization_id
+         FROM tenant t
+         JOIN "member" m ON m.organization_id = t.organization_id
+        WHERE t.slug = $1 AND m.user_id = $2
+        LIMIT 1`,
+      [tenant.slug, userId]
+    )
+    return rows[0]?.organization_id ?? null
+  }
+
+  if (tenant.type === "custom-domain") {
+    const { rows } = await authPool.query<{ organization_id: string }>(
+      `SELECT t.organization_id
+         FROM tenant_domain d
+         JOIN tenant t ON t.id = d.tenant_id
+         JOIN "member" m ON m.organization_id = t.organization_id
+        WHERE d.hostname = $1 AND d.verified_at IS NOT NULL AND m.user_id = $2
+        LIMIT 1`,
+      [normalizeHost(host), userId]
+    )
+    return rows[0]?.organization_id ?? null
+  }
+
+  // Platform host (the vendor account hub): no tenant in the host. Fall back to
+  // the user's sole membership so the account hub works after a fresh sign-in;
+  // when the user belongs to several orgs it's ambiguous, so leave it unset.
+  const { rows } = await authPool.query<{ organization_id: string }>(
+    `SELECT organization_id FROM "member" WHERE user_id = $1 LIMIT 2`,
+    [userId]
+  )
+  return rows.length === 1 ? (rows[0]!.organization_id ?? null) : null
 }
 
 // Module-level cache for the trusted-origins fetch. Refreshes every 60 s so a
@@ -76,9 +127,30 @@ async function sendOTPEmailViaBackend(email: string, type: OTPType, host?: strin
 }
 
 export const auth = betterAuth({
-  database: createAuthPool(),
+  database: authPool,
 
   secret: process.env.BETTER_AUTH_SECRET,
+
+  // org == tenant. Better Auth never sets activeOrganizationId on its own, so a
+  // fresh sign-in would land org-less and the org plugin's get-active-member
+  // would 400 with NO_ACTIVE_ORGANIZATION. Resolve it from the auth host here so
+  // every new session starts bound to the right tenant's org (membership-gated).
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session, ctx) => {
+          const h = ctx as { request?: Request; headers?: Headers } | null
+          const headers = h?.request?.headers ?? h?.headers
+          const host =
+            headers?.get("x-comanda-host") || headers?.get("x-forwarded-host") || headers?.get("host") || undefined
+          const activeOrganizationId = await resolveActiveOrgForHost(session.userId, host)
+          if (activeOrganizationId) {
+            return { data: { ...session, activeOrganizationId } }
+          }
+        },
+      },
+    },
+  },
 
   // Disable email/password - using OTP instead
   emailAndPassword: { enabled: false },
@@ -91,11 +163,6 @@ export const auth = betterAuth({
       updatedAt: "updated_at",
     },
     additionalFields: {
-      role: {
-        type: "string",
-        defaultValue: "customer",
-        input: false, // Don't allow setting via signup
-      },
       isPlatformAdmin: {
         type: "boolean",
         defaultValue: false,
@@ -158,30 +225,6 @@ export const auth = betterAuth({
         const h = reqHeaders?.request?.headers ?? reqHeaders?.headers
         const host = h?.get("x-comanda-host") || h?.get("x-forwarded-host") || h?.get("host") || undefined
         await sendOTPEmailViaBackend(email, type as OTPType, host)
-      },
-    }),
-
-    // Admin plugin for managing users and invites
-    admin({
-      ac,
-      roles: {
-        customer: customerRole,
-        admin: adminRole,
-      },
-      defaultRole: "customer",
-      adminRoles: ["admin"],
-      schema: {
-        user: {
-          fields: {
-            banReason: "ban_reason",
-            banExpires: "ban_expires",
-          },
-        },
-        session: {
-          fields: {
-            impersonatedBy: "impersonated_by",
-          },
-        },
       },
     }),
 

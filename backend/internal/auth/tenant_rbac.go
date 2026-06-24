@@ -14,26 +14,39 @@ import (
 type TenantTier int
 
 const (
-	// TierOps covers day-to-day operations: products, orders, stations, POS,
-	// jetons, devices, staff-meals, events.
-	TierOps TenantTier = iota
+	// TierCatalog is the lowest tier: products (incl. images and inventory),
+	// categories, and menus only.
+	TierCatalog TenantTier = iota
+	// TierOps (the staff tier) covers day-to-day operations: orders, stations,
+	// POS, jetons, devices, staff-meals, events — plus everything catalog can do.
+	TierOps
 	// TierTenantAdmin covers tenant administration: settings, payments, branding,
-	// domains, users, invites — plus everything ops can do.
+	// domains, users, invites — plus everything staff can do.
 	TierTenantAdmin
 )
 
-// memberRoleSatisfies reports whether a member.role meets the minimum tier.
-// owner and admin are the tenant-admin tier (and therefore also satisfy ops);
-// ops satisfies only the ops tier. An unrecognised role satisfies nothing
-// (fail-closed).
+// memberRoleSatisfies reports whether a member.role meets the minimum tier. The
+// tiers nest, so the role's rank is compared ordinally: owner and admin rank at
+// tenant-admin, staff at ops, catalog at the lowest tier. An unrecognised role
+// ranks below everything and satisfies nothing (fail-closed).
 func memberRoleSatisfies(role string, min TenantTier) bool {
+	rank, ok := roleRank(role)
+	if !ok {
+		return false
+	}
+	return rank >= min
+}
+
+func roleRank(role string) (TenantTier, bool) {
 	switch role {
 	case "owner", "admin":
-		return true
-	case "ops":
-		return min == TierOps
+		return TierTenantAdmin, true
+	case "staff":
+		return TierOps, true
+	case "catalog":
+		return TierCatalog, true
 	default:
-		return false
+		return 0, false
 	}
 }
 

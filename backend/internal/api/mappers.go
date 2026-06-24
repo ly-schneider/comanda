@@ -291,6 +291,7 @@ func toAPIInvite(e *ent.AdminInvite) generated.Invite {
 		InvitedByUserId: e.InvitedByUserID,
 		InviteeEmail:    openapi_types.Email(e.InviteeEmail),
 		Status:          generated.InviteStatus(e.Status),
+		MemberRole:      generated.MemberRole(e.MemberRole),
 		ExpiresAt:       e.ExpiresAt,
 		UsedAt:          e.UsedAt,
 		CreatedAt:       e.CreatedAt,

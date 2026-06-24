@@ -1,5 +1,5 @@
 export type { Cents, ListResponse } from "./common"
-export type { UserRole, User } from "./user"
+export type { User } from "./user"
 export type { Station, StationRequestStatus, StationRequest, StationProduct } from "./station"
 export type { Category, CategoryDTO } from "./category"
 export type { ProductType, Product, ProductSummaryDTO, ProductDTO } from "./product"

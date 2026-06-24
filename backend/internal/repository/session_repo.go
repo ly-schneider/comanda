@@ -9,13 +9,11 @@ import (
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/session"
-	"backend/internal/generated/ent/user"
 )
 
 type SessionWithUser struct {
 	SessionID            string
 	UserID               string
-	Role                 user.Role
 	Email                string
 	Name                 string
 	IsPlatformAdmin      bool
@@ -66,7 +64,6 @@ func (r *sessionRepo) GetByToken(ctx context.Context, token string) (*SessionWit
 	return &SessionWithUser{
 		SessionID:            e.ID,
 		UserID:               e.UserID,
-		Role:                 u.Role,
 		Email:                email,
 		Name:                 name,
 		IsPlatformAdmin:      u.IsPlatformAdmin,

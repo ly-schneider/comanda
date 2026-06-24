@@ -3,15 +3,19 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
-
+import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
+
+type InviteMemberRole = "admin" | "staff" | "catalog"
 
 type Invite = {
   id: string
   inviteeEmail: string
+  memberRole: InviteMemberRole
   status: string
   invitedByUserId: string
   inviter?: { id: string; name: string | null; email?: string }
@@ -23,6 +27,7 @@ export default function AdminInvitesPage() {
   const fetchAuth = useAuthorizedFetch()
   const [items, setItems] = useState<Invite[]>([])
   const [email, setEmail] = useState("")
+  const [memberRole, setMemberRole] = useState<InviteMemberRole>("staff")
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,13 +52,14 @@ export default function AdminInvitesPage() {
     const res = await fetchAuth(`/api/v1/invites`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify({ email: email.trim(), memberRole }),
     })
     if (!res.ok) {
       setError(await readErrorMessage(res))
       return
     }
     setEmail("")
+    setMemberRole("staff")
     await reload()
   }
 
@@ -86,6 +92,16 @@ export default function AdminInvitesPage() {
           placeholder="E-Mail-Adresse"
           className="h-8 w-72"
         />
+        <Select value={memberRole} onValueChange={(v) => setMemberRole(v as InviteMemberRole)}>
+          <SelectTrigger className="h-8 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="admin">{ROLE_LABELS_DE.admin}</SelectItem>
+            <SelectItem value="staff">{ROLE_LABELS_DE.staff}</SelectItem>
+            <SelectItem value="catalog">{ROLE_LABELS_DE.catalog}</SelectItem>
+          </SelectContent>
+        </Select>
         <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()}>
           Einladen
         </Button>
@@ -106,6 +122,7 @@ export default function AdminInvitesPage() {
                 <TableRow>
                   <TableHead className="whitespace-nowrap">ID</TableHead>
                   <TableHead className="whitespace-nowrap">Eingeladene E-Mail</TableHead>
+                  <TableHead className="whitespace-nowrap">Rolle</TableHead>
                   <TableHead className="whitespace-nowrap">Status</TableHead>
                   <TableHead className="whitespace-nowrap">Eingeladen von</TableHead>
                   <TableHead className="whitespace-nowrap">Erstellt</TableHead>
@@ -130,6 +147,7 @@ export default function AdminInvitesPage() {
                     <TableRow key={i.id} className="even:bg-card odd:bg-muted/40">
                       <TableCell className="text-xs">{i.id}</TableCell>
                       <TableCell>{i.inviteeEmail}</TableCell>
+                      <TableCell>{ROLE_LABELS_DE[i.memberRole] ?? i.memberRole}</TableCell>
                       <TableCell className="uppercase">{i.status}</TableCell>
                       <TableCell>{inviter}</TableCell>
                       <TableCell className="whitespace-nowrap">{created}</TableCell>
@@ -150,5 +168,3 @@ export default function AdminInvitesPage() {
     </div>
   )
 }
-
-// CSRF helper now centralized in lib/csrf

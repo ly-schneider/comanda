@@ -52,7 +52,8 @@ func TestStaffInviteCreatesMember(t *testing.T) {
 		name       string
 		memberRole string
 	}{
-		{"ops tier", "ops"},
+		{"catalog tier", "catalog"},
+		{"staff tier", "staff"},
 		{"admin tier", "admin"},
 	}
 
@@ -94,7 +95,7 @@ func TestStaffInviteReacceptUpgrades(t *testing.T) {
 		env.acceptStaffInvite(t, tenantID, token)
 	}
 
-	accept("ops")
+	accept("staff")
 	accept("admin")
 
 	var role string
@@ -114,7 +115,7 @@ func TestStaffInviteUnlinkedTenantNoMember(t *testing.T) {
 	inviter := env.seedUser(t)
 	email := "nolink-" + randSuffix() + "@example.test"
 	token := "tok-" + randSuffix()
-	env.seedAdminInvite(t, tenantID, inviter, email, "ops", token)
+	env.seedAdminInvite(t, tenantID, inviter, email, "staff", token)
 
 	env.acceptStaffInvite(t, tenantID, token)
 
