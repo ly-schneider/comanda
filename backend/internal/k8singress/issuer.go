@@ -56,7 +56,6 @@ func coveredByWildcard(host, base string) bool {
 	return label != "" && !strings.Contains(label, ".")
 }
 
-// underZone reports whether host is the apex of, or a subdomain of, zone.
 func underZone(host, zone string) bool {
 	if zone == "" {
 		return false
