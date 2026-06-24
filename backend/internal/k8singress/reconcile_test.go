@@ -213,8 +213,6 @@ func TestReconcileSkipsWildcardCoveredHostname(t *testing.T) {
 	r.cfg.WildcardBase = "staging.comanda.leys.ch"
 	ctx := context.Background()
 
-	// A tenant subdomain the *.staging.comanda.leys.ch wildcard already serves: no
-	// per-domain Ingress/Certificate is created, and the domain reports active.
 	d := domain{id: "wild________1", tenantID: "tenant______1", hostname: "incil.staging.comanda.leys.ch", certStatus: tenantdomain.CertStatusPending}
 	if err := r.reconcileDomains(ctx, []domain{d}); err != nil {
 		t.Fatalf("reconcileDomains: %v", err)
@@ -237,8 +235,6 @@ func TestReconcileGarbageCollectsWildcardCoveredObjects(t *testing.T) {
 	r, k8s, cm := newTestReconciler(store)
 	ctx := context.Background()
 
-	// First pass (no wildcard base configured) issues a per-domain cert; once the
-	// platform wildcard base is known, the now-redundant objects must be collected.
 	d := domain{id: "wildgc______1", tenantID: "tenant______1", hostname: "incil.staging.comanda.leys.ch"}
 	if err := r.reconcileDomains(ctx, []domain{d}); err != nil {
 		t.Fatalf("seed reconcile: %v", err)

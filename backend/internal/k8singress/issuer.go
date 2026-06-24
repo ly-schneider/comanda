@@ -11,8 +11,7 @@ import (
 type certPlan struct {
 	// skip is true when a platform wildcard cert already serves the hostname, so a
 	// per-domain Certificate would be redundant and burn Let's Encrypt quota.
-	skip bool
-	// issuer is the ClusterIssuer name to use when skip is false.
+	skip   bool
 	issuer string
 }
 
