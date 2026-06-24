@@ -32,7 +32,6 @@ const TIER_RANK: Record<string, number> = {
   catalog: 1,
 }
 
-// Returns true when the given tier satisfies the required minimum tier.
 export function tierAllows(tier: MemberTier | null | undefined, required: MemberTier): boolean {
   if (!tier) return false
   return (TIER_RANK[tier] ?? 0) >= (TIER_RANK[required] ?? 0)
