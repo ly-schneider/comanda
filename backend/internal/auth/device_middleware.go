@@ -124,9 +124,6 @@ func (m *DeviceAuthMiddleware) RequireDevice(deviceType DeviceType) func(http.Ha
 			}
 			ctx = WithDeviceType(ctx, deviceType)
 			ctx = WithUserID(ctx, session.UserID)
-			if session.Role != "" {
-				ctx = WithUserRole(ctx, string(session.Role))
-			}
 
 			trace.IdentifyUser(ctx, session.UserID, "", "")
 

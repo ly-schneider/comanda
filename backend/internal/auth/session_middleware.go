@@ -64,9 +64,6 @@ func (m *SessionMiddleware) RequireAuth() func(http.Handler) http.Handler {
 			if uid, ok := GetUserID(ctx); ok {
 				trace.Data(spanCtx, "user.id", uid)
 			}
-			if role, ok := GetUserRole(ctx); ok {
-				trace.Data(spanCtx, "user.role", role)
-			}
 			finish()
 			m.syncPlatformAdminGUC(ctx, IsPlatformAdmin(ctx))
 			ctx = WithAuthType(ctx, AuthTypeUser)
@@ -114,9 +111,6 @@ func (m *SessionMiddleware) OptionalAuth() func(http.Handler) http.Handler {
 						ctx = WithDeviceType(ctx, DeviceTypeStation)
 					}
 					ctx = WithUserID(ctx, session.UserID)
-					if session.Role != "" {
-						ctx = WithUserRole(ctx, string(session.Role))
-					}
 
 					trace.IdentifyUser(ctx, session.UserID, "", "")
 
@@ -291,9 +285,6 @@ func (m *SessionMiddleware) validateAndRefresh(traceCtx context.Context, r *http
 	if session.SessionID != "" {
 		ctx = WithSessionID(ctx, session.SessionID)
 	}
-	if session.Role != "" {
-		ctx = WithUserRole(ctx, string(session.Role))
-	}
 	if session.Email != "" {
 		ctx = WithUserEmail(ctx, session.Email)
 	}
@@ -330,8 +321,8 @@ func (m *SessionMiddleware) syncPlatformAdminGUC(ctx context.Context, isPlatform
 }
 
 // IsAdmin reports whether the request may bypass maintenance mode: a member of
-// the bound tenant at ops tier or above, or a platform admin. Authorization is
-// membership-based (HasTenantTier), not the global user.role.
+// the bound tenant at the staff tier or above, or a platform admin.
+// Authorization is membership-based (HasTenantTier), not a global user role.
 func (m *SessionMiddleware) IsAdmin(r *http.Request) bool {
 	ctx, err := m.validateAndRefresh(r.Context(), r)
 	if err != nil {

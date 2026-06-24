@@ -172,37 +172,49 @@ func NewRouter(
 			authed.Get("/orders", wrapper.ListOrders)
 		})
 
-		// ── Ops routes (auth + ops membership + CSRF, NOT blocked) ─
+		// ── Catalog routes (auth + catalog membership + CSRF) ──
+		// The lowest tenant tier: products (incl. images and inventory),
+		// categories, and menus. Staff and tenant-admins satisfy it too.
+		v1.Group(func(catalog chi.Router) {
+			catalog.Use(betterAuthMw.RequireAuth())
+			catalog.Use(betterAuthMw.RequireTenantRole(auth.TierCatalog))
+			csrf := middleware.NewCSRFMiddleware()
+			catalog.Use(csrf.Require)
+
+			catalog.Post("/products", wrapper.CreateProduct)
+			catalog.Patch("/products/{productId}", wrapper.UpdateProduct)
+			catalog.Delete("/products/{productId}", wrapper.DeleteProduct)
+			catalog.Post("/products/{productId}/image", wrapper.UploadProductImage)
+			catalog.Delete("/products/{productId}/image", wrapper.DeleteProductImage)
+			catalog.Get("/products/{productId}/inventory", wrapper.GetProductInventory)
+			catalog.Get("/products/{productId}/inventory/history", wrapper.GetProductInventoryHistory)
+			catalog.Patch("/products/{productId}/inventory", wrapper.AdjustProductInventory)
+
+			catalog.Post("/categories", wrapper.CreateCategory)
+			catalog.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
+			catalog.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
+
+			catalog.Post("/menus", wrapper.CreateMenu)
+			catalog.Patch("/menus/{menuId}", wrapper.UpdateMenu)
+			catalog.Delete("/menus/{menuId}", wrapper.DeleteMenu)
+			catalog.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
+			catalog.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
+			catalog.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
+			catalog.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
+			catalog.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
+			catalog.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
+		})
+
+		// ── Staff routes (auth + staff membership + CSRF, NOT blocked) ─
 		// The subdomain /admin surface is gated by the tenant-scoped org member
-		// role, not the global user.role. Ops is the day-to-day operational tier.
+		// role, not the global user.role. Staff is the day-to-day operational tier
+		// (orders, stations, POS, jetons, devices, staff-meals), strictly above
+		// catalog.
 		v1.Group(func(ops chi.Router) {
 			ops.Use(betterAuthMw.RequireAuth())
 			ops.Use(betterAuthMw.RequireTenantRole(auth.TierOps))
 			csrf := middleware.NewCSRFMiddleware()
 			ops.Use(csrf.Require)
-
-			ops.Post("/products", wrapper.CreateProduct)
-			ops.Patch("/products/{productId}", wrapper.UpdateProduct)
-			ops.Delete("/products/{productId}", wrapper.DeleteProduct)
-			ops.Post("/products/{productId}/image", wrapper.UploadProductImage)
-			ops.Delete("/products/{productId}/image", wrapper.DeleteProductImage)
-			ops.Get("/products/{productId}/inventory", wrapper.GetProductInventory)
-			ops.Get("/products/{productId}/inventory/history", wrapper.GetProductInventoryHistory)
-			ops.Patch("/products/{productId}/inventory", wrapper.AdjustProductInventory)
-
-			ops.Post("/categories", wrapper.CreateCategory)
-			ops.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
-			ops.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
-
-			ops.Post("/menus", wrapper.CreateMenu)
-			ops.Patch("/menus/{menuId}", wrapper.UpdateMenu)
-			ops.Delete("/menus/{menuId}", wrapper.DeleteMenu)
-			ops.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
-			ops.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
-			ops.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
-			ops.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
-			ops.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
-			ops.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
 
 			ops.Patch("/orders/{orderId}", wrapper.UpdateOrderStatus)
 

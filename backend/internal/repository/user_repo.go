@@ -79,9 +79,9 @@ func (r *userRepo) UpdateName(ctx context.Context, id string, name string) error
 	return nil
 }
 
-// CreateInvitedUser creates the user backing an accepted staff invite. The user
-// is a global customer; their tenant tier comes from the member row written in
-// the same accept, so the global user.role grants nothing cross-tenant.
+// CreateInvitedUser creates the user backing an accepted staff invite. The
+// user's tenant tier comes from the member row written in the same accept; a
+// user with no member row is a customer.
 func (r *userRepo) CreateInvitedUser(ctx context.Context, email, name string) (*ent.User, error) {
 	e, err := r.ec(ctx).User.Create().
 		SetID(generateUserID()).
@@ -89,7 +89,6 @@ func (r *userRepo) CreateInvitedUser(ctx context.Context, email, name string) (*
 		SetName(name).
 		SetEmailVerified(true).
 		SetIsAnonymous(false).
-		SetRole(user.RoleCustomer).
 		Save(ctx)
 	if err != nil {
 		return nil, translateError(err)
