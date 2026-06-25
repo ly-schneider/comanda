@@ -56,7 +56,7 @@ func NewDeviceService(
 }
 
 func (s *deviceService) ListAll(ctx context.Context, deviceType *string, status *string) ([]*ent.Device, error) {
-	q := s.client.Device.Query()
+	q := repository.ClientFromContext(ctx, s.client).Device.Query()
 	if deviceType != nil && *deviceType != "" {
 		q = q.Where(device.TypeEQ(device.Type(*deviceType)))
 	}

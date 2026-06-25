@@ -696,7 +696,12 @@ func (s *paymentService) ConfigurePayrexx(ctx context.Context, in ConfigurePayre
 		return "", fmt.Errorf("instance, api secret and webhook secret are required")
 	}
 
-	if err := payment.ValidatePayrexxCredentials(ctx, in.Instance, in.APISecret); err != nil {
+	instance := payrexx.NormalizeInstance(in.Instance)
+	if instance == "" {
+		return "", fmt.Errorf("instance, api secret and webhook secret are required")
+	}
+
+	if err := payment.ValidatePayrexxCredentials(ctx, instance, in.APISecret); err != nil {
 		return "", err
 	}
 
@@ -715,7 +720,7 @@ func (s *paymentService) ConfigurePayrexx(ctx context.Context, in ConfigurePayre
 	}
 
 	if err := s.settingsRepo.UpsertPayrexxCredentials(ctx, repository.PayrexxCredentials{
-		Instance:         in.Instance,
+		Instance:         instance,
 		APISecretEnc:     apiEnc,
 		WebhookSecretEnc: webhookEnc,
 		WebhookToken:     token,

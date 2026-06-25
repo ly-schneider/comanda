@@ -28,8 +28,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.sumup.merchant.reader.api.SumUpAPI
 import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpPayment
@@ -679,6 +681,7 @@ class WebPosActivity : ComponentActivity() {
             val totalCents = obj.optLong("totalCents", -1)
             val orderId = obj.optString("orderId", "-")
             val method = obj.optString("method", "card")
+            val pickupQr = obj.optString("pickupQr", "")
             val currency = branding.currency ?: obj.optString("currency", "CHF")
             val orderTs = obj.optLong("orderTimestamp", -1L)
             val dateStr = try {
@@ -716,6 +719,24 @@ class WebPosActivity : ComponentActivity() {
             }
             lines.append("Bestellung: ${orderId}\n")
             lines.append("\n")
+            if (pickupQr.isNotEmpty()) {
+                try {
+                    val hints = mapOf(
+                        EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+                        EncodeHintType.MARGIN to 2
+                    )
+                    val qrBitmapSize = 320
+                    val matrix = QRCodeWriter().encode(pickupQr, BarcodeFormat.QR_CODE, qrBitmapSize, qrBitmapSize, hints)
+                    val qrBmp = Bitmap.createBitmap(qrBitmapSize, qrBitmapSize, Bitmap.Config.RGB_565)
+                    for (x in 0 until qrBitmapSize) {
+                        for (yy in 0 until qrBitmapSize) {
+                            qrBmp.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
+                        }
+                    }
+                    val imgHex = com.dantsu.escposprinter.textparser.PrinterTextParserImg.bitmapToHexadecimalString(printer, qrBmp)
+                    lines.append("[C]<img>$imgHex</img>\n")
+                } catch (_: Throwable) {}
+            }
             val thankYou = branding.thankYou ?: "Danke!"
             lines.append("[C]$thankYou\n\n")
             printer.printFormattedText(lines.toString())
@@ -848,7 +869,7 @@ class WebPosActivity : ComponentActivity() {
         val headerTopPad = 12
         val headerBottomPad = 6
         val bottomPad = 56
-        val qrSize = 200
+        val qrSize = 320
         val logoMaxHeight = 160
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = fontSize }
@@ -959,7 +980,11 @@ class WebPosActivity : ComponentActivity() {
         if (pickupQr.isNotEmpty()) {
             val size = qrSize
             try {
-                val matrix: BitMatrix = QRCodeWriter().encode(pickupQr, BarcodeFormat.QR_CODE, size, size)
+                val hints = mapOf(
+                    EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+                    EncodeHintType.MARGIN to 2
+                )
+                val matrix: BitMatrix = QRCodeWriter().encode(pickupQr, BarcodeFormat.QR_CODE, size, size, hints)
                 val qrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
                 for (x in 0 until size) {
                     for (yy in 0 until size) {

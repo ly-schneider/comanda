@@ -8,6 +8,8 @@ import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
+import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
+import { InstallPrompt } from "@/components/station/install-prompt"
 import { OfflineReadiness } from "@/components/station/offline-readiness"
 import { OfflineSetupRequired } from "@/components/station/offline-setup-required"
 import { Button } from "@/components/ui/button"
@@ -214,7 +216,7 @@ export default function StationPage() {
     tokenRef.current = bearerToken
   }, [bearerToken])
   // Same ref trick for the device-fetch wrapper: triggerFlush stays stable, but a
-  // flush still routes 401/403 through clear-token-and-redirect to /station/setup.
+  // flush still routes 401/403 through clear-token-and-redirect to /station.
   const deviceFetch = useDeviceFetch("station")
   const deviceFetchRef = useRef(deviceFetch)
   useEffect(() => {
@@ -655,6 +657,7 @@ export default function StationPage() {
       <header className="mx-auto flex w-full max-w-xl items-center justify-between gap-3">
         <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name ?? ""}</p>
         <div className="flex shrink-0 items-center gap-1.5">
+          <InstallPrompt />
           <HardRefreshButton />
           <FullscreenButton />
         </div>
@@ -802,6 +805,7 @@ export default function StationPage() {
       )}
 
       <OrderDetailDialog orderId={detailOrderId} bearerToken={bearerToken} onClose={() => setDetailOrderId(null)} />
+      <InstallHintDrawer />
     </div>
   )
 }

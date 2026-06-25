@@ -26,7 +26,26 @@ type Client struct {
 	httpClient   *http.Client
 }
 
+// NormalizeInstance reduces a user-entered instance to the bare subdomain label
+// the API's `instance` parameter expects. Payrexx answers an unresolvable
+// instance with an opaque HTTP 422 (a wrong API secret returns 403), so a value
+// like "blessthun.payrexx.com", "https://blessthun.payrexx.com/", or one with
+// stray whitespace fails validation in a way that looks like bad credentials.
+func NormalizeInstance(instance string) string {
+	s := strings.TrimSpace(instance)
+	s = strings.TrimPrefix(s, "https://")
+	s = strings.TrimPrefix(s, "http://")
+	if i := strings.IndexAny(s, "/?"); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.Index(s, "."); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
 func NewClient(instanceName, apiSecret string) *Client {
+	instanceName = NormalizeInstance(instanceName)
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{

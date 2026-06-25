@@ -38,7 +38,14 @@ export interface QrPayload {
   t: string
   /** order id */
   o: string
-  /** issued-at, Unix seconds */
+  /**
+   * issued-at, Unix seconds.
+   *
+   * Expiry is intentionally not enforced: the append-only per-station ledger
+   * is the sole replay barrier. One scanner per stand means a token can only
+   * ever be redeemed once for a given (orderId, productId) pair — time-based
+   * expiry would add clock-skew fragility with no security benefit here.
+   */
   i: number
   /** redeemable line items */
   l: QrLine[]
