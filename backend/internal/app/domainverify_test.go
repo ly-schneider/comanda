@@ -47,6 +47,9 @@ func (s *stubDomainRepo) MarkVerified(context.Context, string) (*ent.TenantDomai
 func (s *stubDomainRepo) ListVerified(context.Context, *ent.Client) ([]*ent.TenantDomain, error) {
 	return nil, nil
 }
+func (s *stubDomainRepo) DeleteStaleUnverified(context.Context, *ent.Client, time.Time) (int, error) {
+	return 0, nil
+}
 func (s *stubDomainRepo) ListAllVerifiedHostnames(context.Context, *ent.Client) ([]string, error) {
 	return nil, nil
 }

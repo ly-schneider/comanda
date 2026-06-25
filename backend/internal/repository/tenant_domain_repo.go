@@ -26,6 +26,11 @@ type TenantDomainRepository interface {
 	// ListUnverified returns every not-yet-verified domain across all tenants.
 	// The caller must pass the privileged (RLS-bypassing) client.
 	ListUnverified(ctx context.Context, privileged *ent.Client) ([]*ent.TenantDomain, error)
+	// DeleteStaleUnverified drops BYO custom-domain rows created before cutoff that
+	// are still unverified, returning the number removed. It only touches rows with
+	// a verification token, so platform-assigned domains (tokenless, verified by
+	// construction) can never be swept. The caller must pass the privileged client.
+	DeleteStaleUnverified(ctx context.Context, privileged *ent.Client, cutoff time.Time) (int, error)
 	// ListVerified returns every verified domain across all tenants. The caller
 	// must pass the privileged (RLS-bypassing) client.
 	ListVerified(ctx context.Context, privileged *ent.Client) ([]*ent.TenantDomain, error)
@@ -120,6 +125,20 @@ func (r *tenantDomainRepo) ListUnverified(ctx context.Context, privileged *ent.C
 		return nil, translateError(err)
 	}
 	return rows, nil
+}
+
+func (r *tenantDomainRepo) DeleteStaleUnverified(ctx context.Context, privileged *ent.Client, cutoff time.Time) (int, error) {
+	n, err := privileged.TenantDomain.Delete().
+		Where(
+			tenantdomain.VerifiedAtIsNil(),
+			tenantdomain.VerificationTokenNEQ(""),
+			tenantdomain.CreatedAtLT(cutoff),
+		).
+		Exec(ctx)
+	if err != nil {
+		return 0, translateError(err)
+	}
+	return n, nil
 }
 
 func (r *tenantDomainRepo) ListVerified(ctx context.Context, privileged *ent.Client) ([]*ent.TenantDomain, error) {

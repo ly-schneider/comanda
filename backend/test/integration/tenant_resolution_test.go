@@ -36,6 +36,16 @@ func (e *rlsEnv) seedDomain(t *testing.T, tenantID string, hostname string) {
 	)
 }
 
+// seedUnverifiedDomain registers a not-yet-verified BYO hostname (verified_at
+// NULL, with a verification token) via the privileged pool.
+func (e *rlsEnv) seedUnverifiedDomain(t *testing.T, tenantID string, hostname string) {
+	t.Helper()
+	e.privExec(t,
+		`INSERT INTO tenant_domain (id, tenant_id, hostname, verification_token) VALUES ($1, $2, $3, $4)`,
+		nanoid.New(), tenantID, hostname, "tok-"+randSuffix(),
+	)
+}
+
 // categoryHandler reads category names through the request-scoped Ent client
 // (bound by TenantMiddleware.Tx) and writes them comma-joined. It is the probe
 // for what a request actually sees under RLS.
@@ -134,6 +144,35 @@ func TestUnknownHost404(t *testing.T) {
 	h := env.buildResolverStack(nil, false)
 	code, _ := doGet(t, h, "nobody."+randSuffix()+".test", nil)
 	require.Equal(t, http.StatusNotFound, code)
+}
+
+// TestUnverifiedDomainDoesNotResolve is the regression test for the resolver's
+// verified-only rule: an unverified BYO hostname must not route to its tenant
+// (otherwise a tenant could claim a host it does not control), while the same
+// tenant's verified hostname does.
+func TestUnverifiedDomainDoesNotResolve(t *testing.T) {
+	env := newRLSEnv(t)
+
+	tenantA := env.seedTenant(t, "unv-a-"+randSuffix())
+	verifiedHost := "ok-" + randSuffix() + ".comanda.test"
+	unverifiedHost := "pending-" + randSuffix() + ".comanda.test"
+	env.seedDomain(t, tenantA, verifiedHost)
+	env.seedUnverifiedDomain(t, tenantA, unverifiedHost)
+
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'OnlyA', $2)`, nanoid.New(), tenantA)
+
+	h := env.buildResolverStack(nil, false)
+
+	t.Run("verified host resolves", func(t *testing.T) {
+		code, body := doGet(t, h, verifiedHost, nil)
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, "OnlyA", body)
+	})
+
+	t.Run("unverified host is rejected", func(t *testing.T) {
+		code, _ := doGet(t, h, unverifiedHost, nil)
+		require.Equal(t, http.StatusNotFound, code)
+	})
 }
 
 // TestTenantHeaderTrust: X-Tenant-Id is honored only when headerTrusted is true.

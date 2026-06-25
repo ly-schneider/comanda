@@ -106,8 +106,12 @@ func TestStaffInviteReacceptUpgrades(t *testing.T) {
 	require.Equal(t, "admin", role)
 }
 
-// TestStaffInviteUnlinkedTenantNoMember proves the guarded insert never writes a
-// NULL-org member row when the tenant has no organization.
+// TestStaffInviteUnlinkedTenantNoMember proves accepting a staff invite for a
+// tenant with no linked organization fail-closes: the guarded member insert
+// matches no rows (app_current_org_id() is NULL), so Accept errors before the
+// invite is marked accepted and the request tx rolls back. No NULL-org member is
+// ever written, and the invite stays pending so it can be re-accepted once the
+// tenant is linked.
 func TestStaffInviteUnlinkedTenantNoMember(t *testing.T) {
 	env := newRLSEnv(t)
 
@@ -117,7 +121,16 @@ func TestStaffInviteUnlinkedTenantNoMember(t *testing.T) {
 	token := "tok-" + randSuffix()
 	env.seedAdminInvite(t, tenantID, inviter, email, "staff", token)
 
-	env.acceptStaffInvite(t, tenantID, token)
+	ctx, client, rollback := env.appRequestTxRollback(t, tenantID)
+	svc := service.NewAdminInviteService(
+		TestConfig(),
+		repository.NewAdminInviteRepository(client),
+		repository.NewUserRepository(client),
+		noopEmail{},
+	)
+	err := svc.Accept(ctx, token, "Staff", "Member")
+	rollback()
+	require.Error(t, err)
 
 	var n int
 	require.NoError(t, env.priv.QueryRow(
@@ -125,9 +138,8 @@ func TestStaffInviteUnlinkedTenantNoMember(t *testing.T) {
 		email).Scan(&n))
 	require.Equal(t, 0, n)
 
-	// The invite itself is still accepted and the user still created.
 	var status admininvite.Status
 	require.NoError(t, env.priv.QueryRow(
 		`SELECT status FROM "admin_invite" WHERE invitee_email = $1`, email).Scan(&status))
-	require.Equal(t, admininvite.StatusAccepted, status)
+	require.Equal(t, admininvite.StatusPending, status)
 }
