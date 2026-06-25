@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordInput } from "@/components/ui/password-input"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 
@@ -152,9 +153,8 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
             </div>
             <div className="space-y-2">
               <Label htmlFor="payrexx-api-secret">API-Secret</Label>
-              <Input
+              <PasswordInput
                 id="payrexx-api-secret"
-                type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
                 placeholder={status?.configured ? "••••••••  (zum Ändern neu eingeben)" : ""}
@@ -166,9 +166,8 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
             </div>
             <div className="space-y-2">
               <Label htmlFor="payrexx-webhook-secret">Webhook-Secret</Label>
-              <Input
+              <PasswordInput
                 id="payrexx-webhook-secret"
-                type="password"
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
                 placeholder={status?.configured ? "••••••••  (zum Ändern neu eingeben)" : ""}
