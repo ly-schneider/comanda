@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"backend/internal/config"
 	"backend/internal/generated/ent"
@@ -42,6 +43,9 @@ func (f *fakeDomainRepo) ListUnverified(context.Context, *ent.Client) ([]*ent.Te
 }
 func (f *fakeDomainRepo) ListVerified(context.Context, *ent.Client) ([]*ent.TenantDomain, error) {
 	return nil, nil
+}
+func (f *fakeDomainRepo) DeleteStaleUnverified(context.Context, *ent.Client, time.Time) (int, error) {
+	return 0, nil
 }
 func (f *fakeDomainRepo) ListAllVerifiedHostnames(context.Context, *ent.Client) ([]string, error) {
 	return nil, nil

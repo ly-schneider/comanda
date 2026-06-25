@@ -39,6 +39,14 @@ type CustomDomainConfig struct {
 	// VerifyInterval is how often the background verifier re-checks DNS for
 	// not-yet-verified domains.
 	VerifyInterval time.Duration
+	// UnverifiedTTL is how long a BYO custom domain may sit unverified before the
+	// background sweeper drops it, freeing the globally-unique hostname for the
+	// rightful owner to register. Platform-assigned rows carry no verification
+	// token and are never swept. Set to 0 to disable the sweeper.
+	UnverifiedTTL time.Duration
+	// SweepInterval is how often the background sweeper looks for stale unverified
+	// domains to drop.
+	SweepInterval time.Duration
 	// InternalAPIToken gates the cross-tenant trusted-origins feed. When empty
 	// the feed is not exposed at all (fail closed).
 	InternalAPIToken string
@@ -234,6 +242,8 @@ func Load() Config {
 			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
 			CNAMETarget:      strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_CNAME_TARGET"))),
 			VerifyInterval:   getEnvDurationWithDefault("CUSTOM_DOMAIN_VERIFY_INTERVAL", 60*time.Second),
+			UnverifiedTTL:    getEnvDurationWithDefault("CUSTOM_DOMAIN_UNVERIFIED_TTL", 7*24*time.Hour),
+			SweepInterval:    getEnvDurationWithDefault("CUSTOM_DOMAIN_SWEEP_INTERVAL", time.Hour),
 			InternalAPIToken: getEnvOptional("INTERNAL_API_TOKEN"),
 		},
 		Ingress: IngressConfig{

@@ -70,6 +70,7 @@ func main() {
 			app.SeedProviderCredentials,
 			app.EnsureBootstrapQRKey,
 			app.StartDomainVerifier,
+			app.StartUnverifiedDomainSweeper,
 			app.StartIngressReconciler,
 			app.StartHTTPServer,
 		),
