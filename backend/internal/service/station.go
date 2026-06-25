@@ -57,7 +57,7 @@ func NewStationService(
 }
 
 func (s *stationService) ListStations(ctx context.Context, status *string) ([]*ent.Device, error) {
-	q := s.client.Device.Query().
+	q := repository.ClientFromContext(ctx, s.client).Device.Query().
 		Where(device.TypeEQ(device.TypeSTATION)).
 		WithDeviceProducts(func(dpq *ent.DeviceProductQuery) {
 			dpq.WithProduct()
@@ -90,7 +90,7 @@ func (s *stationService) GetStationByID(ctx context.Context, id string) (*ent.De
 // getStationWithProducts loads a station device by ID with its device products
 // (and each product) eagerly loaded via ent edges.
 func (s *stationService) getStationWithProducts(ctx context.Context, id string) (*ent.Device, error) {
-	return s.client.Device.Query().
+	return repository.ClientFromContext(ctx, s.client).Device.Query().
 		Where(device.ID(id), device.TypeEQ(device.TypeSTATION)).
 		WithDeviceProducts(func(q *ent.DeviceProductQuery) {
 			q.WithProduct()
@@ -116,7 +116,7 @@ func (s *stationService) ListStationProductIDs(ctx context.Context, stationID st
 }
 
 func (s *stationService) RenameStation(ctx context.Context, stationID string, name string) (*ent.Device, error) {
-	_, err := s.client.Device.UpdateOneID(stationID).
+	_, err := repository.ClientFromContext(ctx, s.client).Device.UpdateOneID(stationID).
 		Where(device.TypeEQ(device.TypeSTATION)).
 		SetName(name).
 		Save(ctx)
