@@ -237,3 +237,39 @@ func (e *rlsEnv) appRequestTx(t *testing.T, tenantID string) (context.Context, *
 	}
 	return ctx, client, cleanup
 }
+
+// appRequestTxRollback mirrors appRequestTx but its cleanup ROLLS BACK instead
+// of committing, modelling the production fail-closed path where the per-request
+// Tx middleware rolls the tx back on a 4xx/5xx response.
+func (e *rlsEnv) appRequestTxRollback(t *testing.T, tenantID string) (context.Context, *ent.Client, func()) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := e.app.Conn(ctx)
+	if err != nil {
+		t.Fatalf("app conn: %v", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		t.Fatalf("app begin tx: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantID); err != nil {
+		_ = tx.Rollback()
+		_ = conn.Close()
+		t.Fatalf("set tenant guc: %v", err)
+	}
+
+	client := ent.NewClient(ent.Driver(database.NewTxEntDriver(tx)))
+	enttenant.Register(client)
+
+	ctx = repository.ContextWithClient(ctx, client)
+	ctx = repository.ContextWithRequestTx(ctx, tx)
+	ctx = repository.ContextWithTenantID(ctx, tenantID)
+	ctx = enttenant.WithTenant(ctx, tenantID)
+
+	cleanup := func() {
+		_ = tx.Rollback()
+		_ = conn.Close()
+	}
+	return ctx, client, cleanup
+}
