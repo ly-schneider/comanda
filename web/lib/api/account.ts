@@ -20,6 +20,25 @@ export async function getOnboardingStatus(fetchAuth: AuthorizedFetch): Promise<O
   return res.json() as Promise<OnboardingStatus>
 }
 
+export type AccountLegal = {
+  legalName: string | null
+  legalAddress: string | null
+  contactEmail: string | null
+}
+
+// getAccountLegal reads the branding settings so the onboarding checklist can
+// show which imprint fields the "Marke & Rechtliches" step is still missing.
+export async function getAccountLegal(fetchAuth: AuthorizedFetch): Promise<AccountLegal | null> {
+  const res = await fetchAuth("/api/v1/account/settings")
+  if (!res.ok) return null
+  const data = (await res.json()) as Partial<AccountLegal>
+  return {
+    legalName: data.legalName ?? null,
+    legalAddress: data.legalAddress ?? null,
+    contactEmail: data.contactEmail ?? null,
+  }
+}
+
 export async function completeOnboarding(fetchAuth: AuthorizedFetch): Promise<boolean> {
   const res = await fetchAuth("/api/v1/account/onboarding/complete", {
     method: "POST",

@@ -2,11 +2,16 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
 	"backend/internal/response"
 )
+
+func nonEmpty(p *string) bool {
+	return p != nil && strings.TrimSpace(*p) != ""
+}
 
 // GetOnboardingStatus returns the derived onboarding checklist for the vendor's
 // tenant. Per-step state is derived from real data (a logo, a Payrexx timestamp,
@@ -42,7 +47,9 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, generated.OnboardingStatus{
 		CompletedAt: s.OnboardingCompletedAt,
 		Steps: generated.OnboardingSteps{
-			Brand:    s.LogoURL != nil && *s.LogoURL != "",
+			// The brand step is the legal imprint: company name, address and a
+			// contact email. Logo and colours are optional polish, not a gate.
+			Brand:    nonEmpty(s.LegalName) && nonEmpty(s.LegalAddress) && nonEmpty(s.ContactEmail),
 			Payments: s.PayrexxConfiguredAt != nil,
 			Domain:   hasVerifiedDomain,
 		},
