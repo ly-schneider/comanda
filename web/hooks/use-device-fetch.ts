@@ -28,7 +28,7 @@ export function useDeviceFetch(deviceType: DeviceType) {
   const router = useRouter()
   const token = getDeviceToken()
 
-  const setupPath = deviceType === "pos" ? "/pos/setup" : "/station/setup"
+  const setupPath = deviceType === "pos" ? "/pos/setup" : "/station"
 
   return useCallback(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
