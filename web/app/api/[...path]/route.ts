@@ -8,11 +8,10 @@ function backendBase(): string {
   return process.env.BACKEND_INTERNAL_URL || "http://backend:8080"
 }
 
-// Azure Container Apps scales the backend to zero when idle (see GH issue #340).
-// The first request after a cold start surfaces here as either a connect-time
-// `TypeError: fetch failed` or an in-flight `Error: failed to pipe response`.
-// Both shapes are folded into one Sentry group so they don't keep re-opening
-// new issues. See GH issue #343.
+// During a backend rollout or restart the first proxied request can fail at
+// connect time (`TypeError: fetch failed`) or mid-flight (`Error: failed to
+// pipe response`). Both shapes are folded into one Sentry group so a restart
+// doesn't keep re-opening new issues. See GH issue #343.
 const COLD_START_FINGERPRINT = ["backend-proxy-cold-start"]
 
 function isColdStartFetchError(err: unknown): boolean {

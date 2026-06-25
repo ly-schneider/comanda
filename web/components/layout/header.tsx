@@ -31,13 +31,9 @@ export default function Header() {
         <div className="relative flex items-center justify-between">
           <Link href="/food" className="flex items-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full">
-              <Image
-                src={logoUrl ?? "/assets/images/comanda-logo.png"}
-                alt={`${displayName} Logo`}
-                width={48}
-                height={48}
-                className="h-12 w-12"
-              />
+              {logoUrl && (
+                <Image src={logoUrl} alt={`${displayName} Logo`} width={48} height={48} className="h-12 w-12" />
+              )}
             </div>
           </Link>
 

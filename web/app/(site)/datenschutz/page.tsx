@@ -1,4 +1,6 @@
 import { Metadata } from "next"
+import { OperatorBlock } from "@/components/legal/operator-block"
+import { FOREIGN_TRANSFERS, SUBPROCESSORS } from "@/lib/legal"
 import { getBranding } from "@/lib/server/branding"
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,7 +20,7 @@ export default async function PrivacyPolicyPage() {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Datenschutzerklärung</h1>
-      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 13. April 2026</p>
+      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 25. Juni 2026</p>
 
       <div className="space-y-8 text-sm leading-relaxed">
         <section>
@@ -30,8 +32,8 @@ export default async function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-semibold">1. Verantwortliche Stelle</h2>
-          <p>Verantwortlich für die Datenbearbeitung ist:</p>
+          <h2 className="mb-3 text-lg font-semibold">1. Verantwortliche Stelle und Plattformbetreiber</h2>
+          <p>Verantwortliche Stelle für die Bearbeitung Ihrer Personendaten ist der Anbieter, bei dem Sie bestellen:</p>
           <p className="mt-2">
             {entityName}
             {address ? (
@@ -44,6 +46,23 @@ export default async function PrivacyPolicyPage() {
             Schweiz
           </p>
           {email ? <p className="mt-2">E-Mail: {email}</p> : null}
+
+          <p className="mt-4">Die technische Plattform wird im Auftrag des Anbieters betrieben durch:</p>
+          <OperatorBlock />
+
+          <p className="mt-4">
+            Leys Services handelt als Auftragsbearbeiter im Sinne von Art. 9 nDSG nach den Weisungen des Anbieters und
+            ist für den technischen Betrieb verantwortlich — insbesondere Hosting, Datensicherheit, Verfügbarkeit sowie
+            die Auswahl und Steuerung der eingesetzten Dienstleister. Der Anbieter bleibt verantwortlich für die Inhalte
+            seines Auftritts, sein Sortiment, die Rechtmässigkeit der Datenbearbeitung sowie die Beantwortung von
+            Anfragen betroffener Personen. Für Betrieb und Sicherheit der Plattform bearbeitet Leys Services zudem
+            bestimmte technische Daten (z. B. Server-Protokolle, Authentifizierungs- und Sicherheitsdaten) in eigener
+            Verantwortung.
+          </p>
+          <p className="mt-2">
+            Bei Fragen zum Datenschutz können Sie sich an den Anbieter{email ? ` (${email})` : ""} oder an Leys Services
+            (contact@leys.ch) wenden.
+          </p>
         </section>
 
         <section>
@@ -89,18 +108,15 @@ export default async function PrivacyPolicyPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">4. Empfänger und Auftragsbearbeiter</h2>
           <p className="mb-2">
-            Zur Erbringung unserer Dienstleistungen geben wir Personendaten an folgende Dritte weiter:
+            Der Betrieb der Plattform erfolgt über Leys Services. Für Betrieb, Zahlung und Anmeldung werden folgende
+            Dienstleister eingesetzt:
           </p>
           <ul className="list-disc space-y-1 pl-5">
-            <li>
-              <strong>Payrexx AG</strong> (Thun, Schweiz) — Zahlungsabwicklung (TWINT)
-            </li>
-            <li>
-              <strong>Plunk</strong> — Versand transaktionaler E-Mails
-            </li>
-            <li>
-              <strong>Google LLC</strong> — Authentifizierung via Google OAuth (sofern Sie diese Anmeldemethode wählen)
-            </li>
+            {SUBPROCESSORS.map((sp) => (
+              <li key={sp.name}>
+                <strong>{sp.name}</strong> ({sp.location}) — {sp.purpose}
+              </li>
+            ))}
           </ul>
           <p className="mt-2">
             Mit allen Auftragsbearbeitern bestehen Vereinbarungen zur Auftragsbearbeitung gemäss Art. 9 nDSG.
@@ -110,15 +126,19 @@ export default async function PrivacyPolicyPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">5. Datenübermittlung ins Ausland</h2>
           <p>
-            Bestimmte Auftragsbearbeiter haben ihren Sitz ausserhalb der Schweiz. Daten können in folgende Länder
-            übermittelt werden:
+            Die Plattform wird in der EU betrieben: Hosting in Deutschland (Hetzner) sowie Datenbank- und Dateispeicher
+            in Frankreich (Scaleway, Paris). Der Bundesrat anerkennt den Datenschutz in den EU-/EWR-Staaten als
+            angemessen (Art. 16 Abs. 1 nDSG).
           </p>
+          <p className="mt-2">Einzelne Dienstleister können Personendaten zudem in folgende Länder übermitteln:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>
-              <strong>USA</strong> (Google, Plunk (Amazon SES)) — Die Übermittlung erfolgt auf Grundlage von
-              Standarddatenschutzklauseln (Standard Contractual Clauses, SCC) oder anderer geeigneter Garantien gemäss
-              Art. 16–17 nDSG.
-            </li>
+            {FOREIGN_TRANSFERS.map((t) => (
+              <li key={t.country}>
+                <strong>{t.country}</strong> ({t.parties}) — Die Übermittlung erfolgt auf Grundlage von
+                Standarddatenschutzklauseln (Standard Contractual Clauses, SCC) oder anderer geeigneter Garantien gemäss
+                Art. 16–17 nDSG.
+              </li>
+            ))}
           </ul>
         </section>
 

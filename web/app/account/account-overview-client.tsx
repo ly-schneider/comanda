@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import {
+  type AccountLegal,
   completeOnboarding,
+  getAccountLegal,
   getOnboardingStatus,
   getTenant,
   type OnboardingStatus,
@@ -23,21 +25,28 @@ type Step = {
   href: string
   done: boolean
   optional?: boolean
+  missing?: string[]
 }
 
 export default function AccountOverviewClient() {
   const fetchAuth = useAuthorizedFetch()
   const [tenant, setTenant] = useState<TenantInfo | null>(null)
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null)
+  const [legal, setLegal] = useState<AccountLegal | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [tenantData, onbData] = await Promise.all([getTenant(fetchAuth), getOnboardingStatus(fetchAuth)])
+      const [tenantData, onbData, legalData] = await Promise.all([
+        getTenant(fetchAuth),
+        getOnboardingStatus(fetchAuth),
+        getAccountLegal(fetchAuth),
+      ])
       setTenant(tenantData)
       setOnboarding(onbData)
+      setLegal(legalData)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Laden fehlgeschlagen")
     } finally {
@@ -66,6 +75,16 @@ export default function AccountOverviewClient() {
   const opsBaseUrl =
     typeof window !== "undefined" && tenant ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
 
+  const brandMissing = legal
+    ? [
+        { label: "Firmenname", filled: !!legal.legalName?.trim() },
+        { label: "Adresse", filled: !!legal.legalAddress?.trim() },
+        { label: "Kontakt-E-Mail", filled: !!legal.contactEmail?.trim() },
+      ]
+        .filter((f) => !f.filled)
+        .map((f) => f.label)
+    : []
+
   const steps: Step[] = [
     {
       key: "tenant",
@@ -77,9 +96,10 @@ export default function AccountOverviewClient() {
     {
       key: "brand",
       label: "Marke & Rechtliches",
-      description: "Lade dein Logo hoch und hinterlege Farben, Kontakt und rechtliche Angaben.",
+      description: "Hinterlege Firmenname, Adresse und Kontakt-E-Mail fürs Impressum. Logo und Farben sind optional.",
       href: "/account/branding",
       done: onboarding?.steps.brand ?? false,
+      missing: brandMissing,
     },
     {
       key: "payments",
@@ -167,6 +187,9 @@ export default function AccountOverviewClient() {
                       )}
                     </div>
                     <p className="text-muted-foreground text-sm">{step.description}</p>
+                    {!step.done && step.missing && step.missing.length > 0 && (
+                      <p className="text-xs text-amber-700">Fehlt noch: {step.missing.join(", ")}</p>
+                    )}
                   </div>
                 </div>
                 {step.href && (

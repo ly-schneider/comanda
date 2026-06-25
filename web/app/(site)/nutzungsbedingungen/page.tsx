@@ -1,4 +1,5 @@
 import { Metadata } from "next"
+import { OperatorBlock } from "@/components/legal/operator-block"
 import { getBranding } from "@/lib/server/branding"
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,7 +19,7 @@ export default async function NutzungsbedingungenPage() {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Nutzungsbedingungen</h1>
-      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 13. April 2026</p>
+      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 25. Juni 2026</p>
 
       <div className="space-y-8 text-sm leading-relaxed">
         <section>
@@ -31,8 +32,9 @@ export default async function NutzungsbedingungenPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-semibold">2. Betreiber</h2>
-          <p>
+          <h2 className="mb-3 text-lg font-semibold">2. Anbieter und Plattformbetreiber</h2>
+          <p>Vertragspartner für Ihre Bestellungen ist der Anbieter:</p>
+          <p className="mt-2">
             {entityName}
             {address ? (
               <>
@@ -44,6 +46,15 @@ export default async function NutzungsbedingungenPage() {
             Schweiz
           </p>
           {email ? <p className="mt-2">E-Mail: {email}</p> : null}
+
+          <p className="mt-4">Die technische Plattform wird betrieben von:</p>
+          <OperatorBlock />
+
+          <p className="mt-4">
+            Der Vertrag über bestellte Speisen und Getränke kommt ausschliesslich zwischen Ihnen und dem Anbieter
+            zustande. Leys Services stellt nur die technische Plattform bereit und wird nicht Vertragspartei der
+            Bestellung.
+          </p>
         </section>
 
         <section>
@@ -126,8 +137,9 @@ export default async function NutzungsbedingungenPage() {
             Fahrlässigkeit ist die Haftung auf den vorhersehbaren, vertragstypischen Schaden beschränkt.
           </p>
           <p className="mt-2">
-            Für die ununterbrochene Verfügbarkeit der Plattform übernehmen wir keine Gewähr. Für die Qualität und
-            Sicherheit der Speisen gelten die Bestimmungen des Schweizer Lebensmittelgesetzes (LMG).
+            Für die ununterbrochene Verfügbarkeit der Plattform übernehmen weder der Anbieter noch Leys Services als
+            Plattformbetreiber eine Gewähr. Für die Qualität und Sicherheit der Speisen gelten die Bestimmungen des
+            Schweizer Lebensmittelgesetzes (LMG).
           </p>
         </section>
 
@@ -194,7 +206,7 @@ export default async function NutzungsbedingungenPage() {
           <h2 className="mb-3 text-lg font-semibold">17. Anwendbares Recht und Gerichtsstand</h2>
           <p>
             Es gilt ausschliesslich schweizerisches Recht unter Ausschluss des UN-Kaufrechts (CISG). Gerichtsstand ist
-            der Wohnsitz des Konsumenten oder der Sitz des Betreibers gemäss ZPO Art. 32.
+            der Wohnsitz des Konsumenten oder der Sitz des Anbieters gemäss ZPO Art. 32.
           </p>
         </section>
       </div>
