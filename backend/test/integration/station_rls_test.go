@@ -31,9 +31,6 @@ func (e *rlsEnv) appEntClient() *ent.Client {
 // request tx. Only by routing through repository.ClientFromContext(ctx, s.client)
 // do the reads/writes land on the GUC-bound tx connection; querying the static
 // client runs with no app.tenant_id and RLS returns zero rows.
-//
-// Before the fix these assertions fail: ListStations -> empty, GetStationByID ->
-// not found, RenameStation -> 0 rows (NotFound). After the fix they pass.
 func TestStationService_RequestScopedClient(t *testing.T) {
 	env := newRLSEnv(t)
 

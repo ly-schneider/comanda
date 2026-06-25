@@ -61,7 +61,6 @@ func TestStationService_RedeemAssigned_DBDedup(t *testing.T) {
 	// what this test writes.
 	require.Equal(t, 0, redemptionRowCount(t, tdb, ""))
 
-	// First redeem: both assigned lines are new.
 	first, err := svc.RedeemAssigned(ctx, station.ID, ord.ID, "")
 	require.NoError(t, err)
 	require.EqualValues(t, 2, first["matched"])
@@ -69,7 +68,6 @@ func TestStationService_RedeemAssigned_DBDedup(t *testing.T) {
 
 	require.Equal(t, 2, redemptionRowCount(t, tdb, ""))
 
-	// Second redeem of the same order without a key: nothing new, no extra rows.
 	second, err := svc.RedeemAssigned(ctx, station.ID, ord.ID, "")
 	require.NoError(t, err)
 	require.EqualValues(t, 2, second["matched"], "both lines still match the station")
@@ -148,7 +146,6 @@ func TestStationService_RedeemAssigned_CrossTenant(t *testing.T) {
 	productA := productIDs[0]
 	tenantB := env.seedTenant(t, "redeem-b-"+randSuffix())
 
-	// Station A (tenant A) with productA assigned.
 	stationA := nanoid.New()
 	env.privExec(t,
 		`INSERT INTO device (id, name, device_key, type, status, tenant_id)
@@ -197,7 +194,6 @@ func TestStationService_RedeemAssigned_CrossTenant(t *testing.T) {
 		repos.Device, repos.DeviceProduct, repos.OrderLine, repos.OrderRedemption, repos.Idempotency,
 	)
 
-	// Cross-tenant: station A cannot see or redeem tenant B's line.
 	xt, err := svc.RedeemAssigned(ctx, stationA, orderB, "")
 	require.NoError(t, err)
 	require.EqualValues(t, 0, xt["matched"], "tenant A must not match tenant B's order line")
@@ -207,7 +203,6 @@ func TestStationService_RedeemAssigned_CrossTenant(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists, "no redemption may exist for tenant B's line from tenant A's context")
 
-	// Positive control: station A redeems tenant A's own line.
 	own, err := svc.RedeemAssigned(ctx, stationA, orderA, "")
 	require.NoError(t, err)
 	require.EqualValues(t, 1, own["matched"])
