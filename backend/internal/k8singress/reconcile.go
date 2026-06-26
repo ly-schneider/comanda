@@ -138,7 +138,7 @@ func (r *reconciler) applyIngress(ctx context.Context, d domain) error {
 
 	ing := netv1ac.Ingress(name, r.cfg.Namespace).
 		WithLabels(ownerLabels(d.id, d.tenantID)).
-		WithAnnotations(ingressAnnotations(r.cfg.Namespace)).
+		WithAnnotations(argoAnnotations()).
 		WithSpec(netv1ac.IngressSpec().
 			WithIngressClassName(r.cfg.ClassName).
 			WithTLS(netv1ac.IngressTLS().
