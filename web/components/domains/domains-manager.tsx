@@ -111,8 +111,7 @@ function CopyCell({ value }: { value: string }) {
   )
 }
 
-// The exact DNS records to publish, as a Typ/Name/Wert table — two rows, two
-// records. Showing each name next to its value (rather than four stacked fields)
+// Showing each record's name next to its value (rather than four stacked fields)
 // stops the common mix-up of pasting the TXT record name into the TXT value.
 function DnsRecordsTable({
   hostname,
