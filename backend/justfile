@@ -77,7 +77,7 @@ generate: generate-ent generate-api
 generate-ent:
     mkdir -p ./internal/generated/ent
     echo "package ent" > ./internal/generated/ent/ent.go
-    go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --feature intercept --feature privacy --target ./internal/generated/ent ./internal/schema
+    go tool ent generate --feature sql/modifier --feature sql/upsert --feature intercept --feature privacy --target ./internal/generated/ent ./internal/schema
 
 # Generate API types from OpenAPI
 [group('generate')]

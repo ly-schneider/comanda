@@ -41,7 +41,7 @@ COPY --from=openapi --chown=appbuild:appbuild /src/openapi/bundled.yaml openapi/
 RUN --mount=type=cache,target=/go/pkg/mod,uid=1001,gid=1001 \
     mkdir -p ./internal/generated/ent && \
     echo "package ent" > ./internal/generated/ent/ent.go && \
-    go run -mod=mod entgo.io/ent/cmd/ent generate \
+    go tool ent generate \
         --feature sql/modifier --feature sql/upsert \
         --feature intercept --feature privacy \
         --target ./internal/generated/ent ./internal/schema
