@@ -185,7 +185,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.sumup:merchant-sdk:6.0.0")
+    implementation("com.sumup:merchant-sdk:7.1.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("com.github.DantSu:ESCPOS-ThermalPrinter-Android:3.4.0")
     implementation("com.google.zxing:core:3.5.4")
