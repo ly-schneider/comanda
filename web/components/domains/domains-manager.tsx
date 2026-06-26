@@ -85,7 +85,7 @@ function VerifiedDomainState({ hostname, certStatus }: { hostname: string; certS
   )
 }
 
-function CopyField({ label, value }: { label: string; value: string }) {
+function CopyCell({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
 
   function copy() {
@@ -96,14 +96,63 @@ function CopyField({ label, value }: { label: string; value: string }) {
   }
 
   return (
-    <div className="space-y-1">
-      <Label className="text-muted-foreground text-xs">{label}</Label>
-      <div className="flex items-center gap-2">
-        <code className="bg-muted flex-1 truncate rounded-lg px-3 py-1.5 font-mono text-sm">{value}</code>
-        <Button variant="outline" size="sm" className="rounded-xl" onClick={copy} aria-label={`${label} kopieren`}>
-          {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
-        </Button>
-      </div>
+    <div className="flex items-start gap-1.5">
+      <code className="font-mono text-sm break-all">{value}</code>
+      <Button
+        variant="outline"
+        size="sm"
+        className="size-7 shrink-0 rounded-lg p-0"
+        onClick={copy}
+        aria-label="Kopieren"
+      >
+        {copied ? <Check className="size-3.5" /> : <ClipboardCopy className="size-3.5" />}
+      </Button>
+    </div>
+  )
+}
+
+// The exact DNS records to publish, as a Typ/Name/Wert table — two rows, two
+// records. Showing each name next to its value (rather than four stacked fields)
+// stops the common mix-up of pasting the TXT record name into the TXT value.
+function DnsRecordsTable({
+  hostname,
+  cnameTarget,
+  txtName,
+  txtValue,
+}: {
+  hostname: string
+  cnameTarget: string
+  txtName: string
+  txtValue: string
+}) {
+  const rows = [
+    { type: "CNAME", name: hostname, value: cnameTarget },
+    { type: "TXT", name: txtName, value: txtValue },
+  ]
+  return (
+    <div className="overflow-x-auto rounded-xl border">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="text-muted-foreground border-b text-xs">
+            <th className="px-3 py-2 font-medium">Typ</th>
+            <th className="px-3 py-2 font-medium">Name</th>
+            <th className="px-3 py-2 font-medium">Wert</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.type} className="border-b align-top last:border-0">
+              <td className="px-3 py-2.5 font-mono font-medium">{r.type}</td>
+              <td className="px-3 py-2.5">
+                <CopyCell value={r.name} />
+              </td>
+              <td className="px-3 py-2.5">
+                <CopyCell value={r.value} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -315,12 +364,15 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
           {addResult && (
             <div className="bg-muted space-y-4 rounded-xl p-4">
               <p className="text-sm font-medium">
-                Domain registriert. Erstelle die folgenden DNS-Einträge und klicke dann auf{" "}
-                <strong>Jetzt prüfen</strong>.
+                Domain registriert. Erstelle die folgenden <strong>zwei</strong> DNS-Einträge — jeweils auf dem
+                angegebenen Namen — und klicke dann auf <strong>Jetzt prüfen</strong>.
               </p>
-              <CopyField label="CNAME-Ziel" value={addResult.cnameTarget} />
-              <CopyField label="TXT-Eintragsname" value={addResult.txtName} />
-              <CopyField label="TXT-Wert" value={addResult.txtValue} />
+              <DnsRecordsTable
+                hostname={addResult.domain.hostname}
+                cnameTarget={addResult.cnameTarget}
+                txtName={addResult.txtName}
+                txtValue={addResult.txtValue}
+              />
               <p className="text-muted-foreground text-xs">
                 DNS-Änderungen können bis zu 48 Stunden dauern. Die automatische Prüfung erfolgt regelmässig im
                 Hintergrund.
@@ -437,11 +489,15 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                     {dns && (
                       <div className="bg-muted space-y-4 rounded-xl p-4">
                         <p className="text-sm font-medium">
-                          Erstelle die folgenden DNS-Einträge und klicke dann auf <strong>Jetzt prüfen</strong>.
+                          Erstelle die folgenden <strong>zwei</strong> DNS-Einträge — jeweils auf dem angegebenen Namen
+                          — und klicke dann auf <strong>Jetzt prüfen</strong>.
                         </p>
-                        <CopyField label="CNAME-Ziel" value={dns.cnameTarget} />
-                        <CopyField label="TXT-Eintragsname" value={dns.txtName} />
-                        <CopyField label="TXT-Wert" value={dns.txtValue} />
+                        <DnsRecordsTable
+                          hostname={domain.hostname}
+                          cnameTarget={dns.cnameTarget}
+                          txtName={dns.txtName}
+                          txtValue={dns.txtValue}
+                        />
                         <p className="text-muted-foreground text-xs">
                           DNS-Änderungen können bis zu 48 Stunden dauern. Die automatische Prüfung erfolgt regelmässig
                           im Hintergrund.
