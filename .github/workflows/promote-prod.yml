@@ -1,0 +1,104 @@
+name: Promote to prod
+
+# Manual, deploy-what-you-tested promotion. Reads the digests currently pinned on
+# STAGING (gitops/apps/staging/comanda/values.yaml in the hetzner repo) and
+# re-dispatches them to hetzner's bump-image.yml with env: prod — no rebuild, so
+# prod runs the exact images validated on staging.
+#
+# Dispatch contract (consumed by ly-schneider/hetzner bump-image.yml):
+#   event_type: bump-image
+#   client_payload: { service, env: prod, digest, tag, image, tenant: comanda }
+#
+# ArgoCD prod has automated selfHeal — the bump commits land on hetzner main and
+# roll immediately, firing the PreSync migrate job. Only run this once the comanda
+# prod DB + Doppler comanda/prod secrets exist, or the sync fails.
+#
+# Security: the only input (services) flows through env: and is referenced as a
+# quoted shell var or via strenv() in yq — never interpolated into the script.
+# The digest read from staging is validated to be a real sha256 ref.
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Comma-separated services to promote"
+        type: string
+        default: "api,web,docs,migrate"
+
+concurrency:
+  group: promote-prod-comanda
+  cancel-in-progress: false
+
+env:
+  DISPATCH_REPO: ly-schneider/hetzner
+  TENANT: comanda
+
+jobs:
+  promote:
+    name: Promote staging digests to prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out hetzner gitops (staging values = source of truth)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ly-schneider/hetzner
+          ref: main
+          token: ${{ secrets.HETZNER_DISPATCH_PAT }}
+          persist-credentials: false
+
+      - name: Resolve staging digests + dispatch prod bumps
+        env:
+          DISPATCH_TOKEN: ${{ secrets.HETZNER_DISPATCH_PAT }}
+          SERVICES: ${{ inputs.services }}
+        run: |
+          set -euo pipefail
+          values="gitops/apps/staging/comanda/values.yaml"
+
+          IFS=',' read -ra requested <<< "$SERVICES"
+          for raw in "${requested[@]}"; do
+            svc="$(echo "$raw" | tr -d '[:space:]')"
+            [ -z "$svc" ] && continue
+
+            case "$svc" in
+              api|web|docs)
+                ref="$(key="comanda-$svc" yq '.services[strenv(key)].image' "$values")" ;;
+              migrate)
+                ref="$(yq '.jobs[] | select(.containerName == "migrate") | .image' "$values")" ;;
+              *)
+                echo "::error::unknown service '$svc'"; exit 1 ;;
+            esac
+
+            if [ -z "$ref" ] || [ "$ref" = "null" ]; then
+              echo "::error::no staging image pinned for '$svc' in $values"; exit 1
+            fi
+
+            image="${ref%@*}"
+            digest="${ref#*@}"
+            case "$digest" in
+              sha256:*) ;;
+              *) echo "::error::staging '$svc' image is not digest-pinned: $ref"; exit 1 ;;
+            esac
+            case "$digest" in
+              *0000000000000000000000000000000000000000000000000000000000000000)
+                echo "::error::staging '$svc' digest is the zero placeholder — nothing validated to promote"; exit 1 ;;
+            esac
+
+            short="${digest#sha256:}"
+            tag="staging-${short:0:12}"
+
+            echo "Promoting $svc -> $image@$digest"
+            payload="$(jq -nc \
+              --arg service "$svc" \
+              --arg env "prod" \
+              --arg digest "$digest" \
+              --arg tag "$tag" \
+              --arg image "$image" \
+              --arg tenant "$TENANT" \
+              '{event_type:"bump-image",client_payload:{service:$service,env:$env,digest:$digest,tag:$tag,image:$image,tenant:$tenant}}')"
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${DISPATCH_REPO}/dispatches" \
+              -d "$payload"
+          done
