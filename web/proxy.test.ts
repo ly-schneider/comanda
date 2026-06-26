@@ -77,6 +77,35 @@ describe("proxy — tenant subdomain", () => {
   })
 })
 
+// Regression: the session pre-check accepts either cookie name regardless of
+// x-forwarded-proto (the /admin → /login → /food loop).
+describe("proxy — session cookie name is proto-independent", () => {
+  const host = "food.myevent.ch"
+
+  function reqWith(proto: string, cookie: string, pathname = "/admin"): NextRequest {
+    return new NextRequest(`http://${host}${pathname}`, {
+      headers: { host, "x-forwarded-proto": proto, cookie },
+    })
+  }
+
+  it("serves /admin over https with the legacy non-__Secure- cookie", async () => {
+    const res = await proxy(reqWith("https", "better-auth.session_token=s"))
+    expect(redirectTarget(res)).toBeNull()
+    expect(res.status).toBe(200)
+  })
+
+  it("serves /admin over http with the __Secure- cookie", async () => {
+    const res = await proxy(reqWith("http", "__Secure-better-auth.session_token=s"))
+    expect(redirectTarget(res)).toBeNull()
+    expect(res.status).toBe(200)
+  })
+
+  it("still bounces /admin to /login when no session cookie is present", async () => {
+    const res = await proxy(reqWith("https", "other=1"))
+    expect(redirectTarget(res)).toBe("/login")
+  })
+})
+
 describe("proxy — platform host", () => {
   const host = "comanda.leys.ch"
 

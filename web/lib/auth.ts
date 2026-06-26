@@ -312,10 +312,12 @@ export const auth = betterAuth({
     return origins
   },
 
-  // Cookie security: do NOT set crossSubDomainCookies. Without a domain
-  // attribute, browsers scope each session cookie to the exact issuing host.
-  // Setting crossSubDomainCookies would share the session cookie across all
-  // *.comanda.leys.ch — a direct tenant-session-leakage vector.
+  advanced: {
+    // Deterministic __Secure- cookie name outside dev (all non-dev traffic is HTTPS).
+    useSecureCookies: getAppEnv() !== "dev",
+    // Do NOT set crossSubDomainCookies — it would share the session cookie across
+    // every *.comanda.leys.ch, a tenant-session-leakage vector.
+  },
 })
 
 // Export type for use in other server files

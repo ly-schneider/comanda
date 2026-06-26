@@ -84,6 +84,9 @@ func TestReconcileAppliesIngressAndCertificate(t *testing.T) {
 	if ing.Annotations[annoArgoSyncOptions] != annoArgoSyncValue || ing.Annotations[annoArgoCompareOptions] != annoArgoCompareValue {
 		t.Errorf("ingress missing argo annotations: %v", ing.Annotations)
 	}
+	if want := testNamespace + "-redirect-https@kubernetescrd"; ing.Annotations[annoTraefikMiddlewares] != want {
+		t.Errorf("ingress redirect-https middleware annotation = %q, want %q", ing.Annotations[annoTraefikMiddlewares], want)
+	}
 	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != "traefik" {
 		t.Errorf("ingress class wrong: %v", ing.Spec.IngressClassName)
 	}

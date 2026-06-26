@@ -58,11 +58,11 @@ export async function proxy(request: NextRequest) {
   const protectedPrefixes = ["/profile", "/admin", "/platform-admin", "/account"]
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p))
   if (isProtected) {
-    // Check for Better Auth session cookie (secure prefix in prod, without in dev)
-    const proto = (request.headers.get("x-forwarded-proto") || "").toLowerCase()
-    const secure = proto === "https"
-    const sessionCookieName = secure ? "__Secure-better-auth.session_token" : "better-auth.session_token"
-    const hasSession = request.cookies.get(sessionCookieName)?.value
+    // Check both names: x-forwarded-proto can disagree with the cookie's prefix
+    // on a custom domain. This is presence-only; real validation is downstream.
+    const hasSession =
+      request.cookies.get("__Secure-better-auth.session_token")?.value ||
+      request.cookies.get("better-auth.session_token")?.value
     if (!hasSession) {
       const url = request.nextUrl.clone()
       url.pathname = "/login"

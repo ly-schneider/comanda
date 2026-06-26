@@ -37,6 +37,11 @@ const (
 	annoArgoSyncValue      = "Prune=false"
 	annoArgoCompareOptions = "argocd.argoproj.io/compare-options"
 	annoArgoCompareValue   = "IgnoreExtraneous"
+
+	// Forces HTTPS via the namespace's redirect-https Middleware (matches platform
+	// Ingresses); without it the domain serves http and breaks the web tier's
+	// __Secure- cookie-name check.
+	annoTraefikMiddlewares = "traefik.ingress.kubernetes.io/router.middlewares"
 )
 
 // Reconciler converges cluster state for verified custom domains.
@@ -139,4 +144,10 @@ func argoAnnotations() map[string]string {
 		annoArgoSyncOptions:    annoArgoSyncValue,
 		annoArgoCompareOptions: annoArgoCompareValue,
 	}
+}
+
+func ingressAnnotations(namespace string) map[string]string {
+	a := argoAnnotations()
+	a[annoTraefikMiddlewares] = fmt.Sprintf("%s-redirect-https@kubernetescrd", namespace)
+	return a
 }
