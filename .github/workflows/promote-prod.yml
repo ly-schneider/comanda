@@ -11,7 +11,7 @@ name: Promote to prod
 #
 # ArgoCD prod has automated selfHeal — the bump commits land on hetzner main and
 # roll immediately, firing the PreSync migrate job. Only run this once the comanda
-# prod DB + Doppler comanda/prod secrets exist, or the sync fails. See LEY-361.
+# prod DB + Doppler comanda/prod secrets exist, or the sync fails.
 #
 # Security: the only input (services) flows through env: and is referenced as a
 # quoted shell var or via strenv() in yq — never interpolated into the script.
