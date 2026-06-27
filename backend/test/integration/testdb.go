@@ -315,6 +315,7 @@ func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.Prod
 		nil, // inventory hub
 		nil, // email service
 		repos.Settings,
+		nil, // tenant domain repo
 		NewQRKeySvc(repos),
 		nil, // app db
 		zap.NewNop(),

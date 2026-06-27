@@ -105,6 +105,7 @@ type paymentService struct {
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
 	settingsRepo     repository.SettingsRepository
+	tenantDomainRepo repository.TenantDomainRepository
 	qrKeys           QRKeyService
 	appDB            *database.AppClient
 	logger           *zap.Logger
@@ -123,6 +124,7 @@ func NewPaymentService(
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
 	settingsRepo repository.SettingsRepository,
+	tenantDomainRepo repository.TenantDomainRepository,
 	qrKeys QRKeyService,
 	appDB *database.AppClient,
 	logger *zap.Logger,
@@ -140,6 +142,7 @@ func NewPaymentService(
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
 		settingsRepo:     settingsRepo,
+		tenantDomainRepo: tenantDomainRepo,
 		qrKeys:           qrKeys,
 		appDB:            appDB,
 		logger:           logger,
@@ -850,8 +853,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 		})
 	}
 
-	baseURL := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
-	orderURL := baseURL + "/food/orders/" + orderID
+	orderURL := s.tenantOrderURL(ctx, orderID)
 
 	data := ReceiptEmailData{
 		Brand:      "Comanda",
@@ -866,6 +868,44 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 	if err := s.emailService.SendReceiptEmail(ctx, to, data); err != nil {
 		s.logger.Error("receipt: failed to send", zap.Error(err), zap.String("orderId", orderID), zap.String("to", to))
 	}
+}
+
+// tenantOrderURL builds the customer-facing order link on the tenant's own
+// storefront host (its primary verified domain — a BYO custom domain or the
+// platform-assigned subdomain) rather than the shared platform apex, which has
+// no tenant context and wouldn't resolve the order. Falls back to PublicBaseURL
+// if the lookup fails or no verified domain exists. Must run inside the tenant
+// tx (ctx carries the RLS-bound client) so the domain rows are visible.
+func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) string {
+	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/food/orders/" + orderID
+	if s.tenantDomainRepo == nil {
+		return fallback
+	}
+
+	domains, err := s.tenantDomainRepo.List(ctx)
+	if err != nil {
+		s.logger.Warn("receipt: failed to load tenant domains; using platform base",
+			zap.Error(err), zap.String("orderId", orderID))
+		return fallback
+	}
+
+	host := ""
+	for _, d := range domains {
+		if d.VerifiedAt == nil {
+			continue
+		}
+		if d.IsPrimary {
+			host = d.Hostname
+			break
+		}
+		if host == "" {
+			host = d.Hostname
+		}
+	}
+	if host == "" {
+		return fallback
+	}
+	return "https://" + host + "/food/orders/" + orderID
 }
 
 func safeStr(p *string) string {
