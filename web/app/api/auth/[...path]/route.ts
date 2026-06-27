@@ -4,13 +4,8 @@ import { getAppEnv } from "@/lib/env"
 
 const handlers = toNextJsHandler(authHandler)
 
-// Behind the ingress the request hits Next.js over plain HTTP on an internal
-// host, so `request.url` carries neither the public hostname nor https. The
-// oauth-proxy plugin derives the originating tenant origin from `request.url`
-// (resolveCurrentURL / checkSkipProxy), so rewrite it to the public origin —
-// scheme from the env (https everywhere except dev), host from the
-// forwarded/Host header — before better-auth sees it. The path/query and the
-// browser-set Origin header are preserved, so routing and CSRF are unaffected.
+// Behind the ingress request.url is internal http; oauth-proxy derives the
+// originating origin from it, so rewrite it to the public scheme+host.
 async function withPublicOrigin(req: Request): Promise<Request> {
   const host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "")
     .split(",")[0]

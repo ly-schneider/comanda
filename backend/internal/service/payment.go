@@ -870,12 +870,8 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 	}
 }
 
-// tenantOrderURL builds the customer-facing order link on the tenant's own
-// storefront host (its primary verified domain — a BYO custom domain or the
-// platform-assigned subdomain) rather than the shared platform apex, which has
-// no tenant context and wouldn't resolve the order. Falls back to PublicBaseURL
-// if the lookup fails or no verified domain exists. Must run inside the tenant
-// tx (ctx carries the RLS-bound client) so the domain rows are visible.
+// Order link must use the tenant's primary verified domain, not the platform
+// apex (which has no tenant context). Runs inside the receipt's tenant tx.
 func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) string {
 	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/food/orders/" + orderID
 	if s.tenantDomainRepo == nil {

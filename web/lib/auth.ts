@@ -213,15 +213,8 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    // Every tenant subdomain and custom domain authenticates on its own origin,
-    // but Google's redirect URI is registered only for the platform host
-    // (BETTER_AUTH_URL). The OAuth state cookie set on the tenant origin is
-    // therefore absent when Google calls back to the platform host →
-    // state_security_mismatch. The proxy carries the state through the platform
-    // callback (encrypted into the state param) and hands the resulting session
-    // back to the originating origin. Skipped automatically when the request
-    // origin already is the platform host. Relies on the auth route handler
-    // normalizing the request URL to the public origin behind the ingress.
+    // Carries OAuth state across origins: tenant hosts sign in on their own
+    // origin but Google's redirect URI is only the platform host (BETTER_AUTH_URL).
     oAuthProxy({
       productionURL: process.env.BETTER_AUTH_URL ?? process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL,
     }),
