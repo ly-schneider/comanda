@@ -79,7 +79,7 @@ function VerifiedDomainState({ hostname, certStatus }: { hostname: string; certS
   }
   return (
     <p className="text-muted-foreground text-sm">
-      Domain verifiziert. Das TLS-Zertifikat wird ausgestellt — deine Domain ist in wenigen Minuten über HTTPS unter{" "}
+      Domain verifiziert. Das TLS-Zertifikat wird ausgestellt. Deine Domain ist in wenigen Minuten über HTTPS unter{" "}
       <span className="font-mono">{hostname}</span> erreichbar.
     </p>
   )
@@ -363,8 +363,8 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
           {addResult && (
             <div className="bg-muted space-y-4 rounded-xl p-4">
               <p className="text-sm font-medium">
-                Domain registriert. Erstelle die folgenden <strong>zwei</strong> DNS-Einträge — jeweils auf dem
-                angegebenen Namen — und klicke dann auf <strong>Jetzt prüfen</strong>.
+                Domain registriert. Erstelle die folgenden <strong>zwei</strong> DNS-Einträge auf dem angegebenen Namen
+                und klicke dann auf <strong>Jetzt prüfen</strong>.
               </p>
               <DnsRecordsTable
                 hostname={addResult.domain.hostname}
@@ -488,8 +488,8 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                     {dns && (
                       <div className="bg-muted space-y-4 rounded-xl p-4">
                         <p className="text-sm font-medium">
-                          Erstelle die folgenden <strong>zwei</strong> DNS-Einträge — jeweils auf dem angegebenen Namen
-                          — und klicke dann auf <strong>Jetzt prüfen</strong>.
+                          Erstelle die folgenden <strong>zwei</strong> DNS-Einträge auf dem angegebenen Namen und klicke
+                          dann auf <strong>Jetzt prüfen</strong>.
                         </p>
                         <DnsRecordsTable
                           hostname={domain.hostname}

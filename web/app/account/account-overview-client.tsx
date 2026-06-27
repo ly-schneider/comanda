@@ -89,7 +89,7 @@ export default function AccountOverviewClient() {
     {
       key: "tenant",
       label: "Konto erstellt",
-      description: "Dein Auftritt ist live — Name und Subdomain sind eingerichtet.",
+      description: "Dein Auftritt ist live. Name und Subdomain sind eingerichtet.",
       href: "",
       done: true,
     },
@@ -201,7 +201,7 @@ export default function AccountOverviewClient() {
             ))}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <p className="text-muted-foreground text-xs">
-                Pflicht für den Live-Betrieb sind nur Name und Subdomain — bereits erledigt.
+                Pflicht für den Live-Betrieb sind nur Name und Subdomain, das ist bereits erledigt.
               </p>
               <Button variant="ghost" size="sm" onClick={finishOnboarding} disabled={finishing}>
                 {finishing ? "Speichern…" : allDone ? "Fertig" : "Onboarding abschliessen"}

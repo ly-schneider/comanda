@@ -10,7 +10,7 @@ export function PlatformLanding() {
         Das Bestellsystem für Foodstände und Events.
       </h1>
       <p className="text-muted-foreground mt-6 max-w-xl text-lg text-pretty">
-        Eine Plattform, dein Auftritt. Bestellung, Bezahlung und Abholung — mit eigenem Logo, eigener Domain und eigenem
+        Eine Plattform, dein Auftritt. Bestellung, Bezahlung und Abholung. Mit eigenem Logo, eigener Domain und eigenem
         Payrexx-Konto.
       </p>
       <div className="mt-10 flex flex-wrap items-center justify-center gap-3">

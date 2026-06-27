@@ -45,7 +45,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
               Fehler-ID: <code className="bg-muted rounded px-1.5 py-0.5 font-mono">{error.digest}</code>
             </p>
             <p className="text-muted-foreground mt-2 text-xs">
-              Bitte gib diese ID an, wenn du uns kontaktierst — sie hilft uns, das Problem schneller zu finden.
+              Bitte gib diese ID an, wenn du uns kontaktierst, damit wir das Problem schneller finden.
             </p>
           </div>
         )}

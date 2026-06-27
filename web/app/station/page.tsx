@@ -776,7 +776,7 @@ export default function StationPage() {
                   <ScanCard scan={latest} onOpenDetail={setDetailOrderId} />
                 ) : (
                   <div className="text-muted-foreground bg-card rounded-2xl p-8 text-center text-sm">
-                    Bereit zum Scannen — der nächste QR-Code wird automatisch eingelöst.
+                    Bereit zum Scannen. Der nächste QR-Code wird automatisch eingelöst.
                   </div>
                 )}
 

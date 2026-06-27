@@ -38,8 +38,8 @@ export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPO
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Menü-Vorschlag: {suggestion.menuProduct.name}</p>
             <p className="text-muted-foreground text-xs">
-              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Menü bestellen — gleicher Preis"}
-              {!isPOS && " — Deine Auswahl bleibt erhalten."}
+              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Menü bestellen – gleicher Preis"}
+              {!isPOS && " – Deine Auswahl bleibt erhalten."}
             </p>
           </div>
           {!isPOS && (

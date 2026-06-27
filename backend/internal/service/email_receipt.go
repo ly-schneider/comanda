@@ -98,7 +98,7 @@ func renderReceiptHTML(data ReceiptEmailData) string {
   </head>
   <body style="margin:0;padding:0;">
     <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;opacity:0;">
-      Deine Quittung von %s — %s &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
+      Deine Quittung von %s · %s &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
     </div>
     <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
            bgcolor="#E9E7E6" style="background-color:#E9E7E6;">

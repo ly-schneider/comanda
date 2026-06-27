@@ -69,7 +69,7 @@ export default async function NutzungsbedingungenPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">4. Registrierung und Benutzerkonto</h2>
           <p>
-            Zur Nutzung der Plattform kann ein Benutzerkonto erstellt werden — entweder mit E-Mail-Adresse und Passwort
+            Zur Nutzung der Plattform kann ein Benutzerkonto erstellt werden, entweder mit E-Mail-Adresse und Passwort
             oder über Google. Sie sind dafür verantwortlich, korrekte Angaben zu machen und Ihre Zugangsdaten
             vertraulich zu behandeln.
           </p>
@@ -87,7 +87,7 @@ export default async function NutzungsbedingungenPage() {
             Bestellung zustande.
           </p>
           <p className="mt-2">
-            Wir behalten uns vor, Bestellungen abzulehnen — insbesondere bei Nichtverfügbarkeit von Produkten oder bei
+            Wir behalten uns vor, Bestellungen abzulehnen, insbesondere bei Nichtverfügbarkeit von Produkten oder bei
             Verdacht auf Missbrauch.
           </p>
         </section>
@@ -96,9 +96,8 @@ export default async function NutzungsbedingungenPage() {
           <h2 className="mb-3 text-lg font-semibold">6. Preise und Zahlung</h2>
           <p>Alle Preise sind in {branding.currency} angegeben.</p>
           <p className="mt-2">
-            Die Zahlung erfolgt über den Zahlungsdienstleister Payrexx mittels TWINT. Mit dem Absenden der Bestellung
-            autorisieren Sie die Belastung des fälligen Betrags. Kommt die Zahlung nicht zustande, wird die Bestellung
-            nicht ausgeführt.
+            Zahlungen laufen über Payrexx (TWINT). Mit dem Absenden der Bestellung autorisieren Sie die Belastung des
+            fälligen Betrags. Kommt die Zahlung nicht zustande, wird die Bestellung nicht ausgeführt.
           </p>
         </section>
 

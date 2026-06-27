@@ -23,7 +23,7 @@ export default function CheckoutCancelPage() {
           <X className="h-9 w-9 text-white sm:h-14 sm:w-14" />
         </div>
       </div>
-      <h1 className="text-center text-2xl font-semibold sm:text-3xl">Bezahlung Abgebrochen</h1>
+      <h1 className="text-center text-2xl font-semibold sm:text-3xl">Bezahlung abgebrochen</h1>
 
       <div className="fixed inset-x-0 bottom-0 mx-auto max-w-xl p-4">
         <div className="flex flex-col gap-3">

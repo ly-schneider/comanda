@@ -52,12 +52,12 @@ export default async function PrivacyPolicyPage() {
 
           <p className="mt-4">
             Leys Services handelt als Auftragsbearbeiter im Sinne von Art. 9 nDSG nach den Weisungen des Anbieters und
-            ist für den technischen Betrieb verantwortlich — insbesondere Hosting, Datensicherheit, Verfügbarkeit sowie
-            die Auswahl und Steuerung der eingesetzten Dienstleister. Der Anbieter bleibt verantwortlich für die Inhalte
-            seines Auftritts, sein Sortiment, die Rechtmässigkeit der Datenbearbeitung sowie die Beantwortung von
-            Anfragen betroffener Personen. Für Betrieb und Sicherheit der Plattform bearbeitet Leys Services zudem
-            bestimmte technische Daten (z. B. Server-Protokolle, Authentifizierungs- und Sicherheitsdaten) in eigener
-            Verantwortung.
+            ist für den technischen Betrieb verantwortlich, insbesondere für Hosting, Datensicherheit, Verfügbarkeit
+            sowie die Auswahl und Steuerung der eingesetzten Dienstleister. Der Anbieter bleibt verantwortlich für die
+            Inhalte seines Auftritts, sein Sortiment, die Rechtmässigkeit der Datenbearbeitung sowie die Beantwortung
+            von Anfragen betroffener Personen. Leys Services verarbeitet zusätzlich bestimmte technische Daten für
+            Betrieb und Sicherheit der Plattform (z. B. Server-Protokolle, Authentifizierungs- und Sicherheitsdaten) in
+            eigener Verantwortung.
           </p>
           <p className="mt-2">
             Bei Fragen zum Datenschutz können Sie sich an den Anbieter{email ? ` (${email})` : ""} oder an Leys Services
@@ -77,8 +77,8 @@ export default async function PrivacyPolicyPage() {
               <strong>Bestelldaten:</strong> Bestellte Artikel, Bestellverlauf, Zeitstempel, Bestellstatus
             </li>
             <li>
-              <strong>Zahlungsdaten:</strong> Zahlungsmethode, Transaktions-IDs und Zahlungsstatus (die eigentliche
-              Zahlungsabwicklung erfolgt durch Payrexx; wir speichern keine Kreditkarten- oder TWINT-Kontodaten)
+              <strong>Zahlungsdaten:</strong> Zahlungsmethode, Transaktions-IDs und Zahlungsstatus (Payrexx wickelt die
+              eigentliche Zahlung ab; wir speichern keine Kreditkarten- oder TWINT-Kontodaten)
             </li>
             <li>
               <strong>Technische Daten:</strong> IP-Adresse, Browsertyp, Betriebssystem, Gerätetyp,
@@ -108,13 +108,13 @@ export default async function PrivacyPolicyPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">4. Empfänger und Auftragsbearbeiter</h2>
           <p className="mb-2">
-            Der Betrieb der Plattform erfolgt über Leys Services. Für Betrieb, Zahlung und Anmeldung werden folgende
+            Die Plattform wird von Leys Services betrieben. Für Betrieb, Zahlung und Anmeldung werden folgende
             Dienstleister eingesetzt:
           </p>
           <ul className="list-disc space-y-1 pl-5">
             {SUBPROCESSORS.map((sp) => (
               <li key={sp.name}>
-                <strong>{sp.name}</strong> ({sp.location}) — {sp.purpose}
+                <strong>{sp.name}</strong> ({sp.location}): {sp.purpose}
               </li>
             ))}
           </ul>
@@ -130,11 +130,11 @@ export default async function PrivacyPolicyPage() {
             in Frankreich (Scaleway, Paris). Der Bundesrat anerkennt den Datenschutz in den EU-/EWR-Staaten als
             angemessen (Art. 16 Abs. 1 nDSG).
           </p>
-          <p className="mt-2">Einzelne Dienstleister können Personendaten zudem in folgende Länder übermitteln:</p>
+          <p className="mt-2">Einzelne Dienstleister übermitteln Personendaten ausserdem in folgende Länder:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             {FOREIGN_TRANSFERS.map((t) => (
               <li key={t.country}>
-                <strong>{t.country}</strong> ({t.parties}) — Die Übermittlung erfolgt auf Grundlage von
+                <strong>{t.country}</strong> ({t.parties}): Die Übermittlung erfolgt auf Grundlage von
                 Standarddatenschutzklauseln (Standard Contractual Clauses, SCC) oder anderer geeigneter Garantien gemäss
                 Art. 16–17 nDSG.
               </li>

@@ -237,7 +237,7 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 
 	payload := PlunkSendRequest{
 		To:         to,
-		Subject:    s.subject("Deine Quittung — " + data.Brand),
+		Subject:    s.subject("Deine Quittung von " + data.Brand),
 		Body:       htmlBody,
 		Subscribed: false,
 		Name:       creds.fromName,

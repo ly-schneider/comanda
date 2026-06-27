@@ -83,7 +83,7 @@ export function InstallHintDrawer() {
           </div>
           <DrawerTitle className="text-xl">Station-Scanner installieren</DrawerTitle>
           <DrawerDescription>
-            Starte den Scanner direkt vom Home-Bildschirm — ohne Browser-Leisten, im Vollbild und mit einem Tap bereit.
+            Starte den Scanner direkt vom Home-Bildschirm: ohne Browser-Leisten, im Vollbild und mit einem Tap bereit.
           </DrawerDescription>
         </DrawerHeader>
 
