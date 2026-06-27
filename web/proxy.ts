@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { isProdEnv } from "@/lib/env"
+import { isDevEnv, isProdEnv } from "@/lib/env"
 import { getPublicHost, parseTenantHost } from "@/lib/tenant"
 
 /**
@@ -102,8 +102,12 @@ export async function proxy(request: NextRequest) {
   response.headers.set("Content-Security-Policy", csp)
 
   try {
-    const proto = (request.headers.get("x-forwarded-proto") || "").toLowerCase()
-    const secure = proto === "https"
+    // The CSRF cookie name must follow the browser-facing scheme (https
+    // everywhere except dev), NOT x-forwarded-proto: a custom domain's
+    // edge→origin hop is http, so a proto-derived name would be `csrf` while the
+    // https browser (lib/csrf.ts) reads `__Host-csrf` → token never found → 403
+    // on every mutating request. Mirror the session cookie's useSecureCookies.
+    const secure = !isDevEnv()
     const csrfName = secure ? "__Host-csrf" : "csrf"
     const hasCsrf = request.cookies.get(csrfName)?.value
     if (!hasCsrf) {

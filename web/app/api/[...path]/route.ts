@@ -67,7 +67,7 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
   outHeaders.delete("x-tenant-id")
 
   const headerToken = inHeaders.get("x-csrf") || inHeaders.get("X-CSRF") || undefined
-  const { csrfName } = await resolveCookieNames()
+  const { csrfName } = resolveCookieNames()
   const ck = await cookies()
   const cookieToken = ck.get(csrfName)?.value
   const isMutating = !(method === "GET" || method === "HEAD" || method === "OPTIONS")
