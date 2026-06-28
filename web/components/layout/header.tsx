@@ -32,7 +32,13 @@ export default function Header() {
           <Link href="/food" className="flex items-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full">
               {logoUrl && (
-                <Image src={logoUrl} alt={`${displayName} Logo`} width={48} height={48} className="h-12 w-12" />
+                <Image
+                  src={logoUrl}
+                  alt={`${displayName} Logo`}
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 rounded-lg"
+                />
               )}
             </div>
           </Link>

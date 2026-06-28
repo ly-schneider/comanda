@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
 import { getCSRFToken } from "@/lib/csrf"
@@ -156,100 +156,95 @@ export default function AdminCategoriesPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <div className="relative">
-          <div className="from-background pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r to-transparent" />
-          <div className="from-background pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l to-transparent" />
-          <div
-            className="max-w-full overflow-x-auto overscroll-x-contain rounded-[10px]"
-            role="region"
-            aria-label="Categories table – scroll horizontally to reveal more columns"
-            tabIndex={0}
-          >
-            <Table className="whitespace-nowrap">
-              <TableHeader className="bg-card sticky top-0">
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">Position</TableHead>
-                  <TableHead className="whitespace-nowrap">Name</TableHead>
-                  <TableHead className="whitespace-nowrap">Status</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Aktionen</TableHead>
+      <TableContainer>
+        <div
+          className="overflow-x-auto overscroll-x-contain"
+          role="region"
+          aria-label="Categories table – scroll horizontally to reveal more columns"
+          tabIndex={0}
+        >
+          <Table className="whitespace-nowrap">
+            <TableHeader className="bg-card sticky top-0">
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Position</TableHead>
+                <TableHead className="whitespace-nowrap">Name</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Aktionen</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((c) => (
+                <TableRow key={c.id} className="even:bg-card odd:bg-muted/40">
+                  <TableCell className="w-24">
+                    <Input
+                      type="number"
+                      value={posDrafts[c.id] ?? String(c.position)}
+                      onChange={(e) => setPosDrafts((p) => ({ ...p, [c.id]: e.target.value }))}
+                      onBlur={(e) => {
+                        const raw = e.target.value
+                        const n = raw.trim() === "" ? 0 : Number(raw)
+                        setPosDrafts((p) => {
+                          const next = { ...p }
+                          delete next[c.id]
+                          return next
+                        })
+                        void updatePosition(c.id, n)
+                      }}
+                      className="h-7"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={c.name}
+                      onChange={(e) => {
+                        setItems((prev) => prev.map((it) => (it.id === c.id ? { ...it, name: e.target.value } : it)))
+                      }}
+                      onBlur={(e) => void rename(c.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          e.currentTarget.blur()
+                        }
+                      }}
+                      maxLength={20}
+                      className="h-7 w-40"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <label className="inline-flex items-center gap-2">
+                      <Switch checked={c.isActive} onCheckedChange={(v) => void toggle(c.id, v)} />
+                      <span>{c.isActive ? "Aktiv" : "Inaktiv"}</span>
+                    </label>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-1">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 text-red-700">
+                            Löschen
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Kategorie löschen?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Diese Aktion kann nicht rückgängig gemacht werden. Kategorie "{c.name}" dauerhaft löschen?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => void remove(c.id)}>Löschen</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((c) => (
-                  <TableRow key={c.id} className="even:bg-card odd:bg-muted/40">
-                    <TableCell className="w-24">
-                      <Input
-                        type="number"
-                        value={posDrafts[c.id] ?? String(c.position)}
-                        onChange={(e) => setPosDrafts((p) => ({ ...p, [c.id]: e.target.value }))}
-                        onBlur={(e) => {
-                          const raw = e.target.value
-                          const n = raw.trim() === "" ? 0 : Number(raw)
-                          setPosDrafts((p) => {
-                            const next = { ...p }
-                            delete next[c.id]
-                            return next
-                          })
-                          void updatePosition(c.id, n)
-                        }}
-                        className="h-7"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={c.name}
-                        onChange={(e) => {
-                          setItems((prev) => prev.map((it) => (it.id === c.id ? { ...it, name: e.target.value } : it)))
-                        }}
-                        onBlur={(e) => void rename(c.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            e.currentTarget.blur()
-                          }
-                        }}
-                        maxLength={20}
-                        className="h-7 w-40"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <label className="inline-flex items-center gap-2">
-                        <Switch checked={c.isActive} onCheckedChange={(v) => void toggle(c.id, v)} />
-                        <span>{c.isActive ? "Aktiv" : "Inaktiv"}</span>
-                      </label>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-7 text-red-700">
-                              Löschen
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Kategorie löschen?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Diese Aktion kann nicht rückgängig gemacht werden. Kategorie "{c.name}" dauerhaft
-                                löschen?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => void remove(c.id)}>Löschen</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </TableContainer>
     </div>
   )
 }

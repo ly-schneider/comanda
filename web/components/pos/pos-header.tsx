@@ -158,7 +158,7 @@ export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
       )}
       <div className="pointer-events-none relative z-10 flex flex-col items-center gap-4">
         <div className="mb-2 flex items-center gap-2">
-          <div className="bg-muted mr-1 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
+          <div className="bg-muted mr-1 flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
             <Image src={logoUrl ?? "/assets/images/comanda-logo.png"} alt={displayName} width={40} height={40} />
           </div>
           <span className="text-lg font-semibold">{displayName}</span>
@@ -173,7 +173,7 @@ export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
       <div className="mx-auto w-full p-3 md:p-4">
         <div className="flex h-8 items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-muted flex h-9 w-9 items-center justify-center overflow-hidden rounded-full">
+            <div className="bg-muted flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg">
               <Image src={logoUrl ?? "/assets/images/comanda-logo.png"} alt={displayName} width={36} height={36} />
             </div>
             <span className="text-sm font-semibold">{displayName}</span>

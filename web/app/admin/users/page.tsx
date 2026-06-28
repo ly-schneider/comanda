@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
 type AdminUser = {
@@ -45,45 +45,41 @@ export default function AdminUsersPage() {
 
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="rounded-md border">
-        <div className="relative">
-          <div className="from-background pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r to-transparent" />
-          <div className="from-background pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l to-transparent" />
-          <div
-            className="max-w-full overflow-x-auto overscroll-x-contain rounded-[10px]"
-            role="region"
-            aria-label="Users table - scroll horizontally to reveal more columns"
-            tabIndex={0}
-          >
-            <Table className="whitespace-nowrap">
-              <TableHeader className="bg-card sticky top-0">
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">Name</TableHead>
-                  <TableHead className="whitespace-nowrap">E-Mail</TableHead>
-                  <TableHead className="whitespace-nowrap">Verifiziert</TableHead>
-                  <TableHead className="whitespace-nowrap">Erstellt</TableHead>
-                  <TableHead className="whitespace-nowrap">Aktualisiert</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((u) => {
-                  const created = u.createdAt ? new Date(u.createdAt).toLocaleString("de-CH") : "-"
-                  const updated = u.updatedAt ? new Date(u.updatedAt).toLocaleString("de-CH") : "-"
-                  return (
-                    <TableRow key={u.id} className="even:bg-card odd:bg-muted/40">
-                      <TableCell>{u.name || "-"}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.emailVerified ? "Ja" : "Nein"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{created}</TableCell>
-                      <TableCell className="whitespace-nowrap">{updated}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+      <TableContainer>
+        <div
+          className="overflow-x-auto overscroll-x-contain"
+          role="region"
+          aria-label="Users table - scroll horizontally to reveal more columns"
+          tabIndex={0}
+        >
+          <Table className="whitespace-nowrap">
+            <TableHeader className="bg-card sticky top-0">
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Name</TableHead>
+                <TableHead className="whitespace-nowrap">E-Mail</TableHead>
+                <TableHead className="whitespace-nowrap">Verifiziert</TableHead>
+                <TableHead className="whitespace-nowrap">Erstellt</TableHead>
+                <TableHead className="whitespace-nowrap">Aktualisiert</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((u) => {
+                const created = u.createdAt ? new Date(u.createdAt).toLocaleString("de-CH") : "-"
+                const updated = u.updatedAt ? new Date(u.updatedAt).toLocaleString("de-CH") : "-"
+                return (
+                  <TableRow key={u.id} className="even:bg-card odd:bg-muted/40">
+                    <TableCell>{u.name || "-"}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>{u.emailVerified ? "Ja" : "Nein"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{created}</TableCell>
+                    <TableCell className="whitespace-nowrap">{updated}</TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </TableContainer>
     </div>
   )
 }

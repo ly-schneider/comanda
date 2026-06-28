@@ -31,7 +31,7 @@ export function AccountHeader() {
       <div className="flex flex-wrap items-center gap-6">
         <Link href={base} className="flex items-center gap-2">
           {branding.logoUrl && (
-            <Image src={branding.logoUrl} alt={branding.displayName} width={28} height={28} className="rounded" />
+            <Image src={branding.logoUrl} alt={branding.displayName} width={28} height={28} className="rounded-lg" />
           )}
           <span className="font-primary text-lg tracking-tight">{branding.displayName}</span>
         </Link>

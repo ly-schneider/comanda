@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useAccountTenant } from "@/components/account/account-tenant-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
 import { getCSRFToken } from "@/lib/csrf"
@@ -97,8 +97,8 @@ export default function AccountInvitesPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <div className="max-w-full overflow-x-auto">
+      <TableContainer>
+        <div className="overflow-x-auto">
           <Table className="whitespace-nowrap">
             <TableHeader className="bg-card sticky top-0">
               <TableRow>
@@ -128,7 +128,7 @@ export default function AccountInvitesPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </TableContainer>
     </div>
   )
 }

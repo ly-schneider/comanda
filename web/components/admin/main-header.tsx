@@ -17,7 +17,7 @@ export function AdminMainHeader({ className }: { className?: string }) {
       <div className="mx-auto w-full px-6 md:px-8 lg:px-10">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-muted flex h-7 w-7 items-center justify-center overflow-hidden rounded-full">
+            <div className="bg-muted flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg">
               <Image src={logoUrl ?? "/assets/images/comanda-logo.png"} alt={displayName} width={28} height={28} />
             </div>
             <span className="text-base font-semibold">{displayName}</span>

@@ -12,6 +12,18 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   )
 }
 
+// Surface wrapper for standalone tables. overflow-hidden clips the sticky
+// header's square corners to the rounded border so it never looks cut off.
+function TableContainer({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="table-card"
+      className={cn("bg-card overflow-hidden rounded-[var(--radius-surface)] border shadow-sm", className)}
+      {...props}
+    />
+  )
+}
+
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return <thead data-slot="table-header" className={cn("[&_tr]:border-b", className)} {...props} />
 }
@@ -72,4 +84,4 @@ function TableCaption({ className, ...props }: React.ComponentProps<"caption">) 
   )
 }
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption }
+export { Table, TableContainer, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption }

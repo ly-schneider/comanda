@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { useMemberTier } from "@/hooks/use-member-tier"
 import { getCSRFToken } from "@/lib/csrf"
@@ -124,80 +124,76 @@ export default function AdminDevicesPage() {
       {error && <div className="text-sm text-red-600">{error}</div>}
       {loading && <div className="text-muted-foreground text-sm">Lädt...</div>}
 
-      <div className="rounded-md border">
-        <div className="relative">
-          <div className="from-background pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r to-transparent" />
-          <div className="from-background pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l to-transparent" />
-          <div
-            className="max-w-full overflow-x-auto overscroll-x-contain rounded-[10px]"
-            role="region"
-            aria-label="Devices table - scroll horizontally to reveal more columns"
-            tabIndex={0}
-          >
-            <Table className="whitespace-nowrap">
-              <TableHeader className="bg-card sticky top-0">
+      <TableContainer>
+        <div
+          className="overflow-x-auto overscroll-x-contain"
+          role="region"
+          aria-label="Devices table - scroll horizontally to reveal more columns"
+          tabIndex={0}
+        >
+          <Table className="whitespace-nowrap">
+            <TableHeader className="bg-card sticky top-0">
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Name</TableHead>
+                <TableHead className="whitespace-nowrap">Modell</TableHead>
+                <TableHead className="whitespace-nowrap">OS</TableHead>
+                <TableHead className="whitespace-nowrap">Device Key</TableHead>
+                <TableHead className="whitespace-nowrap">Typ</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
+                <TableHead className="whitespace-nowrap">Entschieden von</TableHead>
+                <TableHead className="whitespace-nowrap">Entschieden am</TableHead>
+                {canRevoke && <TableHead className="text-right whitespace-nowrap">Aktionen</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!loading && items.length === 0 && (
                 <TableRow>
-                  <TableHead className="whitespace-nowrap">Name</TableHead>
-                  <TableHead className="whitespace-nowrap">Modell</TableHead>
-                  <TableHead className="whitespace-nowrap">OS</TableHead>
-                  <TableHead className="whitespace-nowrap">Device Key</TableHead>
-                  <TableHead className="whitespace-nowrap">Typ</TableHead>
-                  <TableHead className="whitespace-nowrap">Status</TableHead>
-                  <TableHead className="whitespace-nowrap">Entschieden von</TableHead>
-                  <TableHead className="whitespace-nowrap">Entschieden am</TableHead>
-                  {canRevoke && <TableHead className="text-right whitespace-nowrap">Aktionen</TableHead>}
+                  <TableCell colSpan={canRevoke ? 9 : 8} className="text-muted-foreground text-center">
+                    Keine aktiven Geräte.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {!loading && items.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={canRevoke ? 9 : 8} className="text-muted-foreground text-center">
-                      Keine aktiven Geräte.
-                    </TableCell>
+              )}
+              {items.map((d) => {
+                const decidedAt = d.decidedAt ? new Date(d.decidedAt).toLocaleString("de-CH") : "-"
+                const decidedByLink = d.decidedBy ? (
+                  <Link
+                    href={`/admin/users/${encodeURIComponent(d.decidedBy)}`}
+                    className="text-xs underline underline-offset-2"
+                  >
+                    {d.decidedBy}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )
+                return (
+                  <TableRow key={d.id} className="even:bg-card odd:bg-muted/40">
+                    <TableCell>{d.name || "-"}</TableCell>
+                    <TableCell>{d.model || "-"}</TableCell>
+                    <TableCell>{d.os || "-"}</TableCell>
+                    <TableCell className="text-xs">{d.deviceKey || "-"}</TableCell>
+                    <TableCell>{formatDeviceType(d.type)}</TableCell>
+                    <TableCell>{formatStatus(d.status)}</TableCell>
+                    <TableCell>{decidedByLink}</TableCell>
+                    <TableCell className="whitespace-nowrap">{decidedAt}</TableCell>
+                    {canRevoke && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={revoking === d.id}
+                          onClick={() => setConfirmRevoke({ id: d.id, name: d.name || d.id })}
+                        >
+                          {revoking === d.id ? "Wird gesperrt..." : "Sperren"}
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
-                )}
-                {items.map((d) => {
-                  const decidedAt = d.decidedAt ? new Date(d.decidedAt).toLocaleString("de-CH") : "-"
-                  const decidedByLink = d.decidedBy ? (
-                    <Link
-                      href={`/admin/users/${encodeURIComponent(d.decidedBy)}`}
-                      className="text-xs underline underline-offset-2"
-                    >
-                      {d.decidedBy}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )
-                  return (
-                    <TableRow key={d.id} className="even:bg-card odd:bg-muted/40">
-                      <TableCell>{d.name || "-"}</TableCell>
-                      <TableCell>{d.model || "-"}</TableCell>
-                      <TableCell>{d.os || "-"}</TableCell>
-                      <TableCell className="text-xs">{d.deviceKey || "-"}</TableCell>
-                      <TableCell>{formatDeviceType(d.type)}</TableCell>
-                      <TableCell>{formatStatus(d.status)}</TableCell>
-                      <TableCell>{decidedByLink}</TableCell>
-                      <TableCell className="whitespace-nowrap">{decidedAt}</TableCell>
-                      {canRevoke && (
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={revoking === d.id}
-                            onClick={() => setConfirmRevoke({ id: d.id, name: d.name || d.id })}
-                          >
-                            {revoking === d.id ? "Wird gesperrt..." : "Sperren"}
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </TableContainer>
 
       <AlertDialog
         open={!!confirmRevoke}
