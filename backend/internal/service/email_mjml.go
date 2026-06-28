@@ -142,6 +142,10 @@ const baseMJML = `{{define "base"}}<mjml>
     <mj-attributes>
       <mj-all font-family="{{.Branding.FontStack}}" />
       <mj-text font-size="14px" line-height="1.6" color="` + colBody + `" padding="0" />
+      <mj-button padding="0" />
+      <mj-table padding="0" />
+      <mj-image padding="0" />
+      <mj-divider padding="0" />
     </mj-attributes>
     {{if .Branding.FontHref}}<mj-font name="{{.Branding.FontName}}" href="{{.Branding.FontHref}}" />{{end}}
     <mj-style>
