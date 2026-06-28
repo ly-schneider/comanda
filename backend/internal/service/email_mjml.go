@@ -111,7 +111,6 @@ var (
 	receiptTmpl = template.Must(template.New("email").Funcs(emailFuncs).Parse(baseMJML + receiptContentMJML))
 )
 
-// renderMJML executes an email template to MJML, then compiles it to HTML.
 func renderMJML(ctx context.Context, tmpl *template.Template, data any) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
@@ -177,6 +176,7 @@ const baseMJML = `{{define "base"}}<mjml>
       <mj-column>
         <mj-text css-class="muted" font-size="12px" color="` + colMuted + `" line-height="1.7">
           <strong class="heading" style="color:` + colHeading + `;">{{.Branding.Name | esc}}</strong><br/>
+          {{if .Branding.LegalName}}{{.Branding.LegalName | esc}}<br/>{{end}}
           {{if .Branding.LegalAddress}}{{.Branding.LegalAddress | esc}}<br/>{{end}}
           {{if .Branding.SupportEmail}}<a class="muted" style="color:` + colMuted + `;" href="mailto:{{.Branding.SupportEmail | esc}}">{{.Branding.SupportEmail | esc}}</a> &middot; {{end}}Powered by Leys
         </mj-text>

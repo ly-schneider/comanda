@@ -35,7 +35,6 @@ type inviteView struct {
 	ExpiresAt string
 }
 
-// renderInviteHTML renders the admin invite email to HTML.
 func renderInviteHTML(ctx context.Context, b emailBranding, data InviteEmailData) (string, error) {
 	view := inviteView{
 		baseView:  newBaseView("Einladung als "+data.RoleLabel, "Du wurdest eingeladen, als "+data.RoleLabel+" bei "+b.Name+" beizutreten.", b),
@@ -169,7 +168,6 @@ type otpView struct {
 	SupportNote string
 }
 
-// renderOTPHTML renders the one-time-code email to HTML.
 func renderOTPHTML(ctx context.Context, b emailBranding, data OTPEmailData, otpType OTPType) (string, error) {
 	heading := otpHeading(otpType)
 	view := otpView{

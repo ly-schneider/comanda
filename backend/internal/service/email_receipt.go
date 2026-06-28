@@ -60,7 +60,6 @@ type receiptView struct {
 	URL       string
 }
 
-// renderReceiptHTML renders the order receipt email to HTML.
 func renderReceiptHTML(ctx context.Context, b emailBranding, data ReceiptEmailData) (string, error) {
 	items := make([]receiptLineView, 0, len(data.Items))
 	for _, it := range data.Items {
