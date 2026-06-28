@@ -62,8 +62,8 @@ InvitePublic:
 
 MemberRole:
   type: string
-  enum: [admin, staff, catalog]
-  x-enum-varnames: [MemberRoleAdmin, MemberRoleStaff, MemberRoleCatalog]
+  enum: [admin, app_admin, staff, catalog]
+  x-enum-varnames: [MemberRoleAdmin, MemberRoleAppAdmin, MemberRoleStaff, MemberRoleCatalog]
   description: Tenant membership tier granted on acceptance. Defaults to staff.
 
 InviteCreate:

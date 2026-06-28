@@ -3,13 +3,11 @@ import {
   Circle,
   ClipboardList,
   CreditCard,
-  Globe,
   Grid2x2,
   Hamburger,
   Home,
   MailPlus,
   MonitorCheck,
-  Paintbrush,
   ReceiptText,
   Settings,
   Smartphone,
@@ -37,13 +35,13 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
 
   const allItems: NavItem[] = [
     { href: "/admin", label: "Home", icon: <Home className="size-5" />, requiredTier: "catalog" },
-    { href: "/admin/users", label: "Benutzer", icon: <Users className="size-5" />, requiredTier: "admin" },
+    { href: "/admin/users", label: "Benutzer", icon: <Users className="size-5" />, requiredTier: "app_admin" },
     {
       href: "/admin/invites",
       label: "Einladungen",
       icon: <MailPlus className="size-5" />,
       badge: badges?.invites,
-      requiredTier: "admin",
+      requiredTier: "app_admin",
     },
     { href: "/admin/products", label: "Produkte", icon: <Hamburger className="size-5" />, requiredTier: "catalog" },
     { href: "/admin/menu", label: "Menus", icon: <UtensilsCrossed className="size-5" />, requiredTier: "catalog" },
@@ -71,9 +69,12 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       icon: <Ticket className="size-5" />,
       requiredTier: "staff",
     },
-    { href: "/admin/branding", label: "Branding", icon: <Paintbrush className="size-5" />, requiredTier: "admin" },
-    { href: "/admin/domains", label: "Domains", icon: <Globe className="size-5" />, requiredTier: "admin" },
-    { href: "/admin/settings", label: "Einstellungen", icon: <Settings className="size-5" />, requiredTier: "admin" },
+    {
+      href: "/admin/settings",
+      label: "Einstellungen",
+      icon: <Settings className="size-5" />,
+      requiredTier: "app_admin",
+    },
   ]
 
   const items = allItems.filter((it) => tierAllows(it.requiredTier))

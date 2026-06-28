@@ -72,10 +72,12 @@ func TestRequireTenantRole(t *testing.T) {
 	orgB := env.seedOrgForTenant(t, tenantB, "rbac-b-"+randSuffix())
 
 	owner := env.seedUser(t)
+	appAdmin := env.seedUser(t)
 	staff := env.seedUser(t)
 	catalog := env.seedUser(t)
 	stranger := env.seedUser(t)
 	env.seedMember(t, orgA, owner, "owner")
+	env.seedMember(t, orgA, appAdmin, "app_admin")
 	env.seedMember(t, orgA, staff, "staff")
 	env.seedMember(t, orgA, catalog, "catalog")
 	// owner is a member of org B too, to exercise the cross-tenant case from a
@@ -93,6 +95,22 @@ func TestRequireTenantRole(t *testing.T) {
 
 	t.Run("tenant-admin role passes the catalog tier", func(t *testing.T) {
 		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, owner, false, auth.TierCatalog))
+	})
+
+	t.Run("app-admin role passes the app-admin tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, appAdmin, false, auth.TierAppAdmin))
+	})
+
+	t.Run("app-admin role passes the ops tier", func(t *testing.T) {
+		require.Equal(t, http.StatusOK, env.callTenantRole(t, tenantA, appAdmin, false, auth.TierOps))
+	})
+
+	t.Run("app-admin role is blocked from the tenant-admin tier", func(t *testing.T) {
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, appAdmin, false, auth.TierTenantAdmin))
+	})
+
+	t.Run("staff role is blocked from the app-admin tier", func(t *testing.T) {
+		require.Equal(t, http.StatusForbidden, env.callTenantRole(t, tenantA, staff, false, auth.TierAppAdmin))
 	})
 
 	t.Run("staff role passes the ops tier", func(t *testing.T) {

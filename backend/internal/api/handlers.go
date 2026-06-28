@@ -37,6 +37,7 @@ type Handlers struct {
 	androidUpdate service.AndroidUpdateService
 	domains       service.DomainService
 	tenants       service.TenantService
+	account       service.AccountService
 	verification  repository.VerificationRepository
 	idempotency   repository.IdempotencyRepository
 	blobStore     *blobstore.Client
@@ -78,6 +79,7 @@ type HandlersDeps struct {
 	AndroidUpdate service.AndroidUpdateService
 	Domains       service.DomainService
 	Tenants       service.TenantService
+	Account       service.AccountService
 	Verification  repository.VerificationRepository
 	Idempotency   repository.IdempotencyRepository
 	BlobStore     *blobstore.Client `optional:"true"`
@@ -109,6 +111,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		androidUpdate: deps.AndroidUpdate,
 		domains:       deps.Domains,
 		tenants:       deps.Tenants,
+		account:       deps.Account,
 		verification:  deps.Verification,
 		idempotency:   deps.Idempotency,
 		blobStore:     deps.BlobStore,

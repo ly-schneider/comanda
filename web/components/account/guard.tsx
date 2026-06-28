@@ -3,44 +3,28 @@
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { authClient } from "@/lib/auth/client"
-import { postAuthPath } from "@/lib/post-auth"
 
-// AccountGuard gates the vendor account hub. A vendor is a signed-in user whose
-// session has an active organization; that org is the tenant the backend rebinds
-// to via ResolveVendorTenant. This is UI-only — the backend account routes are
-// authoritative (membership is verified on the privileged pool). Non-vendors are
-// routed back via postAuthPath (platform admins → /platform-admin, else → /).
+// AccountGuard gates the account hub on a signed-in user. Which tenants the user
+// may actually manage (and whether they have any) is resolved by the tenant
+// boundary, which lists them and sends a user with none away. The backend
+// account routes remain authoritative (membership / platform-admin verified on
+// the privileged pool).
 export function AccountGuard({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = authClient.useSession()
   const router = useRouter()
-
-  const activeOrganizationId = session?.session?.activeOrganizationId ?? null
-  const isVendor = !!activeOrganizationId
 
   useEffect(() => {
     if (isPending) return
     if (!session?.user) {
       router.replace("/login?next=/account")
-      return
     }
-    if (!isVendor) {
-      router.replace(
-        postAuthPath(
-          {
-            isPlatformAdmin: (session.user as Record<string, unknown>).isPlatformAdmin === true,
-            activeOrganizationId,
-          },
-          null
-        )
-      )
-    }
-  }, [isPending, session, isVendor, activeOrganizationId, router])
+  }, [isPending, session, router])
 
   if (isPending) {
     return <div className="text-muted-foreground p-8 text-center text-sm font-medium">Zugriff wird geprüft…</div>
   }
 
-  if (!isVendor) return null
+  if (!session?.user) return null
 
   return <>{children}</>
 }

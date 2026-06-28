@@ -250,37 +250,29 @@ func NewRouter(
 			ops.Get("/staff-meals/{campaignId}/print.pdf", apiHandlers.PrintStaffMealSlips)
 		})
 
-		// ── Tenant-admin routes (auth + tenant-admin membership + CSRF) ─
-		// The tenant administration tier (owner/admin): settings, payments,
-		// branding, domains, users, and staff invites — strictly above ops.
-		v1.Group(func(tadmin chi.Router) {
-			tadmin.Use(betterAuthMw.RequireAuth())
-			tadmin.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
+		// ── App-admin routes (auth + app-admin membership + CSRF) ──────
+		// The app management tier (owner/admin/app_admin): food-system settings,
+		// users, and app-role invites. Branding, domains, and payments are
+		// hard-blocked here — they live on the account hub (the settings tier).
+		// UpdateSettings additionally rejects branding fields below tenant-admin.
+		v1.Group(func(appadmin chi.Router) {
+			appadmin.Use(betterAuthMw.RequireAuth())
+			appadmin.Use(betterAuthMw.RequireTenantRole(auth.TierAppAdmin))
 			csrf := middleware.NewCSRFMiddleware()
-			tadmin.Use(csrf.Require)
+			appadmin.Use(csrf.Require)
 
-			tadmin.Get("/settings", wrapper.GetSettings)
-			tadmin.Patch("/settings", wrapper.UpdateSettings)
-			tadmin.Post("/settings/logo", wrapper.UploadBrandingLogo)
-			tadmin.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
-			tadmin.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
-			tadmin.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
+			appadmin.Get("/settings", wrapper.GetSettings)
+			appadmin.Patch("/settings", wrapper.UpdateSettings)
 
-			tadmin.Get("/domains", wrapper.ListDomains)
-			tadmin.Post("/domains", wrapper.CreateDomain)
-			tadmin.Get("/domains/{id}", wrapper.GetDomain)
-			tadmin.Delete("/domains/{id}", wrapper.DeleteDomain)
-			tadmin.Post("/domains/{id}/verify", wrapper.VerifyDomain)
+			appadmin.Get("/users", wrapper.ListUsers)
+			appadmin.Get("/users/{userId}", wrapper.GetUser)
+			appadmin.Patch("/users/{userId}", wrapper.UpdateUser)
+			appadmin.Delete("/users/{userId}", wrapper.DeleteUser)
 
-			tadmin.Get("/users", wrapper.ListUsers)
-			tadmin.Get("/users/{userId}", wrapper.GetUser)
-			tadmin.Patch("/users/{userId}", wrapper.UpdateUser)
-			tadmin.Delete("/users/{userId}", wrapper.DeleteUser)
-
-			tadmin.Get("/invites", wrapper.ListInvites)
-			tadmin.Post("/invites", wrapper.CreateInvite)
-			tadmin.Get("/invites/{inviteId}", wrapper.GetInvite)
-			tadmin.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
+			appadmin.Get("/invites", wrapper.ListInvites)
+			appadmin.Post("/invites", wrapper.CreateInvite)
+			appadmin.Get("/invites/{inviteId}", wrapper.GetInvite)
+			appadmin.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
 		})
 
 		// ── Platform-admin routes (cross-tenant; platform host only) ──
@@ -302,46 +294,55 @@ func NewRouter(
 			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
 		})
 
+		// ── Account hub: tenant listing (platform host; pre-selection) ─
+		// Lists the tenants the user may manage before any single tenant is
+		// bound, so it runs RequireAuth only (no ResolveVendorTenant). GET, no
+		// CSRF. The handler asserts platform context and reads cross-tenant
+		// memberships on the privileged pool.
+		v1.Group(func(acctList chi.Router) {
+			acctList.Use(betterAuthMw.RequireAuth())
+			acctList.Get("/account/tenants", apiHandlers.ListAccountTenants)
+		})
+
 		// ── Account routes (vendor self-service; platform host only) ──
-		// The platform host carries no tenant Host, so ResolveVendorTenant binds
-		// the vendor's tenant from the session's active organization (membership
-		// verified) under RLS, with no platform-admin bypass.
-		v1.Group(func(account chi.Router) {
+		// The tenant is the {accountTenant} slug in the path; ResolveVendorTenant
+		// resolves+authorizes it (a member of the tenant's org, or a platform admin
+		// who may manage any tenant) and binds it. The hub is the settings tier
+		// (branding, domains, payments, admin invites), so the whole group requires
+		// tenant-admin; UpdateSettings still guards branding fields.
+		v1.Route("/account/{accountTenant}", func(account chi.Router) {
 			account.Use(betterAuthMw.RequireAuth())
 			account.Use(tenantMw.ResolveVendorTenant)
 			csrf := middleware.NewCSRFMiddleware()
 			account.Use(csrf.Require)
+			account.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
 
-			// Any member: the tenant summary and the branding that themes the
-			// hub chrome (resolved to the vendor's tenant, not platform defaults).
-			account.Get("/account/tenant", wrapper.GetAccountTenant)
-			account.Get("/account/branding", wrapper.GetBranding)
-			// Read-only onboarding checklist; staff members see it too, the steps
-			// themselves stay behind the tenant-admin routes below.
-			account.Get("/account/onboarding", wrapper.GetOnboardingStatus)
+			account.Get("/tenant", wrapper.GetAccountTenant)
+			account.Get("/branding", wrapper.GetBranding)
+			account.Get("/onboarding", wrapper.GetOnboardingStatus)
 
-			// Tenant administration (owner/admin): the same branding and custom-
-			// domain surfaces as the subdomain /admin tadmin group, rebound to the
-			// vendor's tenant. Reuses the audited handlers — they read the tenant
-			// from context, which ResolveVendorTenant has bound.
-			account.Group(func(mgmt chi.Router) {
-				mgmt.Use(betterAuthMw.RequireTenantRole(auth.TierTenantAdmin))
+			account.Get("/settings", wrapper.GetSettings)
+			account.Patch("/settings", wrapper.UpdateSettings)
+			account.Post("/settings/logo", wrapper.UploadBrandingLogo)
+			account.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
+			account.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
+			account.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
 
-				mgmt.Get("/account/settings", wrapper.GetSettings)
-				mgmt.Patch("/account/settings", wrapper.UpdateSettings)
-				mgmt.Post("/account/settings/logo", wrapper.UploadBrandingLogo)
-				mgmt.Delete("/account/settings/logo", wrapper.DeleteBrandingLogo)
-				mgmt.Get("/account/settings/payrexx", wrapper.GetPayrexxStatus)
-				mgmt.Put("/account/settings/payrexx", wrapper.ConfigurePayrexx)
+			account.Get("/domains", wrapper.ListDomains)
+			account.Post("/domains", wrapper.CreateDomain)
+			account.Get("/domains/{id}", wrapper.GetDomain)
+			account.Delete("/domains/{id}", wrapper.DeleteDomain)
+			account.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 
-				mgmt.Get("/account/domains", wrapper.ListDomains)
-				mgmt.Post("/account/domains", wrapper.CreateDomain)
-				mgmt.Get("/account/domains/{id}", wrapper.GetDomain)
-				mgmt.Delete("/account/domains/{id}", wrapper.DeleteDomain)
-				mgmt.Post("/account/domains/{id}/verify", wrapper.VerifyDomain)
+			// Admin invites (settings tier). The accept link targets the tenant's
+			// own host so the membership binds; app-level roles are invited from
+			// the tenant /admin surface instead.
+			account.Get("/invites", wrapper.ListInvites)
+			account.Post("/invites", apiHandlers.CreateAccountInvite)
+			account.Get("/invites/{inviteId}", wrapper.GetInvite)
+			account.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
 
-				mgmt.Post("/account/onboarding/complete", wrapper.CompleteOnboarding)
-			})
+			account.Post("/onboarding/complete", wrapper.CompleteOnboarding)
 		})
 
 		// ── Owner-invite acceptance (authed; not yet a member) ──

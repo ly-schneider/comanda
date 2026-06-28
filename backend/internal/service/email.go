@@ -66,6 +66,7 @@ type plunkCreds struct {
 // per-tenant credentials exist, keeping the bootstrap tenant and local dev
 // working. ok=false means callers skip sending.
 func (s *emailService) resolveCreds(ctx context.Context) (plunkCreds, bool) {
+	brand := s.brandName(ctx)
 	if s.encryptor != nil && s.settingsRepo != nil {
 		creds, err := s.settingsRepo.GetPlunkCredentials(ctx)
 		if err == nil {
@@ -76,7 +77,7 @@ func (s *emailService) resolveCreds(ctx context.Context) (plunkCreds, bool) {
 			}
 			return plunkCreds{
 				apiKey:    key,
-				fromName:  firstNonEmpty(creds.FromName, s.cfg.FromName),
+				fromName:  firstNonEmpty(creds.FromName, brand),
 				fromEmail: firstNonEmpty(creds.FromEmail, s.cfg.FromEmail),
 				replyTo:   firstNonEmpty(creds.ReplyTo, s.cfg.ReplyTo),
 			}, true
@@ -85,12 +86,32 @@ func (s *emailService) resolveCreds(ctx context.Context) (plunkCreds, bool) {
 	if s.cfg.APIKey != "" {
 		return plunkCreds{
 			apiKey:    s.cfg.APIKey,
-			fromName:  s.cfg.FromName,
+			fromName:  firstNonEmpty(brand, s.cfg.FromName),
 			fromEmail: s.cfg.FromEmail,
 			replyTo:   s.cfg.ReplyTo,
 		}, true
 	}
 	return plunkCreds{}, false
+}
+
+// brandName resolves the tenant's display name for the from-name and the email
+// body: settings.display_name, else the tenant's name, else the platform
+// default. On a platform/no-tenant context the RLS reads return nothing, so it
+// falls back to "Comanda" — correct for platform mail like account-hub sign-in.
+func (s *emailService) brandName(ctx context.Context) string {
+	if s.settingsRepo != nil {
+		if st, err := s.settingsRepo.Get(ctx); err == nil && st.DisplayName != nil {
+			if name := strings.TrimSpace(*st.DisplayName); name != "" {
+				return name
+			}
+		}
+		if name, err := s.settingsRepo.TenantName(ctx); err == nil {
+			if name = strings.TrimSpace(name); name != "" {
+				return name
+			}
+		}
+	}
+	return firstNonEmpty(s.cfg.FromName, "Comanda")
 }
 
 func firstNonEmpty(a, b string) string {
@@ -118,7 +139,7 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 	}
 
 	data := InviteEmailData{
-		Brand:     "Comanda",
+		Brand:     s.brandName(ctx),
 		InviteURL: inviteURL,
 		ExpiresAt: formatExpiry(expiresAt),
 	}
@@ -192,7 +213,7 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 	const otpExpiresInSeconds = 300
 
 	data := OTPEmailData{
-		Brand:       "Comanda",
+		Brand:       s.brandName(ctx),
 		Code:        otp,
 		CodeTTL:     friendlyTTL(otpExpiresInSeconds),
 		SupportNote: "Wir werden dich niemals nach deinem Code fragen.",
@@ -233,6 +254,7 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 		return nil
 	}
 
+	data.Brand = s.brandName(ctx)
 	htmlBody := renderReceiptHTML(data)
 
 	payload := PlunkSendRequest{

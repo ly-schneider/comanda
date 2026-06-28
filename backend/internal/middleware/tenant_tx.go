@@ -19,6 +19,7 @@ import (
 	"backend/internal/response"
 
 	nanoid "backend/internal/id"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 )
@@ -186,17 +187,20 @@ var (
 	// errVendorTenantDenied is surfaced as an undifferentiated 403 (unknown org,
 	// unlinked org, and non-member all map to it) so the boundary can't be probed.
 	errVendorTenantDenied = errors.New("vendor tenant resolution denied")
+	// errNoAccountTenant means no tenant could be selected: no cookie and no
+	// active organization on the session.
+	errNoAccountTenant = errors.New("no account tenant selected")
 )
 
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
-// ResolveVendorTenant scopes a platform-host request to the logged-in vendor's
-// tenant, for the account route group (after RequireAuth). The session's
-// active_organization_id is only a hint; the privileged membership lookup is the
-// authorization boundary and fails closed. is_platform_admin stays false for a
-// vendor, so this only ever narrows access.
+// ResolveVendorTenant scopes a platform-host request to the tenant the account
+// hub is acting on, for the account route group (after RequireAuth). The tenant
+// is the comanda_active_tenant cookie selection (else the session's active
+// organization); the privileged authorization is the boundary and fails closed —
+// a member of the tenant's org, or a platform admin who may manage any tenant.
 func (m *TenantMiddleware) ResolveVendorTenant(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -215,22 +219,19 @@ func (m *TenantMiddleware) ResolveVendorTenant(next http.Handler) http.Handler {
 			return
 		}
 
-		orgID, ok := auth.GetActiveOrgID(ctx)
-		if !ok {
-			writeJSONError(w, http.StatusForbidden, "no_active_organization",
-				"No active organization for this session")
-			return
-		}
-
-		tenantID, err := m.resolveVendorTenant(ctx, orgID, userID)
+		tenantID, err := m.resolveAccountTenant(ctx, r, userID)
 		if err != nil {
-			if errors.Is(err, errVendorTenantDenied) {
+			switch {
+			case errors.Is(err, errNoAccountTenant):
+				writeJSONError(w, http.StatusBadRequest, "no_tenant",
+					"No tenant in the request path")
+			case errors.Is(err, errVendorTenantDenied):
 				writeJSONError(w, http.StatusForbidden, "tenant_access_denied",
 					"You are not a member of an organization linked to a tenant")
-				return
+			default:
+				m.logger.Error("vendor tenant resolution failed", zap.Error(err))
+				writeJSONError(w, http.StatusInternalServerError, "internal_error", "internal error")
 			}
-			m.logger.Error("vendor tenant resolution failed", zap.Error(err))
-			writeJSONError(w, http.StatusInternalServerError, "internal_error", "internal error")
 			return
 		}
 
@@ -256,25 +257,44 @@ func (m *TenantMiddleware) ResolveVendorTenant(next http.Handler) http.Handler {
 	})
 }
 
-// resolveVendorTenant returns the tenant the user may act on, or
-// errVendorTenantDenied. It uses the privileged pool because no tenant is bound
-// yet (an app-pool read would be denied by the org-keyed RLS); the JOIN enforces
-// membership: a row comes back only for a member of the linked org.
-func (m *TenantMiddleware) resolveVendorTenant(ctx context.Context, orgID, userID string) (string, error) {
-	var tenantID string
-	err := m.privilegedDB.QueryRowContext(ctx, `
-		SELECT t.id
-		FROM tenant t
-		JOIN member m ON m.organization_id = t.organization_id
-		WHERE t.organization_id = $1 AND m.user_id = $2
-	`, orgID, userID).Scan(&tenantID)
+// resolveAccountTenant picks the tenant the account hub request acts on from the
+// {accountTenant} slug in the path. The slug is authorized against the caller, so
+// it can't be used to reach a tenant the user has no right to.
+func (m *TenantMiddleware) resolveAccountTenant(ctx context.Context, r *http.Request, userID string) (string, error) {
+	slug := strings.TrimSpace(chi.URLParam(r, "accountTenant"))
+	if slug == "" {
+		return "", errNoAccountTenant
+	}
+	return m.authorizeAccountTenant(ctx, slug, userID, auth.IsPlatformAdmin(ctx))
+}
+
+// authorizeAccountTenant returns the tenant id for the slug if the caller may
+// manage it, else errVendorTenantDenied. A platform admin may select any tenant;
+// everyone else must be a member of the tenant's organization. Runs on the
+// privileged pool because no tenant is bound yet (an app-pool read would be
+// denied by the org-keyed RLS). The slug reaches the query only as a bound
+// parameter, so an unknown/malformed slug just yields no rows -> 403.
+func (m *TenantMiddleware) authorizeAccountTenant(ctx context.Context, slug, userID string, isPlatformAdmin bool) (string, error) {
+	var got string
+	var err error
+	if isPlatformAdmin {
+		err = m.privilegedDB.QueryRowContext(ctx,
+			`SELECT id FROM tenant WHERE slug = $1`, slug).Scan(&got)
+	} else {
+		err = m.privilegedDB.QueryRowContext(ctx, `
+			SELECT t.id
+			FROM tenant t
+			JOIN member m ON m.organization_id = t.organization_id
+			WHERE t.slug = $1 AND m.user_id = $2
+		`, slug, userID).Scan(&got)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", errVendorTenantDenied
 	}
 	if err != nil {
 		return "", err
 	}
-	return tenantID, nil
+	return got, nil
 }
 
 // Tx opens a Postgres transaction on the app pool, binds it to the resolved

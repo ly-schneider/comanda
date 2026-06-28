@@ -8,6 +8,50 @@ import (
 	"backend/internal/response"
 )
 
+type accountTenant struct {
+	ID          string `json:"id"`
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	LogoURL     string `json:"logoUrl,omitempty"`
+	Role        string `json:"role,omitempty"`
+}
+
+// ListAccountTenants returns the tenants the signed-in user may manage from the
+// account hub. Runs on the platform host with no tenant bound yet, so it does
+// not go through ResolveVendorTenant.
+func (h *Handlers) ListAccountTenants(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !auth.IsPlatformContext(ctx) {
+		writeError(w, http.StatusBadRequest, "not_platform_host", "Account routes are only available on the platform host")
+		return
+	}
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		return
+	}
+
+	tenants, err := h.account.ListManageableTenants(ctx, userID, auth.IsPlatformAdmin(ctx))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
+		return
+	}
+
+	items := make([]accountTenant, 0, len(tenants))
+	for _, t := range tenants {
+		items = append(items, accountTenant{
+			ID:          t.ID,
+			Slug:        t.Slug,
+			Name:        t.Name,
+			DisplayName: t.DisplayName,
+			LogoURL:     t.LogoURL,
+			Role:        t.Role,
+		})
+	}
+	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 // GetAccountTenant returns the tenant the request resolved to via the
 // user→tenant resolver (the logged-in vendor's active organization).
 func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request) {

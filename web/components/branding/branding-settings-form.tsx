@@ -32,11 +32,9 @@ function isValidHex(v: string) {
   return HEX_RE.test(v)
 }
 
-// BrandingSettingsForm is the shared branding/legal editor used by both the
-// subdomain ops admin (/admin/branding → /api/v1/settings) and the platform
-// account hub (/account/branding → /api/v1/account/settings). The only
-// difference is the API base path, which the backend rebinds to the right
-// tenant via host resolution (admin) or the active organization (account).
+// BrandingSettingsForm is the branding/legal editor for the account hub
+// (/t/<tenant>/branding → /api/v1/account/<tenant>/settings). The tenant flows
+// in via the basePath; the backend resolves and authorizes it.
 export function BrandingSettingsForm({ basePath, heading = "Branding" }: { basePath: string; heading?: string }) {
   const fetchAuth = useAuthorizedFetch()
 

@@ -48,11 +48,13 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The tenant /admin surface grants app-level roles only. The settings tier
+	// (admin) is minted from the account hub, so it can't be escalated here.
 	memberRole := admininvite.MemberRoleStaff
 	if body.MemberRole != nil {
 		switch *body.MemberRole {
-		case generated.MemberRoleAdmin:
-			memberRole = admininvite.MemberRoleAdmin
+		case generated.MemberRoleAppAdmin:
+			memberRole = admininvite.MemberRoleAppAdmin
 		case generated.MemberRoleStaff:
 			memberRole = admininvite.MemberRoleStaff
 		case generated.MemberRoleCatalog:
@@ -64,6 +66,38 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	invite, err := h.invites.Create(ctx, userID, string(body.Email), memberRole, nil)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invite_failed", err.Error())
+		return
+	}
+	response.WriteJSON(w, http.StatusCreated, toAPIInvite(invite))
+}
+
+// CreateAccountInvite creates a settings-admin invite from the account hub.
+// (POST /account/invites)
+func (h *Handlers) CreateAccountInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
+	var body generated.InviteCreate
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
+
+	// The account hub mints settings admins only; app-level roles are invited
+	// from the tenant /admin surface.
+	if body.MemberRole != nil && *body.MemberRole != generated.MemberRoleAdmin {
+		writeError(w, http.StatusBadRequest, "invalid_member_role", "The account hub can only invite admins")
+		return
+	}
+
+	invite, err := h.invites.Create(ctx, userID, string(body.Email), admininvite.MemberRoleAdmin, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invite_failed", err.Error())
 		return
