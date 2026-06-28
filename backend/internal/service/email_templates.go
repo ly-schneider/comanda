@@ -1,13 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
 
 // InviteEmailData contains the data for rendering an admin invite email.
 type InviteEmailData struct {
-	Brand     string
 	RoleLabel string
 	InviteURL string
 	ExpiresAt string
@@ -28,108 +28,49 @@ func formatExpiry(t time.Time) string {
 	return fmt.Sprintf("%d. %s %d, %02d:%02d", t.Day(), month, t.Year(), t.Hour(), t.Minute())
 }
 
-// renderInviteHTML generates the HTML version of the admin invite email.
-func renderInviteHTML(data InviteEmailData) string {
-	return fmt.Sprintf(`<!doctype html>
-<html lang="de" dir="ltr"
-      xmlns:v="urn:schemas-microsoft-com:vml"
-      xmlns:o="urn:schemas-microsoft-com:office:office">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <meta name="x-apple-disable-message-reformatting">
-    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
-    <title>%s Einladung</title>
-    <!--[if mso]>
-      <noscript>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-          </o:OfficeDocumentSettings>
-        </xml>
-      </noscript>
-      <style>
-        body, table, td, p, a, span { font-family: Arial, sans-serif !important; }
-      </style>
-    <![endif]-->
-    <style>
-      @media (max-width:600px){
-        .container { width:100%% !important; }
-        .px { padding-left:16px !important; padding-right:16px !important; }
-      }
-    </style>
-  </head>
-  <body style="margin:0;padding:0;">
-    <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;opacity:0;">
-      Du wurdest eingeladen, als %s bei %s beizutreten &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
-    </div>
-    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
-           bgcolor="#E9E7E6" style="background-color:#E9E7E6;">
-      <tr>
-        <td align="center" style="padding:24px;">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
-                 class="container"
-                 bgcolor="#FDFDFD"
-                 style="width:560px;max-width:560px;background-color:#FDFDFD;border:1px solid #D7D7D7;border-radius:11px;">
-            <tr>
-              <td class="px" style="padding:20px 24px 8px 24px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="font:700 14px/1.2 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                      %s
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td class="px" style="padding:8px 24px 24px 24px;">
-                <p style="margin:0 0 8px 0;font:600 18px/1.3 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                  Einladung als %s
-                </p>
-                <p style="margin:0 0 16px 0;font:13px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Du wurdest eingeladen, als %s bei %s beizutreten.
-                  Klicke auf den Button unten, um die Einladung anzunehmen.
-                </p>
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
-                  <tr>
-                    <td align="center" bgcolor="#000000" style="border-radius:7px;">
-                      <a href="%s" target="_blank" style="display:inline-block;padding:14px 28px;font:600 14px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#FFFFFF;text-decoration:none;">
-                        Einladung annehmen
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:16px 0 0 0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Diese Einladung ist gültig bis: %s
-                </p>
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
-                  <tr><td height="1" style="line-height:1px;font-size:1px;background:#D7D7D7;">&nbsp;</td></tr>
-                </table>
-                <p style="margin:0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:
-                </p>
-                <p style="margin:8px 0 0 0;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;color:#7B7B7B;word-break:break-all;">
-                  %s
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td class="px" style="padding:16px 24px 24px 24px;">
-                <p style="margin:0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Wenn du diese Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`, escHTML(data.Brand), escHTML(data.RoleLabel), escHTML(data.Brand), escHTML(data.Brand), escHTML(data.RoleLabel), escHTML(data.RoleLabel), escHTML(data.Brand), data.InviteURL, data.ExpiresAt, data.InviteURL)
+type inviteView struct {
+	baseView
+	RoleLabel string
+	URL       string
+	ExpiresAt string
 }
+
+// renderInviteHTML renders the admin invite email to HTML.
+func renderInviteHTML(ctx context.Context, b emailBranding, data InviteEmailData) (string, error) {
+	view := inviteView{
+		baseView:  newBaseView("Einladung als "+data.RoleLabel, "Du wurdest eingeladen, als "+data.RoleLabel+" bei "+b.Name+" beizutreten.", b),
+		RoleLabel: data.RoleLabel,
+		URL:       data.InviteURL,
+		ExpiresAt: data.ExpiresAt,
+	}
+	return renderMJML(ctx, inviteTmpl, view)
+}
+
+const inviteContentMJML = `{{define "content"}}
+<mj-section padding="26px 24px 4px 24px">
+  <mj-column>
+    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 8px 0">Einladung als {{.RoleLabel | esc}}</mj-text>
+    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">Du wurdest eingeladen, als {{.RoleLabel | esc}} bei {{.Branding.Name | esc}} beizutreten. Klicke auf den Button unten, um die Einladung anzunehmen.</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="18px 24px 6px 24px">
+  <mj-column>
+    <mj-button css-class="btn" width="100%" background-color="#1A1A1A" color="#FAFAFA" border-radius="10px" font-size="15px" font-weight="600" inner-padding="15px 24px" href="{{.URL | esc}}">Einladung annehmen</mj-button>
+  </mj-column>
+</mj-section>
+<mj-section padding="6px 24px 0 24px">
+  <mj-column>
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Diese Einladung ist gültig bis: {{.ExpiresAt | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="14px 24px 26px 24px">
+  <mj-column>
+    <mj-divider border-width="1px" border-color="#E6E4E2" padding="0 0 14px 0" />
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6" padding="0 0 6px 0">Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:</mj-text>
+    <mj-text css-class="muted" font-family="{{.MonoStack}}" font-size="11px" color="#9A9A9A" line-height="1.5">{{.URL | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+{{end}}`
 
 // OTPType represents the type of OTP being sent.
 type OTPType string
@@ -142,7 +83,6 @@ const (
 
 // OTPEmailData contains the data for rendering an OTP email.
 type OTPEmailData struct {
-	Brand       string
 	Code        string
 	CodeTTL     string
 	SupportNote string
@@ -196,102 +136,75 @@ func getOTPSubject(otpType OTPType) string {
 	}
 }
 
-// renderOTPHTML generates the HTML version of the OTP email.
-func renderOTPHTML(data OTPEmailData) string {
-	return fmt.Sprintf(`<!doctype html>
-<html lang="de" dir="ltr"
-      xmlns:v="urn:schemas-microsoft-com:vml"
-      xmlns:o="urn:schemas-microsoft-com:office:office">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <meta name="x-apple-disable-message-reformatting">
-    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
-    <title>%s Anmeldung</title>
-    <!--[if mso]>
-      <noscript>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-          </o:OfficeDocumentSettings>
-        </xml>
-      </noscript>
-      <style>
-        body, table, td, p, a, span { font-family: Arial, sans-serif !important; }
-      </style>
-    <![endif]-->
-    <style>
-      @media (max-width:600px){
-        .container { width:100%% !important; }
-        .px { padding-left:16px !important; padding-right:16px !important; }
-      }
-    </style>
-  </head>
-  <body style="margin:0;padding:0;">
-    <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;opacity:0;">
-      Dein einmaliger Code für %s: %s (läuft in %s ab) &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
-    </div>
-    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
-           bgcolor="#E9E7E6" style="background-color:#E9E7E6;">
-      <tr>
-        <td align="center" style="padding:24px;">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
-                 class="container"
-                 bgcolor="#FDFDFD"
-                 style="width:560px;max-width:560px;background-color:#FDFDFD;border:1px solid #D7D7D7;border-radius:11px;">
-            <tr>
-              <td class="px" style="padding:20px 24px 8px 24px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="font:700 14px/1.2 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                      %s
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td class="px" style="padding:8px 24px 24px 24px;">
-                <p style="margin:0 0 8px 0;font:600 18px/1.3 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                  Anmelden mit Code
-                </p>
-                <p style="margin:0 0 16px 0;font:13px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Gib diesen einmaligen 6-stelligen Code im Anmeldefenster ein:
-                </p>
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
-                       style="background:#FFFFFF;border:1px solid #D7D7D7;border-radius:7px;">
-                  <tr>
-                    <td align="center" style="padding:16px 12px;">
-                      <span style="display:inline-block;font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;color:#000000;letter-spacing:6px;">
-                        %s
-                      </span>
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:16px 0 0 0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Der Code läuft in %s ab und kann nur einmal verwendet werden.
-                </p>
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
-                  <tr><td height="1" style="line-height:1px;font-size:1px;background:#D7D7D7;">&nbsp;</td></tr>
-                </table>
-                <p style="margin:0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  %s
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td class="px" style="padding:16px 24px 24px 24px;">
-                <p style="margin:0;font:12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Wenn du dies nicht angefordert hast, kannst du diese E-Mail ignorieren.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`, escHTML(data.Brand), escHTML(data.Brand), data.Code, data.CodeTTL, escHTML(data.Brand), data.Code, data.CodeTTL, data.SupportNote)
+// otpHeading/otpIntro adapt the copy to the OTP flow; the code panel and
+// reassurance are shared.
+func otpHeading(otpType OTPType) string {
+	switch otpType {
+	case OTPTypeSignIn:
+		return "Anmelden mit Code"
+	case OTPTypeForgetPassword:
+		return "Passwort zurücksetzen"
+	default:
+		return "E-Mail bestätigen"
+	}
 }
+
+func otpIntro(otpType OTPType) string {
+	switch otpType {
+	case OTPTypeSignIn:
+		return "Gib diesen einmaligen Code im Anmeldefenster ein:"
+	case OTPTypeForgetPassword:
+		return "Gib diesen Code ein, um ein neues Passwort zu setzen:"
+	default:
+		return "Gib diesen Code ein, um deine E-Mail-Adresse zu bestätigen:"
+	}
+}
+
+type otpView struct {
+	baseView
+	Heading     string
+	Intro       string
+	Code        string
+	TTLNote     string
+	SupportNote string
+}
+
+// renderOTPHTML renders the one-time-code email to HTML.
+func renderOTPHTML(ctx context.Context, b emailBranding, data OTPEmailData, otpType OTPType) (string, error) {
+	heading := otpHeading(otpType)
+	view := otpView{
+		baseView:    newBaseView(heading, heading+" bei "+b.Name, b),
+		Heading:     heading,
+		Intro:       otpIntro(otpType),
+		Code:        data.Code,
+		TTLNote:     "Der Code läuft in " + data.CodeTTL + " ab und kann nur einmal verwendet werden.",
+		SupportNote: data.SupportNote,
+	}
+	return renderMJML(ctx, otpTmpl, view)
+}
+
+const otpContentMJML = `{{define "content"}}
+<mj-section padding="26px 24px 4px 24px">
+  <mj-column>
+    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 8px 0">{{.Heading | esc}}</mj-text>
+    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">{{.Intro | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="12px 24px">
+  <mj-column css-class="panel" background-color="#F4F3F1" border="1px solid #E6E4E2" border-radius="10px" padding="22px 12px">
+    <mj-text css-class="code" align="center" font-family="{{.MonoStack}}" font-size="32px" font-weight="700" letter-spacing="8px" color="#1A1A1A" line-height="1.1">{{.Code | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="10px 24px 0 24px">
+  <mj-column>
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">{{.TTLNote | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="14px 24px 26px 24px">
+  <mj-column>
+    <mj-divider border-width="1px" border-color="#E6E4E2" padding="0 0 14px 0" />
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6" padding="0 0 4px 0">{{.SupportNote | esc}}</mj-text>
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Wenn du dies nicht angefordert hast, kannst du diese E-Mail ignorieren.</mj-text>
+  </mj-column>
+</mj-section>
+{{end}}`

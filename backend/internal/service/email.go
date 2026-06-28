@@ -45,6 +45,7 @@ type emailService struct {
 }
 
 func NewEmailService(cfg config.Config, settingsRepo repository.SettingsRepository, encryptor *crypto.Encryptor, logger *zap.Logger) EmailService {
+	go warmMJML()
 	return &emailService{
 		cfg:          cfg.Plunk,
 		appEnv:       strings.ToLower(strings.TrimSpace(cfg.App.AppEnv)),
@@ -112,6 +113,35 @@ func (s *emailService) brandName(ctx context.Context) string {
 	return firstNonEmpty(s.cfg.FromName, "Comanda")
 }
 
+// brandingForEmail collects the per-tenant slice of an email — name, logo,
+// font and footer contact/legal — from the tenant settings. Everything else in
+// the design is a fixed neutral palette. Falls back to platform defaults for
+// no-tenant mail (account-hub OTP).
+func (s *emailService) brandingForEmail(ctx context.Context) emailBranding {
+	b := emailBranding{Name: s.brandName(ctx)}
+	fontKey := ""
+	if s.settingsRepo != nil {
+		if st, err := s.settingsRepo.Get(ctx); err == nil {
+			fontKey = st.FontKey
+			if st.LogoURL != nil {
+				b.LogoURL = strings.TrimSpace(*st.LogoURL)
+			}
+			if st.ContactEmail != nil {
+				b.SupportEmail = strings.TrimSpace(*st.ContactEmail)
+			}
+			if st.LegalName != nil {
+				b.LegalName = strings.TrimSpace(*st.LegalName)
+			}
+			if st.LegalAddress != nil {
+				b.LegalAddress = strings.TrimSpace(*st.LegalAddress)
+			}
+		}
+	}
+	f := resolveFont(fontKey)
+	b.FontName, b.FontHref, b.FontStack = f.name, f.href, f.fontStack()
+	return b
+}
+
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -137,13 +167,15 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 	}
 
 	data := InviteEmailData{
-		Brand:     s.brandName(ctx),
 		RoleLabel: roleLabel,
 		InviteURL: inviteURL,
 		ExpiresAt: formatExpiry(expiresAt),
 	}
 
-	htmlBody := renderInviteHTML(data)
+	htmlBody, err := renderInviteHTML(ctx, s.brandingForEmail(ctx), data)
+	if err != nil {
+		return fmt.Errorf("render invite email: %w", err)
+	}
 
 	payload := PlunkSendRequest{
 		To:         to,
@@ -212,13 +244,15 @@ func (s *emailService) SendOTPEmail(ctx context.Context, to string, otp string, 
 	const otpExpiresInSeconds = 300
 
 	data := OTPEmailData{
-		Brand:       s.brandName(ctx),
 		Code:        otp,
 		CodeTTL:     friendlyTTL(otpExpiresInSeconds),
 		SupportNote: "Wir werden dich niemals nach deinem Code fragen.",
 	}
 
-	htmlBody := renderOTPHTML(data)
+	htmlBody, err := renderOTPHTML(ctx, s.brandingForEmail(ctx), data, otpType)
+	if err != nil {
+		return fmt.Errorf("render otp email: %w", err)
+	}
 	subject := s.subject(getOTPSubject(otpType))
 
 	payload := PlunkSendRequest{
@@ -253,12 +287,15 @@ func (s *emailService) SendReceiptEmail(ctx context.Context, to string, data Rec
 		return nil
 	}
 
-	data.Brand = s.brandName(ctx)
-	htmlBody := renderReceiptHTML(data)
+	branding := s.brandingForEmail(ctx)
+	htmlBody, err := renderReceiptHTML(ctx, branding, data)
+	if err != nil {
+		return fmt.Errorf("render receipt email: %w", err)
+	}
 
 	payload := PlunkSendRequest{
 		To:         to,
-		Subject:    s.subject("Deine Quittung von " + data.Brand),
+		Subject:    s.subject("Deine Quittung von " + branding.Name),
 		Body:       htmlBody,
 		Subscribed: false,
 		Name:       creds.fromName,

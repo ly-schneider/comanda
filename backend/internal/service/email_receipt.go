@@ -1,8 +1,9 @@
 package service
 
 import (
+	"context"
 	"fmt"
-	"strings"
+	"html"
 	"time"
 )
 
@@ -14,7 +15,6 @@ type ReceiptLineItem struct {
 }
 
 type ReceiptEmailData struct {
-	Brand      string
 	OrderID    string
 	OrderURL   string
 	OrderDate  string
@@ -42,195 +42,96 @@ func formatOrderDate(t time.Time) string {
 	return fmt.Sprintf("%d. %s %d, %02d:%02d", t.Day(), months[t.Month()-1], t.Year(), t.Hour(), t.Minute())
 }
 
-func renderReceiptHTML(data ReceiptEmailData) string {
-	var itemRows strings.Builder
-	for _, item := range data.Items {
-		lineTotal := item.Cents * int64(item.Quantity)
-		itemRows.WriteString(fmt.Sprintf(`
-                    <tr>
-                      <td style="padding:8px 0;font:14px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;border-bottom:1px solid #EEEEEE;">
-                        %s &times; %d
-                      </td>
-                      <td align="right" style="padding:8px 0;font:14px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;border-bottom:1px solid #EEEEEE;">
-                        %s
-                      </td>
-                    </tr>`, escHTML(item.Title), item.Quantity, formatCHF(lineTotal)))
-		for _, child := range item.Children {
-			itemRows.WriteString(fmt.Sprintf(`
-                    <tr>
-                      <td colspan="2" style="padding:2px 0 2px 16px;font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;border-bottom:1px solid #EEEEEE;">
-                        %s
-                      </td>
-                    </tr>`, escHTML(child.Title)))
+// receiptLineView holds the pre-formatted, pre-escaped fields embedded directly
+// into the MJML <mj-table> rows.
+type receiptLineView struct {
+	Label    string
+	Price    string
+	Children []string
+}
+
+type receiptView struct {
+	baseView
+	OrderID   string
+	OrderDate string
+	Method    string
+	Items     []receiptLineView
+	Total     string
+	URL       string
+}
+
+// renderReceiptHTML renders the order receipt email to HTML.
+func renderReceiptHTML(ctx context.Context, b emailBranding, data ReceiptEmailData) (string, error) {
+	items := make([]receiptLineView, 0, len(data.Items))
+	for _, it := range data.Items {
+		children := make([]string, 0, len(it.Children))
+		for _, c := range it.Children {
+			children = append(children, html.EscapeString(c.Title))
 		}
+		items = append(items, receiptLineView{
+			Label:    fmt.Sprintf("%s &times; %d", html.EscapeString(it.Title), it.Quantity),
+			Price:    formatCHF(it.Cents * int64(it.Quantity)),
+			Children: children,
+		})
 	}
 
-	return fmt.Sprintf(`<!doctype html>
-<html lang="de" dir="ltr"
-      xmlns:v="urn:schemas-microsoft-com:vml"
-      xmlns:o="urn:schemas-microsoft-com:office:office">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <meta name="x-apple-disable-message-reformatting">
-    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
-    <title>%s Quittung</title>
-    <!--[if mso]>
-      <noscript>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-          </o:OfficeDocumentSettings>
-        </xml>
-      </noscript>
-      <style>
-        body, table, td, p, a, span { font-family: Arial, sans-serif !important; }
-      </style>
-    <![endif]-->
-    <style>
-      @media (max-width:600px){
-        .container { width:100%% !important; }
-        .px { padding-left:16px !important; padding-right:16px !important; }
-      }
-    </style>
-  </head>
-  <body style="margin:0;padding:0;">
-    <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;opacity:0;">
-      Deine Quittung von %s · %s &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
-    </div>
-    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
-           bgcolor="#E9E7E6" style="background-color:#E9E7E6;">
+	view := receiptView{
+		baseView:  newBaseView("Deine Quittung von "+b.Name, "Vielen Dank für deine Bestellung bei "+b.Name+".", b),
+		OrderID:   data.OrderID,
+		OrderDate: data.OrderDate,
+		Method:    data.Method,
+		Items:     items,
+		Total:     formatCHF(data.TotalCents),
+		URL:       data.OrderURL,
+	}
+	return renderMJML(ctx, receiptTmpl, view)
+}
+
+const receiptContentMJML = `{{define "content"}}
+<mj-section padding="26px 24px 2px 24px">
+  <mj-column>
+    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 6px 0">Deine Quittung</mj-text>
+    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">Vielen Dank für deine Bestellung!</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="14px 24px 4px 24px">
+  <mj-column css-class="panel" background-color="#F4F3F1" border="1px solid #E6E4E2" border-radius="10px" padding="14px 16px">
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.5">Bestellnr.</mj-text>
+    <mj-text css-class="muted" font-family="{{.MonoStack}}" font-size="11px" color="#9A9A9A" padding="2px 0 8px 0">{{.OrderID | esc}}</mj-text>
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Datum: {{.OrderDate | esc}}</mj-text>
+    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Zahlungsart: {{.Method | esc}}</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="12px 24px 0 24px">
+  <mj-column>
+    <mj-table css-class="body" cellpadding="0" cellspacing="0" width="100%" font-size="14px" color="#1A1A1A" line-height="1.4">
+      {{range .Items}}
       <tr>
-        <td align="center" style="padding:24px;">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"
-                 class="container"
-                 bgcolor="#FDFDFD"
-                 style="width:560px;max-width:560px;background-color:#FDFDFD;border:1px solid #D7D7D7;border-radius:11px;">
-            <tr>
-              <td class="px" style="padding:20px 24px 8px 24px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="font:700 14px/1.2 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                      %s
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td class="px" style="padding:8px 24px 24px 24px;">
-                <p style="margin:0 0 4px 0;font:600 18px/1.3 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                  Deine Quittung
-                </p>
-                <p style="margin:0 0 20px 0;font:13px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Vielen Dank für deine Bestellung!
-                </p>
-
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
-                       style="background:#FAFAFA;border:1px solid #EEEEEE;border-radius:7px;">
-                  <tr>
-                    <td style="padding:12px 16px;">
-                      <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0">
-                        <tr>
-                          <td style="font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;padding-bottom:2px;">
-                            Bestellnr.
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#999999;padding-bottom:8px;word-break:break-all;">
-                            %s
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                            Datum
-                          </td>
-                          <td align="right" style="font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                            %s
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style="font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                            Zahlungsart
-                          </td>
-                          <td align="right" style="font:12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                            %s
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-%s
-                    <tr>
-                      <td style="padding:12px 0 0 0;font:600 15px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                        Total
-                      </td>
-                      <td align="right" style="padding:12px 0 0 0;font:600 15px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                        %s
-                      </td>
-                    </tr>
-                </table>
-
-                <p style="margin:8px 0 0 0;font:11px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Alle Preise in CHF inkl. MwSt.
-                </p>
-
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="margin:20px 0 0 0;">
-                  <tr>
-                    <td align="center" bgcolor="#000000" style="border-radius:11px;">
-                      <a href="%s" target="_blank" style="display:block;padding:16px 28px;font:600 16px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#FFFFFF;text-decoration:none;text-align:center;">
-                        Bestellung &amp; QR-Code anzeigen
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 0 0;">
-                  <tr><td height="1" style="line-height:1px;font-size:1px;background:#D7D7D7;">&nbsp;</td></tr>
-                </table>
-
-                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;">
-                  <tr>
-                    <td style="font:12px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                      <strong style="color:#000000;">%s</strong><br>
-                      Powered by Leys
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:12px 0 0 0;font:11px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#999999;">
-                  Dies ist eine automatisch generierte Quittung.
-                  Bitte bewahre diese E-Mail als Zahlungsbeleg auf.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
+        <td style="padding:8px 0;border-bottom:1px solid #EDEBE9;color:#1A1A1A;">{{.Label}}</td>
+        <td align="right" style="padding:8px 0;border-bottom:1px solid #EDEBE9;color:#1A1A1A;white-space:nowrap;">{{.Price}}</td>
       </tr>
-    </table>
-  </body>
-</html>`,
-		escHTML(data.Brand),
-		escHTML(data.Brand), formatCHF(data.TotalCents),
-		escHTML(data.Brand),
-		escHTML(data.OrderID),
-		escHTML(data.OrderDate),
-		escHTML(data.Method),
-		itemRows.String(),
-		formatCHF(data.TotalCents),
-		escHTML(data.OrderURL),
-		escHTML(data.Brand),
-	)
-}
-
-func escHTML(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	return s
-}
+      {{range .Children}}
+      <tr>
+        <td colspan="2" style="padding:2px 0 2px 14px;border-bottom:1px solid #EDEBE9;color:#9A9A9A;font-size:12px;">{{.}}</td>
+      </tr>
+      {{end}}
+      {{end}}
+      <tr>
+        <td style="padding:12px 0 0 0;font-weight:700;color:#1A1A1A;">Total</td>
+        <td align="right" style="padding:12px 0 0 0;font-weight:700;color:#1A1A1A;white-space:nowrap;">{{.Total}}</td>
+      </tr>
+    </mj-table>
+  </mj-column>
+</mj-section>
+<mj-section padding="6px 24px 0 24px">
+  <mj-column>
+    <mj-text css-class="muted" font-size="11px" color="#9A9A9A" line-height="1.5">Alle Preise in CHF inkl. MwSt.</mj-text>
+  </mj-column>
+</mj-section>
+<mj-section padding="18px 24px 26px 24px">
+  <mj-column>
+    <mj-button css-class="btn" width="100%" background-color="#1A1A1A" color="#FAFAFA" border-radius="10px" font-size="15px" font-weight="600" inner-padding="16px 24px" href="{{.URL | esc}}">Bestellung &amp; QR-Code anzeigen</mj-button>
+    <mj-text css-class="muted" font-size="11px" color="#9A9A9A" line-height="1.5" padding="14px 0 0 0">Dies ist eine automatisch generierte Quittung. Bitte bewahre diese E-Mail als Zahlungsbeleg auf.</mj-text>
+  </mj-column>
+</mj-section>
+{{end}}`
