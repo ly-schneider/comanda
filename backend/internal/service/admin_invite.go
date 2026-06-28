@@ -138,7 +138,7 @@ func (s *adminInviteService) Create(ctx context.Context, inviterID, email string
 
 	// Build invite URL and send email
 	inviteURL := s.buildInviteURL(ctx, token)
-	_ = s.emailSvc.SendInviteEmail(ctx, email, inviteURL, expiresAt)
+	_ = s.emailSvc.SendInviteEmail(ctx, email, inviteURL, memberRoleLabelDE(memberRole), expiresAt)
 
 	return invite, nil
 }
@@ -211,7 +211,7 @@ func (s *adminInviteService) Resend(ctx context.Context, id string) error {
 
 	// Send email
 	inviteURL := s.buildInviteURL(ctx, token)
-	return s.emailSvc.SendInviteEmail(ctx, invite.InviteeEmail, inviteURL, expiresAt)
+	return s.emailSvc.SendInviteEmail(ctx, invite.InviteeEmail, inviteURL, memberRoleLabelDE(invite.MemberRole), expiresAt)
 }
 
 func (s *adminInviteService) Verify(ctx context.Context, token string) (*ent.AdminInvite, error) {
@@ -360,6 +360,22 @@ func (s *adminInviteService) tenantPrimaryHost(ctx context.Context) string {
 		}
 	}
 	return host
+}
+
+// memberRoleLabelDE maps a membership tier to its German display label, matching
+// web/lib/auth/rbac.ts ROLE_LABELS_DE so the invite email names the same role the
+// admin granted.
+func memberRoleLabelDE(role admininvite.MemberRole) string {
+	switch role {
+	case admininvite.MemberRoleAdmin:
+		return "Administrator"
+	case admininvite.MemberRoleAppAdmin:
+		return "App-Admin"
+	case admininvite.MemberRoleCatalog:
+		return "Sortiment"
+	default:
+		return "Mitarbeiter"
+	}
 }
 
 // generateToken creates a new secure random token and its SHA-256 hash.

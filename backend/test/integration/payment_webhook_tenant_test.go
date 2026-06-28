@@ -134,6 +134,16 @@ func (e *rlsEnv) orderStatus(t *testing.T, orderID string) string {
 	return status
 }
 
+func (e *rlsEnv) payrexxWebhookRecorded(t *testing.T, tenantID string) bool {
+	t.Helper()
+	var n int
+	require.NoError(t, e.priv.QueryRow(
+		`SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND payrexx_last_webhook_at IS NOT NULL`,
+		tenantID,
+	).Scan(&n))
+	return n == 1
+}
+
 func postWebhook(t *testing.T, router http.Handler, token string, body []byte, signature string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/v1/payments/webhooks/payrexx/"+token, bytes.NewReader(body))
@@ -159,6 +169,8 @@ func TestPayrexxWebhook_CrossTenantIsolation(t *testing.T) {
 		rec := postWebhook(t, router, a.webhookToken, body, sig)
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 		require.Equal(t, string(order.StatusPaid), env.orderStatus(t, a.orderID))
+		// A verified webhook records delivery for the setup UI indicator.
+		require.True(t, env.payrexxWebhookRecorded(t, a.id))
 	})
 
 	t.Run("A's signed body posted to B's token -> 401, no cross-attribution", func(t *testing.T) {
@@ -169,6 +181,8 @@ func TestPayrexxWebhook_CrossTenantIsolation(t *testing.T) {
 		// B's order remains pending; A's order stays paid (untouched by B's request).
 		require.Equal(t, string(order.StatusPending), env.orderStatus(t, b.orderID))
 		require.Equal(t, string(order.StatusPaid), env.orderStatus(t, a.orderID))
+		// The failed verification must not record a webhook for B.
+		require.False(t, env.payrexxWebhookRecorded(t, b.id))
 	})
 
 	t.Run("unknown token -> 404", func(t *testing.T) {

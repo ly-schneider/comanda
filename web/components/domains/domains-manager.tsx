@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ClipboardCopy, ExternalLink, Info, RefreshCw, Trash2 } from "lucide-react"
+import { Check, ClipboardCopy, ExternalLink, Info, RefreshCw, Star, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -172,6 +172,8 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
 
   const [verifying, setVerifying] = useState<Record<string, boolean>>({})
   const [verifyError, setVerifyError] = useState<Record<string, string>>({})
+  const [settingPrimary, setSettingPrimary] = useState<Record<string, boolean>>({})
+  const [primaryError, setPrimaryError] = useState<Record<string, string>>({})
   const [removing, setRemoving] = useState<Record<string, boolean>>({})
   const [removeError, setRemoveError] = useState<Record<string, string>>({})
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
@@ -253,6 +255,33 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
       setVerifyError((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : "Prüfung fehlgeschlagen" }))
     } finally {
       setVerifying((prev) => ({ ...prev, [id]: false }))
+    }
+  }
+
+  async function setPrimary(id: string) {
+    setSettingPrimary((prev) => ({ ...prev, [id]: true }))
+    setPrimaryError((prev) => {
+      const n = { ...prev }
+      delete n[id]
+      return n
+    })
+    try {
+      const csrf = getCSRFToken()
+      const res = await fetchAuth(`${basePath}/${id}/primary`, {
+        method: "POST",
+        headers: { "X-CSRF": csrf || "" },
+      })
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { code?: string; message?: string; detail?: string }
+        if (j.code === "domain_not_verified") throw new Error("Nur eine verifizierte Domain kann Standard werden.")
+        throw new Error(j.message || j.detail || `Fehler ${res.status}`)
+      }
+      const updated = (await res.json()) as Domain
+      setDomains((prev) => prev.map((d) => ({ ...d, isPrimary: d.id === updated.id })))
+    } catch (e) {
+      setPrimaryError((prev) => ({ ...prev, [id]: e instanceof Error ? e.message : "Festlegen fehlgeschlagen" }))
+    } finally {
+      setSettingPrimary((prev) => ({ ...prev, [id]: false }))
     }
   }
 
@@ -399,8 +428,8 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-medium">{domain.hostname}</span>
                           {domain.isPrimary && (
-                            <Badge variant="secondary" className="text-xs">
-                              Primär
+                            <Badge variant="default" className="text-xs">
+                              Standard
                             </Badge>
                           )}
                         </div>
@@ -434,6 +463,18 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                               Jetzt prüfen
                             </Button>
                           </>
+                        )}
+                        {domain.verifiedAt && !domain.isPrimary && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => setPrimary(domain.id)}
+                            disabled={settingPrimary[domain.id]}
+                          >
+                            <Star className="size-4" />
+                            {settingPrimary[domain.id] ? "Festlegen…" : "Als Standard festlegen"}
+                          </Button>
                         )}
                         {confirmRemove === domain.id ? (
                           <div className="flex items-center gap-1.5">
@@ -476,6 +517,11 @@ export function DomainsManager({ basePath, heading = "Eigene Domains" }: { baseP
                     {verifyError[domain.id] && (
                       <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
                         {verifyError[domain.id]}
+                      </div>
+                    )}
+                    {primaryError[domain.id] && (
+                      <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
+                        {primaryError[domain.id]}
                       </div>
                     )}
                     {removeError[domain.id] && (

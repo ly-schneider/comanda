@@ -201,6 +201,57 @@ verify:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+primary:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Domains]
+    summary: Set a domain as the tenant's standard domain
+    description: |
+      Promotes a verified domain to the tenant's standard (primary) domain.
+      Generated links — admin invites and order receipts — then use it as the
+      canonical host instead of the platform subdomain. The previous standard is
+      demoted automatically. Only verified domains can be promoted.
+    operationId: setPrimaryDomain
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Updated domain
+        content:
+          application/json:
+            schema:
+              $ref: "#/Domain"
+      "400":
+        description: Domain is not verified yet
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Domain not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 Domain:
   type: object
   required: [id, hostname, isPrimary, certStatus, createdAt]

@@ -47,7 +47,7 @@ Invite:
 InvitePublic:
   type: object
   description: Public invite view (no sensitive fields)
-  required: [id, inviteeEmail, status, expiresAt]
+  required: [id, inviteeEmail, status, memberRole, expiresAt]
   properties:
     id:
       type: string
@@ -56,6 +56,8 @@ InvitePublic:
       format: email
     status:
       $ref: "#/InviteStatus"
+    memberRole:
+      $ref: "#/MemberRole"
     expiresAt:
       type: string
       format: date-time

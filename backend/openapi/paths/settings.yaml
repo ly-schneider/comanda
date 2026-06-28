@@ -175,9 +175,9 @@ payrexx:
     tags: [Settings]
     summary: Get Payrexx connection status
     description: |
-      Returns whether the tenant's Payrexx integration is configured and the
-      tenant-specific webhook URL to register in the Payrexx dashboard. Secrets
-      are never returned.
+      Returns the staged setup state of the tenant's Payrexx integration, the
+      tenant-specific webhook URL to register in the Payrexx dashboard, and the
+      time the last inbound webhook was verified. Secrets are never returned.
     operationId: getPayrexxStatus
     security:
       - sessionAuth: []
@@ -189,14 +189,18 @@ payrexx:
           application/json:
             schema:
               type: object
-              required: [configured]
+              required: [state]
               properties:
-                configured:
-                  type: boolean
+                state:
+                  type: string
+                  enum: [not_started, api_connected, configured]
                 instance:
                   type: string
                 webhookUrl:
                   type: string
+                lastWebhookAt:
+                  type: string
+                  format: date-time
       "401":
         description: Authentication required
         content:
@@ -210,14 +214,15 @@ payrexx:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+payrexxApi:
   put:
     tags: [Settings]
-    summary: Configure Payrexx credentials
+    summary: Connect Payrexx API credentials
     description: |
-      Validates the supplied Payrexx credentials with a live API call, then
-      stores them AES-256-GCM-encrypted on the tenant settings row. Returns the
-      tenant-specific webhook URL.
-    operationId: configurePayrexx
+      Staged step one. Validates the instance + API key with a live API call,
+      then stores them AES-256-GCM-encrypted on the tenant settings row and
+      returns the status (including the webhook URL to register in Payrexx).
+    operationId: connectPayrexxApi
     security:
       - sessionAuth: []
     x-required-permissions: [admin:access]
@@ -227,27 +232,132 @@ payrexx:
         application/json:
           schema:
             type: object
-            required: [instance, apiSecret, webhookSecret]
+            required: [instance, apiSecret]
             properties:
               instance:
                 type: string
               apiSecret:
                 type: string
-              webhookSecret:
-                type: string
     responses:
       "200":
-        description: Payrexx configured
+        description: Payrexx API connected
         content:
           application/json:
             schema:
               type: object
-              required: [configured, webhookUrl]
+              required: [state]
               properties:
-                configured:
-                  type: boolean
+                state:
+                  type: string
+                  enum: [not_started, api_connected, configured]
+                instance:
+                  type: string
                 webhookUrl:
                   type: string
+                lastWebhookAt:
+                  type: string
+                  format: date-time
+      "400":
+        description: Invalid or unverifiable credentials
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+payrexxWebhook:
+  put:
+    tags: [Settings]
+    summary: Set Payrexx webhook secret
+    description: |
+      Staged step two. Stores the webhook signing secret Payrexx generated when
+      the merchant created the webhook, AES-256-GCM-encrypted, completing the
+      configuration. Requires the API step to have run first.
+    operationId: setPayrexxWebhookSecret
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [webhookSecret]
+            properties:
+              webhookSecret:
+                type: string
+    responses:
+      "200":
+        description: Payrexx webhook secret stored
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [not_started, api_connected, configured]
+                instance:
+                  type: string
+                webhookUrl:
+                  type: string
+                lastWebhookAt:
+                  type: string
+                  format: date-time
+      "400":
+        description: Invalid request or API not yet connected
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+payrexxTest:
+  post:
+    tags: [Settings]
+    summary: Test Payrexx API connection
+    description: |
+      Re-validates the stored Payrexx instance + API key with a live API call,
+      so the merchant can confirm the connection at any time.
+    operationId: testPayrexxConnection
+    security:
+      - sessionAuth: []
+    x-required-permissions: [admin:access]
+    responses:
+      "200":
+        description: Connection OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ok]
+              properties:
+                ok:
+                  type: boolean
       "400":
         description: Invalid or unverifiable credentials
         content:

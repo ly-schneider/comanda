@@ -113,6 +113,26 @@ func (h *Handlers) VerifyDomain(w http.ResponseWriter, r *http.Request, id strin
 	response.WriteJSON(w, http.StatusOK, toAPIDomain(d))
 }
 
+// SetPrimaryDomain promotes a verified domain to the tenant's standard domain.
+// (POST /domains/{id}/primary)
+func (h *Handlers) SetPrimaryDomain(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.domains.SetPrimary(r.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, service.ErrDomainNotVerified):
+			writeError(w, http.StatusBadRequest, "domain_not_verified", "Only a verified domain can be set as the standard domain.")
+		default:
+			writeEntError(w, err)
+		}
+		return
+	}
+	view, err := h.domains.GetView(r.Context(), id)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, toAPIDomain(view.Domain))
+}
+
 // HandleTrustedOrigins returns every verified custom-domain hostname across all
 // tenants for the web tier to feed into Better Auth's trustedOrigins. It runs on
 // the privileged client with no tenant tx (it is intentionally cross-tenant) and

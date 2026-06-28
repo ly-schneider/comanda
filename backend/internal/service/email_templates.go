@@ -8,6 +8,7 @@ import (
 // InviteEmailData contains the data for rendering an admin invite email.
 type InviteEmailData struct {
 	Brand     string
+	RoleLabel string
 	InviteURL string
 	ExpiresAt string
 }
@@ -40,7 +41,7 @@ func renderInviteHTML(data InviteEmailData) string {
     <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title>%s Admin-Einladung</title>
+    <title>%s Einladung</title>
     <!--[if mso]>
       <noscript>
         <xml>
@@ -62,7 +63,7 @@ func renderInviteHTML(data InviteEmailData) string {
   </head>
   <body style="margin:0;padding:0;">
     <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;opacity:0;">
-      Du wurdest eingeladen, Admin bei %s zu werden &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
+      Du wurdest eingeladen, als %s bei %s beizutreten &nbsp;&#8205;&nbsp;&#8205;&nbsp;&#8205;
     </div>
     <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0"
            bgcolor="#E9E7E6" style="background-color:#E9E7E6;">
@@ -86,10 +87,10 @@ func renderInviteHTML(data InviteEmailData) string {
             <tr>
               <td class="px" style="padding:8px 24px 24px 24px;">
                 <p style="margin:0 0 8px 0;font:600 18px/1.3 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#000000;">
-                  Admin-Einladung
+                  Einladung als %s
                 </p>
                 <p style="margin:0 0 16px 0;font:13px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                  Du wurdest eingeladen, als Administrator bei %s beizutreten.
+                  Du wurdest eingeladen, als %s bei %s beizutreten.
                   Klicke auf den Button unten, um die Einladung anzunehmen.
                 </p>
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
@@ -127,7 +128,7 @@ func renderInviteHTML(data InviteEmailData) string {
       </tr>
     </table>
   </body>
-</html>`, escHTML(data.Brand), escHTML(data.Brand), escHTML(data.Brand), escHTML(data.Brand), data.InviteURL, data.ExpiresAt, data.InviteURL)
+</html>`, escHTML(data.Brand), escHTML(data.RoleLabel), escHTML(data.Brand), escHTML(data.Brand), escHTML(data.RoleLabel), escHTML(data.RoleLabel), escHTML(data.Brand), data.InviteURL, data.ExpiresAt, data.InviteURL)
 }
 
 // OTPType represents the type of OTP being sent.

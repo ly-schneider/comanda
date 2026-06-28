@@ -7,6 +7,7 @@ import (
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
 	"backend/internal/generated/ent/product"
+	"backend/internal/repository"
 	"backend/internal/service"
 
 	nanoid "backend/internal/id"
@@ -445,4 +446,70 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "TWINT max")
 	})
+}
+
+// TestSettingsRepo_PayrexxStagedFlow exercises the two-stage Payrexx setup at the
+// persistence layer: connecting the API leaves the tenant "API connected" (the
+// provider path stays unconfigured) until the webhook secret completes it.
+func TestSettingsRepo_PayrexxStagedFlow(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	ctx := tenantCtx()
+
+	cfg, err := repos.Settings.GetPayrexxConfig(ctx)
+	require.NoError(t, err)
+	require.False(t, cfg.HasAPISecret)
+	require.False(t, cfg.HasWebhookSecret)
+
+	// Step 1: connect the API — instance + key + token, no webhook secret yet.
+	require.NoError(t, repos.Settings.UpsertPayrexxAPICredentials(ctx, "my-instance", "api-enc", "tok-123"))
+
+	cfg, err = repos.Settings.GetPayrexxConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "my-instance", cfg.Instance)
+	require.True(t, cfg.HasAPISecret)
+	require.False(t, cfg.HasWebhookSecret)
+	require.Equal(t, "tok-123", cfg.WebhookToken)
+	require.Nil(t, cfg.ConfiguredAt)
+
+	// The provider/full-creds path stays unconfigured without the webhook secret.
+	_, err = repos.Settings.GetPayrexxCredentials(ctx)
+	require.ErrorIs(t, err, repository.ErrNotFound)
+
+	// The API-only getter returns the ciphertext used by the test/validate path.
+	inst, apiEnc, err := repos.Settings.GetPayrexxAPICredentials(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "my-instance", inst)
+	require.Equal(t, "api-enc", apiEnc)
+
+	// Step 2: set the webhook secret — now fully configured.
+	require.NoError(t, repos.Settings.SetPayrexxWebhookSecret(ctx, "wh-enc"))
+
+	cfg, err = repos.Settings.GetPayrexxConfig(ctx)
+	require.NoError(t, err)
+	require.True(t, cfg.HasWebhookSecret)
+	require.NotNil(t, cfg.ConfiguredAt)
+	require.Nil(t, cfg.LastWebhookAt)
+
+	creds, err := repos.Settings.GetPayrexxCredentials(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "my-instance", creds.Instance)
+	require.Equal(t, "api-enc", creds.APISecretEnc)
+	require.Equal(t, "wh-enc", creds.WebhookSecretEnc)
+	require.Equal(t, "tok-123", creds.WebhookToken)
+
+	// Re-connecting the API must not wipe the stored webhook secret.
+	require.NoError(t, repos.Settings.UpsertPayrexxAPICredentials(ctx, "my-instance", "api-enc-2", "tok-123"))
+	cfg, err = repos.Settings.GetPayrexxConfig(ctx)
+	require.NoError(t, err)
+	require.True(t, cfg.HasWebhookSecret)
+
+	// Webhook receipt stamp.
+	require.NoError(t, repos.Settings.TouchPayrexxWebhookReceived(ctx))
+	cfg, err = repos.Settings.GetPayrexxConfig(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.LastWebhookAt)
 }

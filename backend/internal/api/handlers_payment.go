@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"backend/internal/database"
 	"backend/internal/enttenant"
@@ -73,6 +74,14 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 		h.logger.Warn("payrexx webhook: invalid signature", zap.String("tenantId", tenantID))
 		writeError(w, http.StatusUnauthorized, "invalid_signature", "Invalid webhook signature")
 		return
+	}
+
+	// A verified signature proves the stored webhook secret matches Payrexx's;
+	// record it (best effort) before branching on status so the setup UI can
+	// confirm delivery even for non-success ("ignored") events.
+	if err := h.payments.RecordPayrexxWebhookReceived(ctx); err != nil {
+		h.logger.Warn("payrexx webhook: failed to record receipt",
+			zap.String("tenantId", tenantID), zap.Error(err))
 	}
 
 	result, err := prov.ParseWebhook(body)
@@ -178,6 +187,20 @@ func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID string) (c
 	return ctx, finalize, nil
 }
 
+func payrexxStatusResponse(status service.PayrexxStatus) map[string]any {
+	resp := map[string]any{"state": string(status.State)}
+	if status.Instance != "" {
+		resp["instance"] = status.Instance
+	}
+	if status.WebhookURL != "" {
+		resp["webhookUrl"] = status.WebhookURL
+	}
+	if status.LastWebhookAt != nil {
+		resp["lastWebhookAt"] = status.LastWebhookAt.UTC().Format(time.RFC3339)
+	}
+	return resp
+}
+
 // (GET /settings/payrexx)
 func (h *Handlers) GetPayrexxStatus(w http.ResponseWriter, r *http.Request) {
 	status, err := h.payments.GetPayrexxStatus(r.Context())
@@ -185,37 +208,53 @@ func (h *Handlers) GetPayrexxStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to read Payrexx status")
 		return
 	}
-	resp := map[string]any{"configured": status.Configured}
-	if status.Configured {
-		resp["instance"] = status.Instance
-		resp["webhookUrl"] = status.WebhookURL
-	}
-	response.WriteJSON(w, http.StatusOK, resp)
+	response.WriteJSON(w, http.StatusOK, payrexxStatusResponse(status))
 }
 
-// (PUT /settings/payrexx)
-func (h *Handlers) ConfigurePayrexx(w http.ResponseWriter, r *http.Request) {
-	var body generated.ConfigurePayrexxJSONRequestBody
+// (PUT /settings/payrexx/api)
+func (h *Handlers) ConnectPayrexxApi(w http.ResponseWriter, r *http.Request) {
+	var body generated.ConnectPayrexxApiJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
 
-	webhookURL, err := h.payments.ConfigurePayrexx(r.Context(), service.ConfigurePayrexxInput{
-		Instance:      body.Instance,
-		APISecret:     body.ApiSecret,
-		WebhookSecret: body.WebhookSecret,
-	})
+	status, err := h.payments.ConnectPayrexxAPI(r.Context(), body.Instance, body.ApiSecret)
 	if err != nil {
-		h.logger.Warn("configure payrexx failed", zap.Error(err))
-		writeError(w, http.StatusBadRequest, "configure_failed", "Could not validate Payrexx credentials. Check the instance name and API secret.")
+		h.logger.Warn("connect payrexx api failed", zap.Error(err))
+		writeError(w, http.StatusBadRequest, "configure_failed", "Could not validate Payrexx credentials. Check the instance name and API key.")
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, map[string]any{
-		"configured": true,
-		"webhookUrl": webhookURL,
-	})
+	response.WriteJSON(w, http.StatusOK, payrexxStatusResponse(status))
+}
+
+// (PUT /settings/payrexx/webhook)
+func (h *Handlers) SetPayrexxWebhookSecret(w http.ResponseWriter, r *http.Request) {
+	var body generated.SetPayrexxWebhookSecretJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
+
+	status, err := h.payments.SetPayrexxWebhookSecret(r.Context(), body.WebhookSecret)
+	if err != nil {
+		h.logger.Warn("set payrexx webhook secret failed", zap.Error(err))
+		writeError(w, http.StatusBadRequest, "configure_failed", "Could not store the webhook secret. Connect the Payrexx API first.")
+		return
+	}
+
+	response.WriteJSON(w, http.StatusOK, payrexxStatusResponse(status))
+}
+
+// (POST /settings/payrexx/test)
+func (h *Handlers) TestPayrexxConnection(w http.ResponseWriter, r *http.Request) {
+	if err := h.payments.TestPayrexxConnection(r.Context()); err != nil {
+		h.logger.Warn("test payrexx connection failed", zap.Error(err))
+		writeError(w, http.StatusBadRequest, "test_failed", "Could not reach Payrexx with the stored credentials.")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // GetPayment returns a payment by ID.

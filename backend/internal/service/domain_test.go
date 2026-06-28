@@ -15,10 +15,11 @@ import (
 // fakeDomainRepo is a minimal TenantDomainRepository for service-level tests
 // that don't need a database: it serves one preloaded row and records deletes.
 type fakeDomainRepo struct {
-	row     *ent.TenantDomain
-	list    []*ent.TenantDomain
-	getErr  error
-	deleted bool
+	row        *ent.TenantDomain
+	list       []*ent.TenantDomain
+	getErr     error
+	deleted    bool
+	primarySet bool
 }
 
 func (f *fakeDomainRepo) GetByID(context.Context, string) (*ent.TenantDomain, error) {
@@ -35,7 +36,10 @@ func (f *fakeDomainRepo) Create(context.Context, string, string) (*ent.TenantDom
 	return f.row, nil
 }
 func (f *fakeDomainRepo) List(context.Context) ([]*ent.TenantDomain, error) { return f.list, nil }
-func (f *fakeDomainRepo) SetPrimary(context.Context, string) error          { return nil }
+func (f *fakeDomainRepo) SetPrimary(context.Context, string) error {
+	f.primarySet = true
+	return nil
+}
 func (f *fakeDomainRepo) MarkVerified(context.Context, string) (*ent.TenantDomain, error) {
 	return f.row, nil
 }
@@ -302,6 +306,31 @@ func TestDeleteBYODomainAllowed(t *testing.T) {
 	}
 	if !repo.deleted {
 		t.Error("BYO domain should be deleted")
+	}
+}
+
+func TestSetPrimaryUnverifiedRejected(t *testing.T) {
+	repo := &fakeDomainRepo{row: &ent.TenantDomain{ID: "d1", Hostname: "shop.example.com", VerifiedAt: nil}}
+	svc := newServiceWithRepo(repo, "ingress.comanda.leys.ch")
+
+	if err := svc.SetPrimary(context.Background(), "d1"); !errors.Is(err, ErrDomainNotVerified) {
+		t.Fatalf("SetPrimary unverified = %v, want ErrDomainNotVerified", err)
+	}
+	if repo.primarySet {
+		t.Error("an unverified domain must not be promoted to standard")
+	}
+}
+
+func TestSetPrimaryVerifiedAllowed(t *testing.T) {
+	verified := time.Now()
+	repo := &fakeDomainRepo{row: &ent.TenantDomain{ID: "d2", Hostname: "shop.example.com", VerifiedAt: &verified}}
+	svc := newServiceWithRepo(repo, "ingress.comanda.leys.ch")
+
+	if err := svc.SetPrimary(context.Background(), "d2"); err != nil {
+		t.Fatalf("SetPrimary verified = %v, want nil", err)
+	}
+	if !repo.primarySet {
+		t.Error("a verified domain should be promoted to standard")
 	}
 }
 
