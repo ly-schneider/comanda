@@ -3,16 +3,14 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAuth } from "@/contexts/auth-context"
+import { UserMenu } from "@/components/user-menu"
 import { useBranding } from "@/contexts/branding-context"
 import { useAccountTenant } from "./account-tenant-context"
 
 // AccountHeader is the active-tenant-branded chrome; the switcher shows when the
 // user manages more than one tenant.
 export function AccountHeader() {
-  const { signOut } = useAuth()
   const branding = useBranding()
   const pathname = usePathname()
   const { tenants, activeSlug, switchTo } = useAccountTenant()
@@ -66,9 +64,7 @@ export function AccountHeader() {
           })}
         </nav>
       </div>
-      <Button variant="outline" size="sm" onClick={() => signOut()}>
-        Abmelden
-      </Button>
+      <UserMenu />
     </header>
   )
 }
