@@ -326,6 +326,7 @@ func NewRouter(
 			account.Get("/domains/{id}", wrapper.GetDomain)
 			account.Delete("/domains/{id}", wrapper.DeleteDomain)
 			account.Post("/domains/{id}/verify", wrapper.VerifyDomain)
+			account.Post("/domains/{id}/primary", wrapper.SetPrimaryDomain)
 
 			account.Get("/invites", wrapper.ListInvites)
 			account.Post("/invites", wrapper.CreateAccountInvite)

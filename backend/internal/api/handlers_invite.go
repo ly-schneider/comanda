@@ -118,6 +118,7 @@ func (h *Handlers) GetInvite(w http.ResponseWriter, r *http.Request, inviteId st
 		Id:           apiInvite.Id,
 		InviteeEmail: apiInvite.InviteeEmail,
 		Status:       apiInvite.Status,
+		MemberRole:   apiInvite.MemberRole,
 		ExpiresAt:    apiInvite.ExpiresAt,
 	}
 	response.WriteJSON(w, http.StatusOK, public)
@@ -154,6 +155,7 @@ func (h *Handlers) VerifyInvite(w http.ResponseWriter, r *http.Request) {
 		Id:           apiInvite.Id,
 		InviteeEmail: apiInvite.InviteeEmail,
 		Status:       apiInvite.Status,
+		MemberRole:   apiInvite.MemberRole,
 		ExpiresAt:    apiInvite.ExpiresAt,
 	}
 	response.WriteJSON(w, http.StatusOK, public)

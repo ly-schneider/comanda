@@ -179,7 +179,9 @@ type captureEmail struct {
 	data *service.ReceiptEmailData
 }
 
-func (c *captureEmail) SendInviteEmail(context.Context, string, string, time.Time) error { return nil }
+func (c *captureEmail) SendInviteEmail(context.Context, string, string, string, time.Time) error {
+	return nil
+}
 func (c *captureEmail) SendOTPEmail(context.Context, string, string, service.OTPType) error {
 	return nil
 }

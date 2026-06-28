@@ -117,7 +117,7 @@ func (s *ownerInviteService) Create(ctx context.Context, tenantID, inviterID, em
 	}
 
 	inviteURL := s.buildAcceptURL(token)
-	_ = s.emailSvc.SendInviteEmail(ctx, email, inviteURL, expiresAt)
+	_ = s.emailSvc.SendInviteEmail(ctx, email, inviteURL, "Inhaber", expiresAt)
 
 	return &OwnerInvitePublic{Email: email, Status: "pending", ExpiresAt: expiresAt}, nil
 }

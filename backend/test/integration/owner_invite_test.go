@@ -17,7 +17,9 @@ import (
 // noopEmail satisfies service.EmailService without sending anything.
 type noopEmail struct{}
 
-func (noopEmail) SendInviteEmail(context.Context, string, string, time.Time) error { return nil }
+func (noopEmail) SendInviteEmail(context.Context, string, string, string, time.Time) error {
+	return nil
+}
 func (noopEmail) SendOTPEmail(context.Context, string, string, service.OTPType) error {
 	return nil
 }

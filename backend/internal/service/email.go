@@ -30,7 +30,7 @@ type PlunkSendRequest struct {
 }
 
 type EmailService interface {
-	SendInviteEmail(ctx context.Context, to string, inviteURL string, expiresAt time.Time) error
+	SendInviteEmail(ctx context.Context, to string, inviteURL string, roleLabel string, expiresAt time.Time) error
 	SendOTPEmail(ctx context.Context, to string, otp string, otpType OTPType) error
 	SendReceiptEmail(ctx context.Context, to string, data ReceiptEmailData) error
 }
@@ -126,7 +126,7 @@ func (s *emailService) subject(base string) string {
 	return base
 }
 
-func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL string, expiresAt time.Time) error {
+func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL string, roleLabel string, expiresAt time.Time) error {
 	creds, ok := s.resolveCreds(ctx)
 	if !ok {
 		s.logger.Warn("Plunk not configured, skipping email",
@@ -138,6 +138,7 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 
 	data := InviteEmailData{
 		Brand:     s.brandName(ctx),
+		RoleLabel: roleLabel,
 		InviteURL: inviteURL,
 		ExpiresAt: formatExpiry(expiresAt),
 	}
@@ -146,7 +147,7 @@ func (s *emailService) SendInviteEmail(ctx context.Context, to string, inviteURL
 
 	payload := PlunkSendRequest{
 		To:         to,
-		Subject:    s.subject("Admin-Einladung"),
+		Subject:    s.subject("Einladung als " + roleLabel),
 		Body:       htmlBody,
 		Subscribed: false,
 		Name:       creds.fromName,

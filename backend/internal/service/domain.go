@@ -24,6 +24,10 @@ var (
 	// (seeded, no verification token) and must not be removed by a tenant admin,
 	// since deleting it would route all the tenant's traffic to a 404.
 	ErrPlatformDomain = errors.New("platform_domain")
+	// ErrDomainNotVerified signals a 400: an unverified domain cannot be promoted
+	// to the standard domain, as generated links would point at a host that does
+	// not yet route to the tenant.
+	ErrDomainNotVerified = errors.New("domain_not_verified")
 )
 
 // verifyTXTPrefix is the DNS label the ownership TXT record lives under:
@@ -171,6 +175,13 @@ func (s *domainService) Delete(ctx context.Context, id string) error {
 }
 
 func (s *domainService) SetPrimary(ctx context.Context, id string) error {
+	d, err := s.domains.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.VerifiedAt == nil {
+		return ErrDomainNotVerified
+	}
 	return s.domains.SetPrimary(ctx, id)
 }
 

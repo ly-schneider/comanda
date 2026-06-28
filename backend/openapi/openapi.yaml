@@ -152,6 +152,8 @@ paths:
     $ref: "paths/domains.yaml#/item"
   /domains/{id}/verify:
     $ref: "paths/domains.yaml#/verify"
+  /domains/{id}/primary:
+    $ref: "paths/domains.yaml#/primary"
 
   /platform/tenants:
     $ref: "paths/platform.yaml#/collection"

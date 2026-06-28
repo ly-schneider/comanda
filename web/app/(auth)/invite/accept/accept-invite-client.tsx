@@ -6,6 +6,7 @@ import AuthHeader from "@/components/layout/auth-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
 import { authClient } from "@/lib/auth-client"
 
 export default function AcceptInviteClient() {
@@ -16,10 +17,13 @@ export default function AcceptInviteClient() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [email, setEmail] = useState("")
+  const [role, setRole] = useState<string | null>(null)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const router = useRouter()
   const { data: session } = authClient.useSession()
+
+  const roleLabel = role ? (ROLE_LABELS_DE[role] ?? null) : null
 
   const disabled = useMemo(() => submitting || !firstName || !token, [submitting, firstName, token])
 
@@ -49,9 +53,10 @@ export default function AcceptInviteClient() {
           setLoading(false)
           return
         }
-        const data = (await res.json()) as { inviteeEmail: string; status: string }
+        const data = (await res.json()) as { inviteeEmail: string; status: string; memberRole: string }
         if (!cancelled) {
           setEmail(data.inviteeEmail)
+          setRole(data.memberRole)
           setLoading(false)
         }
       } catch {
@@ -97,7 +102,11 @@ export default function AcceptInviteClient() {
           <AuthHeader />
           <h1 className="mt-4 mb-2 text-center text-2xl font-semibold">Einladung angenommen</h1>
           <div className="mt-12 space-y-4 text-center">
-            <p>Deine Admin-Einladung wurde erfolgreich angenommen.</p>
+            <p>
+              {roleLabel
+                ? `Deine Einladung als ${roleLabel} wurde erfolgreich angenommen.`
+                : "Deine Einladung wurde erfolgreich angenommen."}
+            </p>
             <p className="text-muted-foreground text-sm">
               Melde dich jetzt an, um auf das Admin-Dashboard zuzugreifen.
             </p>
@@ -114,7 +123,9 @@ export default function AcceptInviteClient() {
     <div className="flex flex-1 flex-col">
       <main className="container mx-auto px-4 pt-24 pb-10">
         <AuthHeader />
-        <h1 className="mt-4 mb-2 text-center text-2xl font-semibold">Admin-Einladung annehmen</h1>
+        <h1 className="mt-4 mb-2 text-center text-2xl font-semibold">
+          {roleLabel ? `Einladung als ${roleLabel} annehmen` : "Einladung annehmen"}
+        </h1>
 
         <div className="mt-12 space-y-4">
           {loading ? (
