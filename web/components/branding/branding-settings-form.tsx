@@ -32,9 +32,8 @@ function isValidHex(v: string) {
   return HEX_RE.test(v)
 }
 
-// BrandingSettingsForm is the branding/legal editor for the account hub
-// (/t/<tenant>/branding → /api/v1/account/<tenant>/settings). The tenant flows
-// in via the basePath; the backend resolves and authorizes it.
+// BrandingSettingsForm is the account-hub branding/legal editor; the tenant
+// flows in via basePath (/api/v1/account/<tenant>/settings).
 export function BrandingSettingsForm({ basePath, heading = "Branding" }: { basePath: string; heading?: string }) {
   const fetchAuth = useAuthorizedFetch()
 

@@ -65,9 +65,8 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if brandingPresent(&body) {
-		// Branding (and payment provider) is the tenant-admin tier: an app-admin
-		// can edit food-system fields on /settings but is hard-blocked here, even
-		// via a crafted request. Platform admins pass (HasTenantTier bypasses).
+		// Branding is tenant-admin only: an app-admin may PATCH food-system fields
+		// but not branding, even via a crafted request.
 		ok, err := auth.HasTenantTier(ctx, auth.TierTenantAdmin)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "update_failed", err.Error())

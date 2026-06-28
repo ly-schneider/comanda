@@ -11,8 +11,7 @@ export type ManageableTenant = {
   role?: string
 }
 
-// getManageableTenants lists the tenants the signed-in user may manage from the
-// hub (their owner/admin memberships, or every tenant for a platform admin).
+// Lists the user's manageable tenants (owner/admin memberships, or all for a platform admin).
 export async function getManageableTenants(fetchAuth: AuthorizedFetch): Promise<ManageableTenant[]> {
   const res = await fetchAuth("/api/v1/account/tenants")
   if (!res.ok) throw new Error(`Fehler ${res.status}`)

@@ -9,8 +9,7 @@ import (
 )
 
 // ManageableTenant is a tenant the signed-in user may manage from the account
-// hub, with their membership role (empty for a platform admin who is not a
-// member of the tenant).
+// hub. Role is empty for a platform admin who isn't a member.
 type ManageableTenant struct {
 	ID          string
 	Slug        string
@@ -41,8 +40,6 @@ func (s *accountService) ListManageableTenants(ctx context.Context, userID strin
 		err  error
 	)
 	if isPlatformAdmin {
-		// A platform admin manages every tenant; the member join is left so the
-		// switcher can still show their own role where they happen to be a member.
 		rows, err = s.db.QueryContext(ctx, `
 			SELECT t.id, t.slug, t.name, s.display_name, s.logo_url, m.role
 			FROM tenant t
@@ -50,8 +47,7 @@ func (s *accountService) ListManageableTenants(ctx context.Context, userID strin
 			LEFT JOIN member m ON m.organization_id = t.organization_id AND m.user_id = $1
 			ORDER BY t.name`, userID)
 	} else {
-		// Only the settings tier (owner/admin) gets the account hub; app_admin and
-		// below manage the app on the tenant host instead.
+		// The hub is the settings tier only; app_admin and below stay on the tenant host.
 		rows, err = s.db.QueryContext(ctx, `
 			SELECT t.id, t.slug, t.name, s.display_name, s.logo_url, m.role
 			FROM tenant t

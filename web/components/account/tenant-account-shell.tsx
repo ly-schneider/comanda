@@ -11,9 +11,9 @@ import { AccountTenantContext } from "./account-tenant-context"
 import { AccountGuard } from "./guard"
 import { AccountHeader } from "./header"
 
-// TenantAccountShell scopes the account hub to the {tenant} slug in the URL. The
-// slug is the single source of truth for which tenant every /api/v1/account/<slug>
-// call targets, so switching is plain navigation — tab-safe, no shared cookie.
+// TenantAccountShell scopes the account hub to the {tenant} slug in the URL —
+// the source of truth for every /api/v1/account/<slug> call, so switching is
+// plain navigation (tab-safe, no shared cookie).
 export function TenantAccountShell({ tenant, children }: { tenant: string; children: React.ReactNode }) {
   return (
     <AccountGuard>
@@ -79,9 +79,8 @@ function TenantBoundary({ tenant, children }: { tenant: string; children: React.
   )
 }
 
-// AccountBrandedShell fetches the active tenant's branding and scopes it to this
-// subtree via an inline style — the root :root vars stay neutral for the rest of
-// the app on the platform host.
+// AccountBrandedShell scopes the active tenant's branding to this subtree via an
+// inline style, leaving the platform host's root :root vars neutral.
 function AccountBrandedShell({ tenant, children }: { tenant: string; children: React.ReactNode }) {
   const fetchAuth = useAuthorizedFetch()
   const [branding, setBranding] = useState<Branding | null>(null)

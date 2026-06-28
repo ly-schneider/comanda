@@ -122,8 +122,6 @@ export default function ManageTenantPage() {
   // host the operator is on (env-agnostic: localhost / staging / prod).
   const tenantBaseUrl =
     typeof window !== "undefined" ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
-  // Branding, payments and domains are managed on the account hub, scoped to this
-  // tenant's slug (a platform admin may manage any tenant).
   const onboardingSteps = [
     { label: "Branding einrichten", href: `/t/${tenant.slug}/branding` },
     { label: "Payrexx verbinden", href: `/t/${tenant.slug}/payrexx` },

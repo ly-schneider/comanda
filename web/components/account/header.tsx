@@ -9,9 +9,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { useBranding } from "@/contexts/branding-context"
 import { useAccountTenant } from "./account-tenant-context"
 
-// AccountHeader is the active-tenant-branded chrome for the account hub. The nav
-// links and the logo carry the active tenant's slug, and a switcher (shown when
-// the user manages more than one tenant) navigates to /t/<slug>.
+// AccountHeader is the active-tenant-branded chrome; the switcher shows when the
+// user manages more than one tenant.
 export function AccountHeader() {
   const { signOut } = useAuth()
   const branding = useBranding()

@@ -48,8 +48,7 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The tenant /admin surface grants app-level roles only. The settings tier
-	// (admin) is minted from the account hub, so it can't be escalated here.
+	// Tenant /admin grants app-level roles only; admin is minted from the hub.
 	memberRole := admininvite.MemberRoleStaff
 	if body.MemberRole != nil {
 		switch *body.MemberRole {
@@ -90,8 +89,6 @@ func (h *Handlers) CreateAccountInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The account hub mints settings admins only; app-level roles are invited
-	// from the tenant /admin surface.
 	if body.MemberRole != nil && *body.MemberRole != generated.MemberRoleAdmin {
 		writeError(w, http.StatusBadRequest, "invalid_member_role", "The account hub can only invite admins")
 		return

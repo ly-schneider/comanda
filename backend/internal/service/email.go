@@ -94,10 +94,8 @@ func (s *emailService) resolveCreds(ctx context.Context) (plunkCreds, bool) {
 	return plunkCreds{}, false
 }
 
-// brandName resolves the tenant's display name for the from-name and the email
-// body: settings.display_name, else the tenant's name, else the platform
-// default. On a platform/no-tenant context the RLS reads return nothing, so it
-// falls back to "Comanda" — correct for platform mail like account-hub sign-in.
+// brandName is the tenant's display name, else its name, else the "Comanda"
+// platform default — which is also where no-tenant mail (account-hub OTP) lands.
 func (s *emailService) brandName(ctx context.Context) string {
 	if s.settingsRepo != nil {
 		if st, err := s.settingsRepo.Get(ctx); err == nil && st.DisplayName != nil {

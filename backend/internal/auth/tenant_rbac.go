@@ -21,11 +21,9 @@ const (
 	// POS, jetons, devices, staff-meals, events — plus everything catalog can do.
 	TierOps
 	// TierAppAdmin (the app-admin tier) covers full app management — users,
-	// invites, food-system settings — plus everything staff can do, but is
-	// hard-blocked from branding, domains, and payments.
+	// invites, food-system settings — but not branding, domains, or payments.
 	TierAppAdmin
-	// TierTenantAdmin covers tenant administration: branding, domains, payments,
-	// and the account hub — plus everything app-admin can do.
+	// TierTenantAdmin covers branding, domains, payments, and the account hub.
 	TierTenantAdmin
 )
 

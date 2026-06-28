@@ -80,8 +80,7 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
     pathName.startsWith("/v1/devices/") ||
     pathName.startsWith("/v1/health") ||
     pathName.startsWith("/v1/public/") ||
-    // Public invite token flows; no session exists yet at this point. Scoped to
-    // the exact sub-paths so authenticated invite mutations still need CSRF.
+    // Public invite token flows (no session yet); exact-match so authed invite mutations keep CSRF.
     pathName === "/v1/invites/verify" ||
     pathName === "/v1/invites/accept" ||
     pathName === "/v1/owner-invites/verify" ||

@@ -321,11 +321,10 @@ func (s *adminInviteService) linkMember(ctx context.Context, userID string, role
 	return nil
 }
 
-// buildInviteURL points the accept link at the tenant's own verified host. The
-// accept flow links the membership via app_current_org_id(), which is NULL on the
-// platform apex, so a link to PublicBaseURL would silently fail to bind — and a
-// platform admin inviting into another tenant would never link at all. Falls
-// back to PublicBaseURL only when the tenant has no verified domain yet.
+// buildInviteURL targets the tenant's own verified host: accept links the
+// membership via app_current_org_id(), which is NULL on the platform apex, so a
+// PublicBaseURL link would silently fail to bind. Falls back to PublicBaseURL
+// only when the tenant has no verified domain yet.
 func (s *adminInviteService) buildInviteURL(ctx context.Context, token string) string {
 	base := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
 	if base == "" {

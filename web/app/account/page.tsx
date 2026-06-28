@@ -6,8 +6,7 @@ import { AccountGuard } from "@/components/account/guard"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getManageableTenants } from "@/lib/api/account"
 
-// /account is the stable post-auth entry point; it forwards to the slug-scoped
-// hub at /t/<tenant>. A user with no manageable tenant is sent home.
+// Stable post-auth entry point; forwards to the slug-scoped hub at /t/<tenant>.
 export default function AccountIndex() {
   return (
     <AccountGuard>

@@ -156,9 +156,8 @@ function DnsRecordsTable({
   )
 }
 
-// DomainsManager is the custom-domain add/verify UI for the account hub
-// (/t/<tenant>/domains → /api/v1/account/<tenant>/domains). The tenant flows in
-// via the basePath; the backend resolves and authorizes it.
+// DomainsManager is the account-hub custom-domain add/verify UI; the tenant
+// flows in via basePath (/api/v1/account/<tenant>/domains).
 export function DomainsManager({ basePath, heading = "Eigene Domains" }: { basePath: string; heading?: string }) {
   const fetchAuth = useAuthorizedFetch()
 

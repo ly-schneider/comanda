@@ -17,9 +17,8 @@ type accountTenant struct {
 	Role        string `json:"role,omitempty"`
 }
 
-// ListAccountTenants returns the tenants the signed-in user may manage from the
-// account hub. Runs on the platform host with no tenant bound yet, so it does
-// not go through ResolveVendorTenant.
+// ListAccountTenants lists the tenants the user may manage. Runs before any
+// tenant is bound, so it skips ResolveVendorTenant.
 func (h *Handlers) ListAccountTenants(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !auth.IsPlatformContext(ctx) {

@@ -251,10 +251,9 @@ func NewRouter(
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────
-		// The app management tier (owner/admin/app_admin): food-system settings,
-		// users, and app-role invites. Branding, domains, and payments are
-		// hard-blocked here — they live on the account hub (the settings tier).
-		// UpdateSettings additionally rejects branding fields below tenant-admin.
+		// Food-system settings, users, and app-role invites. Branding, domains and
+		// payments live on the account hub; UpdateSettings rejects branding below
+		// tenant-admin.
 		v1.Group(func(appadmin chi.Router) {
 			appadmin.Use(betterAuthMw.RequireAuth())
 			appadmin.Use(betterAuthMw.RequireTenantRole(auth.TierAppAdmin))
@@ -295,21 +294,15 @@ func NewRouter(
 		})
 
 		// ── Account hub: tenant listing (platform host; pre-selection) ─
-		// Lists the tenants the user may manage before any single tenant is
-		// bound, so it runs RequireAuth only (no ResolveVendorTenant). GET, no
-		// CSRF. The handler asserts platform context and reads cross-tenant
-		// memberships on the privileged pool.
+		// Runs before a tenant is bound, so RequireAuth only — no ResolveVendorTenant.
 		v1.Group(func(acctList chi.Router) {
 			acctList.Use(betterAuthMw.RequireAuth())
 			acctList.Get("/account/tenants", apiHandlers.ListAccountTenants)
 		})
 
 		// ── Account routes (vendor self-service; platform host only) ──
-		// The tenant is the {accountTenant} slug in the path; ResolveVendorTenant
-		// resolves+authorizes it (a member of the tenant's org, or a platform admin
-		// who may manage any tenant) and binds it. The hub is the settings tier
-		// (branding, domains, payments, admin invites), so the whole group requires
-		// tenant-admin; UpdateSettings still guards branding fields.
+		// ResolveVendorTenant binds + authorizes the {accountTenant} slug; the whole
+		// group is the settings tier.
 		v1.Route("/account/{accountTenant}", func(account chi.Router) {
 			account.Use(betterAuthMw.RequireAuth())
 			account.Use(tenantMw.ResolveVendorTenant)
@@ -334,9 +327,6 @@ func NewRouter(
 			account.Delete("/domains/{id}", wrapper.DeleteDomain)
 			account.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 
-			// Admin invites (settings tier). The accept link targets the tenant's
-			// own host so the membership binds; app-level roles are invited from
-			// the tenant /admin surface instead.
 			account.Get("/invites", wrapper.ListInvites)
 			account.Post("/invites", apiHandlers.CreateAccountInvite)
 			account.Get("/invites/{inviteId}", wrapper.GetInvite)

@@ -187,8 +187,7 @@ var (
 	// errVendorTenantDenied is surfaced as an undifferentiated 403 (unknown org,
 	// unlinked org, and non-member all map to it) so the boundary can't be probed.
 	errVendorTenantDenied = errors.New("vendor tenant resolution denied")
-	// errNoAccountTenant means no tenant could be selected: no cookie and no
-	// active organization on the session.
+	// errNoAccountTenant means the {accountTenant} path param was empty.
 	errNoAccountTenant = errors.New("no account tenant selected")
 )
 
@@ -196,11 +195,10 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
-// ResolveVendorTenant scopes a platform-host request to the tenant the account
-// hub is acting on, for the account route group (after RequireAuth). The tenant
-// is the comanda_active_tenant cookie selection (else the session's active
-// organization); the privileged authorization is the boundary and fails closed —
-// a member of the tenant's org, or a platform admin who may manage any tenant.
+// ResolveVendorTenant binds the account route group (platform host, after
+// RequireAuth) to the {accountTenant} slug in the path. The privileged
+// authorization is the boundary and fails closed: a member of the tenant's org,
+// or a platform admin who may manage any tenant.
 func (m *TenantMiddleware) ResolveVendorTenant(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -257,9 +255,8 @@ func (m *TenantMiddleware) ResolveVendorTenant(next http.Handler) http.Handler {
 	})
 }
 
-// resolveAccountTenant picks the tenant the account hub request acts on from the
-// {accountTenant} slug in the path. The slug is authorized against the caller, so
-// it can't be used to reach a tenant the user has no right to.
+// resolveAccountTenant resolves the {accountTenant} slug from the path, authorized
+// against the caller.
 func (m *TenantMiddleware) resolveAccountTenant(ctx context.Context, r *http.Request, userID string) (string, error) {
 	slug := strings.TrimSpace(chi.URLParam(r, "accountTenant"))
 	if slug == "" {
@@ -268,12 +265,10 @@ func (m *TenantMiddleware) resolveAccountTenant(ctx context.Context, r *http.Req
 	return m.authorizeAccountTenant(ctx, slug, userID, auth.IsPlatformAdmin(ctx))
 }
 
-// authorizeAccountTenant returns the tenant id for the slug if the caller may
-// manage it, else errVendorTenantDenied. A platform admin may select any tenant;
-// everyone else must be a member of the tenant's organization. Runs on the
-// privileged pool because no tenant is bound yet (an app-pool read would be
-// denied by the org-keyed RLS). The slug reaches the query only as a bound
-// parameter, so an unknown/malformed slug just yields no rows -> 403.
+// authorizeAccountTenant returns the tenant id for the slug, or
+// errVendorTenantDenied. A platform admin may pick any tenant; everyone else must
+// be a member. Uses the privileged pool because no tenant is bound yet (the app
+// pool's org-keyed RLS would deny the lookup).
 func (m *TenantMiddleware) authorizeAccountTenant(ctx context.Context, slug, userID string, isPlatformAdmin bool) (string, error) {
 	var got string
 	var err error
