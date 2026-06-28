@@ -11,43 +11,52 @@ import { PasswordInput } from "@/components/ui/password-input"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 
+type PayrexxState = "not_started" | "api_connected" | "configured"
+
 type PayrexxStatus = {
-  configured: boolean
+  state: PayrexxState
   instance?: string
   webhookUrl?: string
+  lastWebhookAt?: string
 }
 
-function WebhookUrl({ url }: { url: string }) {
+function CopyableCode({ value, ariaLabel }: { value: string; ariaLabel: string }) {
   const [copied, setCopied] = useState(false)
   function copy() {
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(value).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
   return (
-    <div className="bg-muted space-y-2 rounded-xl p-4">
-      <p className="text-sm font-medium">Webhook-URL</p>
-      <p className="text-muted-foreground text-sm">
-        Trage diese URL in deinem Payrexx-Dashboard unter <strong>Integrationen → Webhook</strong> ein, damit Zahlungen
-        deinem Konto zugeordnet werden.
-      </p>
-      <div className="flex items-center gap-2">
-        <code className="bg-background flex-1 truncate rounded-lg px-3 py-1.5 font-mono text-sm">{url}</code>
-        <Button variant="outline" size="sm" className="rounded-xl" onClick={copy} aria-label="Webhook-URL kopieren">
-          {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
-        </Button>
-      </div>
+    <div className="flex items-center gap-2">
+      <code className="bg-background flex-1 truncate rounded-lg px-3 py-1.5 font-mono text-sm">{value}</code>
+      <Button variant="outline" size="sm" className="rounded-xl" onClick={copy} aria-label={ariaLabel}>
+        {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
+      </Button>
     </div>
   )
 }
 
-// PayrexxBindingForm is the shared per-tenant Payrexx connection editor. It binds
-// the instance name + API secret + webhook secret against PUT {basePath}; the
-// backend validates the credentials against Payrexx, encrypts the secrets
-// (AES-256-GCM), and returns the tenant-scoped webhook URL to paste into Payrexx.
-// Secrets are write-only — the GET status never returns them, so reconfiguring
-// always requires re-entering all three.
+function ValueRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[8rem_1fr] items-center gap-2">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="text-sm font-medium">{children}</span>
+    </div>
+  )
+}
+
+async function errorMessage(res: Response, fallback: string) {
+  const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
+  return j.message || j.detail || fallback
+}
+
+// PayrexxBindingForm is the shared per-tenant Payrexx connection editor, split
+// into two stages that mirror how Payrexx works: first connect the API (instance
+// + API key, validated live), then register the webhook — Payrexx only generates
+// the webhook signing secret after the merchant creates the webhook from the URL
+// shown here. Secrets are write-only; the GET status never returns them.
 export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePath: string; heading?: string }) {
   const fetchAuth = useAuthorizedFetch()
 
@@ -56,9 +65,16 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
   const [apiSecret, setApiSecret] = useState("")
   const [webhookSecret, setWebhookSecret] = useState("")
 
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [apiSuccess, setApiSuccess] = useState(false)
+
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null)
+
+  const [savingWebhook, setSavingWebhook] = useState(false)
+  const [webhookError, setWebhookError] = useState<string | null>(null)
+  const [webhookSuccess, setWebhookSuccess] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -71,38 +87,79 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
     })()
   }, [fetchAuth, basePath])
 
-  async function save(e: React.FormEvent) {
+  const state = status?.state ?? "not_started"
+  const apiConnected = state === "api_connected" || state === "configured"
+  const configured = state === "configured"
+
+  async function connectApi(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
-    setError(null)
-    setSuccess(false)
+    setConnecting(true)
+    setApiError(null)
+    setApiSuccess(false)
+    setTestResult(null)
     try {
       const csrf = getCSRFToken()
-      const res = await fetchAuth(basePath, {
+      const res = await fetchAuth(`${basePath}/api`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-        body: JSON.stringify({
-          instance: instance.trim(),
-          apiSecret: apiSecret.trim(),
-          webhookSecret: webhookSecret.trim(),
-        }),
+        body: JSON.stringify({ instance: instance.trim(), apiSecret: apiSecret.trim() }),
       })
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
         throw new Error(
-          j.message || j.detail || "Payrexx-Zugangsdaten konnten nicht überprüft werden. Prüfe Instanz und API-Secret."
+          await errorMessage(res, "Payrexx-Zugangsdaten konnten nicht überprüft werden. Prüfe Instanz und API-Key.")
         )
       }
-      const data = (await res.json()) as { configured: boolean; webhookUrl: string }
-      setStatus({ configured: true, instance: instance.trim(), webhookUrl: data.webhookUrl })
+      setStatus((await res.json()) as PayrexxStatus)
       setApiSecret("")
-      setWebhookSecret("")
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 4000)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen")
+      setApiSuccess(true)
+      setTimeout(() => setApiSuccess(false), 4000)
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Speichern fehlgeschlagen")
     } finally {
-      setSaving(false)
+      setConnecting(false)
+    }
+  }
+
+  async function testConnection() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const csrf = getCSRFToken()
+      const res = await fetchAuth(`${basePath}/test`, {
+        method: "POST",
+        headers: { "X-CSRF": csrf || "" },
+      })
+      setTestResult(res.ok ? "ok" : "fail")
+    } catch {
+      setTestResult("fail")
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function saveWebhook(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingWebhook(true)
+    setWebhookError(null)
+    setWebhookSuccess(false)
+    try {
+      const csrf = getCSRFToken()
+      const res = await fetchAuth(`${basePath}/webhook`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
+        body: JSON.stringify({ webhookSecret: webhookSecret.trim() }),
+      })
+      if (!res.ok) {
+        throw new Error(await errorMessage(res, "Webhook-Secret konnte nicht gespeichert werden."))
+      }
+      setStatus((await res.json()) as PayrexxStatus)
+      setWebhookSecret("")
+      setWebhookSuccess(true)
+      setTimeout(() => setWebhookSuccess(false), 4000)
+    } catch (err) {
+      setWebhookError(err instanceof Error ? err.message : "Speichern fehlgeschlagen")
+    } finally {
+      setSavingWebhook(false)
     }
   }
 
@@ -110,30 +167,31 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
     <div className="space-y-6 pt-4">
       <div className="flex items-center gap-3">
         <h1 className="font-primary text-2xl">{heading}</h1>
-        {status?.configured && <Badge variant="default">Verbunden</Badge>}
+        {configured && <Badge variant="default">Verbunden</Badge>}
       </div>
 
-      {error && (
-        <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div role="status" className="rounded bg-green-100 px-3 py-2 text-sm text-green-800">
-          Payrexx verbunden
-        </div>
-      )}
-
+      {/* Step 1 — API access */}
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle>Payrexx verbinden</CardTitle>
+          <CardTitle>Schritt 1: API-Zugang</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Verbinde dein Payrexx-Konto, damit Kunden online bezahlen können. Instanzname und API-Secret findest du in
-            deinem Payrexx-Dashboard unter <strong>Integrationen → API &amp; Plugins</strong>.
+            Verbinde dein Payrexx-Konto, damit Kunden online bezahlen können. Instanzname und API-Key findest du in
+            deinem Payrexx-Dashboard unter <strong>API &amp; Plugins</strong>.
           </p>
         </CardHeader>
         <CardContent className="max-w-lg space-y-4">
-          <form onSubmit={save} className="space-y-4">
+          {apiError && (
+            <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
+              {apiError}
+            </div>
+          )}
+          {apiSuccess && (
+            <div role="status" className="rounded bg-green-100 px-3 py-2 text-sm text-green-800">
+              API-Zugang verbunden
+            </div>
+          )}
+
+          <form onSubmit={connectApi} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="payrexx-instance">Instanzname</Label>
               <Input
@@ -144,7 +202,7 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
                 className="rounded-xl"
                 autoComplete="off"
                 spellCheck={false}
-                disabled={saving}
+                disabled={connecting}
                 required
               />
               <p className="text-muted-foreground text-xs">
@@ -152,50 +210,134 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="payrexx-api-secret">API-Secret</Label>
+              <Label htmlFor="payrexx-api-secret">API-Key</Label>
               <PasswordInput
                 id="payrexx-api-secret"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
-                placeholder={status?.configured ? "••••••••  (zum Ändern neu eingeben)" : ""}
+                placeholder={apiConnected ? "••••••••  (zum Ändern neu eingeben)" : ""}
                 className="rounded-xl font-mono"
                 autoComplete="off"
-                disabled={saving}
+                disabled={connecting}
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="payrexx-webhook-secret">Webhook-Secret</Label>
-              <PasswordInput
-                id="payrexx-webhook-secret"
-                value={webhookSecret}
-                onChange={(e) => setWebhookSecret(e.target.value)}
-                placeholder={status?.configured ? "••••••••  (zum Ändern neu eingeben)" : ""}
-                className="rounded-xl font-mono"
-                autoComplete="off"
-                disabled={saving}
-                required
-              />
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={saving} className="h-11 min-w-32 rounded-xl">
-                {saving ? "Prüfe…" : status?.configured ? "Aktualisieren" : "Verbinden"}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-sm">
+                {apiConnected && (
+                  <span className="inline-flex items-center gap-1 text-green-700">
+                    <Check className="size-4" /> Verbunden
+                  </span>
+                )}
+                {apiConnected && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={testConnection}
+                    disabled={testing}
+                  >
+                    {testing ? "Teste…" : "Erneut testen"}
+                  </Button>
+                )}
+                {testResult === "ok" && <span className="text-green-700">Verbindung erfolgreich</span>}
+                {testResult === "fail" && <span className="text-destructive">Verbindung fehlgeschlagen</span>}
+              </div>
+              <Button type="submit" disabled={connecting} className="h-11 min-w-32 rounded-xl">
+                {connecting ? "Prüfe…" : apiConnected ? "Aktualisieren" : "Verbinden"}
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      {status?.configured && status.webhookUrl && (
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle>Webhook einrichten</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WebhookUrl url={status.webhookUrl} />
+      {/* Step 2 — Webhook */}
+      <Card className={`rounded-2xl ${apiConnected ? "" : "pointer-events-none opacity-50"}`}>
+        <CardHeader>
+          <CardTitle>Schritt 2: Webhook einrichten</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            {apiConnected
+              ? "Erstelle in Payrexx einen Webhook mit den folgenden Werten. Payrexx zeigt dir danach ein Signatur-Secret, das du hier einträgst."
+              : "Schliesse zuerst Schritt 1 ab."}
+          </p>
+        </CardHeader>
+        {apiConnected && (
+          <CardContent className="space-y-5">
+            <div className="bg-muted space-y-3 rounded-xl p-4">
+              <p className="text-sm">
+                In Payrexx unter <strong>Webhooks → Webhook hinzufügen</strong>:
+              </p>
+              {status?.webhookUrl && (
+                <div className="space-y-1.5">
+                  <span className="text-muted-foreground text-sm">URL</span>
+                  <CopyableCode value={status.webhookUrl} ariaLabel="Webhook-URL kopieren" />
+                </div>
+              )}
+              <div className="space-y-2 border-t pt-3">
+                <ValueRow label="Typ">JSON</ValueRow>
+                <ValueRow label="Events">Transaction</ValueRow>
+                <ValueRow label="Bei Fehler erneut versuchen">aktivieren</ValueRow>
+                <ValueRow label="Version">neueste</ValueRow>
+                <ValueRow label="Name">
+                  Comanda <span className="text-muted-foreground font-normal">(frei wählbar)</span>
+                </ValueRow>
+              </div>
+            </div>
+
+            {webhookError && (
+              <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">
+                {webhookError}
+              </div>
+            )}
+            {webhookSuccess && (
+              <div role="status" className="rounded bg-green-100 px-3 py-2 text-sm text-green-800">
+                Webhook-Secret gespeichert
+              </div>
+            )}
+
+            <form onSubmit={saveWebhook} className="max-w-lg space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="payrexx-webhook-secret">Webhook-Secret (von Payrexx)</Label>
+                <PasswordInput
+                  id="payrexx-webhook-secret"
+                  value={webhookSecret}
+                  onChange={(e) => setWebhookSecret(e.target.value)}
+                  placeholder={configured ? "••••••••  (zum Ändern neu eingeben)" : ""}
+                  className="rounded-xl font-mono"
+                  autoComplete="off"
+                  disabled={savingWebhook}
+                  required
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={savingWebhook} className="h-11 min-w-32 rounded-xl">
+                  {savingWebhook ? "Speichere…" : "Speichern"}
+                </Button>
+              </div>
+            </form>
+
+            {configured && (
+              <div className="rounded-xl border p-4 text-sm">
+                {status?.lastWebhookAt ? (
+                  <span className="inline-flex items-center gap-2 text-green-700">
+                    <Check className="size-4" />
+                    Letzter Webhook empfangen:{" "}
+                    {new Date(status.lastWebhookAt).toLocaleString("de-CH", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Noch kein Webhook empfangen. Löse in Payrexx eine Test-Zahlung aus, um die Zustellung zu bestätigen.
+                  </span>
+                )}
+              </div>
+            )}
           </CardContent>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   )
 }

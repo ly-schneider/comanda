@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -49,22 +50,35 @@ type PaymentService interface {
 	CleanupOtherPendingOrdersByAttemptID(ctx context.Context, attemptID string, keepOrderID string) (int64, error)
 	// GetPaymentCheckout retrieves a hosted checkout by its provider gateway ID.
 	GetPaymentCheckout(ctx context.Context, gatewayID int) (*payment.CheckoutResult, error)
-	// ConfigurePayrexx validates, encrypts and stores credentials, returning the webhook URL.
-	ConfigurePayrexx(ctx context.Context, in ConfigurePayrexxInput) (string, error)
-	// GetPayrexxStatus reports whether Payrexx is configured and the webhook URL.
+	// ConnectPayrexxAPI validates + stores the instance and API key (staged step
+	// one), returning status with the webhook URL to register in Payrexx.
+	ConnectPayrexxAPI(ctx context.Context, instance, apiSecret string) (PayrexxStatus, error)
+	// SetPayrexxWebhookSecret stores the webhook secret (staged step two),
+	// completing configuration.
+	SetPayrexxWebhookSecret(ctx context.Context, webhookSecret string) (PayrexxStatus, error)
+	// TestPayrexxConnection live-validates the stored API credentials.
+	TestPayrexxConnection(ctx context.Context) error
+	// RecordPayrexxWebhookReceived stamps the time of the last verified inbound
+	// webhook, surfaced in the setup UI as a delivery confirmation.
+	RecordPayrexxWebhookReceived(ctx context.Context) error
+	// GetPayrexxStatus reports the staged setup state, webhook URL and last webhook.
 	GetPayrexxStatus(ctx context.Context) (PayrexxStatus, error)
 }
 
-type ConfigurePayrexxInput struct {
-	Instance      string
-	APISecret     string
-	WebhookSecret string
-}
+// PayrexxState is the staged-setup lifecycle of a tenant's Payrexx connection.
+type PayrexxState string
+
+const (
+	PayrexxStateNotStarted   PayrexxState = "not_started"
+	PayrexxStateAPIConnected PayrexxState = "api_connected"
+	PayrexxStateConfigured   PayrexxState = "configured"
+)
 
 type PayrexxStatus struct {
-	Configured bool
-	Instance   string
-	WebhookURL string
+	State         PayrexxState
+	Instance      string
+	WebhookURL    string
+	LastWebhookAt *time.Time
 }
 
 type CreateCheckoutInput struct {
@@ -691,62 +705,106 @@ func (s *paymentService) GetPaymentCheckout(ctx context.Context, gatewayID int) 
 	return provider.GetCheckout(ctx, gatewayID)
 }
 
-func (s *paymentService) ConfigurePayrexx(ctx context.Context, in ConfigurePayrexxInput) (string, error) {
+func (s *paymentService) ConnectPayrexxAPI(ctx context.Context, instance, apiSecret string) (PayrexxStatus, error) {
 	if s.encryptor == nil {
-		return "", fmt.Errorf("payment master key not configured")
+		return PayrexxStatus{}, fmt.Errorf("payment master key not configured")
 	}
-	if in.Instance == "" || in.APISecret == "" || in.WebhookSecret == "" {
-		return "", fmt.Errorf("instance, api secret and webhook secret are required")
-	}
-
-	instance := payrexx.NormalizeInstance(in.Instance)
-	if instance == "" {
-		return "", fmt.Errorf("instance, api secret and webhook secret are required")
+	if instance == "" || apiSecret == "" {
+		return PayrexxStatus{}, fmt.Errorf("instance and api key are required")
 	}
 
-	if err := payment.ValidatePayrexxCredentials(ctx, instance, in.APISecret); err != nil {
-		return "", err
+	normalized := payrexx.NormalizeInstance(instance)
+	if normalized == "" {
+		return PayrexxStatus{}, fmt.Errorf("instance and api key are required")
 	}
 
-	apiEnc, err := s.encryptor.EncryptString(in.APISecret)
+	if err := payment.ValidatePayrexxCredentials(ctx, normalized, apiSecret); err != nil {
+		return PayrexxStatus{}, err
+	}
+
+	apiEnc, err := s.encryptor.EncryptString(apiSecret)
 	if err != nil {
-		return "", fmt.Errorf("encrypt api secret: %w", err)
-	}
-	webhookEnc, err := s.encryptor.EncryptString(in.WebhookSecret)
-	if err != nil {
-		return "", fmt.Errorf("encrypt webhook secret: %w", err)
+		return PayrexxStatus{}, fmt.Errorf("encrypt api key: %w", err)
 	}
 
 	token, err := s.settingsRepo.EnsureWebhookToken(ctx)
 	if err != nil {
-		return "", fmt.Errorf("ensure webhook token: %w", err)
+		return PayrexxStatus{}, fmt.Errorf("ensure webhook token: %w", err)
 	}
 
-	if err := s.settingsRepo.UpsertPayrexxCredentials(ctx, repository.PayrexxCredentials{
-		Instance:         instance,
-		APISecretEnc:     apiEnc,
-		WebhookSecretEnc: webhookEnc,
-		WebhookToken:     token,
-	}); err != nil {
-		return "", fmt.Errorf("store payrexx credentials: %w", err)
+	if err := s.settingsRepo.UpsertPayrexxAPICredentials(ctx, normalized, apiEnc, token); err != nil {
+		return PayrexxStatus{}, fmt.Errorf("store payrexx api credentials: %w", err)
 	}
 
-	return s.webhookURL(token), nil
+	return s.GetPayrexxStatus(ctx)
+}
+
+func (s *paymentService) SetPayrexxWebhookSecret(ctx context.Context, webhookSecret string) (PayrexxStatus, error) {
+	if s.encryptor == nil {
+		return PayrexxStatus{}, fmt.Errorf("payment master key not configured")
+	}
+	if webhookSecret == "" {
+		return PayrexxStatus{}, fmt.Errorf("webhook secret is required")
+	}
+
+	enc, err := s.encryptor.EncryptString(webhookSecret)
+	if err != nil {
+		return PayrexxStatus{}, fmt.Errorf("encrypt webhook secret: %w", err)
+	}
+
+	if err := s.settingsRepo.SetPayrexxWebhookSecret(ctx, enc); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return PayrexxStatus{}, fmt.Errorf("connect the Payrexx API first")
+		}
+		return PayrexxStatus{}, fmt.Errorf("store payrexx webhook secret: %w", err)
+	}
+
+	return s.GetPayrexxStatus(ctx)
+}
+
+func (s *paymentService) TestPayrexxConnection(ctx context.Context) error {
+	if s.encryptor == nil {
+		return fmt.Errorf("payment master key not configured")
+	}
+	instance, apiEnc, err := s.settingsRepo.GetPayrexxAPICredentials(ctx)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return fmt.Errorf("connect the Payrexx API first")
+		}
+		return err
+	}
+	apiSecret, err := s.encryptor.DecryptString(apiEnc)
+	if err != nil {
+		return fmt.Errorf("decrypt api key: %w", err)
+	}
+	return payment.ValidatePayrexxCredentials(ctx, instance, apiSecret)
+}
+
+func (s *paymentService) RecordPayrexxWebhookReceived(ctx context.Context) error {
+	return s.settingsRepo.TouchPayrexxWebhookReceived(ctx)
 }
 
 func (s *paymentService) GetPayrexxStatus(ctx context.Context) (PayrexxStatus, error) {
-	creds, err := s.settingsRepo.GetPayrexxCredentials(ctx)
+	cfg, err := s.settingsRepo.GetPayrexxConfig(ctx)
 	if err != nil {
-		if err == repository.ErrNotFound {
-			return PayrexxStatus{Configured: false}, nil
-		}
 		return PayrexxStatus{}, err
 	}
-	return PayrexxStatus{
-		Configured: true,
-		Instance:   creds.Instance,
-		WebhookURL: s.webhookURL(creds.WebhookToken),
-	}, nil
+
+	status := PayrexxStatus{
+		State:         PayrexxStateNotStarted,
+		Instance:      cfg.Instance,
+		LastWebhookAt: cfg.LastWebhookAt,
+	}
+	if cfg.Instance != "" && cfg.WebhookToken != "" {
+		status.WebhookURL = s.webhookURL(cfg.WebhookToken)
+	}
+	switch {
+	case cfg.HasAPISecret && cfg.HasWebhookSecret:
+		status.State = PayrexxStateConfigured
+	case cfg.HasAPISecret:
+		status.State = PayrexxStateAPIConnected
+	}
+	return status, nil
 }
 
 func (s *paymentService) webhookURL(token string) string {

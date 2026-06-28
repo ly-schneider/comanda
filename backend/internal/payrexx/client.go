@@ -1,16 +1,14 @@
 package payrexx
 
 import (
+	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -21,14 +19,14 @@ const DefaultRequestTimeout = 8 * time.Second
 
 type Client struct {
 	instanceName string
-	apiSecret    string
+	apiSecret    string // sent as the X-API-KEY header
 	baseURL      string
 	httpClient   *http.Client
 }
 
 // NormalizeInstance reduces a user-entered instance to the bare subdomain label
 // the API's `instance` parameter expects. Payrexx answers an unresolvable
-// instance with an opaque HTTP 422 (a wrong API secret returns 403), so a value
+// instance with an opaque HTTP 422 (a wrong API key returns 401), so a value
 // like "blessthun.payrexx.com", "https://blessthun.payrexx.com/", or one with
 // stray whitespace fails validation in a way that looks like bad credentials.
 func NormalizeInstance(instance string) string {
@@ -85,6 +83,9 @@ func (c *Client) ValidateCredentials(ctx context.Context) error {
 	return err
 }
 
+// doRequest talks to the Payrexx v1.0 API using the modern X-API-KEY header
+// scheme: the API key authenticates every call via the header, the instance is a
+// query parameter, and write bodies are JSON.
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, params map[string]any) ([]byte, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -92,33 +93,27 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, params 
 		defer cancel()
 	}
 
-	// Payrexx v1.0 authenticates every call with an HMAC-SHA256 signature of the
-	// form-encoded request parameters, keyed by the API secret and base64-encoded,
-	// passed as the ApiSignature parameter. The instance name is a separate query
-	// parameter and is never part of the signed payload.
-	values := url.Values{}
-	flattenParams("", params, values)
-	values.Set("ApiSignature", signParams(values.Encode(), c.apiSecret))
-
 	reqURL := c.baseURL + endpoint + "?instance=" + url.QueryEscape(c.instanceName)
 
-	var req *http.Request
-	var err error
-	switch method {
-	case http.MethodGet, http.MethodDelete:
-		reqURL += "&" + values.Encode()
-		req, err = http.NewRequestWithContext(ctx, method, reqURL, nil)
-	default:
-		req, err = http.NewRequestWithContext(ctx, method, reqURL, strings.NewReader(values.Encode()))
-		if req != nil {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var bodyReader io.Reader
+	if params != nil && (method == http.MethodPost || method == http.MethodPut) {
+		payload, err := json.Marshal(params)
+		if err != nil {
+			return nil, fmt.Errorf("payrexx: failed to encode request: %w", err)
 		}
+		bodyReader = bytes.NewReader(payload)
 	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("payrexx: failed to create request: %w", err)
 	}
 
+	req.Header.Set("X-API-KEY", c.apiSecret)
 	req.Header.Set("Accept", "application/json")
+	if bodyReader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -136,45 +131,4 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, params 
 	}
 
 	return respBody, nil
-}
-
-func signParams(query, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(query))
-	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
-}
-
-// flattenParams expands nested params into PHP http_build_query bracket form
-// (fields[email][value], basket[0][amount], pm[0], …) so the signature we compute
-// matches what Payrexx reconstructs from the parameters it receives.
-func flattenParams(prefix string, value any, out url.Values) {
-	switch v := value.(type) {
-	case map[string]any:
-		for key, val := range v {
-			flattenParams(childKey(prefix, key), val, out)
-		}
-	case []map[string]any:
-		for i, val := range v {
-			flattenParams(childKey(prefix, strconv.Itoa(i)), val, out)
-		}
-	case []any:
-		for i, val := range v {
-			flattenParams(childKey(prefix, strconv.Itoa(i)), val, out)
-		}
-	case []string:
-		for i, val := range v {
-			flattenParams(childKey(prefix, strconv.Itoa(i)), val, out)
-		}
-	case nil:
-		// Unset optional fields carry no signed value.
-	default:
-		out.Set(prefix, fmt.Sprintf("%v", v))
-	}
-}
-
-func childKey(prefix, key string) string {
-	if prefix == "" {
-		return key
-	}
-	return prefix + "[" + key + "]"
 }

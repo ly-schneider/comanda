@@ -30,6 +30,21 @@ type SettingsRepository interface {
 	// EnsureWebhookToken returns the tenant's webhook token, generating one if absent.
 	EnsureWebhookToken(ctx context.Context) (string, error)
 	UpsertPayrexxCredentials(ctx context.Context, c PayrexxCredentials) error
+	// UpsertPayrexxAPICredentials stores the instance + API key + webhook token
+	// without the webhook secret, leaving the tenant in the "API connected"
+	// state (payrexx_configured_at stays unset until the webhook secret lands).
+	UpsertPayrexxAPICredentials(ctx context.Context, instance, apiSecretEnc, webhookToken string) error
+	// SetPayrexxWebhookSecret stores the webhook secret and stamps
+	// payrexx_configured_at; returns ErrNotFound if the API step hasn't run yet.
+	SetPayrexxWebhookSecret(ctx context.Context, webhookSecretEnc string) error
+	// TouchPayrexxWebhookReceived stamps payrexx_last_webhook_at = now.
+	TouchPayrexxWebhookReceived(ctx context.Context) error
+	// GetPayrexxConfig returns the non-secret view driving the staged setup UI;
+	// an empty value (not an error) when nothing is configured.
+	GetPayrexxConfig(ctx context.Context) (*PayrexxConfig, error)
+	// GetPayrexxAPICredentials returns the instance + encrypted API key without
+	// requiring the webhook secret; ErrNotFound when the API step hasn't run.
+	GetPayrexxAPICredentials(ctx context.Context) (instance, apiSecretEnc string, err error)
 	// GetPayrexxCredentials returns ErrNotFound when the tenant has none configured.
 	GetPayrexxCredentials(ctx context.Context) (*PayrexxCredentials, error)
 	UpsertPlunkCredentials(ctx context.Context, c PlunkCredentials) error
@@ -56,6 +71,17 @@ type PayrexxCredentials struct {
 	APISecretEnc     string
 	WebhookSecretEnc string
 	WebhookToken     string
+}
+
+// PayrexxConfig is the non-secret view of a tenant's Payrexx connection that
+// drives the staged setup UI. Secrets are reported as presence booleans only.
+type PayrexxConfig struct {
+	Instance         string
+	HasAPISecret     bool
+	HasWebhookSecret bool
+	WebhookToken     string
+	ConfiguredAt     *time.Time
+	LastWebhookAt    *time.Time
 }
 
 type PlunkCredentials struct {
@@ -478,6 +504,91 @@ func (r *settingsRepo) GetPayrexxCredentials(ctx context.Context) (*PayrexxCrede
 		WebhookSecretEnc: *e.PayrexxWebhookSecretEnc,
 		WebhookToken:     token,
 	}, nil
+}
+
+func (r *settingsRepo) UpsertPayrexxAPICredentials(ctx context.Context, instance, apiSecretEnc, webhookToken string) error {
+	id := r.settingsID(ctx)
+	tenantID, hasTenant := TenantIDFromContext(ctx)
+
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetPayrexxInstance(instance).
+		SetPayrexxAPISecretEnc(apiSecretEnc).
+		SetPaymentWebhookToken(webhookToken).
+		SetPaymentProvider("payrexx")
+	if hasTenant {
+		create = create.SetTenantID(tenantID)
+	}
+
+	// Intentionally leaves payrexx_webhook_secret_enc and payrexx_configured_at
+	// untouched so re-running the API step never clears an existing webhook secret.
+	err := create.
+		OnConflictColumns(settings.FieldID).
+		Update(func(u *ent.SettingsUpsert) {
+			u.SetPayrexxInstance(instance)
+			u.SetPayrexxAPISecretEnc(apiSecretEnc)
+			u.SetPaymentWebhookToken(webhookToken)
+			u.SetPaymentProvider("payrexx")
+		}).
+		Exec(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) SetPayrexxWebhookSecret(ctx context.Context, webhookSecretEnc string) error {
+	id := r.settingsID(ctx)
+	e, err := r.ec(ctx).Settings.Get(ctx, id)
+	if err != nil {
+		return translateError(err)
+	}
+	if e.PayrexxInstance == nil || e.PayrexxAPISecretEnc == nil {
+		return ErrNotFound
+	}
+	_, err = r.ec(ctx).Settings.UpdateOneID(id).
+		SetPayrexxWebhookSecretEnc(webhookSecretEnc).
+		SetPayrexxConfiguredAt(time.Now()).
+		Save(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) TouchPayrexxWebhookReceived(ctx context.Context) error {
+	_, err := r.ec(ctx).Settings.UpdateOneID(r.settingsID(ctx)).
+		SetPayrexxLastWebhookAt(time.Now()).
+		Save(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) GetPayrexxConfig(ctx context.Context) (*PayrexxConfig, error) {
+	e, err := r.ec(ctx).Settings.Get(ctx, r.settingsID(ctx))
+	if err != nil {
+		if translateError(err) == ErrNotFound {
+			return &PayrexxConfig{}, nil
+		}
+		return nil, translateError(err)
+	}
+	cfg := &PayrexxConfig{
+		HasAPISecret:     e.PayrexxAPISecretEnc != nil,
+		HasWebhookSecret: e.PayrexxWebhookSecretEnc != nil,
+		ConfiguredAt:     e.PayrexxConfiguredAt,
+		LastWebhookAt:    e.PayrexxLastWebhookAt,
+	}
+	if e.PayrexxInstance != nil {
+		cfg.Instance = *e.PayrexxInstance
+	}
+	if e.PaymentWebhookToken != nil {
+		cfg.WebhookToken = *e.PaymentWebhookToken
+	}
+	return cfg, nil
+}
+
+func (r *settingsRepo) GetPayrexxAPICredentials(ctx context.Context) (string, string, error) {
+	e, err := r.ec(ctx).Settings.Get(ctx, r.settingsID(ctx))
+	if err != nil {
+		return "", "", translateError(err)
+	}
+	if e.PayrexxInstance == nil || e.PayrexxAPISecretEnc == nil {
+		return "", "", ErrNotFound
+	}
+	return *e.PayrexxInstance, *e.PayrexxAPISecretEnc, nil
 }
 
 func (r *settingsRepo) GetQRSigningKey(ctx context.Context) (*QRSigningKey, error) {

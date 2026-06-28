@@ -115,6 +115,11 @@ func (Settings) Fields() []ent.Field {
 		field.Time("payrexx_configured_at").
 			Optional().
 			Nillable(),
+		// Last inbound webhook whose HMAC verified — proof the stored webhook
+		// secret matches what Payrexx signs with.
+		field.Time("payrexx_last_webhook_at").
+			Optional().
+			Nillable(),
 		field.Text("plunk_api_key_enc").
 			Optional().
 			Nillable(),

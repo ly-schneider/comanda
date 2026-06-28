@@ -145,6 +145,12 @@ paths:
     $ref: "paths/settings.yaml#/logo"
   /settings/payrexx:
     $ref: "paths/settings.yaml#/payrexx"
+  /settings/payrexx/api:
+    $ref: "paths/settings.yaml#/payrexxApi"
+  /settings/payrexx/webhook:
+    $ref: "paths/settings.yaml#/payrexxWebhook"
+  /settings/payrexx/test:
+    $ref: "paths/settings.yaml#/payrexxTest"
 
   /domains:
     $ref: "paths/domains.yaml#/collection"

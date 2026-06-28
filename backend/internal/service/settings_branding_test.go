@@ -58,6 +58,17 @@ func (f *fakeSettingsRepo) UpsertPayrexxCredentials(context.Context, repository.
 func (f *fakeSettingsRepo) GetPayrexxCredentials(context.Context) (*repository.PayrexxCredentials, error) {
 	return nil, repository.ErrNotFound
 }
+func (f *fakeSettingsRepo) UpsertPayrexxAPICredentials(context.Context, string, string, string) error {
+	return nil
+}
+func (f *fakeSettingsRepo) SetPayrexxWebhookSecret(context.Context, string) error { return nil }
+func (f *fakeSettingsRepo) TouchPayrexxWebhookReceived(context.Context) error     { return nil }
+func (f *fakeSettingsRepo) GetPayrexxConfig(context.Context) (*repository.PayrexxConfig, error) {
+	return &repository.PayrexxConfig{}, nil
+}
+func (f *fakeSettingsRepo) GetPayrexxAPICredentials(context.Context) (string, string, error) {
+	return "", "", repository.ErrNotFound
+}
 func (f *fakeSettingsRepo) UpsertPlunkCredentials(context.Context, repository.PlunkCredentials) error {
 	return nil
 }

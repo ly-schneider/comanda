@@ -319,7 +319,9 @@ func NewRouter(
 			account.Post("/settings/logo", wrapper.UploadBrandingLogo)
 			account.Delete("/settings/logo", wrapper.DeleteBrandingLogo)
 			account.Get("/settings/payrexx", wrapper.GetPayrexxStatus)
-			account.Put("/settings/payrexx", wrapper.ConfigurePayrexx)
+			account.Put("/settings/payrexx/api", wrapper.ConnectPayrexxApi)
+			account.Put("/settings/payrexx/webhook", wrapper.SetPayrexxWebhookSecret)
+			account.Post("/settings/payrexx/test", wrapper.TestPayrexxConnection)
 
 			account.Get("/domains", wrapper.ListDomains)
 			account.Post("/domains", wrapper.CreateDomain)

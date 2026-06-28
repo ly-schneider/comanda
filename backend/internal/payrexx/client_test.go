@@ -2,9 +2,10 @@ package payrexx
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
 
@@ -27,12 +28,12 @@ func TestNormalizeInstance(t *testing.T) {
 	}
 }
 
-func TestValidateCredentialsSendsSignature(t *testing.T) {
-	var gotInstance, gotSig, gotAPIKeyHeader string
+func TestValidateCredentialsSendsAPIKey(t *testing.T) {
+	var gotInstance, gotSig, gotAPIKey string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotInstance = r.URL.Query().Get("instance")
 		gotSig = r.URL.Query().Get("ApiSignature")
-		gotAPIKeyHeader = r.Header.Get("X-API-KEY")
+		gotAPIKey = r.Header.Get("X-API-KEY")
 		_, _ = w.Write([]byte(`{"status":"success","data":[]}`))
 	}))
 	defer srv.Close()
@@ -46,32 +47,22 @@ func TestValidateCredentialsSendsSignature(t *testing.T) {
 	if gotInstance != "my-instance" {
 		t.Errorf("instance = %q, want my-instance", gotInstance)
 	}
-	// No params on SignatureCheck, so the signed payload is the empty string.
-	if want := signParams("", "s3cr3t"); gotSig != want {
-		t.Errorf("ApiSignature = %q, want %q", gotSig, want)
+	if gotAPIKey != "s3cr3t" {
+		t.Errorf("X-API-KEY = %q, want s3cr3t", gotAPIKey)
 	}
-	if gotAPIKeyHeader != "" {
-		t.Errorf("X-API-KEY header should not be sent, got %q", gotAPIKeyHeader)
+	if gotSig != "" {
+		t.Errorf("ApiSignature should not be sent under X-API-KEY, got %q", gotSig)
 	}
 }
 
-func TestDoRequestPostSignsBody(t *testing.T) {
-	var ct, gotSig, signedBody string
+func TestDoRequestPostSendsJSON(t *testing.T) {
+	var ct, gotAPIKey string
+	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ct = r.Header.Get("Content-Type")
-		_ = r.ParseForm()
-		gotSig = r.PostFormValue("ApiSignature")
-		// Reconstruct the signed payload: the posted form minus the signature.
-		params := url.Values{}
-		for k, vs := range r.PostForm {
-			if k == "ApiSignature" {
-				continue
-			}
-			for _, v := range vs {
-				params.Add(k, v)
-			}
-		}
-		signedBody = params.Encode()
+		gotAPIKey = r.Header.Get("X-API-KEY")
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
 		_, _ = w.Write([]byte(`{"status":"success","data":[{"id":1}]}`))
 	}))
 	defer srv.Close()
@@ -82,37 +73,35 @@ func TestDoRequestPostSignsBody(t *testing.T) {
 	if _, err := c.doRequest(context.Background(), http.MethodPost, "Gateway/", map[string]any{
 		"amount":   1200,
 		"currency": "CHF",
+		"fields":   map[string]any{"email": map[string]any{"value": "a@b.ch"}},
+		"pm":       []string{"visa"},
+		"basket":   []map[string]any{{"name": map[string]any{"1": "Kaffee"}, "amount": 450}},
 	}); err != nil {
 		t.Fatalf("doRequest: %v", err)
 	}
-	if ct != "application/x-www-form-urlencoded" {
-		t.Errorf("Content-Type = %q", ct)
+	if ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
-	if want := signParams(signedBody, "topsecret"); gotSig != want {
-		t.Errorf("ApiSignature = %q, want %q (over %q)", gotSig, want, signedBody)
+	if gotAPIKey != "topsecret" {
+		t.Errorf("X-API-KEY = %q, want topsecret", gotAPIKey)
 	}
-}
+	if body["currency"] != "CHF" {
+		t.Errorf("currency = %v, want CHF", body["currency"])
+	}
 
-func TestFlattenParamsNested(t *testing.T) {
-	out := url.Values{}
-	flattenParams("", map[string]any{
-		"amount": 1000,
-		"fields": map[string]any{"email": map[string]any{"value": "a@b.ch"}},
-		"pm":     []string{"visa", "mastercard"},
-		"basket": []map[string]any{{"name": map[string]any{"1": "Kaffee"}, "amount": 450}},
-	}, out)
-
-	want := map[string]string{
-		"amount":               "1000",
-		"fields[email][value]": "a@b.ch",
-		"pm[0]":                "visa",
-		"pm[1]":                "mastercard",
-		"basket[0][name][1]":   "Kaffee",
-		"basket[0][amount]":    "450",
+	// Nested fields/basket round-trip as JSON objects/arrays (the shape Payrexx expects).
+	fields, _ := body["fields"].(map[string]any)
+	email, _ := fields["email"].(map[string]any)
+	if email["value"] != "a@b.ch" {
+		t.Errorf("fields.email.value = %v, want a@b.ch", email["value"])
 	}
-	for k, v := range want {
-		if got := out.Get(k); got != v {
-			t.Errorf("%s = %q, want %q", k, got, v)
-		}
+	basket, _ := body["basket"].([]any)
+	if len(basket) != 1 {
+		t.Fatalf("basket len = %d, want 1", len(basket))
+	}
+	item, _ := basket[0].(map[string]any)
+	name, _ := item["name"].(map[string]any)
+	if name["1"] != "Kaffee" {
+		t.Errorf("basket[0].name.1 = %v, want Kaffee", name["1"])
 	}
 }
