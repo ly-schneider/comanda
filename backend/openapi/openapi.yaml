@@ -160,11 +160,15 @@ paths:
   /platform/tenants/{tenantId}/owner-invite:
     $ref: "paths/platform.yaml#/owner-invite"
 
-  /account/tenant:
+  /account/tenants:
+    $ref: "paths/account.yaml#/tenants"
+  /account/{accountTenant}/tenant:
     $ref: "paths/account.yaml#/tenant"
-  /account/onboarding:
+  /account/{accountTenant}/invites:
+    $ref: "paths/account.yaml#/invites"
+  /account/{accountTenant}/onboarding:
     $ref: "paths/account.yaml#/onboarding"
-  /account/onboarding/complete:
+  /account/{accountTenant}/onboarding/complete:
     $ref: "paths/account.yaml#/onboarding-complete"
 
   /owner-invites/verify:

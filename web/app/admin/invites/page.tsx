@@ -10,7 +10,7 @@ import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 
-type InviteMemberRole = "admin" | "staff" | "catalog"
+type InviteMemberRole = "app_admin" | "staff" | "catalog"
 
 type Invite = {
   id: string
@@ -97,7 +97,7 @@ export default function AdminInvitesPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="admin">{ROLE_LABELS_DE.admin}</SelectItem>
+            <SelectItem value="app_admin">{ROLE_LABELS_DE.app_admin}</SelectItem>
             <SelectItem value="staff">{ROLE_LABELS_DE.staff}</SelectItem>
             <SelectItem value="catalog">{ROLE_LABELS_DE.catalog}</SelectItem>
           </SelectContent>

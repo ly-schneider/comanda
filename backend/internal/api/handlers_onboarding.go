@@ -18,7 +18,7 @@ func nonEmpty(p *string) bool {
 // a verified domain), so the wizard is inherently resumable; CompletedAt is the
 // one persisted flag. Read-only and available to any member so the account
 // overview renders for staff too; the steps are gated by the tenant-admin routes.
-func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request, _ generated.AccountTenantParam) {
 	ctx := r.Context()
 	if _, ok := auth.GetTenantID(ctx); !ok {
 		writeError(w, http.StatusForbidden, "no_tenant", "No tenant resolved for this request")
@@ -58,7 +58,7 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request) {
 
 // CompleteOnboarding marks the wizard as finished (or dismissed) for the tenant.
 // It only records that the vendor is done; the underlying steps stay editable.
-func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request, _ generated.AccountTenantParam) {
 	ctx := r.Context()
 	if _, ok := auth.GetTenantID(ctx); !ok {
 		writeError(w, http.StatusForbidden, "no_tenant", "No tenant resolved for this request")

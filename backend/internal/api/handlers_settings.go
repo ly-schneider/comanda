@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/settings"
@@ -64,6 +65,17 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if brandingPresent(&body) {
+		// Branding is tenant-admin only: an app-admin may PATCH food-system fields
+		// but not branding, even via a crafted request.
+		ok, err := auth.HasTenantTier(ctx, auth.TierTenantAdmin)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "update_failed", err.Error())
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusForbidden, "insufficient_role", "Branding requires the tenant-admin tier")
+			return
+		}
 		in := service.BrandingInput{
 			DisplayName:     body.DisplayName,
 			ColorPrimary:    body.ColorPrimary,

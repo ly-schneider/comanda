@@ -32,6 +32,7 @@ func NewServices() fx.Option {
 			service.NewAndroidUpdateService,
 			service.NewDomainService,
 			service.NewTenantService,
+			service.NewAccountService,
 		),
 	)
 }

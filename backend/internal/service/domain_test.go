@@ -16,6 +16,7 @@ import (
 // that don't need a database: it serves one preloaded row and records deletes.
 type fakeDomainRepo struct {
 	row     *ent.TenantDomain
+	list    []*ent.TenantDomain
 	getErr  error
 	deleted bool
 }
@@ -33,7 +34,7 @@ func (f *fakeDomainRepo) Delete(context.Context, string) error {
 func (f *fakeDomainRepo) Create(context.Context, string, string) (*ent.TenantDomain, error) {
 	return f.row, nil
 }
-func (f *fakeDomainRepo) List(context.Context) ([]*ent.TenantDomain, error) { return nil, nil }
+func (f *fakeDomainRepo) List(context.Context) ([]*ent.TenantDomain, error) { return f.list, nil }
 func (f *fakeDomainRepo) SetPrimary(context.Context, string) error          { return nil }
 func (f *fakeDomainRepo) MarkVerified(context.Context, string) (*ent.TenantDomain, error) {
 	return f.row, nil

@@ -118,14 +118,14 @@ export default function ManageTenantPage() {
     )
   }
 
-  // The tenant's own admin lives on its subdomain, derived from the platform
+  // The tenant's storefront lives on its subdomain, derived from the platform
   // host the operator is on (env-agnostic: localhost / staging / prod).
   const tenantBaseUrl =
     typeof window !== "undefined" ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
   const onboardingSteps = [
-    { label: "Branding einrichten", href: `${tenantBaseUrl}/admin/branding` },
-    { label: "Payrexx verbinden", href: `${tenantBaseUrl}/admin/settings` },
-    { label: "Eigene Domain", href: `${tenantBaseUrl}/admin/domains` },
+    { label: "Branding einrichten", href: `/t/${tenant.slug}/branding` },
+    { label: "Payrexx verbinden", href: `/t/${tenant.slug}/payrexx` },
+    { label: "Eigene Domain", href: `/t/${tenant.slug}/domains` },
   ]
 
   return (
@@ -219,7 +219,7 @@ export default function ManageTenantPage() {
       <Card>
         <CardHeader>
           <CardTitle>Onboarding</CardTitle>
-          <p className="text-muted-foreground text-sm">Im Admin des Tenants abschliessen.</p>
+          <p className="text-muted-foreground text-sm">Im Konto-Hub für diesen Tenant verwalten.</p>
         </CardHeader>
         <CardContent className="space-y-2">
           {onboardingSteps.map((step) => (

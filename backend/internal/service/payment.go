@@ -856,7 +856,6 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 	orderURL := s.tenantOrderURL(ctx, orderID)
 
 	data := ReceiptEmailData{
-		Brand:      "Comanda",
 		OrderID:    orderID,
 		OrderURL:   orderURL,
 		OrderDate:  formatOrderDate(paidAt),

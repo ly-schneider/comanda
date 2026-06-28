@@ -20,15 +20,17 @@ const (
 	// TierOps (the staff tier) covers day-to-day operations: orders, stations,
 	// POS, jetons, devices, staff-meals, events — plus everything catalog can do.
 	TierOps
-	// TierTenantAdmin covers tenant administration: settings, payments, branding,
-	// domains, users, invites — plus everything staff can do.
+	// TierAppAdmin (the app-admin tier) covers full app management — users,
+	// invites, food-system settings — but not branding, domains, or payments.
+	TierAppAdmin
+	// TierTenantAdmin covers branding, domains, payments, and the account hub.
 	TierTenantAdmin
 )
 
 // memberRoleSatisfies reports whether a member.role meets the minimum tier. The
 // tiers nest, so the role's rank is compared ordinally: owner and admin rank at
-// tenant-admin, staff at ops, catalog at the lowest tier. An unrecognised role
-// ranks below everything and satisfies nothing (fail-closed).
+// tenant-admin, app_admin at app-admin, staff at ops, catalog at the lowest tier.
+// An unrecognised role ranks below everything and satisfies nothing (fail-closed).
 func memberRoleSatisfies(role string, min TenantTier) bool {
 	rank, ok := roleRank(role)
 	if !ok {
@@ -41,6 +43,8 @@ func roleRank(role string) (TenantTier, bool) {
 	switch role {
 	case "owner", "admin":
 		return TierTenantAdmin, true
+	case "app_admin":
+		return TierAppAdmin, true
 	case "staff":
 		return TierOps, true
 	case "catalog":

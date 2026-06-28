@@ -10,6 +10,7 @@ import (
 	"backend/internal/service"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // seedAdminInvite inserts an accepted-flow staff invite for a tenant via the
@@ -36,7 +37,9 @@ func (e *rlsEnv) acceptStaffInvite(t *testing.T, tenantID, token string) {
 		TestConfig(),
 		repository.NewAdminInviteRepository(client),
 		repository.NewUserRepository(client),
+		repository.NewTenantDomainRepository(client),
 		noopEmail{},
+		zap.NewNop(),
 	)
 	require.NoError(t, svc.Accept(ctx, token, "Staff", "Member"))
 	cleanup() // commits the request tx
@@ -126,7 +129,9 @@ func TestStaffInviteUnlinkedTenantNoMember(t *testing.T) {
 		TestConfig(),
 		repository.NewAdminInviteRepository(client),
 		repository.NewUserRepository(client),
+		repository.NewTenantDomainRepository(client),
 		noopEmail{},
+		zap.NewNop(),
 	)
 	err := svc.Accept(ctx, token, "Staff", "Member")
 	rollback()

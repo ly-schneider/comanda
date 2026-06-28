@@ -16,6 +16,8 @@ import (
 	"backend/internal/generated/ent/admininvite"
 	nanoid "backend/internal/id"
 	"backend/internal/repository"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -47,23 +49,29 @@ type AdminInviteService interface {
 }
 
 type adminInviteService struct {
-	cfg        config.Config
-	inviteRepo repository.AdminInviteRepository
-	userRepo   repository.UserRepository
-	emailSvc   EmailService
+	cfg              config.Config
+	inviteRepo       repository.AdminInviteRepository
+	userRepo         repository.UserRepository
+	tenantDomainRepo repository.TenantDomainRepository
+	emailSvc         EmailService
+	logger           *zap.Logger
 }
 
 func NewAdminInviteService(
 	cfg config.Config,
 	inviteRepo repository.AdminInviteRepository,
 	userRepo repository.UserRepository,
+	tenantDomainRepo repository.TenantDomainRepository,
 	emailSvc EmailService,
+	logger *zap.Logger,
 ) AdminInviteService {
 	return &adminInviteService{
-		cfg:        cfg,
-		inviteRepo: inviteRepo,
-		userRepo:   userRepo,
-		emailSvc:   emailSvc,
+		cfg:              cfg,
+		inviteRepo:       inviteRepo,
+		userRepo:         userRepo,
+		tenantDomainRepo: tenantDomainRepo,
+		emailSvc:         emailSvc,
+		logger:           logger,
 	}
 }
 
@@ -129,7 +137,7 @@ func (s *adminInviteService) Create(ctx context.Context, inviterID, email string
 	}
 
 	// Build invite URL and send email
-	inviteURL := s.buildInviteURL(token)
+	inviteURL := s.buildInviteURL(ctx, token)
 	_ = s.emailSvc.SendInviteEmail(ctx, email, inviteURL, expiresAt)
 
 	return invite, nil
@@ -202,7 +210,7 @@ func (s *adminInviteService) Resend(ctx context.Context, id string) error {
 	}
 
 	// Send email
-	inviteURL := s.buildInviteURL(token)
+	inviteURL := s.buildInviteURL(ctx, token)
 	return s.emailSvc.SendInviteEmail(ctx, invite.InviteeEmail, inviteURL, expiresAt)
 }
 
@@ -313,12 +321,45 @@ func (s *adminInviteService) linkMember(ctx context.Context, userID string, role
 	return nil
 }
 
-func (s *adminInviteService) buildInviteURL(token string) string {
-	baseURL := s.cfg.App.PublicBaseURL
-	if baseURL == "" {
-		baseURL = "http://localhost:3000"
+// buildInviteURL targets the tenant's own verified host: accept links the
+// membership via app_current_org_id(), which is NULL on the platform apex, so a
+// PublicBaseURL link would silently fail to bind. Falls back to PublicBaseURL
+// only when the tenant has no verified domain yet.
+func (s *adminInviteService) buildInviteURL(ctx context.Context, token string) string {
+	base := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
+	if base == "" {
+		base = "http://localhost:3000"
 	}
-	return fmt.Sprintf("%s/invite/accept?token=%s", baseURL, token)
+	if host := s.tenantPrimaryHost(ctx); host != "" {
+		base = "https://" + host
+	}
+	return fmt.Sprintf("%s/invite/accept?token=%s", base, token)
+}
+
+func (s *adminInviteService) tenantPrimaryHost(ctx context.Context) string {
+	if s.tenantDomainRepo == nil {
+		return ""
+	}
+	domains, err := s.tenantDomainRepo.List(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("admin invite: failed to load tenant domains; using platform base", zap.Error(err))
+		}
+		return ""
+	}
+	host := ""
+	for _, d := range domains {
+		if d.VerifiedAt == nil {
+			continue
+		}
+		if d.IsPrimary {
+			return d.Hostname
+		}
+		if host == "" {
+			host = d.Hostname
+		}
+	}
+	return host
 }
 
 // generateToken creates a new secure random token and its SHA-256 hash.

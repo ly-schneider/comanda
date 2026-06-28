@@ -13,6 +13,7 @@ import (
 	"backend/internal/middleware"
 
 	nanoid "backend/internal/id"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -190,12 +191,22 @@ func TestVendorTenantResolutionQuery(t *testing.T) {
 	})
 }
 
+// withAccountTenant returns ctx carrying a chi route context with the
+// {accountTenant} URL param set, matching how the account route group invokes
+// ResolveVendorTenant.
+func withAccountTenant(ctx context.Context, slug string) context.Context {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("accountTenant", slug)
+	return context.WithValue(ctx, chi.RouteCtxKey, rctx)
+}
+
 // TestResolveVendorTenantMiddleware exercises the resolver end to end against the
 // app pool: a member is bound to their tenant; everyone else is refused.
 func TestResolveVendorTenantMiddleware(t *testing.T) {
 	env := newRLSEnv(t)
 
-	tenantA := env.seedTenant(t, "rvt-a-"+randSuffix())
+	slugA := "rvt-a-" + randSuffix()
+	tenantA := env.seedTenant(t, slugA)
 	orgA := env.seedOrgForTenant(t, tenantA, "rvt-a-"+randSuffix())
 	member := env.seedUser(t)
 	stranger := env.seedUser(t)
@@ -204,9 +215,9 @@ func TestResolveVendorTenantMiddleware(t *testing.T) {
 	mw := middleware.NewTenantMiddleware(env.app, env.privClient(), env.priv, "", nil, false, zap.NewNop())
 
 	// call drives ResolveVendorTenant over a platform-context (or tenant-context)
-	// request tx on the app pool, returning the HTTP status and the tenant the
-	// downstream handler observed.
-	call := func(t *testing.T, platform bool, userID, orgID string) (int, string, bool) {
+	// request tx with the given {accountTenant} slug, returning the HTTP status and
+	// the tenant the downstream handler observed.
+	call := func(t *testing.T, platform bool, userID, slug string) (int, string, bool) {
 		t.Helper()
 		var baseCtx context.Context
 		var cleanup func()
@@ -221,9 +232,7 @@ func TestResolveVendorTenantMiddleware(t *testing.T) {
 		if userID != "" {
 			rc = auth.WithUserID(rc, userID)
 		}
-		if orgID != "" {
-			rc = auth.WithActiveOrgID(rc, orgID)
-		}
+		rc = withAccountTenant(rc, slug)
 
 		var bound string
 		var platformAfter bool
@@ -234,14 +243,14 @@ func TestResolveVendorTenantMiddleware(t *testing.T) {
 			platformAfter = enttenant.IsPlatform(r.Context())
 			w.WriteHeader(http.StatusOK)
 		})
-		req := httptest.NewRequest(http.MethodGet, "/v1/account/tenant", nil).WithContext(rc)
+		req := httptest.NewRequest(http.MethodGet, "/v1/account/"+slug+"/tenant", nil).WithContext(rc)
 		rec := httptest.NewRecorder()
 		mw.ResolveVendorTenant(final).ServeHTTP(rec, req)
 		return rec.Code, bound, platformAfter
 	}
 
 	t.Run("member is bound to their tenant", func(t *testing.T) {
-		code, bound, platformAfter := call(t, true, member, orgA)
+		code, bound, platformAfter := call(t, true, member, slugA)
 		require.Equal(t, http.StatusOK, code)
 		require.Equal(t, tenantA, bound)
 		// The platform marker is cleared once a concrete tenant is bound, so the
@@ -250,18 +259,98 @@ func TestResolveVendorTenantMiddleware(t *testing.T) {
 	})
 
 	t.Run("non-member is forbidden", func(t *testing.T) {
-		code, bound, _ := call(t, true, stranger, orgA)
+		code, bound, _ := call(t, true, stranger, slugA)
 		require.Equal(t, http.StatusForbidden, code)
 		require.Empty(t, bound)
 	})
 
-	t.Run("missing active org is forbidden", func(t *testing.T) {
+	t.Run("missing slug is rejected", func(t *testing.T) {
 		code, _, _ := call(t, true, member, "")
-		require.Equal(t, http.StatusForbidden, code)
+		require.Equal(t, http.StatusBadRequest, code)
 	})
 
 	t.Run("non-platform host is rejected", func(t *testing.T) {
-		code, _, _ := call(t, false, member, orgA)
+		code, _, _ := call(t, false, member, slugA)
 		require.Equal(t, http.StatusBadRequest, code)
+	})
+}
+
+// TestResolveVendorTenantSlugSelection covers the {accountTenant} slug path: the
+// selection is authorized (a member of the tenant's org, or a platform admin who
+// may pick any tenant), never trusted on its face.
+func TestResolveVendorTenantSlugSelection(t *testing.T) {
+	env := newRLSEnv(t)
+
+	slugA := "rvts-a-" + randSuffix()
+	slugB := "rvts-b-" + randSuffix()
+	tenantA := env.seedTenant(t, slugA)
+	tenantB := env.seedTenant(t, slugB)
+	orgA := env.seedOrgForTenant(t, tenantA, "rvts-a-"+randSuffix())
+	env.seedOrgForTenant(t, tenantB, "rvts-b-"+randSuffix())
+	member := env.seedUser(t) // member of tenant A only
+	env.seedMember(t, orgA, member, "owner")
+	stranger := env.seedUser(t) // member of nothing
+
+	mw := middleware.NewTenantMiddleware(env.app, env.privClient(), env.priv, "", nil, false, zap.NewNop())
+
+	// call drives ResolveVendorTenant over a platform-context request tx with the
+	// given slug, returning the HTTP status and the tenant the handler observed.
+	call := func(t *testing.T, userID, slug string, isPlatformAdmin bool) (int, string) {
+		t.Helper()
+		baseCtx, _, cleanup := env.appPlatformTx(t, false)
+		defer cleanup()
+
+		rc := baseCtx
+		if userID != "" {
+			rc = auth.WithUserID(rc, userID)
+		}
+		if isPlatformAdmin {
+			rc = auth.WithIsPlatformAdmin(rc, true)
+		}
+		rc = withAccountTenant(rc, slug)
+
+		var bound string
+		final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if id, ok := auth.GetTenantID(r.Context()); ok {
+				bound = id
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/v1/account/"+slug+"/tenant", nil).WithContext(rc)
+		rec := httptest.NewRecorder()
+		mw.ResolveVendorTenant(final).ServeHTTP(rec, req)
+		return rec.Code, bound
+	}
+
+	t.Run("member binds their own tenant by slug", func(t *testing.T) {
+		code, bound := call(t, member, slugA, false)
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, tenantA, bound)
+	})
+
+	t.Run("member cannot select a tenant they don't belong to", func(t *testing.T) {
+		code, bound := call(t, member, slugB, false)
+		require.Equal(t, http.StatusForbidden, code)
+		require.Empty(t, bound)
+	})
+
+	t.Run("non-member cannot select any tenant", func(t *testing.T) {
+		code, bound := call(t, stranger, slugA, false)
+		require.Equal(t, http.StatusForbidden, code)
+		require.Empty(t, bound)
+	})
+
+	t.Run("platform admin selects any tenant by slug", func(t *testing.T) {
+		// stranger is a member of nothing but, as a platform admin, may manage any
+		// tenant from the hub.
+		code, bound := call(t, stranger, slugB, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, tenantB, bound)
+	})
+
+	t.Run("unknown slug is rejected", func(t *testing.T) {
+		code, bound := call(t, member, "does-not-exist-"+randSuffix(), false)
+		require.Equal(t, http.StatusForbidden, code)
+		require.Empty(t, bound)
 	})
 }

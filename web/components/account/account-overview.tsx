@@ -13,10 +13,9 @@ import {
   completeOnboarding,
   getAccountLegal,
   getOnboardingStatus,
-  getTenant,
   type OnboardingStatus,
-  type TenantInfo,
 } from "@/lib/api/account"
+import { useAccountTenant } from "./account-tenant-context"
 
 type Step = {
   key: string
@@ -28,31 +27,26 @@ type Step = {
   missing?: string[]
 }
 
-export default function AccountOverviewClient() {
+export function AccountOverview() {
   const fetchAuth = useAuthorizedFetch()
-  const [tenant, setTenant] = useState<TenantInfo | null>(null)
+  const { activeSlug: slug, activeTenant } = useAccountTenant()
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null)
   const [legal, setLegal] = useState<AccountLegal | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [tenantData, onbData, legalData] = await Promise.all([
-        getTenant(fetchAuth),
-        getOnboardingStatus(fetchAuth),
-        getAccountLegal(fetchAuth),
+      const [onbData, legalData] = await Promise.all([
+        getOnboardingStatus(fetchAuth, slug),
+        getAccountLegal(fetchAuth, slug),
       ])
-      setTenant(tenantData)
       setOnboarding(onbData)
       setLegal(legalData)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Laden fehlgeschlagen")
-    } finally {
-      setLoading(false)
     }
-  }, [fetchAuth])
+  }, [fetchAuth, slug])
 
   useEffect(() => {
     load()
@@ -61,7 +55,7 @@ export default function AccountOverviewClient() {
   async function finishOnboarding() {
     setFinishing(true)
     try {
-      const ok = await completeOnboarding(fetchAuth)
+      const ok = await completeOnboarding(fetchAuth, slug)
       if (ok) {
         setOnboarding((prev) => (prev ? { ...prev, completedAt: new Date().toISOString() } : prev))
       }
@@ -73,7 +67,7 @@ export default function AccountOverviewClient() {
   // The day-to-day ops admin lives on the tenant's subdomain, derived from the
   // platform host we're on (env-agnostic: localhost / staging / prod).
   const opsBaseUrl =
-    typeof window !== "undefined" && tenant ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
+    typeof window !== "undefined" ? `${window.location.protocol}//${activeTenant.slug}.${window.location.host}` : ""
 
   const brandMissing = legal
     ? [
@@ -97,7 +91,7 @@ export default function AccountOverviewClient() {
       key: "brand",
       label: "Marke & Rechtliches",
       description: "Hinterlege Firmenname, Adresse und Kontakt-E-Mail fürs Impressum. Logo und Farben sind optional.",
-      href: "/account/branding",
+      href: `/t/${slug}/branding`,
       done: onboarding?.steps.brand ?? false,
       missing: brandMissing,
     },
@@ -105,14 +99,14 @@ export default function AccountOverviewClient() {
       key: "payments",
       label: "Zahlungen verbinden",
       description: "Verbinde dein Payrexx-Konto, damit Kunden online bezahlen können.",
-      href: "/account/payrexx",
+      href: `/t/${slug}/payrexx`,
       done: onboarding?.steps.payments ?? false,
     },
     {
       key: "domain",
       label: "Eigene Domain",
       description: "Optional: Verknüpfe eine eigene Domain mit deinem Auftritt.",
-      href: "/account/domains",
+      href: `/t/${slug}/domains`,
       done: onboarding?.steps.domain ?? false,
       optional: true,
     },
@@ -127,9 +121,7 @@ export default function AccountOverviewClient() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="font-primary text-2xl">
-          {loading ? "Laden…" : `Willkommen${tenant ? `, ${tenant.name}` : ""}`}
-        </h1>
+        <h1 className="font-primary text-2xl">Willkommen, {activeTenant.displayName || activeTenant.name}</h1>
         <p className="text-muted-foreground text-sm">Verwalte hier deinen Auftritt, deine Domains und dein Konto.</p>
       </div>
 
@@ -219,22 +211,16 @@ export default function AccountOverviewClient() {
           </p>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          {tenant ? (
-            <>
-              <Button asChild>
-                <a href={`${opsBaseUrl}/admin`} target="_blank" rel="noopener noreferrer">
-                  Betriebs-Admin öffnen
-                </a>
-              </Button>
-              <Button asChild variant="outline">
-                <a href={`${opsBaseUrl}/food`} target="_blank" rel="noopener noreferrer">
-                  Storefront ansehen
-                </a>
-              </Button>
-            </>
-          ) : (
-            <p className="text-muted-foreground text-sm">Laden…</p>
-          )}
+          <Button asChild>
+            <a href={`${opsBaseUrl}/admin`} target="_blank" rel="noopener noreferrer">
+              Betriebs-Admin öffnen
+            </a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={`${opsBaseUrl}/food`} target="_blank" rel="noopener noreferrer">
+              Storefront ansehen
+            </a>
+          </Button>
         </CardContent>
       </Card>
 
@@ -246,7 +232,7 @@ export default function AccountOverviewClient() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/account/branding">Marke bearbeiten</Link>
+              <Link href={`/t/${slug}/branding`}>Marke bearbeiten</Link>
             </Button>
           </CardContent>
         </Card>
@@ -257,7 +243,7 @@ export default function AccountOverviewClient() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/account/payrexx">Zahlungen verwalten</Link>
+              <Link href={`/t/${slug}/payrexx`}>Zahlungen verwalten</Link>
             </Button>
           </CardContent>
         </Card>
@@ -268,20 +254,18 @@ export default function AccountOverviewClient() {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/account/domains">Domains verwalten</Link>
+              <Link href={`/t/${slug}/domains`}>Domains verwalten</Link>
             </Button>
           </CardContent>
         </Card>
       </div>
 
-      {tenant && (
-        <p className="text-muted-foreground text-xs">
-          Subdomain:{" "}
-          <span className="font-mono">
-            {tenant.slug}.{typeof window !== "undefined" ? window.location.host : "comanda.leys.ch"}
-          </span>
-        </p>
-      )}
+      <p className="text-muted-foreground text-xs">
+        Subdomain:{" "}
+        <span className="font-mono">
+          {activeTenant.slug}.{typeof window !== "undefined" ? window.location.host : "comanda.leys.ch"}
+        </span>
+      </p>
     </div>
   )
 }

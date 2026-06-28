@@ -32,3 +32,30 @@ OnboardingSteps:
       type: boolean
     domain:
       type: boolean
+
+ManageableTenant:
+  type: object
+  required: [id, slug, name, displayName]
+  properties:
+    id:
+      type: string
+    slug:
+      type: string
+    name:
+      type: string
+    displayName:
+      type: string
+    logoUrl:
+      type: string
+    role:
+      type: string
+      description: The caller's membership role; empty for a platform admin who is not a member.
+
+ManageableTenantList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/ManageableTenant"

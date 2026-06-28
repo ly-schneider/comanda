@@ -8,9 +8,43 @@ import (
 	"backend/internal/response"
 )
 
-// GetAccountTenant returns the tenant the request resolved to via the
-// user→tenant resolver (the logged-in vendor's active organization).
-func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request) {
+// ListAccountTenants lists the tenants the user may manage. Runs before any
+// tenant is bound, so it skips ResolveVendorTenant.
+func (h *Handlers) ListAccountTenants(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !auth.IsPlatformContext(ctx) {
+		writeError(w, http.StatusBadRequest, "not_platform_host", "Account routes are only available on the platform host")
+		return
+	}
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		return
+	}
+
+	tenants, err := h.account.ListManageableTenants(ctx, userID, auth.IsPlatformAdmin(ctx))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
+		return
+	}
+
+	items := make([]generated.ManageableTenant, 0, len(tenants))
+	for _, t := range tenants {
+		item := generated.ManageableTenant{Id: t.ID, Slug: t.Slug, Name: t.Name, DisplayName: t.DisplayName}
+		if t.LogoURL != "" {
+			item.LogoUrl = ptr(t.LogoURL)
+		}
+		if t.Role != "" {
+			item.Role = ptr(t.Role)
+		}
+		items = append(items, item)
+	}
+	response.WriteJSON(w, http.StatusOK, generated.ManageableTenantList{Items: items})
+}
+
+// GetAccountTenant returns the tenant the request resolved to. The slug is
+// already bound by ResolveVendorTenant, so the path param is unused here.
+func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request, _ generated.AccountTenantParam) {
 	ctx := r.Context()
 	tenantID, ok := auth.GetTenantID(ctx)
 	if !ok {

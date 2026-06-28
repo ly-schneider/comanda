@@ -44,7 +44,7 @@ func (AdminInvite) Fields() []ent.Field {
 			Default("pending").
 			StorageKey("status"),
 		field.Enum("member_role").
-			Values("admin", "staff", "catalog").
+			Values("admin", "app_admin", "staff", "catalog").
 			Default("staff").
 			StorageKey("member_role"),
 		field.Time("expires_at").

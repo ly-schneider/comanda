@@ -197,7 +197,7 @@ func renderReceiptHTML(data ReceiptEmailData) string {
                 <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;">
                   <tr>
                     <td style="font:12px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#7B7B7B;">
-                      <strong style="color:#000000;">Comanda</strong><br>
+                      <strong style="color:#000000;">%s</strong><br>
                       Powered by Leys
                     </td>
                   </tr>
@@ -214,15 +214,16 @@ func renderReceiptHTML(data ReceiptEmailData) string {
     </table>
   </body>
 </html>`,
-		data.Brand,
-		data.Brand, formatCHF(data.TotalCents),
-		data.Brand,
+		escHTML(data.Brand),
+		escHTML(data.Brand), formatCHF(data.TotalCents),
+		escHTML(data.Brand),
 		escHTML(data.OrderID),
 		escHTML(data.OrderDate),
 		escHTML(data.Method),
 		itemRows.String(),
 		formatCHF(data.TotalCents),
 		escHTML(data.OrderURL),
+		escHTML(data.Brand),
 	)
 }
 

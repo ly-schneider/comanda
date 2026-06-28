@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { isMember, isStaff, isTenantAdmin, type MemberTier, ROLE_LABELS_DE, tierAllows } from "./rbac"
+import { isAppAdmin, isMember, isStaff, isTenantAdmin, type MemberTier, ROLE_LABELS_DE, tierAllows } from "./rbac"
 
-const TIERS: MemberTier[] = ["owner", "admin", "staff", "catalog"]
+const TIERS: MemberTier[] = ["owner", "admin", "app_admin", "staff", "catalog"]
 // Values outside the union still reach these helpers at runtime (e.g. a stale
 // member.role from the API), so the fail-closed paths must be exercised.
 const NON_TIERS = [null, undefined, "" as unknown as MemberTier, "superuser" as unknown as MemberTier]
@@ -15,10 +15,18 @@ describe("tierAllows", () => {
     }
   })
 
-  it("staff satisfies staff and catalog but not admin", () => {
+  it("staff satisfies staff and catalog but not app_admin or admin", () => {
     expect(tierAllows("staff", "admin")).toBe(false)
+    expect(tierAllows("staff", "app_admin")).toBe(false)
     expect(tierAllows("staff", "staff")).toBe(true)
     expect(tierAllows("staff", "catalog")).toBe(true)
+  })
+
+  it("app_admin satisfies app_admin and below but not admin", () => {
+    expect(tierAllows("app_admin", "admin")).toBe(false)
+    expect(tierAllows("app_admin", "app_admin")).toBe(true)
+    expect(tierAllows("app_admin", "staff")).toBe(true)
+    expect(tierAllows("app_admin", "catalog")).toBe(true)
   })
 
   it("catalog satisfies only catalog", () => {
@@ -37,19 +45,32 @@ describe("tierAllows", () => {
 })
 
 describe("isTenantAdmin", () => {
-  it("is true only for owner and admin", () => {
+  it("is true only for owner and admin (app_admin is hard-blocked)", () => {
     expect(isTenantAdmin("owner")).toBe(true)
     expect(isTenantAdmin("admin")).toBe(true)
+    expect(isTenantAdmin("app_admin")).toBe(false)
     expect(isTenantAdmin("staff")).toBe(false)
     expect(isTenantAdmin("catalog")).toBe(false)
     for (const t of NON_TIERS) expect(isTenantAdmin(t)).toBe(false)
   })
 })
 
+describe("isAppAdmin", () => {
+  it("is true for owner, admin and app_admin, not staff or catalog", () => {
+    expect(isAppAdmin("owner")).toBe(true)
+    expect(isAppAdmin("admin")).toBe(true)
+    expect(isAppAdmin("app_admin")).toBe(true)
+    expect(isAppAdmin("staff")).toBe(false)
+    expect(isAppAdmin("catalog")).toBe(false)
+    for (const t of NON_TIERS) expect(isAppAdmin(t)).toBe(false)
+  })
+})
+
 describe("isStaff", () => {
-  it("is true for owner, admin and staff, not catalog", () => {
+  it("is true for owner, admin, app_admin and staff, not catalog", () => {
     expect(isStaff("owner")).toBe(true)
     expect(isStaff("admin")).toBe(true)
+    expect(isStaff("app_admin")).toBe(true)
     expect(isStaff("staff")).toBe(true)
     expect(isStaff("catalog")).toBe(false)
     for (const t of NON_TIERS) expect(isStaff(t)).toBe(false)

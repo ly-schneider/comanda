@@ -1,13 +1,40 @@
+tenants:
+  get:
+    tags: [Account]
+    summary: List the tenants the user may manage
+    description: >
+      Lists the tenants the signed-in user may manage from the account hub: their
+      owner/admin memberships, or every tenant for a platform admin. Runs before
+      any single tenant is bound.
+    operationId: listAccountTenants
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Manageable tenants
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/account.yaml#/ManageableTenantList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 tenant:
   get:
     tags: [Account]
     summary: Get the vendor's resolved tenant
     description: >
-      Returns the tenant resolved from the logged-in vendor's active
-      organization (platform host only). Available to any member of the tenant.
+      Returns the tenant resolved from the {accountTenant} slug (platform host
+      only).
     operationId: getAccountTenant
     security:
       - sessionAuth: []
+    parameters:
+      - $ref: "#/AccountTenantParam"
     responses:
       "200":
         description: Tenant summary
@@ -28,16 +55,56 @@ tenant:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+invites:
+  post:
+    tags: [Account]
+    summary: Invite a tenant administrator
+    description: >
+      Creates a settings-admin (admin) invite for the tenant. Only the admin role
+      may be granted here; app-level roles are invited from the tenant /admin.
+    operationId: createAccountInvite
+    security:
+      - sessionAuth: []
+    parameters:
+      - $ref: "#/AccountTenantParam"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/invites.yaml#/InviteCreate"
+    responses:
+      "201":
+        description: Invite created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/invites.yaml#/Invite"
+      "400":
+        description: Invalid body or role
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 onboarding:
   get:
     tags: [Account]
     summary: Get the onboarding checklist
     description: >
       Returns the vendor's onboarding progress, derived from tenant data plus the
-      persisted completed/dismissed flag. Available to any member of the tenant.
+      persisted completed/dismissed flag.
     operationId: getOnboardingStatus
     security:
       - sessionAuth: []
+    parameters:
+      - $ref: "#/AccountTenantParam"
     responses:
       "200":
         description: Onboarding status
@@ -68,6 +135,8 @@ onboarding-complete:
     operationId: completeOnboarding
     security:
       - sessionAuth: []
+    parameters:
+      - $ref: "#/AccountTenantParam"
     responses:
       "204":
         description: Onboarding marked complete
@@ -83,3 +152,11 @@ onboarding-complete:
           application/json:
             schema:
               $ref: "../schemas/common.yaml#/Error"
+
+AccountTenantParam:
+  name: accountTenant
+  in: path
+  required: true
+  description: Tenant slug
+  schema:
+    type: string

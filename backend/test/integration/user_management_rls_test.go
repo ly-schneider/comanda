@@ -68,4 +68,26 @@ func TestUserManagementOrgScoped(t *testing.T) {
 			`SELECT EXISTS(SELECT 1 FROM "user" WHERE id = $1)`, foreignB).Scan(&exists))
 		require.True(t, exists)
 	})
+
+	t.Run("delete of an own member removes the membership but keeps the global user", func(t *testing.T) {
+		staffA := env.seedUser(t)
+		env.seedMember(t, orgA, staffA, "staff")
+
+		_, total, err := svc.List(ctx)
+		require.NoError(t, err)
+		require.Equal(t, int64(2), total)
+
+		require.NoError(t, svc.Delete(ctx, staffA))
+
+		_, total, err = svc.List(ctx)
+		require.NoError(t, err)
+		require.Equal(t, int64(1), total)
+
+		tx, ok := repository.RequestTxFromContext(ctx)
+		require.True(t, ok)
+		var userExists bool
+		require.NoError(t, tx.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM "user" WHERE id = $1)`, staffA).Scan(&userExists))
+		require.True(t, userExists)
+	})
 }
