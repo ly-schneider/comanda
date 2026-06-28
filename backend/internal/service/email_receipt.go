@@ -214,16 +214,16 @@ func renderReceiptHTML(data ReceiptEmailData) string {
     </table>
   </body>
 </html>`,
-		data.Brand,
-		data.Brand, formatCHF(data.TotalCents),
-		data.Brand,
+		escHTML(data.Brand),
+		escHTML(data.Brand), formatCHF(data.TotalCents),
+		escHTML(data.Brand),
 		escHTML(data.OrderID),
 		escHTML(data.OrderDate),
 		escHTML(data.Method),
 		itemRows.String(),
 		formatCHF(data.TotalCents),
 		escHTML(data.OrderURL),
-		data.Brand,
+		escHTML(data.Brand),
 	)
 }
 

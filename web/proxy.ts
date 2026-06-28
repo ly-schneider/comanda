@@ -45,9 +45,13 @@ export async function proxy(request: NextRequest) {
     })
   }
 
-  // The platform-admin control plane and vendor account hub live only on the
-  // platform host; on a tenant or custom-domain host they do not exist.
-  if ((pathname.startsWith("/platform-admin") || pathname.startsWith("/account")) && tenantResult.type !== "platform") {
+  // The platform-admin control plane and the vendor account hub (/account
+  // redirector + /t/<tenant>) live only on the platform host; on a tenant or
+  // custom-domain host they do not exist.
+  if (
+    (pathname.startsWith("/platform-admin") || pathname.startsWith("/account") || pathname.startsWith("/t/")) &&
+    tenantResult.type !== "platform"
+  ) {
     const url = request.nextUrl.clone()
     url.pathname = "/"
     url.search = ""
@@ -55,7 +59,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Checkout and Orders are intentionally NOT protected to allow guest flows
-  const protectedPrefixes = ["/profile", "/admin", "/platform-admin", "/account"]
+  const protectedPrefixes = ["/profile", "/admin", "/platform-admin", "/account", "/t/"]
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p))
   if (isProtected) {
     // Check both names: x-forwarded-proto can disagree with the cookie's prefix

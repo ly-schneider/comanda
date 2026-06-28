@@ -71,11 +71,20 @@ func (s *userService) UpdateName(ctx context.Context, id string, name string) er
 	return s.userRepo.UpdateName(ctx, id, name)
 }
 
+// Delete removes the user from the bound tenant only — it deletes the member row,
+// not the global user account, so a user who belongs to other tenants keeps those
+// memberships. requireOrgMember already 404s a non-member.
 func (s *userService) Delete(ctx context.Context, id string) error {
 	if err := s.requireOrgMember(ctx, id); err != nil {
 		return err
 	}
-	return s.userRepo.Delete(ctx, id)
+	tx, ok := repository.RequestTxFromContext(ctx)
+	if !ok {
+		return errors.New("user service: no request tx in context")
+	}
+	_, err := tx.ExecContext(ctx,
+		"DELETE FROM member WHERE organization_id = app_current_org_id() AND user_id = $1", id)
+	return err
 }
 
 // orgMemberUserIDs returns the user IDs that belong to the bound tenant's

@@ -8,15 +8,6 @@ import (
 	"backend/internal/response"
 )
 
-type accountTenant struct {
-	ID          string `json:"id"`
-	Slug        string `json:"slug"`
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	LogoURL     string `json:"logoUrl,omitempty"`
-	Role        string `json:"role,omitempty"`
-}
-
 // ListAccountTenants lists the tenants the user may manage. Runs before any
 // tenant is bound, so it skips ResolveVendorTenant.
 func (h *Handlers) ListAccountTenants(w http.ResponseWriter, r *http.Request) {
@@ -37,23 +28,23 @@ func (h *Handlers) ListAccountTenants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]accountTenant, 0, len(tenants))
+	items := make([]generated.ManageableTenant, 0, len(tenants))
 	for _, t := range tenants {
-		items = append(items, accountTenant{
-			ID:          t.ID,
-			Slug:        t.Slug,
-			Name:        t.Name,
-			DisplayName: t.DisplayName,
-			LogoURL:     t.LogoURL,
-			Role:        t.Role,
-		})
+		item := generated.ManageableTenant{Id: t.ID, Slug: t.Slug, Name: t.Name, DisplayName: t.DisplayName}
+		if t.LogoURL != "" {
+			item.LogoUrl = ptr(t.LogoURL)
+		}
+		if t.Role != "" {
+			item.Role = ptr(t.Role)
+		}
+		items = append(items, item)
 	}
-	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	response.WriteJSON(w, http.StatusOK, generated.ManageableTenantList{Items: items})
 }
 
-// GetAccountTenant returns the tenant the request resolved to via the
-// user→tenant resolver (the logged-in vendor's active organization).
-func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request) {
+// GetAccountTenant returns the tenant the request resolved to. The slug is
+// already bound by ResolveVendorTenant, so the path param is unused here.
+func (h *Handlers) GetAccountTenant(w http.ResponseWriter, r *http.Request, _ generated.AccountTenantParam) {
 	ctx := r.Context()
 	tenantID, ok := auth.GetTenantID(ctx)
 	if !ok {

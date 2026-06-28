@@ -60,7 +60,7 @@ func (h *Handlers) UpdateUser(w http.ResponseWriter, r *http.Request, userId str
 	response.WriteJSON(w, http.StatusOK, toAPIUser(user))
 }
 
-// DeleteUser removes a user.
+// DeleteUser removes the user from the current tenant (its member row).
 // (DELETE /users/{userId})
 func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request, userId string) {
 	if err := h.users.Delete(r.Context(), userId); err != nil {

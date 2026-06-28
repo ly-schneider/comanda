@@ -297,7 +297,7 @@ func NewRouter(
 		// Runs before a tenant is bound, so RequireAuth only — no ResolveVendorTenant.
 		v1.Group(func(acctList chi.Router) {
 			acctList.Use(betterAuthMw.RequireAuth())
-			acctList.Get("/account/tenants", apiHandlers.ListAccountTenants)
+			acctList.Get("/account/tenants", wrapper.ListAccountTenants)
 		})
 
 		// ── Account routes (vendor self-service; platform host only) ──
@@ -328,7 +328,7 @@ func NewRouter(
 			account.Post("/domains/{id}/verify", wrapper.VerifyDomain)
 
 			account.Get("/invites", wrapper.ListInvites)
-			account.Post("/invites", apiHandlers.CreateAccountInvite)
+			account.Post("/invites", wrapper.CreateAccountInvite)
 			account.Get("/invites/{inviteId}", wrapper.GetInvite)
 			account.Delete("/invites/{inviteId}", wrapper.DeleteInvite)
 

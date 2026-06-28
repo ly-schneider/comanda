@@ -48,7 +48,6 @@ function TenantBoundary({ tenant, children }: { tenant: string; children: React.
       router.replace("/")
       return
     }
-    // The slug isn't one this user may manage — send them to their first tenant.
     if (!tenants.some((x) => x.slug === tenant)) {
       router.replace(`/t/${tenants[0]!.slug}`)
     }

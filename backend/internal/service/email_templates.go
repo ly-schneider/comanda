@@ -127,7 +127,7 @@ func renderInviteHTML(data InviteEmailData) string {
       </tr>
     </table>
   </body>
-</html>`, data.Brand, data.Brand, data.Brand, data.Brand, data.InviteURL, data.ExpiresAt, data.InviteURL)
+</html>`, escHTML(data.Brand), escHTML(data.Brand), escHTML(data.Brand), escHTML(data.Brand), data.InviteURL, data.ExpiresAt, data.InviteURL)
 }
 
 // OTPType represents the type of OTP being sent.
@@ -292,5 +292,5 @@ func renderOTPHTML(data OTPEmailData) string {
       </tr>
     </table>
   </body>
-</html>`, data.Brand, data.Brand, data.Code, data.CodeTTL, data.Brand, data.Code, data.CodeTTL, data.SupportNote)
+</html>`, escHTML(data.Brand), escHTML(data.Brand), data.Code, data.CodeTTL, escHTML(data.Brand), data.Code, data.CodeTTL, data.SupportNote)
 }

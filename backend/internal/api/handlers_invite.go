@@ -72,9 +72,10 @@ func (h *Handlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusCreated, toAPIInvite(invite))
 }
 
-// CreateAccountInvite creates a settings-admin invite from the account hub.
-// (POST /account/invites)
-func (h *Handlers) CreateAccountInvite(w http.ResponseWriter, r *http.Request) {
+// CreateAccountInvite creates a settings-admin invite from the account hub. The
+// tenant is bound by ResolveVendorTenant, so the path param is unused here.
+// (POST /account/{accountTenant}/invites)
+func (h *Handlers) CreateAccountInvite(w http.ResponseWriter, r *http.Request, _ generated.AccountTenantParam) {
 	ctx := r.Context()
 
 	userID, ok := auth.GetUserID(ctx)

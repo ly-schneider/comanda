@@ -50,6 +50,11 @@ describe("proxy — custom domain (BYO)", () => {
     expect(redirectTarget(res)).toBe("/")
   })
 
+  it("redirects /t/<tenant> to / (platform-only hub)", async () => {
+    const res = await run(host, "/t/incil", { session: true })
+    expect(redirectTarget(res)).toBe("/")
+  })
+
   it("redirects /platform-admin to / (platform-only surface)", async () => {
     const res = await run(host, "/platform-admin", { session: true })
     expect(redirectTarget(res)).toBe("/")
@@ -119,6 +124,17 @@ describe("proxy — platform host", () => {
     const res = await run(host, "/platform-admin", { session: true })
     expect(redirectTarget(res)).toBeNull()
     expect(res.status).toBe(200)
+  })
+
+  it("serves /t/<tenant> with a session", async () => {
+    const res = await run(host, "/t/incil", { session: true })
+    expect(redirectTarget(res)).toBeNull()
+    expect(res.status).toBe(200)
+  })
+
+  it("redirects /t/<tenant> without a session to /login", async () => {
+    const res = await run(host, "/t/incil")
+    expect(redirectTarget(res)).toBe("/login")
   })
 
   it("redirects /account without a session to /login", async () => {
