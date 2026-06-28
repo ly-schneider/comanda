@@ -8,11 +8,16 @@ import (
 
 func testBranding(name string) emailBranding {
 	f := resolveFont("inter")
+	r := resolveRadius("rounded")
 	return emailBranding{
-		Name:      name,
-		FontName:  f.name,
-		FontHref:  f.href,
-		FontStack: f.fontStack(),
+		Name:         name,
+		FontName:     f.name,
+		FontHref:     f.href,
+		FontStack:    f.fontStack(),
+		ButtonBg:     "#0a0a0a",
+		ButtonText:   "#ffffff",
+		IconRadius:   r.control,
+		ButtonRadius: r.cta,
 	}
 }
 

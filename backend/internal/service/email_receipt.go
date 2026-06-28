@@ -87,50 +87,54 @@ func renderReceiptHTML(ctx context.Context, b emailBranding, data ReceiptEmailDa
 }
 
 const receiptContentMJML = `{{define "content"}}
-<mj-section padding="26px 24px 2px 24px">
+<mj-section padding="0 44px">
   <mj-column>
-    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 6px 0">Deine Quittung</mj-text>
-    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">Vielen Dank für deine Bestellung!</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="14px 24px 4px 24px">
-  <mj-column css-class="panel" background-color="#F4F3F1" border="1px solid #E6E4E2" border-radius="10px" padding="14px 16px">
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.5">Bestellnr.</mj-text>
-    <mj-text css-class="muted" font-family="{{.MonoStack}}" font-size="11px" color="#9A9A9A" padding="2px 0 8px 0">{{.OrderID | esc}}</mj-text>
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Datum: {{.OrderDate | esc}}</mj-text>
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Zahlungsart: {{.Method | esc}}</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="12px 24px 0 24px">
-  <mj-column>
-    <mj-table css-class="body" cellpadding="0" cellspacing="0" width="100%" font-size="14px" color="#1A1A1A" line-height="1.4">
+    <mj-text css-class="heading" font-size="23px" font-weight="700" color="#0a0a0a" line-height="1.3" padding="0 0 6px 0">Deine Quittung</mj-text>
+    <mj-text css-class="body" color="#737373" line-height="1.6" padding="0 0 26px 0">Vielen Dank für deine Bestellung!</mj-text>
+
+    <mj-table css-class="body" cellpadding="0" cellspacing="0" width="100%" font-size="14px" line-height="1.4">
+      <tr>
+        <td style="padding:7px 0;color:#737373;">Bestellnummer</td>
+        <td align="right" style="padding:7px 0;color:#0a0a0a;">{{.OrderID | esc}}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 0;color:#737373;">Datum</td>
+        <td align="right" style="padding:7px 0;color:#0a0a0a;">{{.OrderDate | esc}}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 0;color:#737373;">Zahlungsart</td>
+        <td align="right" style="padding:7px 0;color:#0a0a0a;">{{.Method | esc}}</td>
+      </tr>
+    </mj-table>
+
+    <mj-divider border-width="1px" border-color="#e5e5e5" padding="18px 0" />
+
+    <mj-table css-class="body" cellpadding="0" cellspacing="0" width="100%" font-size="15px" line-height="1.4">
       {{range .Items}}
       <tr>
-        <td style="padding:8px 0;border-bottom:1px solid #EDEBE9;color:#1A1A1A;">{{.Label}}</td>
-        <td align="right" style="padding:8px 0;border-bottom:1px solid #EDEBE9;color:#1A1A1A;white-space:nowrap;">{{.Price}}</td>
+        <td style="padding:9px 0;color:#0a0a0a;">{{.Label}}</td>
+        <td align="right" style="padding:9px 0;color:#0a0a0a;white-space:nowrap;">{{.Price}}</td>
       </tr>
       {{range .Children}}
       <tr>
-        <td colspan="2" style="padding:2px 0 2px 14px;border-bottom:1px solid #EDEBE9;color:#9A9A9A;font-size:12px;">{{.}}</td>
+        <td colspan="2" style="padding:0 0 7px 16px;color:#737373;font-size:13px;">{{.}}</td>
       </tr>
       {{end}}
       {{end}}
+    </mj-table>
+
+    <mj-divider border-width="1px" border-color="#e5e5e5" padding="16px 0" />
+
+    <mj-table css-class="heading" cellpadding="0" cellspacing="0" width="100%" font-size="16px">
       <tr>
-        <td style="padding:12px 0 0 0;font-weight:700;color:#1A1A1A;">Total</td>
-        <td align="right" style="padding:12px 0 0 0;font-weight:700;color:#1A1A1A;white-space:nowrap;">{{.Total}}</td>
+        <td style="font-weight:700;color:#0a0a0a;">Total</td>
+        <td align="right" style="font-weight:700;color:#0a0a0a;white-space:nowrap;">{{.Total}}</td>
       </tr>
     </mj-table>
-  </mj-column>
-</mj-section>
-<mj-section padding="6px 24px 0 24px">
-  <mj-column>
-    <mj-text css-class="muted" font-size="11px" color="#9A9A9A" line-height="1.5">Alle Preise in CHF inkl. MwSt.</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="18px 24px 26px 24px">
-  <mj-column>
-    <mj-button css-class="btn" width="100%" background-color="#1A1A1A" color="#FAFAFA" border-radius="10px" font-size="15px" font-weight="600" inner-padding="16px 24px" href="{{.URL | esc}}">Bestellung &amp; QR-Code anzeigen</mj-button>
-    <mj-text css-class="muted" font-size="11px" color="#9A9A9A" line-height="1.5" padding="14px 0 0 0">Dies ist eine automatisch generierte Quittung. Bitte bewahre diese E-Mail als Zahlungsbeleg auf.</mj-text>
+    <mj-text css-class="body" font-size="12px" color="#737373" line-height="1.5" padding="8px 0 0 0">Alle Preise in CHF inkl. MwSt.</mj-text>
+
+    <mj-button css-class="btn" width="100%" background-color="{{.Branding.ButtonBg}}" color="{{.Branding.ButtonText}}" border-radius="{{.Branding.ButtonRadius}}" font-size="15px" font-weight="600" inner-padding="16px 24px" padding="28px 0 0 0" href="{{.URL | esc}}">Bestellung &amp; QR-Code anzeigen</mj-button>
+    <mj-text css-class="body" font-size="12px" color="#737373" line-height="1.5" padding="16px 0 0 0">Dies ist eine automatisch generierte Quittung. Bitte bewahre diese E-Mail als Zahlungsbeleg auf.</mj-text>
   </mj-column>
 </mj-section>
 {{end}}`

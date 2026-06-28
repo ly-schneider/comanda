@@ -46,27 +46,15 @@ func renderInviteHTML(ctx context.Context, b emailBranding, data InviteEmailData
 }
 
 const inviteContentMJML = `{{define "content"}}
-<mj-section padding="26px 24px 4px 24px">
+<mj-section padding="0 44px">
   <mj-column>
-    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 8px 0">Einladung als {{.RoleLabel | esc}}</mj-text>
-    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">Du wurdest eingeladen, als {{.RoleLabel | esc}} bei {{.Branding.Name | esc}} beizutreten. Klicke auf den Button unten, um die Einladung anzunehmen.</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="18px 24px 6px 24px">
-  <mj-column>
-    <mj-button css-class="btn" width="100%" background-color="#1A1A1A" color="#FAFAFA" border-radius="10px" font-size="15px" font-weight="600" inner-padding="15px 24px" href="{{.URL | esc}}">Einladung annehmen</mj-button>
-  </mj-column>
-</mj-section>
-<mj-section padding="6px 24px 0 24px">
-  <mj-column>
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Diese Einladung ist gültig bis: {{.ExpiresAt | esc}}</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="14px 24px 26px 24px">
-  <mj-column>
-    <mj-divider border-width="1px" border-color="#E6E4E2" padding="0 0 14px 0" />
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6" padding="0 0 6px 0">Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:</mj-text>
-    <mj-text css-class="muted" font-family="{{.MonoStack}}" font-size="11px" color="#9A9A9A" line-height="1.5">{{.URL | esc}}</mj-text>
+    <mj-text css-class="heading" font-size="23px" font-weight="700" color="#0a0a0a" line-height="1.3" padding="0 0 8px 0">Einladung als {{.RoleLabel | esc}}</mj-text>
+    <mj-text css-class="body" color="#737373" line-height="1.6" padding="0 0 28px 0">Du wurdest eingeladen, als {{.RoleLabel | esc}} bei {{.Branding.Name | esc}} beizutreten. Klicke auf den Button unten, um die Einladung anzunehmen.</mj-text>
+    <mj-button css-class="btn" width="100%" background-color="{{.Branding.ButtonBg}}" color="{{.Branding.ButtonText}}" border-radius="{{.Branding.ButtonRadius}}" font-size="15px" font-weight="600" inner-padding="15px 24px" padding="0 0 22px 0" href="{{.URL | esc}}">Einladung annehmen</mj-button>
+    <mj-text css-class="body" font-size="13px" color="#737373" line-height="1.6" padding="0 0 26px 0">Diese Einladung ist gültig bis: {{.ExpiresAt | esc}}</mj-text>
+    <mj-divider border-width="1px" border-color="#e5e5e5" padding="0 0 26px 0" />
+    <mj-text css-class="body" font-size="13px" color="#737373" line-height="1.6" padding="0 0 6px 0">Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:</mj-text>
+    <mj-text css-class="body" font-size="12px" color="#737373" line-height="1.5">{{.URL | esc}}</mj-text>
   </mj-column>
 </mj-section>
 {{end}}`
@@ -182,27 +170,15 @@ func renderOTPHTML(ctx context.Context, b emailBranding, data OTPEmailData, otpT
 }
 
 const otpContentMJML = `{{define "content"}}
-<mj-section padding="26px 24px 4px 24px">
+<mj-section padding="0 44px">
   <mj-column>
-    <mj-text css-class="heading" font-size="21px" font-weight="700" color="#1A1A1A" line-height="1.3" padding="0 0 8px 0">{{.Heading | esc}}</mj-text>
-    <mj-text css-class="body" color="#6E6E6E" line-height="1.6">{{.Intro | esc}}</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="12px 24px">
-  <mj-column css-class="panel" background-color="#F4F3F1" border="1px solid #E6E4E2" border-radius="10px" padding="22px 12px">
-    <mj-text css-class="code" align="center" font-family="{{.MonoStack}}" font-size="32px" font-weight="700" letter-spacing="8px" color="#1A1A1A" line-height="1.1">{{.Code | esc}}</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="10px 24px 0 24px">
-  <mj-column>
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">{{.TTLNote | esc}}</mj-text>
-  </mj-column>
-</mj-section>
-<mj-section padding="14px 24px 26px 24px">
-  <mj-column>
-    <mj-divider border-width="1px" border-color="#E6E4E2" padding="0 0 14px 0" />
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6" padding="0 0 4px 0">{{.SupportNote | esc}}</mj-text>
-    <mj-text css-class="muted" font-size="12px" color="#9A9A9A" line-height="1.6">Wenn du dies nicht angefordert hast, kannst du diese E-Mail ignorieren.</mj-text>
+    <mj-text css-class="heading" font-size="23px" font-weight="700" color="#0a0a0a" line-height="1.3" padding="0 0 8px 0">{{.Heading | esc}}</mj-text>
+    <mj-text css-class="body" color="#737373" line-height="1.6" padding="0 0 30px 0">{{.Intro | esc}}</mj-text>
+    <mj-text css-class="heading" align="center" font-size="38px" font-weight="700" letter-spacing="10px" color="#0a0a0a" line-height="1.1" padding="6px 0 30px 0">{{.Code | esc}}</mj-text>
+    <mj-text css-class="body" font-size="13px" color="#737373" line-height="1.6" padding="0 0 26px 0">{{.TTLNote | esc}}</mj-text>
+    <mj-divider border-width="1px" border-color="#e5e5e5" padding="0 0 26px 0" />
+    <mj-text css-class="body" font-size="13px" color="#737373" line-height="1.6" padding="0 0 6px 0">{{.SupportNote | esc}}</mj-text>
+    <mj-text css-class="body" font-size="13px" color="#737373" line-height="1.6">Wenn du dies nicht angefordert hast, kannst du diese E-Mail ignorieren.</mj-text>
   </mj-column>
 </mj-section>
 {{end}}`

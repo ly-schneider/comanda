@@ -133,19 +133,30 @@ func (s *emailService) brandNameFrom(ctx context.Context, st *ent.Settings) stri
 	return firstNonEmpty(s.cfg.FromName, "Comanda")
 }
 
-// brandingForEmail collects the per-tenant slice of an email — name, logo,
-// font and footer contact/legal — from a single settings read. Everything else
-// in the design is a fixed neutral palette. Falls back to platform defaults for
-// no-tenant mail (account-hub OTP).
+// brandingForEmail collects the per-tenant slice of an email — name, icon,
+// font, button colour, roundness and footer contact/legal — from a single
+// settings read. The text palette stays fixed neutral. Falls back to platform
+// defaults for no-tenant mail (account-hub OTP).
 func (s *emailService) brandingForEmail(ctx context.Context) emailBranding {
 	st := s.settings(ctx)
-	b := emailBranding{Name: s.brandNameFrom(ctx, st)}
-	fontKey := ""
+	b := emailBranding{
+		Name:       s.brandNameFrom(ctx, st),
+		ButtonBg:   "#0a0a0a",
+		ButtonText: "#ffffff",
+	}
+	fontKey, radiusKey := "", ""
 	if st != nil {
 		fontKey = st.FontKey
-		if st.LogoURL != nil {
-			b.LogoURL = strings.TrimSpace(*st.LogoURL)
+		radiusKey = st.RadiusKey
+		// The square favicon matches the app's auth-screen icon; fall back to
+		// the full logo when no favicon is set.
+		if st.FaviconURL != nil && strings.TrimSpace(*st.FaviconURL) != "" {
+			b.IconURL = strings.TrimSpace(*st.FaviconURL)
+		} else if st.LogoURL != nil {
+			b.IconURL = strings.TrimSpace(*st.LogoURL)
 		}
+		b.ButtonBg = safeHex(st.ColorPrimary, b.ButtonBg)
+		b.ButtonText = safeHex(st.ColorPrimaryForeground, b.ButtonText)
 		if st.ContactEmail != nil {
 			b.SupportEmail = strings.TrimSpace(*st.ContactEmail)
 		}
@@ -158,6 +169,8 @@ func (s *emailService) brandingForEmail(ctx context.Context) emailBranding {
 	}
 	f := resolveFont(fontKey)
 	b.FontName, b.FontHref, b.FontStack = f.name, f.href, f.fontStack()
+	r := resolveRadius(radiusKey)
+	b.IconRadius, b.ButtonRadius = r.control, r.cta
 	return b
 }
 

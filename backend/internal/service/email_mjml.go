@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"regexp"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -17,36 +19,36 @@ import (
 // A Go text/template emits MJML — loops/conditionals and the Swiss German copy
 // stay in Go — and mjml-go handles the client-compatibility soup.
 //
-// Design is a fixed, tenant-agnostic neutral palette (Slack-style): only the
-// logo, display name and font are per-tenant. Colours never come from the
-// tenant brand so every tenant's mail stays legible. Emails are light-only:
-// pure #000/#fff are avoided (Gmail leaves slightly-off values alone), Apple
-// Mail is opted out of dark transforms via meta + color-scheme, and Outlook's
-// forced inversion is re-asserted through the [data-ogsc]/[data-ogsb] selectors.
+// The layout mirrors the app's auth screens: one flat background, content
+// separated by padding (no floating card), an inline icon + name header, and a
+// single CTA in the tenant's primary colour. Per-tenant: icon, name, font,
+// roundness (radius_key) and the button colour. The neutral text palette
+// (#0a0a0a / #737373 / #ffffff) is fixed so copy stays legible for any brand.
+//
+// Emails are light-only: pure #000 is avoided (#0a0a0a), Apple Mail is opted out
+// of dark transforms via meta + color-scheme, and Outlook's forced inversion is
+// re-asserted through the [data-ogsc]/[data-ogsb] selectors.
 
 const (
-	colPage      = "#F2F1EF"
-	colCard      = "#FDFDFD"
-	colBorder    = "#E6E4E2"
-	colHeading   = "#1A1A1A"
-	colBody      = "#6E6E6E"
-	colMuted     = "#9A9A9A"
-	colPanel     = "#F4F3F1"
-	colButtonBg  = "#1A1A1A"
-	colButtonTxt = "#FAFAFA"
-
-	monoStack = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+	colBg      = "#ffffff"
+	colHeading = "#0a0a0a"
+	colBody    = "#737373"
+	colBorder  = "#e5e5e5"
 )
 
-// emailBranding is the per-tenant slice of an email: name, logo and font come
-// from the tenant; the rest of the design is fixed. Name is raw (unescaped) —
-// templates pipe it through esc.
+// emailBranding is the per-tenant slice of an email. Text colours are fixed; the
+// icon, font, roundness and button colour come from the tenant. Name is raw
+// (unescaped) — templates pipe it through esc.
 type emailBranding struct {
 	Name         string
-	LogoURL      string
+	IconURL      string
 	FontName     string
 	FontHref     string
 	FontStack    string
+	ButtonBg     string
+	ButtonText   string
+	IconRadius   string
+	ButtonRadius string
 	SupportEmail string
 	LegalName    string
 	LegalAddress string
@@ -75,7 +77,7 @@ var fontByKey = map[string]fontSpec{
 	"geist":          {"Geist", gFont("Geist"), sansFallback},
 	"space-grotesk":  {"Space Grotesk", gFont("Space+Grotesk"), sansFallback},
 	"ibm-plex-sans":  {"IBM Plex Sans", gFont("IBM+Plex+Sans"), sansFallback},
-	"jetbrains-mono": {"JetBrains Mono", gFont("JetBrains+Mono"), monoStack},
+	"jetbrains-mono": {"JetBrains Mono", gFont("JetBrains+Mono"), sansFallback},
 	"lora":           {"Lora", gFont("Lora"), serifFallback},
 }
 
@@ -92,15 +94,41 @@ func (f fontSpec) fontStack() string {
 	return "'" + f.name + "', " + f.stack
 }
 
+// radiusSpec mirrors the web RADIUS_KEY_TO_VALUES so emails round like the app.
+type radiusSpec struct{ control, cta string }
+
+var radiusByKey = map[string]radiusSpec{
+	"none":    {"0px", "0px"},
+	"rounded": {"10px", "9999px"},
+	"pill":    {"9999px", "9999px"},
+}
+
+func resolveRadius(radiusKey string) radiusSpec {
+	if r, ok := radiusByKey[radiusKey]; ok {
+		return r
+	}
+	return radiusByKey["rounded"]
+}
+
+var hexRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$`)
+
+// safeHex guards tenant colours before they're interpolated into MJML/CSS
+// (defense-in-depth — colours are already hex-validated on write).
+func safeHex(v, fallback string) string {
+	if hexRe.MatchString(strings.TrimSpace(v)) {
+		return strings.TrimSpace(v)
+	}
+	return fallback
+}
+
 type baseView struct {
-	Subject   string
-	Preview   string
-	Branding  emailBranding
-	MonoStack string
+	Subject  string
+	Preview  string
+	Branding emailBranding
 }
 
 func newBaseView(subject, preview string, b emailBranding) baseView {
-	return baseView{Subject: subject, Preview: preview, Branding: b, MonoStack: monoStack}
+	return baseView{Subject: subject, Preview: preview, Branding: b}
 }
 
 var emailFuncs = template.FuncMap{"esc": html.EscapeString}
@@ -141,7 +169,7 @@ const baseMJML = `{{define "base"}}<mjml>
     <mj-preview>{{.Preview | esc}}</mj-preview>
     <mj-attributes>
       <mj-all font-family="{{.Branding.FontStack}}" />
-      <mj-text font-size="14px" line-height="1.6" color="` + colBody + `" padding="0" />
+      <mj-text font-size="15px" line-height="1.6" color="` + colBody + `" padding="0" />
       <mj-button padding="0" />
       <mj-table padding="0" />
       <mj-image padding="0" />
@@ -151,38 +179,31 @@ const baseMJML = `{{define "base"}}<mjml>
     <mj-style>
       :root { color-scheme: light only; supported-color-schemes: light; }
       a { color: ` + colHeading + `; }
-      [data-ogsb] .page { background: ` + colPage + ` !important; }
-      [data-ogsb] .card { background: ` + colCard + ` !important; }
-      [data-ogsb] .panel { background: ` + colPanel + ` !important; }
-      [data-ogsb] .btn td { background: ` + colButtonBg + ` !important; }
+      [data-ogsb] .page { background: ` + colBg + ` !important; }
       [data-ogsc] .heading { color: ` + colHeading + ` !important; }
       [data-ogsc] .body { color: ` + colBody + ` !important; }
-      [data-ogsc] .muted { color: ` + colMuted + ` !important; }
-      [data-ogsc] .code { color: ` + colHeading + ` !important; }
-      [data-ogsc] .btn a { color: ` + colButtonTxt + ` !important; }
+      [data-ogsb] .btn td { background: {{.Branding.ButtonBg}} !important; }
+      [data-ogsc] .btn a { color: {{.Branding.ButtonText}} !important; }
     </mj-style>
     <mj-raw>
       <meta name="color-scheme" content="light">
       <meta name="supported-color-schemes" content="light">
     </mj-raw>
   </mj-head>
-  <mj-body background-color="` + colPage + `" css-class="page" width="600px">
-    <mj-section padding="32px 24px 14px 24px">
+  <mj-body background-color="` + colBg + `" css-class="page" width="600px">
+    <mj-section padding="44px 44px 30px 44px">
       <mj-column>
-        {{if .Branding.LogoURL}}<mj-image src="{{.Branding.LogoURL | esc}}" alt="{{.Branding.Name | esc}}" align="left" width="130px" height="auto" padding="0 0 10px 0" />{{end}}
-        <mj-text css-class="heading" font-size="15px" font-weight="700" color="` + colHeading + `" line-height="1.2">{{.Branding.Name | esc}}</mj-text>
+        <mj-text>{{if .Branding.IconURL}}<img src="{{.Branding.IconURL | esc}}" alt="{{.Branding.Name | esc}}" height="40" style="height:40px;width:auto;max-width:150px;border-radius:{{.Branding.IconRadius}};vertical-align:middle;display:inline-block;" /> {{end}}<span style="vertical-align:middle;font-size:17px;font-weight:700;color:` + colHeading + `;{{if .Branding.IconURL}}padding-left:12px;{{end}}">{{.Branding.Name | esc}}</span></mj-text>
       </mj-column>
     </mj-section>
-    <mj-wrapper css-class="card" background-color="` + colCard + `" border="1px solid ` + colBorder + `" border-radius="14px" padding="0">
-      {{template "content" .}}
-    </mj-wrapper>
-    <mj-section padding="18px 24px 36px 24px">
+    {{template "content" .}}
+    <mj-section padding="34px 44px 44px 44px">
       <mj-column>
-        <mj-text css-class="muted" font-size="12px" color="` + colMuted + `" line-height="1.7">
+        <mj-text css-class="body" font-size="12px" color="` + colBody + `" line-height="1.7">
           <strong class="heading" style="color:` + colHeading + `;">{{.Branding.Name | esc}}</strong><br/>
           {{if .Branding.LegalName}}{{.Branding.LegalName | esc}}<br/>{{end}}
           {{if .Branding.LegalAddress}}{{.Branding.LegalAddress | esc}}<br/>{{end}}
-          {{if .Branding.SupportEmail}}<a class="muted" style="color:` + colMuted + `;" href="mailto:{{.Branding.SupportEmail | esc}}">{{.Branding.SupportEmail | esc}}</a> &middot; {{end}}Powered by Leys
+          {{if .Branding.SupportEmail}}<a class="body" style="color:` + colBody + `;" href="mailto:{{.Branding.SupportEmail | esc}}">{{.Branding.SupportEmail | esc}}</a> &middot; {{end}}Powered by Leys Services
         </mj-text>
       </mj-column>
     </mj-section>
