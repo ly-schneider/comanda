@@ -170,7 +170,6 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
         {configured && <Badge variant="default">Verbunden</Badge>}
       </div>
 
-      {/* Step 1 — API access */}
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle>Schritt 1: API-Zugang</CardTitle>
@@ -252,7 +251,6 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
         </CardContent>
       </Card>
 
-      {/* Step 2 — Webhook */}
       <Card className={`rounded-2xl ${apiConnected ? "" : "pointer-events-none opacity-50"}`}>
         <CardHeader>
           <CardTitle>Schritt 2: Webhook einrichten</CardTitle>

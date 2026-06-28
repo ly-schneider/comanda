@@ -83,9 +83,6 @@ func (c *Client) ValidateCredentials(ctx context.Context) error {
 	return err
 }
 
-// doRequest talks to the Payrexx v1.0 API using the modern X-API-KEY header
-// scheme: the API key authenticates every call via the header, the instance is a
-// query parameter, and write bodies are JSON.
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, params map[string]any) ([]byte, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
