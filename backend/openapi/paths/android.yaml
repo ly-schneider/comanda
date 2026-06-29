@@ -1,0 +1,34 @@
+latest:
+  get:
+    tags: [Android]
+    summary: Get latest Android release
+    description: |
+      Returns the latest available Android app release for update checks.
+
+      The optional `channel` query parameter selects the release channel
+      (`production` or `staging`, default `production`); other values return
+      `400`. Returns `204` when no release is published for the channel.
+    operationId: getAndroidLatestVersion
+    security:
+      - {}
+    responses:
+      "200":
+        description: Latest release
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/android.yaml#/AndroidRelease"
+      "204":
+        description: No release available for the channel
+      "400":
+        description: Invalid channel
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "502":
+        description: Upstream release feed unavailable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

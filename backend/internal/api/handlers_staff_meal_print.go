@@ -9,7 +9,6 @@ import (
 	"backend/internal/service"
 
 	nanoid "backend/internal/id"
-	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
@@ -21,8 +20,8 @@ const (
 
 // PrintStaffMealSlips streams a PDF of printable QR slips for a campaign.
 // GET /v1/staff-meals/{campaignId}/print.pdf?count=30
-func (h *Handlers) PrintStaffMealSlips(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "campaignId")
+func (h *Handlers) PrintStaffMealSlips(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return

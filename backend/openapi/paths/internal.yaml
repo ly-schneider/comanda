@@ -1,0 +1,34 @@
+trusted-origins:
+  servers:
+    - url: /
+      description: Served from the root path, outside the versioned API.
+  get:
+    tags: [Internal]
+    summary: List verified custom-domain hostnames
+    description: |
+      Cross-tenant feed of every verified custom-domain hostname, consumed by the
+      web tier to seed Better Auth's trusted origins. Runs outside the per-tenant
+      transaction and is gated by a shared internal bearer token; absent that
+      token the route is not registered.
+    operationId: handleTrustedOrigins
+    security:
+      - internalAuth: []
+    responses:
+      "200":
+        description: Verified hostnames
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostnames]
+              properties:
+                hostnames:
+                  type: array
+                  items:
+                    type: string
+      "401":
+        description: Invalid internal token
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

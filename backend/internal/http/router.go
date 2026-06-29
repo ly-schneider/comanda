@@ -26,6 +26,14 @@ func NewRouter(
 	logger *zap.Logger,
 	isDev bool,
 ) http.Handler {
+	// ── Create the generated wrapper ──────────────────────────────────
+	wrapper := generated.ServerInterfaceWrapper{
+		Handler: apiHandlers,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		},
+	}
+
 	// ── SSE router (minimal middleware to preserve flushing) ──────────
 	// The stream's only DB access is the initial snapshot; it then loops on an
 	// in-memory hub. The tenant tx is held for the stream lifetime — acceptable
@@ -38,7 +46,7 @@ func NewRouter(
 	sseRouter.Use(tenantMw.Resolve)
 	sseRouter.Use(tenantMw.Tx)
 	sseRouter.Use(systemMw.RequireEnabled)
-	sseRouter.Get("/v1/inventory/stream", apiHandlers.StreamInventory)
+	sseRouter.Get("/v1/inventory/stream", wrapper.StreamInventory)
 
 	// ── Main router with full middleware stack ────────────────────────
 	r := chi.NewRouter()
@@ -57,27 +65,17 @@ func NewRouter(
 	r.Use(chiMw.Heartbeat("/ping"))
 	r.Use(middleware.LogHTTPErrors)
 
-	// ── Create the generated wrapper ──────────────────────────────────
-	wrapper := generated.ServerInterfaceWrapper{
-		Handler: apiHandlers,
-		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		},
-	}
-
 	// ── Health check ──────────────────────────────────────────────────
 	r.Get("/health", apiHandlers.HealthCheck)
 
 	// ── Android update check (public, no auth) ──────────────────────
-	r.Get("/v1/android/latest", apiHandlers.GetAndroidLatestVersion)
+	r.Get("/v1/android/latest", wrapper.GetAndroidLatestVersion)
 
 	// ── Payrexx webhook (per-tenant, no auth, no Host) ──────────────
 	// Wired outside the /v1 tenant-tx group: with no tenant-bearing Host it can't
 	// use the Host resolver, so the handler resolves {tenantToken} and opens its
 	// own RLS-bound tenant tx.
-	r.Post("/v1/payments/webhooks/payrexx/{tenantToken}", func(w http.ResponseWriter, req *http.Request) {
-		apiHandlers.HandlePayrexxWebhook(w, req, chi.URLParam(req, "tenantToken"))
-	})
+	r.Post("/v1/payments/webhooks/payrexx/{tenantToken}", wrapper.HandlePayrexxWebhook)
 
 	// ── Trusted-origins feed (cross-tenant, internal, no Host, no auth UI) ──
 	// The web tier consumes this to seed Better Auth's trustedOrigins with every
@@ -85,7 +83,7 @@ func NewRouter(
 	// it sits outside the /v1 tenant-tx group and is gated by a shared internal
 	// token. Only registered when that token is configured (fail closed).
 	if cfg.CustomDomain.InternalAPIToken != "" {
-		r.Get("/internal/trusted-origins", apiHandlers.HandleTrustedOrigins)
+		r.Get("/internal/trusted-origins", wrapper.HandleTrustedOrigins)
 	}
 
 	// ── API documentation (Scalar) ───────────────────────────────────
@@ -103,7 +101,7 @@ func NewRouter(
 		v1.Use(tenantMw.Tx)
 
 		// ── System status (always accessible, no auth) ───────────
-		v1.Get("/system/status", apiHandlers.GetSystemStatus)
+		v1.Get("/system/status", wrapper.GetSystemStatus)
 
 		// ── Exempt routes (no auth, always accessible) ───────────
 		v1.Post("/devices/pairings", wrapper.CreateDevicePairing)
@@ -133,8 +131,8 @@ func NewRouter(
 			pub.Get("/categories", wrapper.ListCategories)
 			pub.Get("/categories/{categoryId}", wrapper.GetCategory)
 
-			pub.Post("/claim/{token}/auth", apiHandlers.VerifyClaimAccess)
-			pub.Get("/claim/{token}", apiHandlers.GetClaimCampaign)
+			pub.Post("/claim/{token}/auth", wrapper.VerifyClaimAccess)
+			pub.Get("/claim/{token}", wrapper.GetClaimCampaign)
 		})
 
 		// ── Device-authenticated routes (blocked when disabled) ──
@@ -143,7 +141,7 @@ func NewRouter(
 			station.Use(deviceAuthMw.RequireDevice(auth.DeviceTypeStation))
 			station.Get("/stations/me", wrapper.GetCurrentStation)
 			station.Post("/stations/redeem", wrapper.RedeemAtStation)
-			station.Post("/stations/redeem-campaign", apiHandlers.RedeemCampaignAtStation)
+			station.Post("/stations/redeem-campaign", wrapper.RedeemCampaignAtStation)
 		})
 
 		v1.Group(func(pos chi.Router) {
@@ -153,7 +151,7 @@ func NewRouter(
 			pos.Get("/club100/people", wrapper.ListClub100People)
 			pos.Get("/club100/remaining/{elvantoPersonId}", wrapper.GetClub100Remaining)
 			pos.Patch("/pos/products/{productId}/inventory", wrapper.AdjustProductInventory)
-			pos.Patch("/pos/products/{productId}/active", apiHandlers.SetProductActive)
+			pos.Patch("/pos/products/{productId}/active", wrapper.SetProductActive)
 		})
 
 		// ── Orders (anonymous allowed, blocked when disabled) ────
@@ -241,13 +239,13 @@ func NewRouter(
 
 			ops.Get("/events", wrapper.ListEvents)
 
-			ops.Post("/staff-meals", apiHandlers.CreateVolunteerCampaign)
-			ops.Get("/staff-meals", apiHandlers.ListVolunteerCampaigns)
-			ops.Get("/staff-meals/{campaignId}", apiHandlers.GetVolunteerCampaign)
-			ops.Patch("/staff-meals/{campaignId}", apiHandlers.UpdateVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/end", apiHandlers.EndVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/rotate-token", apiHandlers.RotateVolunteerCampaignToken)
-			ops.Get("/staff-meals/{campaignId}/print.pdf", apiHandlers.PrintStaffMealSlips)
+			ops.Post("/staff-meals", wrapper.CreateVolunteerCampaign)
+			ops.Get("/staff-meals", wrapper.ListVolunteerCampaigns)
+			ops.Get("/staff-meals/{campaignId}", wrapper.GetVolunteerCampaign)
+			ops.Patch("/staff-meals/{campaignId}", wrapper.UpdateVolunteerCampaign)
+			ops.Post("/staff-meals/{campaignId}/end", wrapper.EndVolunteerCampaign)
+			ops.Post("/staff-meals/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
+			ops.Get("/staff-meals/{campaignId}/print.pdf", wrapper.PrintStaffMealSlips)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────

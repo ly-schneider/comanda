@@ -1,0 +1,12 @@
+AndroidRelease:
+  type: object
+  required: [versionName, versionCode, downloadUrl]
+  properties:
+    versionName:
+      type: string
+    versionCode:
+      type: integer
+    downloadUrl:
+      type: string
+    sha256:
+      type: string

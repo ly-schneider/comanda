@@ -13,7 +13,6 @@ import (
 	"backend/internal/service"
 
 	nanoid "backend/internal/id"
-	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
@@ -137,8 +136,8 @@ func (h *Handlers) ListVolunteerCampaigns(w http.ResponseWriter, r *http.Request
 }
 
 // GetVolunteerCampaign (GET /v1/staff-meals/{campaignId})
-func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "campaignId")
+func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
@@ -174,8 +173,8 @@ func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request) 
 }
 
 // UpdateVolunteerCampaign (PATCH /v1/staff-meals/{campaignId})
-func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "campaignId")
+func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
@@ -216,8 +215,8 @@ func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 }
 
 // EndVolunteerCampaign (POST /v1/staff-meals/{campaignId}/end)
-func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "campaignId")
+func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
@@ -230,8 +229,8 @@ func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request) 
 }
 
 // RotateVolunteerCampaignToken (POST /v1/staff-meals/{campaignId}/rotate-token)
-func (h *Handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "campaignId")
+func (h *Handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
@@ -245,8 +244,7 @@ func (h *Handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.R
 }
 
 // VerifyClaimAccess (POST /v1/claim/{token}/auth)
-func (h *Handlers) VerifyClaimAccess(w http.ResponseWriter, r *http.Request) {
-	token := chi.URLParam(r, "token")
+func (h *Handlers) VerifyClaimAccess(w http.ResponseWriter, r *http.Request, token string) {
 	if !nanoid.Valid(token) {
 		writeError(w, http.StatusBadRequest, "invalid_token", "Invalid token")
 		return
@@ -270,8 +268,7 @@ func (h *Handlers) VerifyClaimAccess(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetClaimCampaign (GET /v1/claim/{token})
-func (h *Handlers) GetClaimCampaign(w http.ResponseWriter, r *http.Request) {
-	token := chi.URLParam(r, "token")
+func (h *Handlers) GetClaimCampaign(w http.ResponseWriter, r *http.Request, token string) {
 	if !nanoid.Valid(token) {
 		writeError(w, http.StatusBadRequest, "invalid_token", "Invalid token")
 		return

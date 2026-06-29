@@ -21,6 +21,58 @@ me:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+product-active:
+  parameters:
+    - name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  patch:
+    tags: [POS]
+    summary: Set product active state
+    description: Toggles a product's active flag from a POS device.
+    operationId: setProductActive
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [isActive]
+            properties:
+              isActive:
+                type: boolean
+    responses:
+      "200":
+        description: Product updated
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/products.yaml#/Product"
+      "400":
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Product not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 devices:
   get:
     tags: [POS]
