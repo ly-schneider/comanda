@@ -1,0 +1,181 @@
+RefundKind:
+  type: string
+  enum: [line, arbitrary]
+  x-enum-varnames: [RefundKindLine, RefundKindArbitrary]
+  description: |
+    - `line`: Refund tied to specific order lines (or a full cancellation).
+    - `arbitrary`: Discretionary money refund not tied to lines (admin only).
+
+RefundMethod:
+  type: string
+  enum: [cash, twint]
+  x-enum-varnames: [RefundMethodCash, RefundMethodTwint]
+  description: |
+    - `twint`: Refunded back to the original Payrexx (TWINT) transaction.
+    - `cash`: Cash-out for card/cash/manual orders (no provider call).
+
+RefundActorType:
+  type: string
+  enum: [operator, admin]
+  x-enum-varnames: [RefundActorTypeOperator, RefundActorTypeAdmin]
+  description: |
+    - `operator`: A POS device issued the refund.
+    - `admin`: An authenticated admin user issued the refund.
+
+RefundStatus:
+  type: string
+  enum: [pending, succeeded, failed]
+  x-enum-varnames: [RefundStatusPending, RefundStatusSucceeded, RefundStatusFailed]
+
+RefundLine:
+  type: object
+  required: [id, orderLineId, quantity, amountCents]
+  properties:
+    id:
+      type: string
+    orderLineId:
+      type: string
+    quantity:
+      type: integer
+      minimum: 1
+    amountCents:
+      type: integer
+      format: int64
+
+Refund:
+  type: object
+  required: [id, orderId, amountCents, kind, method, actorType, actorId, status, createdAt]
+  properties:
+    id:
+      type: string
+    orderId:
+      type: string
+    amountCents:
+      type: integer
+      format: int64
+    kind:
+      $ref: "#/RefundKind"
+    method:
+      $ref: "#/RefundMethod"
+    reason:
+      type: string
+      nullable: true
+    actorType:
+      $ref: "#/RefundActorType"
+    actorId:
+      type: string
+    deviceId:
+      type: string
+      nullable: true
+    status:
+      $ref: "#/RefundStatus"
+    createdAt:
+      type: string
+      format: date-time
+    lines:
+      type: array
+      items:
+        $ref: "#/RefundLine"
+
+RefundViewLine:
+  type: object
+  description: A top-level order line with its refund accounting.
+  required:
+    [
+      orderLineId,
+      productId,
+      title,
+      unitPriceCents,
+      boughtQuantity,
+      refundedQuantity,
+      refundableQuantity,
+      redeemed,
+    ]
+  properties:
+    orderLineId:
+      type: string
+    productId:
+      type: string
+    title:
+      type: string
+    unitPriceCents:
+      type: integer
+      format: int64
+    boughtQuantity:
+      type: integer
+    refundedQuantity:
+      type: integer
+    refundableQuantity:
+      type: integer
+    redeemed:
+      type: boolean
+      description: Whether this line has already been picked up (money-only refund).
+
+RefundView:
+  type: object
+  required: [order, lines, refundableBalanceCents, refunds]
+  properties:
+    order:
+      $ref: "orders.yaml#/Order"
+    lines:
+      type: array
+      items:
+        $ref: "#/RefundViewLine"
+    refundableBalanceCents:
+      type: integer
+      format: int64
+      description: Remaining amount that can still be refunded on this order.
+    refunds:
+      type: array
+      items:
+        $ref: "#/Refund"
+
+OrderLookupResult:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "orders.yaml#/Order"
+
+LineRefundRequest:
+  type: object
+  required: [lines]
+  properties:
+    lines:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required: [orderLineId, quantity]
+        properties:
+          orderLineId:
+            type: string
+          quantity:
+            type: integer
+            minimum: 1
+    reason:
+      type: string
+      description: Optional free-text note.
+
+ArbitraryRefundRequest:
+  type: object
+  required: [amountCents, reason]
+  properties:
+    amountCents:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Capped server-side at the order's remaining refundable balance.
+    reason:
+      type: string
+      minLength: 1
+      description: Required justification for a discretionary refund.
+
+CancelOrderRequest:
+  type: object
+  properties:
+    reason:
+      type: string
+      description: Optional free-text note.

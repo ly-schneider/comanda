@@ -118,7 +118,17 @@ func (e *rlsEnv) buildWebhookRouter(t *testing.T, enc *crypto.Encryptor) http.Ha
 		zap.NewNop(),
 	)
 
-	h := api.NewWebhookHandlers(payments, e.privClient(), appClient, factory, zap.NewNop())
+	refunds := service.NewRefundService(
+		repos.Order,
+		repos.Refund,
+		repos.Inventory,
+		stubResolver{p: &stubRefundProvider{}},
+		nil, // qrKeys: reconcile records a money-only refund, no pickup re-issue
+		nil,
+		zap.NewNop(),
+	)
+
+	h := api.NewWebhookHandlers(payments, refunds, e.privClient(), appClient, factory, zap.NewNop())
 
 	r := chi.NewRouter()
 	r.Post("/v1/payments/webhooks/payrexx/{tenantToken}", func(w http.ResponseWriter, req *http.Request) {

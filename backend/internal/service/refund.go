@@ -21,6 +21,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// ErrProviderRefund wraps a failure to resolve or call the payment provider for
+// a TWINT refund, so the HTTP layer can return a generic gateway error rather
+// than leaking the provider's message to the client.
+var ErrProviderRefund = errors.New("payment provider refund failed")
+
 // RefundProviderResolver yields the per-tenant payment provider used to issue
 // TWINT refunds. *payment.Factory satisfies it; tests substitute a stub.
 type RefundProviderResolver interface {
@@ -422,10 +427,10 @@ func (s *refundService) commitRefund(
 		}
 		provider, err := s.providers.For(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("resolve payment provider: %w", err)
+			return nil, fmt.Errorf("%w: %v", ErrProviderRefund, err)
 		}
 		if err := provider.Refund(ctx, *ord.PayrexxTransactionID, int(amountCents)); err != nil {
-			return nil, fmt.Errorf("provider refund: %w", err)
+			return nil, fmt.Errorf("%w: %v", ErrProviderRefund, err)
 		}
 	}
 

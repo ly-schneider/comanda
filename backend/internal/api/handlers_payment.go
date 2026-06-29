@@ -90,6 +90,28 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	// Refund webhooks carry IsRefund=true, IsSuccess=false, so they must be
+	// handled before the IsSuccess gate below (which would otherwise drop them as
+	// "ignored"). Reconcile is defensive + idempotent: it only records a refund
+	// the provider performed that our ledger doesn't already reflect (e.g. a
+	// dashboard-issued refund), so on failure we still ack 200 to avoid a retry
+	// storm; the deferred rollback keeps a failed reconcile from half-writing.
+	if result.IsRefund {
+		if err := h.refunds.ReconcileFromWebhook(ctx, result); err != nil {
+			h.logger.Error("payrexx webhook: refund reconcile failed",
+				zap.Error(err),
+				zap.String("tenantId", tenantID),
+				zap.String("referenceId", result.ReferenceID),
+			)
+			response.WriteJSON(w, http.StatusOK, map[string]string{"status": "refund_reconcile_failed"})
+			return
+		}
+		response.WriteJSON(w, http.StatusOK, map[string]string{"status": "refund_reconciled"})
+		finalize(true)
+		committed = true
+		return
+	}
+
 	if !result.IsSuccess {
 		response.WriteJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 		finalize(true)

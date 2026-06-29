@@ -11,6 +11,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/repository"
 	"backend/internal/response"
+	"backend/internal/service"
 )
 
 // writeError writes a generated.Error JSON response with the given HTTP status,
@@ -48,6 +49,34 @@ func writeEntError(w http.ResponseWriter, err error) {
 	default:
 		logUnhandledError(err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "An unexpected error occurred.")
+	}
+}
+
+// writeRefundError maps refund-service errors to HTTP responses. Not-found and
+// constraint errors get their precise status; genuine infra/Postgres failures
+// are logged and returned as 500; the remaining service validation errors
+// (over-refund, missing reason, not-refundable, unknown line) surface as 400
+// with their message so the POS/admin UI can show why.
+func writeRefundError(w http.ResponseWriter, err error) {
+	switch {
+	case ent.IsNotFound(err) || errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+
+	case ent.IsConstraintError(err) || errors.Is(err, repository.ErrConflict):
+		writeError(w, http.StatusConflict, "conflict", "The resource already exists or violates a constraint.")
+
+	case errors.Is(err, service.ErrProviderRefund):
+		logUnhandledError(err)
+		writeError(w, http.StatusBadGateway, "provider_error", "The payment provider could not process the refund.")
+
+	default:
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			logUnhandledError(err)
+			writeError(w, http.StatusInternalServerError, "internal_error", "An unexpected error occurred.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "refund_failed", err.Error())
 	}
 }
 

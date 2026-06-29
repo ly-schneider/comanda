@@ -1,0 +1,338 @@
+# Refund surface. Two parallel mount points expose the same engine to two caller
+# types using the existing, unchanged middleware:
+#   * POS device operators  -> /pos/orders/...  (deviceAuth, POS only)
+#   * Authenticated admins   -> /orders/...      (sessionAuth, ops tier + CSRF)
+# Arbitrary (discretionary) refunds are admin-only at a strictly higher tier.
+
+# ── POS device surface (operator) ──────────────────────────────────────────
+
+pos-orders-lookup:
+  get:
+    tags: [Refunds]
+    summary: Look up orders for refund (POS)
+    description: |
+      Resolves the `q` query parameter to matching orders. `q` may be a scanned,
+      signed pickup token (decoded to its order) or an order-id prefix (typeahead).
+    operationId: LookupPosOrders
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    responses:
+      "200":
+        description: Matching orders
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/OrderLookupResult"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+pos-order-refunds:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Refunds]
+    summary: Get refund view (POS)
+    description: Order, per-line refund accounting, refundable balance, and prior refunds.
+    operationId: GetPosRefundView
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    responses:
+      "200":
+        description: Refund view
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/RefundView"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+  post:
+    tags: [Refunds]
+    summary: Refund order lines (POS)
+    description: |
+      Refunds quantities of specific order lines. Routes to TWINT (provider) for
+      Payrexx-backed orders or a cash-out otherwise. Restores inventory and
+      re-issues the pickup token for the remaining items.
+    operationId: CreatePosLineRefund
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/LineRefundRequest"
+    responses:
+      "201":
+        description: Refund created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Validation error (over-refund, unknown line, not refundable)
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+pos-order-cancel:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Refunds]
+    summary: Cancel order (POS)
+    description: Refunds the entire remaining balance, restores inventory, and voids the pickup token.
+    operationId: CancelPosOrder
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/CancelOrderRequest"
+    responses:
+      "201":
+        description: Cancellation refund created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Order not cancellable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+# ── Authenticated admin surface ─────────────────────────────────────────────
+
+orders-lookup:
+  get:
+    tags: [Refunds]
+    summary: Look up orders for refund (admin)
+    description: |
+      Resolves the `q` query parameter to matching orders (signed pickup token or
+      order-id prefix). Admin equivalent of the POS lookup.
+    operationId: LookupOrders
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    responses:
+      "200":
+        description: Matching orders
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/OrderLookupResult"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+order-refunds:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Refunds]
+    summary: Get refund view (admin)
+    description: Order, per-line refund accounting, refundable balance, and prior refunds.
+    operationId: GetRefundView
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    responses:
+      "200":
+        description: Refund view
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/RefundView"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+  post:
+    tags: [Refunds]
+    summary: Refund order lines (admin)
+    description: |
+      Refunds quantities of specific order lines. Routes to TWINT (provider) for
+      Payrexx-backed orders or a cash-out otherwise.
+    operationId: CreateLineRefund
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/LineRefundRequest"
+    responses:
+      "201":
+        description: Refund created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Validation error (over-refund, unknown line, not refundable)
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+order-refunds-arbitrary:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Refunds]
+    summary: Arbitrary (discretionary) refund — admin only
+    description: |
+      Refunds an arbitrary amount with a required reason, not tied to lines. A
+      strictly higher gate than line refunds (app-admin tier); POS operators
+      cannot issue these. The amount is capped at the refundable balance.
+    operationId: CreateArbitraryRefund
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund-arbitrary]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/ArbitraryRefundRequest"
+    responses:
+      "201":
+        description: Refund created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Validation error (missing reason, not refundable)
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+order-cancel:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Refunds]
+    summary: Cancel order (admin)
+    description: Refunds the entire remaining balance, restores inventory, and voids the pickup token.
+    operationId: CancelOrder
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/CancelOrderRequest"
+    responses:
+      "201":
+        description: Cancellation refund created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Order not cancellable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
