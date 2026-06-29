@@ -42,6 +42,7 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 3. **Payment secrets never in plaintext.** AES-256-GCM, master key from Doppler; ciphertext in DB.
 4. **Webhook routing is per-tenant** (`/payments/webhooks/payrexx/{tenantToken}`) — wrong-tenant verification = payment misattribution.
 5. **No Azure.** Deploys are Hetzner K3s via ArgoCD gitops (the `hetzner` repo), images `ghcr.io/ly-schneider/comanda/*` pinned by commit SHA.
+6. **Backend HTTP is OpenAPI-first.** New/changed endpoints go through the `oapi-codegen` wrapper — **never** hand-wired `apiHandlers.X` (or a closure) in `backend/internal/http/router.go` (only `/health` + `/ping` are exempt). Add a path + schema under `backend/openapi/` with `operationId` == the Go handler method name, run `just generate-api`, then wire `wrapper.X` in the right middleware group. `server.gen.go` / `openapi/bundled.yaml` are gitignored (regenerated, not committed).
 
 ## Subagents (`.claude/agents/`)
 

@@ -38,6 +38,25 @@ designing: `../iglesio` (TS, but the SQL/RLS pattern translates) and `../hetzner
 - Webhook route → `/v1/payments/webhooks/payrexx/{tenantToken}`, verified with that tenant's secret.
 - `PaymentProvider` interface (Payrexx = first impl).
 
+## HTTP endpoints are OpenAPI-first — never hand-wire
+
+Routing is generated: `oapi-codegen` (`chi-server: true`, config `oapi-codegen.yaml`) emits a typed
+`generated.ServerInterfaceWrapper.X` per spec operation; `internal/http/router.go` wires `wrapper.X`.
+**Every** application endpoint goes through this — only `/health` + `/ping` are exempt infra probes.
+
+**Do NOT hand-wire `apiHandlers.X` (or a closure) in `router.go` for a new or changed endpoint.** To add one:
+
+1. Author/edit `openapi/paths/<name>.yaml` (+ `schemas/<name>.yaml`); reference it from `openapi/openapi.yaml`.
+2. Set `operationId` == the exact Go handler method name (else the generated `ServerInterface` won't match).
+3. `just generate-api` (redocly bundle → oapi-codegen).
+4. Implement the method on `*api.Handlers`; wire `wrapper.X` in `router.go` in the correct middleware group.
+
+Notes: `server.gen.go` + `openapi/bundled.yaml` are **gitignored** (regenerated, never committed). `strict-server`
+is OFF — parse request **bodies** manually; only **path/query params** become typed handler args, so take a path
+param as an arg (`(w, r, id string)`), don't `chi.URLParam`. Leave optional query/header inputs as manual reads
+to preserve the JSON error envelope (a declared typed param routes bad input through `ErrorHandlerFunc` → a
+plain-text 400). Mirror an existing path+schema file for style.
+
 ## Rules
 
 - These are the phases I'll spawn in **plan mode** — produce a written plan and STOP for approval before editing.
