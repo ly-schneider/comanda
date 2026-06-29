@@ -224,9 +224,10 @@ func NewRouter(
 
 			ops.Patch("/orders/{orderId}", wrapper.UpdateOrderStatus)
 
-			// Refunds (admin surface): lookup, view, line refund, deposit return,
-			// cancel — the same operations POS operators get, on the staff/ops tier.
-			// Arbitrary refunds are gated higher (see the app-admin group).
+			// Refunds (admin surface): audit list, lookup, view, line refund,
+			// deposit return, cancel — the same operations POS operators get, on the
+			// staff/ops tier. Arbitrary refunds are gated higher (see the app-admin group).
+			ops.Get("/refunds", wrapper.ListRefunds)
 			ops.Get("/orders/lookup", wrapper.LookupOrders)
 			ops.Get("/orders/{orderId}/refunds", wrapper.GetRefundView)
 			ops.Post("/orders/{orderId}/refunds", wrapper.CreateLineRefund)

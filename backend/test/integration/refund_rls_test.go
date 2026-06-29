@@ -46,6 +46,17 @@ func TestRefundRLS_CrossTenantInvisible(t *testing.T) {
 		nanoid.New(), tenantA, refundA, lineA,
 	)
 
+	// A second, older refund on a different order so the cross-order List() is
+	// exercised for ordering (newest first) and pagination.
+	orderA2 := nanoid.New()
+	env.privExec(t, `INSERT INTO "order" (id, total_cents, status, origin, tenant_id) VALUES ($1, 400, 'paid', 'pos', $2)`, orderA2, tenantA)
+	refundA2 := nanoid.New()
+	env.privExec(t,
+		`INSERT INTO refund (id, tenant_id, order_id, amount_cents, kind, method, actor_type, actor_id, status, created_at)
+		 VALUES ($1, $2, $3, 400, 'line', 'twint', 'operator', 'dev_1', 'succeeded', now() - interval '1 hour')`,
+		refundA2, tenantA, orderA2,
+	)
+
 	t.Run("tenant A reads its own refund", func(t *testing.T) {
 		ctx, client, cleanup := env.appRequestTx(t, tenantA)
 		defer cleanup()
@@ -62,6 +73,17 @@ func TestRefundRLS_CrossTenantInvisible(t *testing.T) {
 		qty, err := repo.SumSucceededLineQtyByOrder(ctx, orderA)
 		require.NoError(t, err)
 		require.Equal(t, 1, qty[lineA])
+
+		all, err := repo.List(ctx, 50, 0)
+		require.NoError(t, err)
+		require.Len(t, all, 2, "global list spans both orders")
+		require.Equal(t, refundA, all[0].ID, "most recent refund first")
+		require.Equal(t, refundA2, all[1].ID)
+
+		page, err := repo.List(ctx, 1, 1)
+		require.NoError(t, err)
+		require.Len(t, page, 1, "limit+offset paginates")
+		require.Equal(t, refundA2, page[0].ID)
 	})
 
 	t.Run("tenant B sees nothing", func(t *testing.T) {
@@ -80,5 +102,9 @@ func TestRefundRLS_CrossTenantInvisible(t *testing.T) {
 		qty, err := repo.SumSucceededLineQtyByOrder(ctx, orderA)
 		require.NoError(t, err)
 		require.Empty(t, qty, "tenant B must not see tenant A's refund_line via the join")
+
+		all, err := repo.List(ctx, 50, 0)
+		require.NoError(t, err)
+		require.Empty(t, all, "tenant B must not see tenant A's refunds in the global list")
 	})
 }

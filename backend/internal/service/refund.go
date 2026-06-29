@@ -34,6 +34,7 @@ type RefundProviderResolver interface {
 
 type RefundService interface {
 	GetRefundView(ctx context.Context, orderID string) (*RefundView, error)
+	ListRefunds(ctx context.Context, limit, offset int) ([]*ent.Refund, error)
 	LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error)
 	RefundLines(ctx context.Context, in RefundLinesInput) (*ent.Refund, error)
 	RefundArbitrary(ctx context.Context, in RefundArbitraryInput) (*ent.Refund, error)
@@ -196,6 +197,12 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 		Refunds:                refundsList,
 		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty)),
 	}, nil
+}
+
+// ListRefunds returns a page of the tenant's refunds for the admin audit
+// surface, most recent first.
+func (s *refundService) ListRefunds(ctx context.Context, limit, offset int) ([]*ent.Refund, error) {
+	return s.refunds.List(ctx, limit, offset)
 }
 
 func (s *refundService) LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error) {
