@@ -745,19 +745,24 @@ func linkedDepositSpecs(ord *ent.Order, productSpecs []refundLineSpec, refundedQ
 			depositByParent[*l.ParentLineID] = l
 		}
 	}
+	released := make(map[string]int)
 	var out []refundLineSpec
 	for _, ps := range productSpecs {
 		dep, ok := depositByParent[ps.orderLineID]
 		if !ok {
 			continue
 		}
+		// Cap against the deposit's outstanding balance, less anything already
+		// released for it in this same call — a product line id may legally repeat
+		// across in.Lines, and a deposit line may have fewer units than its parent.
 		release := ps.quantity
-		if outstanding := dep.Quantity - refundedQty[dep.ID]; release > outstanding {
+		if outstanding := dep.Quantity - refundedQty[dep.ID] - released[dep.ID]; release > outstanding {
 			release = outstanding
 		}
 		if release <= 0 {
 			continue
 		}
+		released[dep.ID] += release
 		out = append(out, refundLineSpec{
 			orderLineID: dep.ID,
 			productID:   dep.ProductID,

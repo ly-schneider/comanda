@@ -70,7 +70,6 @@ func depositOutstanding(t *testing.T, ctx context.Context, svc service.RefundSer
 	return -1
 }
 
-// Scenario: scan order QR and refund deposit to TWINT (online order).
 func TestDepositReturn_TwintScanQR(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -110,7 +109,6 @@ func TestDepositReturn_TwintScanQR(t *testing.T) {
 	require.Equal(t, order.StatusPartiallyRefunded, ord.Status)
 }
 
-// Scenario: per-unit partial return.
 func TestDepositReturn_PerUnitPartial(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -135,7 +133,6 @@ func TestDepositReturn_PerUnitPartial(t *testing.T) {
 	require.Equal(t, 1, depositOutstanding(t, ctx, svc, of.orderID, depositLineID))
 }
 
-// Scenario: cash-paid order refunds the deposit as cash.
 func TestDepositReturn_CashOut(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -160,7 +157,6 @@ func TestDepositReturn_CashOut(t *testing.T) {
 	require.Equal(t, 0, depositOutstanding(t, ctx, svc, of.orderID, depositLineID))
 }
 
-// Scenario: refunding a product line releases its linked deposit.
 func TestDepositReturn_ProductLineReleasesDeposit(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -191,7 +187,6 @@ func TestDepositReturn_ProductLineReleasesDeposit(t *testing.T) {
 	require.Equal(t, order.StatusRefunded, ord.Status)
 	require.Equal(t, 0, depositOutstanding(t, ctx, svc, of.orderID, depositLineID))
 
-	// Nothing left to return.
 	_, err = svc.ReturnDeposit(ctx, service.DepositReturnInput{
 		OrderID: of.orderID,
 		Lines:   []service.RefundLineQty{{OrderLineID: depositLineID, Quantity: 1}},
@@ -200,7 +195,6 @@ func TestDepositReturn_ProductLineReleasesDeposit(t *testing.T) {
 	require.Error(t, err)
 }
 
-// Scenario: full refund / cancel settles outstanding deposits.
 func TestDepositReturn_CancelSettlesDeposits(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -234,7 +228,6 @@ func TestDepositReturn_CancelSettlesDeposits(t *testing.T) {
 	require.Equal(t, 0, depositOutstanding(t, ctx, svc, of.orderID, depositLineID))
 }
 
-// Scenario: over-/double-return is prevented.
 func TestDepositReturn_OverAndDoubleReturnRejected(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -261,7 +254,6 @@ func TestDepositReturn_OverAndDoubleReturnRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, refs, "a rejected return must not persist a refund row")
 
-	// Return all three, then a further return is refused.
 	_, err = svc.ReturnDeposit(ctx, service.DepositReturnInput{
 		OrderID: of.orderID,
 		Lines:   []service.RefundLineQty{{OrderLineID: depositLineID, Quantity: 3}},
@@ -279,7 +271,51 @@ func TestDepositReturn_OverAndDoubleReturnRejected(t *testing.T) {
 	require.Len(t, prov.calls, 1, "the rejected double-return must not call the provider")
 }
 
-// Scenario: invalid or wrong-tenant QR is rejected.
+// A product line id repeated across one RefundLines request must not over-release
+// the linked deposit past its outstanding balance.
+func TestDepositReturn_DuplicateProductSpecsClampDeposit(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	ctx := tenantCtx()
+	paymentSvc := NewPaymentSvc(TestConfig(), repos, NewProductSvc(repos))
+	prov := &stubRefundProvider{}
+	svc := newRefundSvc(repos, prov)
+
+	txnID := 71
+	of, _, productLineID, depositLineID := createPaidDepositOrder(t, ctx, repos, paymentSvc, 2, 200, &txnID)
+	// total = 2*(350+200) = 1100
+
+	// Return one deposit unit first, leaving 1 deposit unit outstanding.
+	_, err := svc.ReturnDeposit(ctx, service.DepositReturnInput{
+		OrderID: of.orderID,
+		Lines:   []service.RefundLineQty{{OrderLineID: depositLineID, Quantity: 1}},
+		Actor:   opActor,
+	})
+	require.NoError(t, err)
+
+	// Refund both product units sent as two separate qty-1 entries for the same line.
+	ref, err := svc.RefundLines(ctx, service.RefundLinesInput{
+		OrderID: of.orderID,
+		Lines: []service.RefundLineQty{
+			{OrderLineID: productLineID, Quantity: 1},
+			{OrderLineID: productLineID, Quantity: 1},
+		},
+		Actor: opActor,
+	})
+	require.NoError(t, err)
+	// 700 product + only the 1 remaining deposit unit (200) = 900, not 1100.
+	require.Equal(t, int64(900), ref.AmountCents)
+	require.Equal(t, 900, prov.calls[len(prov.calls)-1].amount)
+	require.Equal(t, 0, depositOutstanding(t, ctx, svc, of.orderID, depositLineID))
+
+	ord, err := repos.Order.GetByID(ctx, of.orderID)
+	require.NoError(t, err)
+	require.Equal(t, order.StatusRefunded, ord.Status)
+}
+
 func TestDepositReturn_InvalidTokenRejected(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()

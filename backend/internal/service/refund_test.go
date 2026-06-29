@@ -114,6 +114,20 @@ func TestLinkedDepositSpecs(t *testing.T) {
 	if got := linkedDepositSpecs(ord, productSpecs, map[string]int{"d1": 2}); len(got) != 0 {
 		t.Fatalf("already-returned deposit must not be released again, got %+v", got)
 	}
+
+	// Duplicate specs for the same product line must not over-release: with one
+	// unit already returned, two {p1,1} specs release only the single remaining unit.
+	dup := []refundLineSpec{
+		{orderLineID: "p1", lineType: orderline.LineTypeSimple, quantity: 1},
+		{orderLineID: "p1", lineType: orderline.LineTypeSimple, quantity: 1},
+	}
+	total := 0
+	for _, s := range linkedDepositSpecs(ord, dup, map[string]int{"d1": 1}) {
+		total += s.quantity
+	}
+	if total != 1 {
+		t.Fatalf("duplicate product specs must release only the 1 remaining deposit unit, got %d", total)
+	}
 }
 
 func TestRemainingPickupLines(t *testing.T) {
