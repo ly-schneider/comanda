@@ -1,6 +1,6 @@
 import { apiRequest } from "../api"
 
-export type OrderStatus = "pending" | "paid" | "cancelled" | "refunded"
+export type OrderStatus = "pending" | "paid" | "cancelled" | "refunded" | "partially_refunded"
 
 export interface OrderSummaryDTO {
   id: string
@@ -29,11 +29,13 @@ export interface OrderLineRedemptionDTO {
 export interface OrderLineDTO {
   id: string
   orderId: string
-  lineType: "simple" | "bundle" | "component"
+  lineType: "simple" | "bundle" | "component" | "deposit"
   productId: string
   title: string
   quantity: number
   unitPriceCents: number
+  /** Units of this line refunded/returned so far (deposits: units returned). Present only when > 0. */
+  refundedQuantity?: number
   parentLineId?: string | null
   menuSlotId?: string | null
   menuSlotName?: string | null
@@ -61,6 +63,8 @@ export interface PublicOrderDetailsDTO {
   createdAt: string
   lines?: OrderLineDTO[]
   payments?: OrderPaymentSummaryDTO[]
+  /** Total refunded so far in cents (succeeded refunds, incl. returned deposits). Present only when > 0. */
+  refundedTotalCents?: number
   /** Signed, self-contained Ed25519 pickup token (offline-verifiable at the stand). */
   qrPayload?: string | null
 }

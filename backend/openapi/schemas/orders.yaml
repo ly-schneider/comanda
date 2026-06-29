@@ -70,6 +70,10 @@ Order:
       type: integer
       nullable: true
       x-admin-only: true
+    refundedTotalCents:
+      type: integer
+      format: int64
+      description: Total refunded so far in cents (succeeded refunds, incl. returned deposits). Present only when > 0.
     # Relations
     lines:
       type: array
@@ -102,6 +106,9 @@ OrderLine:
     unitPriceCents:
       type: integer
       format: int64
+    refundedQuantity:
+      type: integer
+      description: Units of this line refunded/returned so far. Present only when > 0.
     parentLineId:
       type: string
       nullable: true

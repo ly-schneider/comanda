@@ -4,6 +4,7 @@ import { ShoppingCart } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { CartItemDisplay } from "@/components/cart/cart-item-display"
+import { CartTotalSummary } from "@/components/cart/cart-total-summary"
 import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
 import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
 import { Button } from "@/components/ui/button"
@@ -11,7 +12,7 @@ import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { formatChf } from "@/lib/utils"
+import { cartDepositCents } from "@/lib/utils"
 import { CartItem } from "@/types/cart"
 import { ProductConfigurationModal } from "./product-configuration-modal"
 
@@ -24,6 +25,7 @@ export function FloatingBottomNav() {
   const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestMenuSuggestion()
 
   const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0)
+  const depositCents = cartDepositCents(cart.items)
 
   // Measure the fixed action bar to add an in-flow spacer and avoid overlap
   const barRef = useRef<HTMLDivElement>(null)
@@ -165,12 +167,12 @@ export function FloatingBottomNav() {
               {cart.items.length > 0 && (
                 <DrawerFooter>
                   <div className="border-border flex flex-col gap-3 border-t pt-4">
-                    <div className="flex items-center justify-between pb-2">
-                      <div className="flex flex-col">
-                        <p className="text-lg font-semibold">Total</p>
-                        <span className="text-muted-foreground text-sm">{cart.items.length} Produkte</span>
-                      </div>
-                      <p className="text-lg font-semibold">{formatChf(cart.totalCents)}</p>
+                    <div className="pb-2">
+                      <CartTotalSummary
+                        productCents={cart.totalCents}
+                        depositCents={depositCents}
+                        itemCount={cart.items.length}
+                      />
                     </div>
                     <div className="flex flex-col gap-2">
                       <Button
@@ -266,12 +268,12 @@ export function FloatingBottomNav() {
               {cart.items.length > 0 && (
                 <SheetFooter>
                   <div className="border-border flex w-full flex-col gap-3 border-t pt-4">
-                    <div className="flex items-center justify-between pb-2">
-                      <div className="flex flex-col">
-                        <p className="text-lg font-semibold">Total</p>
-                        <span className="text-muted-foreground text-sm">{cart.items.length} Produkte</span>
-                      </div>
-                      <p className="text-lg font-semibold">{formatChf(cart.totalCents)}</p>
+                    <div className="w-full pb-2">
+                      <CartTotalSummary
+                        productCents={cart.totalCents}
+                        depositCents={depositCents}
+                        itemCount={cart.items.length}
+                      />
                     </div>
                     <div className="flex w-full flex-col gap-2">
                       <Button

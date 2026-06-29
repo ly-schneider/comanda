@@ -127,6 +127,9 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
                 </p>
               )}
               <p className="font-family-secondary mt-1 text-base">{formatChf(product.priceCents)}</p>
+              {product.depositCents > 0 && (
+                <p className="text-muted-foreground mt-0.5 text-xs">+ {formatChf(product.depositCents)} Depot</p>
+              )}
             </div>
             <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
               <CartButtons product={product} onConfigureProduct={handleConfigureProduct} disabled={disabled} />
