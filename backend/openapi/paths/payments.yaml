@@ -176,17 +176,28 @@ item:
               $ref: "../schemas/common.yaml#/Error"
 
 payrexx-webhook:
+  parameters:
+    - name: tenantToken
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Opaque per-tenant webhook token used to resolve and scope the tenant.
+
   post:
     tags: [Payments]
     summary: Payrexx webhook
     description: |
-      Webhook endpoint for Payrexx payment status updates.
-      Verifies HMAC signature before processing.
+      Per-tenant webhook endpoint for Payrexx payment status updates. The
+      `{tenantToken}` resolves the tenant; the HMAC signature is verified with
+      that tenant's own secret before processing.
 
       On successful payment:
       1. Updates payment status to `completed`
       2. Updates order status to `paid`
     operationId: handlePayrexxWebhook
+    security:
+      - {}
     requestBody:
       required: true
       content:
@@ -197,5 +208,30 @@ payrexx-webhook:
     responses:
       "200":
         description: Webhook processed
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ok, ignored]
       "400":
-        description: Invalid signature or payload
+        description: Invalid payload
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Invalid signature or provider not configured
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Unknown webhook tenant
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

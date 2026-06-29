@@ -1,0 +1,91 @@
+item:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+
+  get:
+    tags: [StaffMeals]
+    summary: Get claim campaign
+    description: |
+      Returns the public claim view for a staff-meal campaign. Requires a valid
+      access session cookie established via the auth endpoint.
+    operationId: getClaimCampaign
+    security:
+      - {}
+    responses:
+      "200":
+        description: Claim campaign view
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-meals.yaml#/ClaimCampaign"
+      "400":
+        description: Invalid token
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Access code required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+auth:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+
+  post:
+    tags: [StaffMeals]
+    summary: Verify claim access code
+    description: |
+      Validates a campaign access code and establishes an access session cookie
+      used by subsequent claim requests.
+    operationId: verifyClaimAccess
+    security:
+      - {}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/staff-meals.yaml#/ClaimAccessVerify"
+    responses:
+      "200":
+        description: Access granted
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-meals.yaml#/ClaimAccessResult"
+      "400":
+        description: Invalid token or request body
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Incorrect access code
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

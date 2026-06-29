@@ -58,6 +58,14 @@ tags:
     description: Vendor account hub (self-service, scoped to the vendor's tenant)
   - name: OwnerInvites
     description: Owner-invite registration (platform-host invite → tenant owner)
+  - name: StaffMeals
+    description: Staff-meal (volunteer) campaigns, claim access, and station redemption
+  - name: Inventory
+    description: Real-time inventory stream
+  - name: Android
+    description: Android app release feed for update checks
+  - name: Internal
+    description: Cross-tenant internal feeds (web tier integration)
 
 paths:
   /auth/otp-email:
@@ -103,6 +111,8 @@ paths:
     $ref: "paths/payments.yaml#/order-payment"
   /payments/{paymentId}:
     $ref: "paths/payments.yaml#/item"
+  /payments/webhooks/payrexx/{tenantToken}:
+    $ref: "paths/payments.yaml#/payrexx-webhook"
 
   /users:
     $ref: "paths/users.yaml#/collection"
@@ -124,6 +134,8 @@ paths:
     $ref: "paths/stations.yaml#/me"
   /stations/redeem:
     $ref: "paths/stations.yaml#/redeem"
+  /stations/redeem-campaign:
+    $ref: "paths/stations.yaml#/redeem-campaign"
   /stations/{stationId}:
     $ref: "paths/stations.yaml#/item"
   /stations/{stationId}/products:
@@ -135,6 +147,8 @@ paths:
     $ref: "paths/pos.yaml#/me"
   /pos/devices:
     $ref: "paths/pos.yaml#/devices"
+  /pos/products/{productId}/active:
+    $ref: "paths/pos.yaml#/product-active"
 
   /system/status:
     $ref: "paths/system.yaml#/status"
@@ -212,6 +226,31 @@ paths:
   /club100/remaining/{elvantoPersonId}:
     $ref: "paths/club100.yaml#/remaining"
 
+  /staff-meals:
+    $ref: "paths/staff-meals.yaml#/collection"
+  /staff-meals/{campaignId}:
+    $ref: "paths/staff-meals.yaml#/item"
+  /staff-meals/{campaignId}/end:
+    $ref: "paths/staff-meals.yaml#/end"
+  /staff-meals/{campaignId}/rotate-token:
+    $ref: "paths/staff-meals.yaml#/rotate-token"
+  /staff-meals/{campaignId}/print.pdf:
+    $ref: "paths/staff-meals.yaml#/print"
+
+  /claim/{token}:
+    $ref: "paths/claim.yaml#/item"
+  /claim/{token}/auth:
+    $ref: "paths/claim.yaml#/auth"
+
+  /inventory/stream:
+    $ref: "paths/inventory.yaml#/stream"
+
+  /android/latest:
+    $ref: "paths/android.yaml#/latest"
+
+  /internal/trusted-origins:
+    $ref: "paths/internal.yaml#/trusted-origins"
+
 components:
   securitySchemes:
     sessionAuth:
@@ -223,3 +262,7 @@ components:
       type: http
       scheme: bearer
       description: Device binding token (POS or Station)
+    internalAuth:
+      type: http
+      scheme: bearer
+      description: Shared internal API token for cross-tenant web-tier feeds

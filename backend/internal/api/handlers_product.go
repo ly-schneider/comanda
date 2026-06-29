@@ -11,8 +11,6 @@ import (
 	"backend/internal/generated/ent/product"
 	"backend/internal/response"
 
-	"github.com/go-chi/chi/v5"
-
 	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
@@ -293,10 +291,10 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 
 // SetProductActive toggles isActive for a product or menu from a POS device.
 // PATCH /v1/pos/products/{productId}/active
-func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()
 
-	id := chi.URLParam(r, "productId")
+	id := productId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid product id")
 		return

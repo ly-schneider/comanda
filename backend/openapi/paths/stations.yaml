@@ -111,6 +111,54 @@ redeem:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+redeem-campaign:
+  post:
+    tags: [Stations]
+    summary: Redeem staff-meal campaign at station
+    description: |
+      Redeems a shared staff-meal campaign QR at the authenticated station.
+
+      An optional `Idempotency-Key` header enables at-most-once redemption.
+    operationId: redeemCampaignAtStation
+    security:
+      - deviceAuth: []
+    x-device-types: [STATION]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [claimToken]
+            properties:
+              claimToken:
+                type: string
+    responses:
+      "200":
+        description: Campaign redeemed at station
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-meals.yaml#/CampaignRedemptionResult"
+      "400":
+        description: Invalid claim token or redemption failed
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Device authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Campaign limit reached or no matching products
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 item:
   parameters:
     - name: stationId

@@ -1,0 +1,19 @@
+stream:
+  get:
+    tags: [Inventory]
+    summary: Stream inventory updates
+    description: |
+      Server-sent events stream of inventory levels. Emits an initial
+      `inventory-snapshot` event followed by `inventory-update` events as stock
+      changes. The connection is held open until the client disconnects.
+    operationId: streamInventory
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Server-sent event stream
+        content:
+          text/event-stream:
+            schema:
+              type: string
+              description: SSE frames (`event:`/`data:` lines).
