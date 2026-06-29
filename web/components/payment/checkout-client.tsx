@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { useCart } from "@/contexts/cart-context"
 import { createOrder, initiatePayment } from "@/lib/api/payments"
-import { formatChf } from "@/lib/utils"
+import { cartDepositCents, formatChf } from "@/lib/utils"
 
 export function CheckoutClient() {
   const { user, accessToken } = useAuth()
   const { cart } = useCart()
+  const depositCents = cartDepositCents(cart.items)
   const router = useRouter()
   const [email, setEmail] = useState(user?.email || "")
   const [loading, setLoading] = useState(false)
@@ -73,9 +74,23 @@ export function CheckoutClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-[11px] border p-4">
-        <span>Gesamtsumme</span>
-        <strong>{formatChf(cart.totalCents)}</strong>
+      <div className="flex flex-col gap-2 rounded-[11px] border p-4">
+        {depositCents > 0 && (
+          <>
+            <div className="text-muted-foreground flex items-center justify-between text-sm">
+              <span>Zwischensumme</span>
+              <span>{formatChf(cart.totalCents)}</span>
+            </div>
+            <div className="text-muted-foreground flex items-center justify-between text-sm">
+              <span>Depot</span>
+              <span>{formatChf(depositCents)}</span>
+            </div>
+          </>
+        )}
+        <div className="flex items-center justify-between">
+          <span>Gesamtsumme</span>
+          <strong>{formatChf(cart.totalCents + depositCents)}</strong>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">

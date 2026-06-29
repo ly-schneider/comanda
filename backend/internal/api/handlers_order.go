@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -195,12 +196,50 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 // GetOrder returns a single order by ID with lines, payments, and redemptions.
 // (GET /orders/{orderId})
 func (h *Handlers) GetOrder(w http.ResponseWriter, r *http.Request, orderId string) {
-	o, err := h.orders.GetByIDWithRelations(r.Context(), orderId)
+	ctx := r.Context()
+	o, err := h.orders.GetByIDWithRelations(ctx, orderId)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, toAPIOrder(o))
+	apiOrder := toAPIOrder(o)
+	if orderReflectsRefunds(o.Status) {
+		if err := h.annotateOrderRefunds(ctx, &apiOrder); err != nil {
+			h.logger.Warn("load refund summary", zap.String("order_id", o.ID), zap.Error(err))
+		}
+	}
+	response.WriteJSON(w, http.StatusOK, apiOrder)
+}
+
+// orderReflectsRefunds reports whether an order's status implies money was
+// refunded, so the refund summary is only loaded for those orders.
+func orderReflectsRefunds(s order.Status) bool {
+	return s == order.StatusRefunded || s == order.StatusPartiallyRefunded || s == order.StatusCancelled
+}
+
+func (h *Handlers) annotateOrderRefunds(ctx context.Context, o *generated.Order) error {
+	summary, err := h.refunds.RefundedSummary(ctx, o.Id)
+	if err != nil {
+		return err
+	}
+	if summary.TotalCents > 0 {
+		o.RefundedTotalCents = ptr(summary.TotalCents)
+	}
+	if o.Lines != nil {
+		annotateLineRefunds(*o.Lines, summary.ByLine)
+	}
+	return nil
+}
+
+func annotateLineRefunds(lines []generated.OrderLine, byLine map[string]int) {
+	for i := range lines {
+		if q := byLine[lines[i].Id]; q > 0 {
+			lines[i].RefundedQuantity = ptr(q)
+		}
+		if lines[i].ChildLines != nil {
+			annotateLineRefunds(*lines[i].ChildLines, byLine)
+		}
+	}
 }
 
 // UpdateOrderStatus updates the status of an order.

@@ -34,6 +34,7 @@ type RefundProviderResolver interface {
 
 type RefundService interface {
 	GetRefundView(ctx context.Context, orderID string) (*RefundView, error)
+	RefundedSummary(ctx context.Context, orderID string) (RefundedSummary, error)
 	ListRefunds(ctx context.Context, limit, offset int) ([]*ent.Refund, error)
 	LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error)
 	RefundLines(ctx context.Context, in RefundLinesInput) (*ent.Refund, error)
@@ -108,6 +109,11 @@ type RefundView struct {
 	Deposits               []RefundViewDeposit
 	Refunds                []*ent.Refund
 	RefundableBalanceCents int64
+}
+
+type RefundedSummary struct {
+	TotalCents int64
+	ByLine     map[string]int
 }
 
 type refundService struct {
@@ -197,6 +203,14 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 		Refunds:                refundsList,
 		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty)),
 	}, nil
+}
+
+func (s *refundService) RefundedSummary(ctx context.Context, orderID string) (RefundedSummary, error) {
+	sum, byLine, err := s.refundedSoFar(ctx, orderID)
+	if err != nil {
+		return RefundedSummary{}, err
+	}
+	return RefundedSummary{TotalCents: sum, ByLine: byLine}, nil
 }
 
 func (s *refundService) ListRefunds(ctx context.Context, limit, offset int) ([]*ent.Refund, error) {

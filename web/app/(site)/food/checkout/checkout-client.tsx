@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { AuthNudgeBanner } from "@/components/auth/auth-nudge"
 import { CartItemDisplay } from "@/components/cart/cart-item-display"
+import { CartTotalSummary } from "@/components/cart/cart-total-summary"
 import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
-import { formatChf } from "@/lib/utils"
+import { cartDepositCents } from "@/lib/utils"
 import { CartItem } from "@/types/cart"
 
 export default function CheckoutClient() {
@@ -141,12 +142,12 @@ export default function CheckoutClient() {
       <div ref={footerRef} className="bg-background fixed right-0 bottom-0 left-0 z-50 p-4">
         <div className="mx-auto flex max-w-xl flex-col gap-3">
           {cart.items.length > 0 && (
-            <div className="flex items-center justify-between py-2">
-              <div className="flex flex-col">
-                <p className="text-lg font-semibold">Total</p>
-                <span className="text-muted-foreground text-sm">{cart.items.length} Produkte</span>
-              </div>
-              <p className="text-lg font-semibold">{formatChf(cart.totalCents)}</p>
+            <div className="py-2">
+              <CartTotalSummary
+                productCents={cart.totalCents}
+                depositCents={cartDepositCents(cart.items)}
+                itemCount={cart.items.length}
+              />
             </div>
           )}
 

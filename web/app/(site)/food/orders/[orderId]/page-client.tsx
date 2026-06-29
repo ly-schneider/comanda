@@ -10,6 +10,7 @@ import { useCart } from "@/contexts/cart-context"
 
 import { getOrderPublicById, type OrderLineDTO, type PublicOrderDetailsDTO } from "@/lib/api/orders"
 import { addOrder } from "@/lib/orders-storage"
+import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from "@/lib/refund-format"
 import { formatChf } from "@/lib/utils"
 
 function paymentMethodLabel(method: string | undefined): string {
@@ -152,6 +153,12 @@ export default function OrderPageClient() {
     return roots.map((root) => ({ parent: root, children: childrenByRoot[root.id] || [] }))
   }, [serverOrder])
 
+  const status = serverOrder?.status
+  // A cancelled or fully refunded order has nothing left to hand over, so the
+  // backend clears/empties the pickup token and we show no QR.
+  const pickupSuppressed = status === "cancelled" || status === "refunded"
+  const refundedTotalCents = serverOrder?.refundedTotalCents ?? 0
+
   const qrDisplay = (() => {
     if (!mounted) {
       return <div className="mx-auto h-[260px] w-[260px] animate-pulse rounded-[11px] border-2 bg-gray-100" />
@@ -160,6 +167,17 @@ export default function OrderPageClient() {
       return <p className="text-red-600">Bestellnummer fehlt.</p>
     }
     if (qrReady) {
+      if (pickupSuppressed) {
+        return (
+          <div className="mx-auto flex h-[260px] w-[260px] flex-col items-center justify-center rounded-[11px] border-2 border-dashed bg-gray-50 px-6 text-center">
+            <p className="text-muted-foreground text-sm">
+              {status === "cancelled"
+                ? "Diese Bestellung wurde storniert. Es gibt keinen Abhol-Code."
+                : "Diese Bestellung wurde vollständig erstattet. Es gibt keinen Abhol-Code."}
+            </p>
+          </div>
+        )
+      }
       // The signed, self-contained token is the canonical pickup QR — stands
       // verify it offline. Fall back to the pickup URL only if it's absent.
       const qrValue = serverOrder?.qrPayload || `${window.location.origin}/o/${orderId}`
@@ -170,14 +188,25 @@ export default function OrderPageClient() {
 
   return (
     <div className="flex flex-col p-4" style={{ paddingBottom: footerHeight ? footerHeight + 16 : 16 }}>
-      <h1 className="mb-2 text-2xl font-semibold">Dein Abhol-QR-Code</h1>
-      <p className={`text-muted-foreground text-sm ${from === "success" ? "mb-2" : "mb-6"}`}>
-        Zeigen Sie diesen QR-Code bei der Abholung vor.
-      </p>
-      {from === "success" && (
-        <p className="text-muted-foreground mb-6 text-sm">
-          Du kannst diesen QR-Code jederzeit in deinen Bestellungen finden.
-        </p>
+      <h1 className="mb-2 text-2xl font-semibold">{pickupSuppressed ? "Deine Bestellung" : "Dein Abhol-QR-Code"}</h1>
+      {mounted && status && status !== "paid" && status !== "pending" && (
+        <div className="mb-3">
+          <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${ORDER_STATUS_COLORS[status]}`}>
+            {ORDER_STATUS_LABELS[status]}
+          </span>
+        </div>
+      )}
+      {!pickupSuppressed && (
+        <>
+          <p className={`text-muted-foreground text-sm ${from === "success" ? "mb-2" : "mb-6"}`}>
+            Zeigen Sie diesen QR-Code bei der Abholung vor.
+          </p>
+          {from === "success" && (
+            <p className="text-muted-foreground mb-6 text-sm">
+              Du kannst diesen QR-Code jederzeit in deinen Bestellungen finden.
+            </p>
+          )}
+        </>
       )}
       {qrDisplay}
 
@@ -187,10 +216,15 @@ export default function OrderPageClient() {
           <h2 className="mb-3 text-lg font-semibold">Bestellte Artikel</h2>
           <div className="flex flex-col gap-3">
             {groupedItems.map(({ parent, children }) => {
+              const components = children.filter((c) => c.lineType === "component")
+              const deposits = children.filter((c) => c.lineType === "deposit")
               const isRedeemed =
-                parent.redemption != null || (children.length > 0 && children.every((c) => c.redemption != null))
+                parent.redemption != null || (components.length > 0 && components.every((c) => c.redemption != null))
+              const refundedQty = parent.refundedQuantity ?? 0
+              const remainingQty = Math.max(parent.quantity - refundedQty, 0)
+              const fullyRefunded = refundedQty > 0 && remainingQty === 0
               return (
-                <div key={parent.id} className="rounded-xl border p-3">
+                <div key={parent.id} className={`rounded-xl border p-3 ${fullyRefunded ? "opacity-60" : ""}`}>
                   <div className="flex items-center gap-3">
                     {parent.productImage && (
                       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
@@ -207,15 +241,17 @@ export default function OrderPageClient() {
                     <div className="min-w-0 flex-1">
                       <div className={`flex justify-between gap-3 ${isRedeemed ? "items-start" : "items-center"}`}>
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{parent.title}</p>
+                          <p className={`truncate font-medium ${fullyRefunded ? "line-through" : ""}`}>
+                            {parent.title}
+                          </p>
                           {parent.productDescription && (
                             <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs whitespace-pre-line">
                               {parent.productDescription}
                             </p>
                           )}
-                          {children.length > 0 && (
+                          {components.length > 0 && (
                             <div className="mt-1 flex flex-row flex-wrap gap-1.5">
-                              {children.map((c) => (
+                              {components.map((c) => (
                                 <span
                                   key={c.id}
                                   className="text-muted-foreground border-border rounded-lg border px-2 py-0.5 text-xs"
@@ -225,6 +261,23 @@ export default function OrderPageClient() {
                               ))}
                             </div>
                           )}
+                          {deposits.map((d) => {
+                            const dReturned = d.refundedQuantity ?? 0
+                            const dRemaining = Math.max(d.quantity - dReturned, 0)
+                            return (
+                              <p key={d.id} className="text-muted-foreground mt-1 text-xs">
+                                {dRemaining > 0
+                                  ? `Depot ×${dRemaining} · ${formatChf(d.unitPriceCents * dRemaining)}`
+                                  : "Depot zurückerstattet"}
+                                {dReturned > 0 && dRemaining > 0 ? ` · ${dReturned}× zurückerstattet` : ""}
+                              </p>
+                            )
+                          })}
+                          {refundedQty > 0 && (
+                            <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                              {fullyRefunded ? "Erstattet" : `${refundedQty}× erstattet`}
+                            </div>
+                          )}
                           {isRedeemed && (
                             <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
                               <Check className="size-3" />
@@ -232,10 +285,12 @@ export default function OrderPageClient() {
                             </div>
                           )}
                         </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-muted-foreground text-sm">x{parent.quantity}</p>
-                          <p className="font-medium">{formatChf(parent.unitPriceCents * parent.quantity)}</p>
-                        </div>
+                        {!fullyRefunded && (
+                          <div className="shrink-0 text-right">
+                            <p className="text-muted-foreground text-sm">x{remainingQty}</p>
+                            <p className="font-medium">{formatChf(parent.unitPriceCents * remainingQty)}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -244,9 +299,25 @@ export default function OrderPageClient() {
             })}
           </div>
           {typeof serverOrder.totalCents === "number" && (
-            <div className="mt-4 flex items-center justify-between">
-              <span className="text-muted-foreground text-sm">Summe</span>
-              <span className="text-base font-semibold">{formatChf(serverOrder.totalCents)}</span>
+            <div className="mt-4 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-sm">Summe</span>
+                <span className="text-base font-semibold">{formatChf(serverOrder.totalCents)}</span>
+              </div>
+              {refundedTotalCents > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Erstattet</span>
+                    <span className="text-blue-700">−{formatChf(refundedTotalCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-1">
+                    <span className="text-muted-foreground text-sm">Verbleibend</span>
+                    <span className="text-base font-semibold">
+                      {formatChf(Math.max(serverOrder.totalCents - refundedTotalCents, 0))}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
