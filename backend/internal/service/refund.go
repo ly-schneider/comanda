@@ -1,0 +1,698 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/inventoryledger"
+	"backend/internal/generated/ent/order"
+	"backend/internal/generated/ent/orderline"
+	"backend/internal/generated/ent/product"
+	"backend/internal/generated/ent/refund"
+	"backend/internal/inventory"
+	"backend/internal/payment"
+	"backend/internal/qrsign"
+	"backend/internal/repository"
+
+	"go.uber.org/zap"
+)
+
+// RefundProviderResolver yields the per-tenant payment provider used to issue
+// TWINT refunds. *payment.Factory satisfies it; tests substitute a stub.
+type RefundProviderResolver interface {
+	For(ctx context.Context) (payment.Provider, error)
+}
+
+type RefundService interface {
+	GetRefundView(ctx context.Context, orderID string) (*RefundView, error)
+	LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error)
+	RefundLines(ctx context.Context, in RefundLinesInput) (*ent.Refund, error)
+	RefundArbitrary(ctx context.Context, in RefundArbitraryInput) (*ent.Refund, error)
+	CancelOrder(ctx context.Context, in CancelOrderInput) (*ent.Refund, error)
+	ReconcileFromWebhook(ctx context.Context, result *payment.WebhookResult) error
+}
+
+// RefundActor identifies who issued a refund: a POS operator (device) or an admin.
+type RefundActor struct {
+	Type     refund.ActorType
+	ID       string
+	DeviceID *string
+}
+
+type RefundLineQty struct {
+	OrderLineID string
+	Quantity    int
+}
+
+type RefundLinesInput struct {
+	OrderID string
+	Lines   []RefundLineQty
+	Reason  *string
+	Actor   RefundActor
+}
+
+type RefundArbitraryInput struct {
+	OrderID     string
+	AmountCents int64
+	Reason      string
+	Actor       RefundActor
+}
+
+type CancelOrderInput struct {
+	OrderID string
+	Reason  *string
+	Actor   RefundActor
+}
+
+type RefundViewLine struct {
+	Line             *ent.OrderLine
+	BoughtQuantity   int
+	RefundedQuantity int
+	RefundableQty    int
+	Redeemed         bool
+}
+
+type RefundView struct {
+	Order                  *ent.Order
+	Lines                  []RefundViewLine
+	Refunds                []*ent.Refund
+	RefundableBalanceCents int64
+}
+
+type refundService struct {
+	orders       repository.OrderRepository
+	refunds      repository.RefundRepository
+	inventory    repository.InventoryLedgerRepository
+	providers    RefundProviderResolver
+	qrKeys       QRKeyService
+	inventoryHub *inventory.Hub
+	logger       *zap.Logger
+}
+
+func NewRefundService(
+	orders repository.OrderRepository,
+	refunds repository.RefundRepository,
+	inventoryRepo repository.InventoryLedgerRepository,
+	providers RefundProviderResolver,
+	qrKeys QRKeyService,
+	inventoryHub *inventory.Hub,
+	logger *zap.Logger,
+) RefundService {
+	return &refundService{
+		orders:       orders,
+		refunds:      refunds,
+		inventory:    inventoryRepo,
+		providers:    providers,
+		qrKeys:       qrKeys,
+		inventoryHub: inventoryHub,
+		logger:       logger,
+	}
+}
+
+const posLookupLimit = 10
+
+func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*RefundView, error) {
+	ord, err := s.orders.GetByIDWithRelations(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	succeededSum, refundedQty, err := s.refundedSoFar(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+	refundsList, err := s.refunds.ListByOrder(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var viewLines []RefundViewLine
+	for _, l := range ord.Edges.Lines {
+		if l.ParentLineID != nil {
+			continue
+		}
+		refunded := refundedQty[l.ID]
+		refundable := l.Quantity - refunded
+		if refundable < 0 {
+			refundable = 0
+		}
+		viewLines = append(viewLines, RefundViewLine{
+			Line:             l,
+			BoughtQuantity:   l.Quantity,
+			RefundedQuantity: refunded,
+			RefundableQty:    refundable,
+			Redeemed:         l.Edges.Redemption != nil,
+		})
+	}
+
+	return &RefundView{
+		Order:                  ord,
+		Lines:                  viewLines,
+		Refunds:                refundsList,
+		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord)),
+	}, nil
+}
+
+func (s *refundService) LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, fmt.Errorf("empty lookup query")
+	}
+	if ord, ok := s.lookupByToken(ctx, query); ok {
+		return []*ent.Order{ord}, nil
+	}
+	return s.orders.FindByIDPrefix(ctx, query, posLookupLimit)
+}
+
+// lookupByToken decodes a signed pickup token to its order. A non-token query
+// (e.g. a short id prefix) fails verification and falls through to prefix search.
+func (s *refundService) lookupByToken(ctx context.Context, token string) (*ent.Order, bool) {
+	if s.qrKeys == nil {
+		return nil, false
+	}
+	pub, err := s.qrKeys.TenantPublicKey(ctx)
+	if err != nil {
+		return nil, false
+	}
+	payload, err := qrsign.Verify(pub, token)
+	if err != nil {
+		return nil, false
+	}
+	ord, err := s.orders.GetByIDWithRelations(ctx, payload.OrderID)
+	if err != nil {
+		return nil, false
+	}
+	return ord, true
+}
+
+func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*ent.Refund, error) {
+	if len(in.Lines) == 0 {
+		return nil, fmt.Errorf("no refund lines")
+	}
+	ord, err := s.loadRefundableOrder(ctx, in.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	succeededSum, refundedQty, err := s.refundedSoFar(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+	lineIndex := indexOrderLines(ord)
+
+	var lineSpecs []refundLineSpec
+	var amount int64
+	added := make(map[string]int)
+	for _, rl := range in.Lines {
+		line, ok := lineIndex[rl.OrderLineID]
+		if !ok {
+			return nil, fmt.Errorf("order line %s does not belong to order %s", rl.OrderLineID, ord.ID)
+		}
+		if err := validateRefundLineQty(line.Quantity, refundedQty[rl.OrderLineID]+added[rl.OrderLineID], rl.Quantity); err != nil {
+			return nil, err
+		}
+		lineAmount := line.UnitPriceCents * int64(rl.Quantity)
+		amount += lineAmount
+		added[rl.OrderLineID] += rl.Quantity
+		lineSpecs = append(lineSpecs, refundLineSpec{
+			orderLineID: line.ID,
+			productID:   line.ProductID,
+			productType: productTypeOf(line),
+			quantity:    rl.Quantity,
+			amountCents: lineAmount,
+		})
+	}
+
+	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
+	if amount <= 0 {
+		return nil, fmt.Errorf("refund amount must be positive")
+	}
+	if amount > balance {
+		return nil, fmt.Errorf("refund amount %d exceeds refundable balance %d", amount, balance)
+	}
+
+	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrReissue, mergeQty(refundedQty, added))
+}
+
+func (s *refundService) RefundArbitrary(ctx context.Context, in RefundArbitraryInput) (*ent.Refund, error) {
+	if strings.TrimSpace(in.Reason) == "" {
+		return nil, fmt.Errorf("arbitrary refund requires a reason")
+	}
+	ord, err := s.loadRefundableOrder(ctx, in.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	succeededSum, _, err := s.refundedSoFar(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
+	amount := cappedArbitraryAmount(in.AmountCents, balance)
+	if amount <= 0 {
+		return nil, fmt.Errorf("no refundable balance")
+	}
+	reason := in.Reason
+	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
+	return s.commitRefund(ctx, ord, amount, refund.KindArbitrary, &reason, in.Actor, nil, newStatus, qrKeep, nil)
+}
+
+func (s *refundService) CancelOrder(ctx context.Context, in CancelOrderInput) (*ent.Refund, error) {
+	ord, err := s.loadRefundableOrder(ctx, in.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	succeededSum, refundedQty, err := s.refundedSoFar(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
+
+	var lineSpecs []refundLineSpec
+	added := make(map[string]int)
+	for _, l := range ord.Edges.Lines {
+		remaining := l.Quantity - refundedQty[l.ID]
+		if remaining <= 0 {
+			continue
+		}
+		added[l.ID] += remaining
+		lineSpecs = append(lineSpecs, refundLineSpec{
+			orderLineID: l.ID,
+			productID:   l.ProductID,
+			productType: productTypeOf(l),
+			quantity:    remaining,
+			amountCents: l.UnitPriceCents * int64(remaining),
+		})
+	}
+
+	return s.commitRefund(ctx, ord, balance, refund.KindLine, in.Reason, in.Actor, lineSpecs, order.StatusCancelled, qrClear, mergeQty(refundedQty, added))
+}
+
+func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *payment.WebhookResult) error {
+	if result == nil || !result.IsRefund {
+		return nil
+	}
+	ord, err := s.orders.GetByID(ctx, result.ReferenceID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if ord.Status != order.StatusPaid && ord.Status != order.StatusPartiallyRefunded {
+		return nil
+	}
+	succeededSum, err := s.refunds.SumSucceededByOrder(ctx, ord.ID)
+	if err != nil {
+		return err
+	}
+	// A refund we initiated recorded its row before calling the provider, so the
+	// provider's confirming webhook must not double-count it. Only reconcile when
+	// our ledger shows nothing — a refund issued entirely outside this system.
+	if succeededSum > 0 {
+		return nil
+	}
+	amount := int64(result.AmountCents)
+	if amount <= 0 || amount > ord.TotalCents {
+		amount = ord.TotalCents
+	}
+	reason := "reconciled from payrexx webhook"
+	txnID := result.TransactionID
+	if _, err := s.refunds.CreateRefund(ctx, repository.CreateRefundParams{
+		OrderID:              ord.ID,
+		AmountCents:          amount,
+		Kind:                 refund.KindArbitrary,
+		Method:               refund.MethodTwint,
+		Reason:               &reason,
+		ActorType:            refund.ActorTypeAdmin,
+		ActorID:              "system",
+		PayrexxTransactionID: &txnID,
+		Status:               refund.StatusSucceeded,
+	}); err != nil {
+		return err
+	}
+	return s.setOrderStatus(ctx, ord, orderStatusAfterRefund(ord.TotalCents, amount))
+}
+
+// commitRefund performs the write side shared by line, arbitrary and cancel
+// refunds: insert the (pending) refund + lines, restore inventory, transition the
+// order, re-issue the pickup token, and — last, so its failure rolls the whole
+// request tx back — issue the provider refund before marking the row succeeded.
+func (s *refundService) commitRefund(
+	ctx context.Context,
+	ord *ent.Order,
+	amountCents int64,
+	kind refund.Kind,
+	reason *string,
+	actor RefundActor,
+	lineSpecs []refundLineSpec,
+	newStatus order.Status,
+	qr qrPlan,
+	newRefundedQty map[string]int,
+) (*ent.Refund, error) {
+	method := refundMethodFor(ord.PayrexxTransactionID)
+
+	created, err := s.refunds.CreateRefund(ctx, repository.CreateRefundParams{
+		OrderID:              ord.ID,
+		AmountCents:          amountCents,
+		Kind:                 kind,
+		Method:               method,
+		Reason:               reason,
+		ActorType:            actor.Type,
+		ActorID:              actor.ID,
+		DeviceID:             actor.DeviceID,
+		PayrexxTransactionID: ord.PayrexxTransactionID,
+		Status:               refund.StatusPending,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rlParams := make([]repository.CreateRefundLineParams, 0, len(lineSpecs))
+	for _, ls := range lineSpecs {
+		rlParams = append(rlParams, repository.CreateRefundLineParams{
+			RefundID:    created.ID,
+			OrderLineID: ls.orderLineID,
+			Quantity:    ls.quantity,
+			AmountCents: ls.amountCents,
+		})
+	}
+	rlParams = append(rlParams, s.linkedDepositRefundLines(ctx, ord, created.ID)...)
+	if _, err := s.refunds.CreateRefundLines(ctx, rlParams); err != nil {
+		return nil, err
+	}
+
+	if err := s.restoreInventory(ctx, ord.ID, lineSpecs); err != nil {
+		return nil, err
+	}
+
+	if err := s.setOrderStatus(ctx, ord, newStatus); err != nil {
+		return nil, err
+	}
+	if newStatus == order.StatusRefunded || newStatus == order.StatusCancelled {
+		if err := s.settleDepositsOnFullRefund(ctx, ord.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	switch qr {
+	case qrReissue:
+		token, err := s.reissuePickupToken(ctx, ord, newRefundedQty)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.orders.SetQRPayload(ctx, ord.ID, token); err != nil {
+			return nil, err
+		}
+	case qrClear:
+		if err := s.orders.ClearQRPayload(ctx, ord.ID); err != nil {
+			return nil, err
+		}
+	case qrKeep:
+	}
+
+	if method == refund.MethodTwint && amountCents > 0 {
+		if ord.PayrexxTransactionID == nil {
+			return nil, fmt.Errorf("twint refund requires a payrexx transaction id")
+		}
+		if s.providers == nil {
+			return nil, fmt.Errorf("payment provider not configured")
+		}
+		provider, err := s.providers.For(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve payment provider: %w", err)
+		}
+		if err := provider.Refund(ctx, *ord.PayrexxTransactionID, int(amountCents)); err != nil {
+			return nil, fmt.Errorf("provider refund: %w", err)
+		}
+	}
+
+	if err := s.refunds.SetStatus(ctx, created.ID, refund.StatusSucceeded); err != nil {
+		return nil, err
+	}
+	created.Status = refund.StatusSucceeded
+	return created, nil
+}
+
+func (s *refundService) loadRefundableOrder(ctx context.Context, orderID string) (*ent.Order, error) {
+	// Serialize concurrent refunds of the same order: hold a FOR UPDATE lock for
+	// the rest of the request tx so a second refund reads this one's committed
+	// state (and its over-refund guard) rather than racing it into a double payment.
+	if err := s.orders.LockByID(ctx, orderID); err != nil {
+		return nil, err
+	}
+	ord, err := s.orders.GetByIDWithRelations(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if ord.Status != order.StatusPaid && ord.Status != order.StatusPartiallyRefunded {
+		return nil, fmt.Errorf("order %s is not refundable (status %s)", orderID, ord.Status)
+	}
+	return ord, nil
+}
+
+func (s *refundService) refundedSoFar(ctx context.Context, orderID string) (int64, map[string]int, error) {
+	sum, err := s.refunds.SumSucceededByOrder(ctx, orderID)
+	if err != nil {
+		return 0, nil, err
+	}
+	qty, err := s.refunds.SumSucceededLineQtyByOrder(ctx, orderID)
+	if err != nil {
+		return 0, nil, err
+	}
+	return sum, qty, nil
+}
+
+func (s *refundService) setOrderStatus(ctx context.Context, ord *ent.Order, newStatus order.Status) error {
+	if !isValidStatusTransition(ord.Status, newStatus) {
+		return fmt.Errorf("invalid status transition from %s to %s", ord.Status, newStatus)
+	}
+	return s.orders.UpdateStatus(ctx, ord.ID, newStatus)
+}
+
+func (s *refundService) reissuePickupToken(ctx context.Context, ord *ent.Order, newRefundedQty map[string]int) (string, error) {
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok {
+		return "", fmt.Errorf("qr reissue: no tenant in context")
+	}
+	lines := remainingPickupLines(flattenRedeemableLines(ord), newRefundedQty)
+	return signPickupToken(ctx, s.qrKeys, tenantID, ord.ID, lines)
+}
+
+func (s *refundService) restoreInventory(ctx context.Context, orderID string, lineSpecs []refundLineSpec) error {
+	var entries []repository.InventoryLedgerCreateParams
+	for _, ls := range lineSpecs {
+		if ls.quantity <= 0 || ls.productType != product.TypeSimple {
+			continue
+		}
+		olID := ls.orderLineID
+		entries = append(entries, repository.InventoryLedgerCreateParams{
+			ProductID:   ls.productID,
+			Delta:       ls.quantity,
+			Reason:      inventoryledger.ReasonRefund,
+			OrderID:     &orderID,
+			OrderLineID: &olID,
+		})
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	if _, err := s.inventory.CreateMany(ctx, entries); err != nil {
+		return err
+	}
+	s.publishInventoryUpdates(ctx, entries)
+	return nil
+}
+
+func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []repository.InventoryLedgerCreateParams) {
+	if s.inventoryHub == nil {
+		return
+	}
+	productIDs := make([]string, 0, len(entries))
+	deltaByProduct := make(map[string]int)
+	for _, e := range entries {
+		if _, seen := deltaByProduct[e.ProductID]; !seen {
+			productIDs = append(productIDs, e.ProductID)
+		}
+		deltaByProduct[e.ProductID] += e.Delta
+	}
+	stocks, err := s.inventory.GetCurrentStockBatch(ctx, productIDs)
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	for _, pid := range productIDs {
+		s.inventoryHub.Publish(inventory.Update{
+			ProductID: pid,
+			NewStock:  stocks[pid],
+			Delta:     deltaByProduct[pid],
+			Timestamp: now,
+		})
+	}
+}
+
+// --- deposit seams: inert until per-product deposits land in a later ticket ---
+
+// linkedDepositRefundLines returns deposit refund_line rows accompanying the
+// refunded products. No order carries a deposit yet, so this returns nothing.
+func (s *refundService) linkedDepositRefundLines(_ context.Context, _ *ent.Order, _ string) []repository.CreateRefundLineParams {
+	return nil
+}
+
+// outstandingDepositCents is the deposit balance still owed on an order, held out
+// of the product-refundable balance. Inert until deposits land.
+func (s *refundService) outstandingDepositCents(_ context.Context, _ *ent.Order) int64 {
+	return 0
+}
+
+// settleDepositsOnFullRefund marks an order's deposits settled once it is fully
+// refunded or cancelled. Inert until deposits land.
+func (s *refundService) settleDepositsOnFullRefund(_ context.Context, _ string) error {
+	return nil
+}
+
+// --- pure helpers (unit-tested without a database) ---
+
+type refundLineSpec struct {
+	orderLineID string
+	productID   string
+	productType product.Type
+	quantity    int
+	amountCents int64
+}
+
+type qrPlan int
+
+const (
+	qrReissue qrPlan = iota // re-sign from the remaining un-redeemed lines
+	qrClear                 // drop the token (full cancellation)
+	qrKeep                  // leave the token unchanged (money-only refund)
+)
+
+type redeemableLine struct {
+	OrderLineID string
+	ProductID   string
+	LineType    orderline.LineType
+	HasChildren bool
+	Redeemed    bool
+	BoughtQty   int
+}
+
+func refundMethodFor(payrexxTransactionID *int) refund.Method {
+	if payrexxTransactionID != nil {
+		return refund.MethodTwint
+	}
+	return refund.MethodCash
+}
+
+func refundableBalanceCents(totalCents, succeededSum, outstandingDeposit int64) int64 {
+	bal := totalCents - succeededSum - outstandingDeposit
+	if bal < 0 {
+		return 0
+	}
+	return bal
+}
+
+func orderStatusAfterRefund(totalCents, succeededAfter int64) order.Status {
+	if succeededAfter >= totalCents {
+		return order.StatusRefunded
+	}
+	return order.StatusPartiallyRefunded
+}
+
+func cappedArbitraryAmount(requested, refundable int64) int64 {
+	if requested > refundable {
+		return refundable
+	}
+	return requested
+}
+
+func validateRefundLineQty(bought, alreadyRefunded, requested int) error {
+	if requested <= 0 {
+		return fmt.Errorf("refund quantity must be positive")
+	}
+	if alreadyRefunded+requested > bought {
+		return fmt.Errorf("refund quantity %d exceeds %d remaining", requested, bought-alreadyRefunded)
+	}
+	return nil
+}
+
+// remainingPickupLines rebuilds the signed pickup set after refunds: redeemed
+// lines were already handed over (money-only, excluded) and each remaining line's
+// quantity is reduced by what has been refunded. A configured bundle parent
+// carries no pickup item of its own; its components do.
+func remainingPickupLines(lines []redeemableLine, refundedQty map[string]int) []qrsign.Line {
+	out := make([]qrsign.Line, 0, len(lines))
+	for _, l := range lines {
+		if l.Redeemed {
+			continue
+		}
+		switch l.LineType {
+		case orderline.LineTypeSimple, orderline.LineTypeComponent:
+		case orderline.LineTypeBundle:
+			if l.HasChildren {
+				continue
+			}
+		default:
+			continue
+		}
+		remaining := l.BoughtQty - refundedQty[l.OrderLineID]
+		if remaining <= 0 {
+			continue
+		}
+		out = append(out, qrsign.Line{ProductID: l.ProductID, Quantity: remaining})
+	}
+	return out
+}
+
+// flattenRedeemableLines projects an order's loaded lines (parents and children
+// share order_id, so Edges.Lines is already flat) into the redeemable view the
+// pickup token is built from.
+func flattenRedeemableLines(ord *ent.Order) []redeemableLine {
+	hasChildren := make(map[string]bool)
+	for _, l := range ord.Edges.Lines {
+		if l.ParentLineID != nil {
+			hasChildren[*l.ParentLineID] = true
+		}
+	}
+	out := make([]redeemableLine, 0, len(ord.Edges.Lines))
+	for _, l := range ord.Edges.Lines {
+		out = append(out, redeemableLine{
+			OrderLineID: l.ID,
+			ProductID:   l.ProductID,
+			LineType:    l.LineType,
+			HasChildren: hasChildren[l.ID],
+			Redeemed:    l.Edges.Redemption != nil,
+			BoughtQty:   l.Quantity,
+		})
+	}
+	return out
+}
+
+func indexOrderLines(ord *ent.Order) map[string]*ent.OrderLine {
+	out := make(map[string]*ent.OrderLine, len(ord.Edges.Lines))
+	for _, l := range ord.Edges.Lines {
+		out[l.ID] = l
+	}
+	return out
+}
+
+func productTypeOf(line *ent.OrderLine) product.Type {
+	if line.Edges.Product == nil {
+		return ""
+	}
+	return line.Edges.Product.Type
+}
+
+func mergeQty(base, add map[string]int) map[string]int {
+	out := make(map[string]int, len(base))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range add {
+		out[k] += v
+	}
+	return out
+}

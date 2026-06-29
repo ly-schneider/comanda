@@ -457,9 +457,6 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 	ctx, finish := trace.StartSpan(ctx, "service", "payment.sign_qr")
 	defer finish()
 
-	if s.qrKeys == nil {
-		return "", fmt.Errorf("qr signing not configured")
-	}
 	tenantID, ok := repository.TenantIDFromContext(ctx)
 	if !ok {
 		return "", fmt.Errorf("qr sign: no tenant in context")
@@ -484,22 +481,7 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 		}
 	}
 
-	priv, _, err := s.qrKeys.EnsureTenantKey(ctx)
-	if err != nil {
-		return "", fmt.Errorf("qr sign: ensure tenant key: %w", err)
-	}
-
-	token, err := qrsign.Sign(priv, qrsign.Payload{
-		Version:  qrsign.Version,
-		TenantID: tenantID,
-		OrderID:  orderID,
-		IssuedAt: time.Now().Unix(),
-		Lines:    redeemable,
-	})
-	if err != nil {
-		return "", fmt.Errorf("qr sign: sign payload: %w", err)
-	}
-	return token, nil
+	return signPickupToken(ctx, s.qrKeys, tenantID, orderID, redeemable)
 }
 
 func (s *paymentService) CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error) {

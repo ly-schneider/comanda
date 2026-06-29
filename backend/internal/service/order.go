@@ -207,6 +207,12 @@ func isValidStatusTransition(from, to order.Status) bool {
 		order.StatusPaid: {
 			order.StatusCancelled,
 			order.StatusRefunded,
+			order.StatusPartiallyRefunded,
+		},
+		order.StatusPartiallyRefunded: {
+			order.StatusPartiallyRefunded,
+			order.StatusRefunded,
+			order.StatusCancelled,
 		},
 		order.StatusCancelled: {
 			// Terminal state
