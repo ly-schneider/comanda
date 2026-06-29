@@ -137,6 +137,52 @@ pos-order-cancel:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+pos-order-deposit-returns:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Refunds]
+    summary: Return deposit units (POS)
+    description: |
+      Returns N deposit units for the order's deposit lines, refunding `units ×
+      deposit` back to TWINT (Payrexx) for online orders or as a cash-out
+      otherwise. Refuses over-/double-returns. The pickup token is unchanged
+      (deposits aren't pickup items). An optional scanned `token` is verified
+      against this order.
+    operationId: CreatePosDepositReturn
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/DepositReturnRequest"
+    responses:
+      "201":
+        description: Deposit return created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Validation error (over-return, not a deposit line, invalid token, not refundable)
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 # ── Authenticated admin surface ─────────────────────────────────────────────
 
 orders-lookup:
@@ -320,6 +366,55 @@ order-cancel:
               $ref: "../schemas/refunds.yaml#/Refund"
       "400":
         description: Order not cancellable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+order-deposit-returns:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Refunds]
+    summary: Return deposit units (admin)
+    description: |
+      Returns N deposit units for the order's deposit lines. Admin equivalent of
+      the POS deposit return.
+    operationId: CreateDepositReturn
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/refunds.yaml#/DepositReturnRequest"
+    responses:
+      "201":
+        description: Deposit return created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/Refund"
+      "400":
+        description: Validation error (over-return, not a deposit line, invalid token, not refundable)
         content:
           application/json:
             schema:

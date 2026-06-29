@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
 	"backend/internal/generated/ent/refund"
@@ -69,6 +70,63 @@ func TestValidateRefundLineQty(t *testing.T) {
 	}
 	if err := validateRefundLineQty(3, 0, 3); err != nil {
 		t.Fatalf("full quantity must be refundable, got %v", err)
+	}
+}
+
+func TestOutstandingDepositCents(t *testing.T) {
+	ord := &ent.Order{Edges: ent.OrderEdges{Lines: []*ent.OrderLine{
+		{ID: "p1", LineType: orderline.LineTypeSimple, Quantity: 2, UnitPriceCents: 350},
+		{ID: "d1", LineType: orderline.LineTypeDeposit, Quantity: 2, UnitPriceCents: 200},
+	}}}
+
+	if got := outstandingDepositCents(ord, map[string]int{}); got != 400 {
+		t.Fatalf("two unreturned deposits = 400, got %d", got)
+	}
+	if got := outstandingDepositCents(ord, map[string]int{"d1": 1}); got != 200 {
+		t.Fatalf("one returned leaves 200 outstanding, got %d", got)
+	}
+	if got := outstandingDepositCents(ord, map[string]int{"d1": 2}); got != 0 {
+		t.Fatalf("all returned leaves 0 outstanding, got %d", got)
+	}
+	// Product-line refunds never reduce the deposit balance.
+	if got := outstandingDepositCents(ord, map[string]int{"p1": 2}); got != 400 {
+		t.Fatalf("product refunds must not touch the deposit balance, got %d", got)
+	}
+}
+
+func TestLinkedDepositSpecs(t *testing.T) {
+	parent := "p1"
+	ord := &ent.Order{Edges: ent.OrderEdges{Lines: []*ent.OrderLine{
+		{ID: "p1", LineType: orderline.LineTypeSimple, ProductID: "prod", Quantity: 2, UnitPriceCents: 350},
+		{ID: "d1", LineType: orderline.LineTypeDeposit, ProductID: "prod", Quantity: 2, UnitPriceCents: 200, ParentLineID: &parent},
+	}}}
+	productSpecs := []refundLineSpec{{orderLineID: "p1", lineType: orderline.LineTypeSimple, quantity: 1}}
+
+	got := linkedDepositSpecs(ord, productSpecs, map[string]int{})
+	if len(got) != 1 {
+		t.Fatalf("refunding one product unit releases one deposit spec, got %d", len(got))
+	}
+	if got[0].orderLineID != "d1" || got[0].quantity != 1 || got[0].amountCents != 200 || got[0].lineType != orderline.LineTypeDeposit {
+		t.Fatalf("unexpected linked deposit spec: %+v", got[0])
+	}
+
+	// A deposit already returned via the return flow is capped to zero.
+	if got := linkedDepositSpecs(ord, productSpecs, map[string]int{"d1": 2}); len(got) != 0 {
+		t.Fatalf("already-returned deposit must not be released again, got %+v", got)
+	}
+
+	// Duplicate specs for the same product line must not over-release: with one
+	// unit already returned, two {p1,1} specs release only the single remaining unit.
+	dup := []refundLineSpec{
+		{orderLineID: "p1", lineType: orderline.LineTypeSimple, quantity: 1},
+		{orderLineID: "p1", lineType: orderline.LineTypeSimple, quantity: 1},
+	}
+	total := 0
+	for _, s := range linkedDepositSpecs(ord, dup, map[string]int{"d1": 1}) {
+		total += s.quantity
+	}
+	if total != 1 {
+		t.Fatalf("duplicate product specs must release only the 1 remaining deposit unit, got %d", total)
 	}
 }
 
