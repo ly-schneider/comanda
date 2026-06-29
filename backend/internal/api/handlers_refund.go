@@ -102,6 +102,38 @@ func (h *Handlers) doLineRefund(w http.ResponseWriter, r *http.Request, orderID 
 	response.WriteJSON(w, http.StatusCreated, toAPIRefund(ref))
 }
 
+func (h *Handlers) doDepositReturn(w http.ResponseWriter, r *http.Request, orderID string, actor service.RefundActor) {
+	if !nanoid.Valid(orderID) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
+	var body generated.DepositReturnRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
+	if len(body.Lines) == 0 {
+		writeError(w, http.StatusBadRequest, "no_lines", "At least one deposit line is required")
+		return
+	}
+	lines := make([]service.RefundLineQty, 0, len(body.Lines))
+	for _, l := range body.Lines {
+		lines = append(lines, service.RefundLineQty{OrderLineID: l.OrderLineId, Quantity: l.Quantity})
+	}
+	ref, err := h.refunds.ReturnDeposit(r.Context(), service.DepositReturnInput{
+		OrderID: orderID,
+		Token:   body.Token,
+		Lines:   lines,
+		Reason:  body.Reason,
+		Actor:   actor,
+	})
+	if err != nil {
+		writeRefundError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusCreated, toAPIRefund(ref))
+}
+
 func (h *Handlers) doCancelOrder(w http.ResponseWriter, r *http.Request, orderID string, actor service.RefundActor) {
 	if !nanoid.Valid(orderID) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
@@ -155,6 +187,16 @@ func (h *Handlers) CancelPosOrder(w http.ResponseWriter, r *http.Request, orderI
 	h.doCancelOrder(w, r, orderId, actor)
 }
 
+// (POST /pos/orders/{orderId}/deposit-returns)
+func (h *Handlers) CreatePosDepositReturn(w http.ResponseWriter, r *http.Request, orderId string) {
+	actor, ok := posRefundActor(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Device authentication required")
+		return
+	}
+	h.doDepositReturn(w, r, orderId, actor)
+}
+
 // (GET /orders/lookup)
 func (h *Handlers) LookupOrders(w http.ResponseWriter, r *http.Request) {
 	h.doRefundLookup(w, r)
@@ -183,6 +225,16 @@ func (h *Handlers) CancelOrder(w http.ResponseWriter, r *http.Request, orderId s
 		return
 	}
 	h.doCancelOrder(w, r, orderId, actor)
+}
+
+// (POST /orders/{orderId}/deposit-returns)
+func (h *Handlers) CreateDepositReturn(w http.ResponseWriter, r *http.Request, orderId string) {
+	actor, ok := adminRefundActor(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	h.doDepositReturn(w, r, orderId, actor)
 }
 
 // CreateArbitraryRefund issues a discretionary, line-independent refund. The
@@ -264,6 +316,18 @@ func toAPIRefundView(v *service.RefundView) generated.RefundView {
 			Redeemed:           l.Redeemed,
 		})
 	}
+	deposits := make([]generated.RefundViewDeposit, 0, len(v.Deposits))
+	for _, d := range v.Deposits {
+		deposits = append(deposits, generated.RefundViewDeposit{
+			OrderLineId:         d.Line.ID,
+			ProductId:           d.Line.ProductID,
+			Title:               d.Line.Title,
+			UnitPriceCents:      d.Line.UnitPriceCents,
+			BoughtQuantity:      d.BoughtQuantity,
+			ReturnedQuantity:    d.ReturnedQuantity,
+			OutstandingQuantity: d.OutstandingQty,
+		})
+	}
 	refunds := make([]generated.Refund, 0, len(v.Refunds))
 	for _, rf := range v.Refunds {
 		refunds = append(refunds, toAPIRefund(rf))
@@ -271,6 +335,7 @@ func toAPIRefundView(v *service.RefundView) generated.RefundView {
 	return generated.RefundView{
 		Order:                  toAPIOrder(v.Order),
 		Lines:                  lines,
+		Deposits:               deposits,
 		RefundableBalanceCents: v.RefundableBalanceCents,
 		Refunds:                refunds,
 	}

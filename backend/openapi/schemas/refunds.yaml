@@ -111,9 +111,39 @@ RefundViewLine:
       type: boolean
       description: Whether this line has already been picked up (money-only refund).
 
+RefundViewDeposit:
+  type: object
+  description: A returnable deposit line with its return accounting.
+  required:
+    [
+      orderLineId,
+      productId,
+      title,
+      unitPriceCents,
+      boughtQuantity,
+      returnedQuantity,
+      outstandingQuantity,
+    ]
+  properties:
+    orderLineId:
+      type: string
+    productId:
+      type: string
+    title:
+      type: string
+    unitPriceCents:
+      type: integer
+      format: int64
+    boughtQuantity:
+      type: integer
+    returnedQuantity:
+      type: integer
+    outstandingQuantity:
+      type: integer
+
 RefundView:
   type: object
-  required: [order, lines, refundableBalanceCents, refunds]
+  required: [order, lines, deposits, refundableBalanceCents, refunds]
   properties:
     order:
       $ref: "orders.yaml#/Order"
@@ -121,6 +151,11 @@ RefundView:
       type: array
       items:
         $ref: "#/RefundViewLine"
+    deposits:
+      type: array
+      description: Returnable deposit lines (returned via the deposit-return endpoint).
+      items:
+        $ref: "#/RefundViewDeposit"
     refundableBalanceCents:
       type: integer
       format: int64
@@ -146,6 +181,32 @@ LineRefundRequest:
     lines:
       type: array
       minItems: 1
+      items:
+        type: object
+        required: [orderLineId, quantity]
+        properties:
+          orderLineId:
+            type: string
+          quantity:
+            type: integer
+            minimum: 1
+    reason:
+      type: string
+      description: Optional free-text note.
+
+DepositReturnRequest:
+  type: object
+  required: [lines]
+  properties:
+    token:
+      type: string
+      description: |
+        Optional scanned signed pickup token. When present it is verified and must
+        resolve to this order — a forged, wrong-tenant, or mismatched token is rejected.
+    lines:
+      type: array
+      minItems: 1
+      description: Deposit lines and the number of units returned for each.
       items:
         type: object
         required: [orderLineId, quantity]

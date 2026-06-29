@@ -37,6 +37,7 @@ type RefundService interface {
 	LookupForPOS(ctx context.Context, query string) ([]*ent.Order, error)
 	RefundLines(ctx context.Context, in RefundLinesInput) (*ent.Refund, error)
 	RefundArbitrary(ctx context.Context, in RefundArbitraryInput) (*ent.Refund, error)
+	ReturnDeposit(ctx context.Context, in DepositReturnInput) (*ent.Refund, error)
 	CancelOrder(ctx context.Context, in CancelOrderInput) (*ent.Refund, error)
 	ReconcileFromWebhook(ctx context.Context, result *payment.WebhookResult) error
 }
@@ -73,6 +74,17 @@ type CancelOrderInput struct {
 	Actor   RefundActor
 }
 
+// DepositReturnInput returns deposit units for an order. Token, when present, is
+// the scanned signed pickup token and must resolve to OrderID; Lines reference
+// the order's deposit lines.
+type DepositReturnInput struct {
+	OrderID string
+	Token   *string
+	Lines   []RefundLineQty
+	Reason  *string
+	Actor   RefundActor
+}
+
 type RefundViewLine struct {
 	Line             *ent.OrderLine
 	BoughtQuantity   int
@@ -81,9 +93,18 @@ type RefundViewLine struct {
 	Redeemed         bool
 }
 
+// RefundViewDeposit is a returnable deposit line with its return accounting.
+type RefundViewDeposit struct {
+	Line             *ent.OrderLine
+	BoughtQuantity   int
+	ReturnedQuantity int
+	OutstandingQty   int
+}
+
 type RefundView struct {
 	Order                  *ent.Order
 	Lines                  []RefundViewLine
+	Deposits               []RefundViewDeposit
 	Refunds                []*ent.Refund
 	RefundableBalanceCents int64
 }
@@ -135,7 +156,22 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 	}
 
 	var viewLines []RefundViewLine
+	var deposits []RefundViewDeposit
 	for _, l := range ord.Edges.Lines {
+		if l.LineType == orderline.LineTypeDeposit {
+			returned := refundedQty[l.ID]
+			outstanding := l.Quantity - returned
+			if outstanding < 0 {
+				outstanding = 0
+			}
+			deposits = append(deposits, RefundViewDeposit{
+				Line:             l,
+				BoughtQuantity:   l.Quantity,
+				ReturnedQuantity: returned,
+				OutstandingQty:   outstanding,
+			})
+			continue
+		}
 		if l.ParentLineID != nil {
 			continue
 		}
@@ -156,8 +192,9 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 	return &RefundView{
 		Order:                  ord,
 		Lines:                  viewLines,
+		Deposits:               deposits,
 		Refunds:                refundsList,
-		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord)),
+		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty)),
 	}, nil
 }
 
@@ -215,6 +252,9 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 		if !ok {
 			return nil, fmt.Errorf("order line %s does not belong to order %s", rl.OrderLineID, ord.ID)
 		}
+		if line.LineType == orderline.LineTypeDeposit {
+			return nil, fmt.Errorf("deposit line %s must be returned via the deposit-return endpoint", rl.OrderLineID)
+		}
 		if err := validateRefundLineQty(line.Quantity, refundedQty[rl.OrderLineID]+added[rl.OrderLineID], rl.Quantity); err != nil {
 			return nil, err
 		}
@@ -225,17 +265,27 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 			orderLineID: line.ID,
 			productID:   line.ProductID,
 			productType: productTypeOf(line),
+			lineType:    line.LineType,
 			quantity:    rl.Quantity,
 			amountCents: lineAmount,
 		})
 	}
 
-	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
+	balance := refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty))
 	if amount <= 0 {
 		return nil, fmt.Errorf("refund amount must be positive")
 	}
 	if amount > balance {
 		return nil, fmt.Errorf("refund amount %d exceeds refundable balance %d", amount, balance)
+	}
+
+	// Refunding a product line releases its linked deposit (same money movement);
+	// each release is capped at that deposit line's outstanding balance and draws
+	// from the deposit balance, not the product-refundable balance above.
+	for _, ds := range linkedDepositSpecs(ord, lineSpecs, refundedQty) {
+		amount += ds.amountCents
+		added[ds.orderLineID] += ds.quantity
+		lineSpecs = append(lineSpecs, ds)
 	}
 
 	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
@@ -250,11 +300,11 @@ func (s *refundService) RefundArbitrary(ctx context.Context, in RefundArbitraryI
 	if err != nil {
 		return nil, err
 	}
-	succeededSum, _, err := s.refundedSoFar(ctx, ord.ID)
+	succeededSum, refundedQty, err := s.refundedSoFar(ctx, ord.ID)
 	if err != nil {
 		return nil, err
 	}
-	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
+	balance := refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty))
 	amount := cappedArbitraryAmount(in.AmountCents, balance)
 	if amount <= 0 {
 		return nil, fmt.Errorf("no refundable balance")
@@ -273,11 +323,16 @@ func (s *refundService) CancelOrder(ctx context.Context, in CancelOrderInput) (*
 	if err != nil {
 		return nil, err
 	}
-	balance := refundableBalanceCents(ord.TotalCents, succeededSum, s.outstandingDepositCents(ctx, ord))
 
 	var lineSpecs []refundLineSpec
 	added := make(map[string]int)
 	for _, l := range ord.Edges.Lines {
+		// Deposit lines are settled by settleDepositsOnFullRefund (their money is
+		// already part of the full remaining balance below); including them here
+		// would double-restore the linked product's inventory.
+		if l.LineType == orderline.LineTypeDeposit {
+			continue
+		}
 		remaining := l.Quantity - refundedQty[l.ID]
 		if remaining <= 0 {
 			continue
@@ -287,12 +342,99 @@ func (s *refundService) CancelOrder(ctx context.Context, in CancelOrderInput) (*
 			orderLineID: l.ID,
 			productID:   l.ProductID,
 			productType: productTypeOf(l),
+			lineType:    l.LineType,
 			quantity:    remaining,
 			amountCents: l.UnitPriceCents * int64(remaining),
 		})
 	}
 
-	return s.commitRefund(ctx, ord, balance, refund.KindLine, in.Reason, in.Actor, lineSpecs, order.StatusCancelled, qrClear, mergeQty(refundedQty, added))
+	// Cancellation refunds everything still owed — products and outstanding deposits.
+	amount := ord.TotalCents - succeededSum
+	if amount < 0 {
+		amount = 0
+	}
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, order.StatusCancelled, qrClear, mergeQty(refundedQty, added))
+}
+
+// ReturnDeposit refunds outstanding deposit units for the given deposit lines.
+// It mirrors RefundLines but is the only path that may touch deposit lines, and
+// it never re-issues the pickup token (deposits aren't pickup items).
+func (s *refundService) ReturnDeposit(ctx context.Context, in DepositReturnInput) (*ent.Refund, error) {
+	if len(in.Lines) == 0 {
+		return nil, fmt.Errorf("no deposit return lines")
+	}
+	ord, err := s.loadRefundableOrder(ctx, in.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Token != nil {
+		if err := s.verifyPickupToken(ctx, *in.Token, ord.ID); err != nil {
+			return nil, err
+		}
+	}
+	succeededSum, refundedQty, err := s.refundedSoFar(ctx, ord.ID)
+	if err != nil {
+		return nil, err
+	}
+	lineIndex := indexOrderLines(ord)
+
+	var lineSpecs []refundLineSpec
+	var amount int64
+	added := make(map[string]int)
+	for _, rl := range in.Lines {
+		line, ok := lineIndex[rl.OrderLineID]
+		if !ok {
+			return nil, fmt.Errorf("order line %s does not belong to order %s", rl.OrderLineID, ord.ID)
+		}
+		if line.LineType != orderline.LineTypeDeposit {
+			return nil, fmt.Errorf("order line %s is not a deposit line", rl.OrderLineID)
+		}
+		if rl.Quantity <= 0 {
+			return nil, fmt.Errorf("return quantity must be positive")
+		}
+		outstanding := line.Quantity - refundedQty[rl.OrderLineID] - added[rl.OrderLineID]
+		if rl.Quantity > outstanding {
+			return nil, fmt.Errorf("return quantity %d exceeds %d outstanding", rl.Quantity, outstanding)
+		}
+		lineAmount := line.UnitPriceCents * int64(rl.Quantity)
+		amount += lineAmount
+		added[rl.OrderLineID] += rl.Quantity
+		lineSpecs = append(lineSpecs, refundLineSpec{
+			orderLineID: line.ID,
+			productID:   line.ProductID,
+			productType: productTypeOf(line),
+			lineType:    orderline.LineTypeDeposit,
+			quantity:    rl.Quantity,
+			amountCents: lineAmount,
+		})
+	}
+	if amount <= 0 {
+		return nil, fmt.Errorf("deposit return amount must be positive")
+	}
+
+	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
+}
+
+// verifyPickupToken checks a scanned pickup token's signature against the tenant
+// key and that it resolves to the expected order — rejecting forged, wrong-tenant
+// (signed by another key), or mismatched tokens.
+func (s *refundService) verifyPickupToken(ctx context.Context, token, orderID string) error {
+	if s.qrKeys == nil {
+		return fmt.Errorf("qr verification unavailable")
+	}
+	pub, err := s.qrKeys.TenantPublicKey(ctx)
+	if err != nil {
+		return fmt.Errorf("qr verification unavailable: %w", err)
+	}
+	payload, err := qrsign.Verify(pub, token)
+	if err != nil {
+		return fmt.Errorf("invalid pickup token: %w", err)
+	}
+	if payload.OrderID != orderID {
+		return fmt.Errorf("pickup token does not match order")
+	}
+	return nil
 }
 
 func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *payment.WebhookResult) error {
@@ -384,7 +526,6 @@ func (s *refundService) commitRefund(
 			AmountCents: ls.amountCents,
 		})
 	}
-	rlParams = append(rlParams, s.linkedDepositRefundLines(ctx, ord, created.ID)...)
 	if _, err := s.refunds.CreateRefundLines(ctx, rlParams); err != nil {
 		return nil, err
 	}
@@ -397,7 +538,7 @@ func (s *refundService) commitRefund(
 		return nil, err
 	}
 	if newStatus == order.StatusRefunded || newStatus == order.StatusCancelled {
-		if err := s.settleDepositsOnFullRefund(ctx, ord.ID); err != nil {
+		if err := s.settleDepositsOnFullRefund(ctx, ord, created.ID, newRefundedQty); err != nil {
 			return nil, err
 		}
 	}
@@ -489,7 +630,7 @@ func (s *refundService) reissuePickupToken(ctx context.Context, ord *ent.Order, 
 func (s *refundService) restoreInventory(ctx context.Context, orderID string, lineSpecs []refundLineSpec) error {
 	var entries []repository.InventoryLedgerCreateParams
 	for _, ls := range lineSpecs {
-		if ls.quantity <= 0 || ls.productType != product.TypeSimple {
+		if ls.quantity <= 0 || ls.lineType == orderline.LineTypeDeposit || ls.productType != product.TypeSimple {
 			continue
 		}
 		olID := ls.orderLineID
@@ -538,22 +679,32 @@ func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []r
 	}
 }
 
-// linkedDepositRefundLines returns the deposit refund_line rows released
-// alongside the refunded products.
-func (s *refundService) linkedDepositRefundLines(_ context.Context, _ *ent.Order, _ string) []repository.CreateRefundLineParams {
-	return nil
-}
-
-// outstandingDepositCents is the deposit balance still owed on an order, held
-// out of the product-refundable balance.
-func (s *refundService) outstandingDepositCents(_ context.Context, _ *ent.Order) int64 {
-	return 0
-}
-
-// settleDepositsOnFullRefund settles an order's outstanding deposits once it is
-// fully refunded or cancelled.
-func (s *refundService) settleDepositsOnFullRefund(_ context.Context, _ string) error {
-	return nil
+// settleDepositsOnFullRefund records any deposit units still outstanding against
+// this refund when the order is fully refunded or cancelled, so a later return
+// scan finds nothing. newRefundedQty already reflects deposits released by the
+// current refund, so settled deposits are never double-counted.
+func (s *refundService) settleDepositsOnFullRefund(ctx context.Context, ord *ent.Order, refundID string, newRefundedQty map[string]int) error {
+	var params []repository.CreateRefundLineParams
+	for _, l := range ord.Edges.Lines {
+		if l.LineType != orderline.LineTypeDeposit {
+			continue
+		}
+		outstanding := l.Quantity - newRefundedQty[l.ID]
+		if outstanding <= 0 {
+			continue
+		}
+		params = append(params, repository.CreateRefundLineParams{
+			RefundID:    refundID,
+			OrderLineID: l.ID,
+			Quantity:    outstanding,
+			AmountCents: l.UnitPriceCents * int64(outstanding),
+		})
+	}
+	if len(params) == 0 {
+		return nil
+	}
+	_, err := s.refunds.CreateRefundLines(ctx, params)
+	return err
 }
 
 // --- pure helpers (unit-tested without a database) ---
@@ -562,8 +713,61 @@ type refundLineSpec struct {
 	orderLineID string
 	productID   string
 	productType product.Type
+	lineType    orderline.LineType
 	quantity    int
 	amountCents int64
+}
+
+// outstandingDepositCents is the deposit balance still owed on an order, held out
+// of the product-refundable balance: per deposit line, units not yet returned
+// (incl. deposits released by a product-line refund) times the per-unit deposit.
+func outstandingDepositCents(ord *ent.Order, refundedQty map[string]int) int64 {
+	var sum int64
+	for _, l := range ord.Edges.Lines {
+		if l.LineType != orderline.LineTypeDeposit {
+			continue
+		}
+		outstanding := l.Quantity - refundedQty[l.ID]
+		if outstanding > 0 {
+			sum += int64(outstanding) * l.UnitPriceCents
+		}
+	}
+	return sum
+}
+
+// linkedDepositSpecs returns the deposit refund specs released alongside the
+// given refunded product lines: each refunded product unit refunds its sibling
+// deposit unit, capped at that deposit line's outstanding balance.
+func linkedDepositSpecs(ord *ent.Order, productSpecs []refundLineSpec, refundedQty map[string]int) []refundLineSpec {
+	depositByParent := make(map[string]*ent.OrderLine)
+	for _, l := range ord.Edges.Lines {
+		if l.LineType == orderline.LineTypeDeposit && l.ParentLineID != nil {
+			depositByParent[*l.ParentLineID] = l
+		}
+	}
+	var out []refundLineSpec
+	for _, ps := range productSpecs {
+		dep, ok := depositByParent[ps.orderLineID]
+		if !ok {
+			continue
+		}
+		release := ps.quantity
+		if outstanding := dep.Quantity - refundedQty[dep.ID]; release > outstanding {
+			release = outstanding
+		}
+		if release <= 0 {
+			continue
+		}
+		out = append(out, refundLineSpec{
+			orderLineID: dep.ID,
+			productID:   dep.ProductID,
+			productType: productTypeOf(dep),
+			lineType:    orderline.LineTypeDeposit,
+			quantity:    release,
+			amountCents: dep.UnitPriceCents * int64(release),
+		})
+	}
+	return out
 }
 
 type qrPlan int

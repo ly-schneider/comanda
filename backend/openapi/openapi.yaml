@@ -116,6 +116,8 @@ paths:
     $ref: "paths/refunds.yaml#/order-refunds-arbitrary"
   /orders/{orderId}/cancel:
     $ref: "paths/refunds.yaml#/order-cancel"
+  /orders/{orderId}/deposit-returns:
+    $ref: "paths/refunds.yaml#/order-deposit-returns"
 
   /pos/orders/lookup:
     $ref: "paths/refunds.yaml#/pos-orders-lookup"
@@ -123,6 +125,8 @@ paths:
     $ref: "paths/refunds.yaml#/pos-order-refunds"
   /pos/orders/{orderId}/cancel:
     $ref: "paths/refunds.yaml#/pos-order-cancel"
+  /pos/orders/{orderId}/deposit-returns:
+    $ref: "paths/refunds.yaml#/pos-order-deposit-returns"
 
   /orders/{orderId}/payment:
     $ref: "paths/payments.yaml#/order-payment"
