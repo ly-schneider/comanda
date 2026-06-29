@@ -6,8 +6,6 @@ export interface CartTotalSummaryProps {
   itemCount: number
 }
 
-// Footer totals for the cart and checkout: when any product carries a deposit,
-// the deposit is broken out as its own line and folded into the grand total.
 export function CartTotalSummary({ productCents, depositCents, itemCount }: CartTotalSummaryProps) {
   return (
     <div className="flex flex-col gap-1.5">

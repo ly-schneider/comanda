@@ -217,8 +217,6 @@ func orderReflectsRefunds(s order.Status) bool {
 	return s == order.StatusRefunded || s == order.StatusPartiallyRefunded || s == order.StatusCancelled
 }
 
-// annotateOrderRefunds fills refundedTotalCents and per-line refundedQuantity
-// from the refund ledger so the storefront can show what was returned.
 func (h *Handlers) annotateOrderRefunds(ctx context.Context, o *generated.Order) error {
 	summary, err := h.refunds.RefundedSummary(ctx, o.Id)
 	if err != nil {

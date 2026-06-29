@@ -111,8 +111,6 @@ type RefundView struct {
 	RefundableBalanceCents int64
 }
 
-// RefundedSummary is the lightweight refund picture for an order: the total
-// refunded so far and the refunded/returned quantity per order line.
 type RefundedSummary struct {
 	TotalCents int64
 	ByLine     map[string]int
