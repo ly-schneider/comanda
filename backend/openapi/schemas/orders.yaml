@@ -18,11 +18,12 @@ OrderOrigin:
 
 OrderItemType:
   type: string
-  enum: [simple, bundle, component]
+  enum: [simple, bundle, component, deposit]
   description: |
     - `simple`: Standalone product line
     - `bundle`: Menu product parent line
     - `component`: Menu slot selection (child of bundle)
+    - `deposit`: Refundable per-unit container deposit (child of the product line)
 
 Order:
   type: object
@@ -93,8 +94,8 @@ OrderLine:
       type: string
     title:
       type: string
-      maxLength: 20
-      description: Product name snapshot at time of order
+      maxLength: 40
+      description: Product name snapshot at time of order (deposit lines prefix "Depot — ")
     quantity:
       type: integer
       minimum: 1

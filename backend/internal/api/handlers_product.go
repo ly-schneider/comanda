@@ -78,12 +78,18 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		description = nil
 	}
 
+	var depositCents int64
+	if body.DepositCents != nil {
+		depositCents = *body.DepositCents
+	}
+
 	prod, err := h.products.Create(
 		r.Context(),
 		body.CategoryId,
 		pType,
 		body.Name,
 		body.PriceCents,
+		depositCents,
 		true, // isActive defaults to true
 		body.Image,
 		description,
@@ -140,6 +146,10 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 	if body.PriceCents != nil {
 		priceCents = *body.PriceCents
 	}
+	depositCents := existing.DepositCents
+	if body.DepositCents != nil {
+		depositCents = *body.DepositCents
+	}
 	isActive := existing.IsActive
 	if body.IsActive != nil {
 		isActive = *body.IsActive
@@ -173,6 +183,7 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 		existing.Type,
 		name,
 		priceCents,
+		depositCents,
 		isActive,
 		image,
 		description,
@@ -321,6 +332,7 @@ func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request, prod
 		existing.Type,
 		existing.Name,
 		existing.PriceCents,
+		existing.DepositCents,
 		*body.IsActive,
 		existing.Image,
 		existing.Description,
@@ -402,7 +414,7 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 
-	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.IsActive, &url, existing.Description, existing.JetonID)
+	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, &url, existing.Description, existing.JetonID)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -427,7 +439,7 @@ func (h *Handlers) DeleteProductImage(w http.ResponseWriter, r *http.Request, pr
 		}
 	}
 
-	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.IsActive, nil, existing.Description, existing.JetonID)
+	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, nil, existing.Description, existing.JetonID)
 	if err != nil {
 		writeEntError(w, err)
 		return

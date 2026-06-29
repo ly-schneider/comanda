@@ -3,10 +3,12 @@ package integration
 import (
 	"testing"
 
+	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
 	"backend/internal/generated/ent/product"
+	"backend/internal/qrsign"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -445,6 +447,114 @@ func TestPaymentService_TWINTLimits(t *testing.T) {
 		_, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "TWINT max")
+	})
+}
+
+func TestPaymentService_DepositCheckout(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+	cfg := TestConfig()
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
+	keys := NewQRKeySvc(repos)
+	ctx := tenantCtx()
+
+	category := fixtures.CreateCategory("Drinks", 1, true)
+	kaffee := fixtures.CreateProductWithDeposit("Kaffee", category.ID, 200, 200) // 2.00 CHF + 2.00 CHF deposit
+	fixtures.AddInventory(kaffee.ID, 100, inventoryledger.ReasonOpeningBalance)
+	wasser := fixtures.CreateProduct("Wasser", category.ID, 150, product.TypeSimple, nil)
+	fixtures.AddInventory(wasser.ID, 100, inventoryledger.ReasonOpeningBalance)
+
+	depositAndProductLines := func(t *testing.T, orderID string) (deposit, productLine *ent.OrderLine) {
+		t.Helper()
+		lines, err := repos.OrderLine.GetByOrderID(ctx, orderID)
+		require.NoError(t, err)
+		for _, l := range lines {
+			switch {
+			case l.LineType == orderline.LineTypeDeposit:
+				deposit = l
+			case l.LineType == orderline.LineTypeSimple && l.ProductID == kaffee.ID:
+				productLine = l
+			}
+		}
+		return deposit, productLine
+	}
+
+	t.Run("deposit product adds a separate deposit line included in the total", func(t *testing.T) {
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: kaffee.ID, Quantity: 1}},
+		}
+		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, int64(400), prep.TotalCents) // 200 product + 200 deposit
+
+		deposit, productLine := depositAndProductLines(t, prep.OrderID)
+		require.NotNil(t, productLine, "product line present")
+		require.NotNil(t, deposit, "deposit line present")
+		require.Equal(t, "Depot — Kaffee", deposit.Title)
+		require.Equal(t, 1, deposit.Quantity)
+		require.Equal(t, int64(200), deposit.UnitPriceCents)
+		require.Equal(t, kaffee.ID, deposit.ProductID)
+		require.NotNil(t, deposit.ParentLineID)
+		require.Equal(t, productLine.ID, *deposit.ParentLineID, "deposit hangs off the product line")
+
+		// The gateway basket carries both lines and sums to the charged total.
+		basket := 0
+		for _, li := range prep.LineItems {
+			basket += li.Amount * li.Quantity
+		}
+		require.Len(t, prep.LineItems, 2)
+		require.Equal(t, int(prep.TotalCents), basket)
+	})
+
+	t.Run("deposit scales per unit", func(t *testing.T) {
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: kaffee.ID, Quantity: 3}},
+		}
+		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, int64(1200), prep.TotalCents) // 3 * (200 + 200)
+
+		deposit, _ := depositAndProductLines(t, prep.OrderID)
+		require.NotNil(t, deposit)
+		require.Equal(t, 3, deposit.Quantity)
+		require.Equal(t, int64(200), deposit.UnitPriceCents) // 6.00 CHF over the line
+	})
+
+	t.Run("deposit line is not a redeemable pickup item", func(t *testing.T) {
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: kaffee.ID, Quantity: 1}},
+		}
+		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.NoError(t, err)
+
+		_, pub, err := keys.EnsureTenantKey(ctx)
+		require.NoError(t, err)
+		payload, err := qrsign.Verify(pub, prep.QRPayload)
+		require.NoError(t, err)
+
+		// Only the handed-over product is redeemable; the deposit never is.
+		require.Len(t, payload.Lines, 1)
+		require.Equal(t, kaffee.ID, payload.Lines[0].ProductID)
+		require.Equal(t, 1, payload.Lines[0].Quantity)
+	})
+
+	t.Run("zero-deposit product creates no deposit line", func(t *testing.T) {
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: wasser.ID, Quantity: 2}},
+		}
+		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, int64(300), prep.TotalCents) // 2 * 150, no deposit
+
+		lines, err := repos.OrderLine.GetByOrderID(ctx, prep.OrderID)
+		require.NoError(t, err)
+		for _, l := range lines {
+			require.NotEqual(t, orderline.LineTypeDeposit, l.LineType, "no deposit line expected")
+		}
 	})
 }
 

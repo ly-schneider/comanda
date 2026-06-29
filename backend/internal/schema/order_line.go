@@ -29,11 +29,11 @@ func (OrderLine) Fields() []ent.Field {
 		nanoidPK(),
 		field.String("order_id").MaxLen(12),
 		field.Enum("line_type").
-			Values("simple", "bundle", "component").
+			Values("simple", "bundle", "component", "deposit").
 			StorageKey("line_type"),
 		field.String("product_id").MaxLen(12),
 		field.String("title").
-			MaxLen(20).
+			MaxLen(40).
 			NotEmpty(),
 		field.Int("quantity").
 			Default(1),

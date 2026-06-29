@@ -360,7 +360,16 @@ func (f *Fixtures) CreateJeton(name, color string) *ent.Jeton {
 
 // CreateProduct creates a test product.
 func (f *Fixtures) CreateProduct(name string, categoryID string, priceCents int64, productType product.Type, jetonID *string) *ent.Product {
-	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, true, nil, nil, jetonID)
+	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, 0, true, nil, nil, jetonID)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create product: %v", err))
+	}
+	return p
+}
+
+// CreateProductWithDeposit creates a simple test product carrying a per-unit deposit.
+func (f *Fixtures) CreateProductWithDeposit(name string, categoryID string, priceCents, depositCents int64) *ent.Product {
+	p, err := f.repos.Product.Create(f.ctx, categoryID, product.TypeSimple, name, priceCents, depositCents, true, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create product: %v", err))
 	}

@@ -17,12 +17,13 @@ func NewProductRepository(client *ent.Client) *ProductRepository {
 	return &ProductRepository{client: client}
 }
 
-func (r *ProductRepository) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+func (r *ProductRepository) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
 	builder := r.client.Product.Create().
 		SetCategoryID(categoryID).
 		SetType(productType).
 		SetName(name).
 		SetPriceCents(priceCents).
+		SetDepositCents(depositCents).
 		SetIsActive(isActive)
 	if image != nil {
 		builder.SetImage(*image)
@@ -161,12 +162,13 @@ func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.
 	return rows, nil
 }
 
-func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
 	builder := r.client.Product.UpdateOneID(id).
 		SetCategoryID(categoryID).
 		SetType(productType).
 		SetName(name).
 		SetPriceCents(priceCents).
+		SetDepositCents(depositCents).
 		SetIsActive(isActive)
 	if image != nil {
 		builder.SetImage(*image)

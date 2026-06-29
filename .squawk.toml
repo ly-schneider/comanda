@@ -19,6 +19,9 @@
 #     existing order/order_line counts and ids); use `field.Int64` for a real BIGINT.
 #   - require-enum-value-ordering: enum values are appended with `ALTER TYPE ... ADD
 #     VALUE`; their positional ordering is never relied on.
+#   - changing-column-type: the VARCHAR(n) caps come from Ent `MaxLen`, which is
+#     occasionally raised (e.g. a longer order_line title); widening a varchar is a
+#     metadata-only catalog change in Postgres — no table rewrite, only a brief lock.
 excluded_rules = [
   "prefer-text-field",
   "require-timeout-settings",
@@ -29,4 +32,5 @@ excluded_rules = [
   "ban-drop-column",
   "prefer-bigint-over-int",
   "require-enum-value-ordering",
+  "changing-column-type",
 ]

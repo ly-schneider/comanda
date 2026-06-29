@@ -262,10 +262,11 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		if !ok {
 			return nil, fmt.Errorf("unknown product: %s", it.ProductID)
 		}
-		totalCents += p.PriceCents * int64(it.Quantity)
+		lineCents := (p.PriceCents + p.DepositCents) * int64(it.Quantity)
+		totalCents += lineCents
 
 		// TWINT limit: 5000 CHF per transaction
-		if p.PriceCents*int64(it.Quantity) > 500000 {
+		if lineCents > 500000 {
 			return nil, fmt.Errorf("item exceeds TWINT max: %s", p.Name)
 		}
 	}
@@ -334,6 +335,20 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 			UnitPriceCents: p.PriceCents,
 		}
 		orderLines = append(orderLines, parentLine)
+
+		// A returnable-container deposit rides as a sibling line linked to the
+		// product line: charged per unit, refundable, and never a pickup item.
+		if p.DepositCents > 0 {
+			orderLines = append(orderLines, repository.OrderLineCreateParams{
+				OrderID:        ord.ID,
+				LineType:       orderline.LineTypeDeposit,
+				ProductID:      p.ID,
+				Title:          "Depot — " + p.Name,
+				Quantity:       it.Quantity,
+				UnitPriceCents: p.DepositCents,
+				ParentLineID:   &parentLineID,
+			})
+		}
 
 		// Reserve inventory for simple products
 		if p.Type == product.TypeSimple && it.Quantity > 0 {
@@ -423,7 +438,10 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	// Prepare provider line items from the params (we have all the data we need)
 	lineItems := make([]payment.LineItem, 0)
 	for _, line := range orderLines {
-		if line.ParentLineID == nil && line.UnitPriceCents > 0 && line.Quantity > 0 {
+		// Top-level priced lines plus deposit lines (which hang off a product
+		// line) make up the gateway basket; their sum equals totalCents.
+		charged := line.ParentLineID == nil || line.LineType == orderline.LineTypeDeposit
+		if charged && line.UnitPriceCents > 0 && line.Quantity > 0 {
 			lineItems = append(lineItems, payment.LineItem{
 				Name:     line.Title,
 				Quantity: line.Quantity,
@@ -464,7 +482,7 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 
 	hasComponents := make(map[string]bool, len(lines))
 	for _, l := range lines {
-		if l.ParentLineID != nil {
+		if l.ParentLineID != nil && l.LineType == orderline.LineTypeComponent {
 			hasComponents[*l.ParentLineID] = true
 		}
 	}
