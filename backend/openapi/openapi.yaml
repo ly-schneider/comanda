@@ -118,6 +118,8 @@ paths:
     $ref: "paths/refunds.yaml#/order-cancel"
   /orders/{orderId}/deposit-returns:
     $ref: "paths/refunds.yaml#/order-deposit-returns"
+  /refunds:
+    $ref: "paths/refunds.yaml#/refunds-collection"
 
   /pos/orders/lookup:
     $ref: "paths/refunds.yaml#/pos-orders-lookup"

@@ -4,6 +4,53 @@
 #   * Authenticated admins   -> /orders/...      (sessionAuth, ops tier + CSRF)
 # Arbitrary (discretionary) refunds are admin-only at a strictly higher tier.
 
+# ── Admin audit surface ─────────────────────────────────────────────────────
+
+refunds-collection:
+  get:
+    tags: [Refunds]
+    summary: List refunds (admin audit)
+    description: |
+      Lists this tenant's refunds (line, arbitrary, and cancellation) across all
+      orders, most recent first, for the admin audit surface.
+    operationId: ListRefunds
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:refund]
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Refund list
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/refunds.yaml#/RefundList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 # ── POS device surface (operator) ──────────────────────────────────────────
 
 pos-orders-lookup:

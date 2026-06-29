@@ -12,6 +12,7 @@ import {
   Settings,
   Smartphone,
   Ticket,
+  Undo2,
   Users,
   UtensilsCrossed,
 } from "lucide-react"
@@ -51,6 +52,12 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       label: "Bestellungen",
       icon: <ReceiptText className="size-5" />,
       badge: badges?.orders,
+      requiredTier: "staff",
+    },
+    {
+      href: "/admin/refunds",
+      label: "Rückerstattungen",
+      icon: <Undo2 className="size-5" />,
       requiredTier: "staff",
     },
     { href: "/admin/inventory", label: "Inventar", icon: <ClipboardList className="size-5" />, requiredTier: "staff" },

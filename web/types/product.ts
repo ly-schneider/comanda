@@ -13,6 +13,7 @@ export interface Product {
   image: string | null
   description: string | null
   priceCents: Cents
+  depositCents: Cents
   isActive: boolean
   createdAt: string // ISO date
   updatedAt: string // ISO date
@@ -26,6 +27,7 @@ export interface ProductSummaryDTO {
   image: string | null
   description?: string | null
   priceCents: Cents
+  depositCents: Cents
   isActive: boolean
   availableQuantity?: number | null
   isAvailable?: boolean

@@ -30,6 +30,7 @@ type Product = {
   id: string
   name: string
   priceCents: number
+  depositCents?: number
   isActive: boolean
   image?: string | null
   description?: string | null
@@ -125,6 +126,15 @@ export default function AdminProductsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
       body: JSON.stringify({ priceCents }),
+    })
+    if (!res.ok) throw new Error(await readErrorMessage(res))
+  }
+  async function updateDeposit(id: string, depositCents: number) {
+    const csrf = getCSRFToken()
+    const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
+      body: JSON.stringify({ depositCents }),
     })
     if (!res.ok) throw new Error(await readErrorMessage(res))
   }
@@ -229,6 +239,7 @@ export default function AdminProductsPage() {
   async function createProduct(payload: {
     name: string
     priceCents: number
+    depositCents?: number
     categoryId: string
     type: "simple" | "menu"
     isActive: boolean
@@ -263,6 +274,7 @@ export default function AdminProductsPage() {
       body: JSON.stringify({
         name: payload.name,
         priceCents: payload.priceCents,
+        depositCents: payload.depositCents ?? 0,
         categoryId: payload.categoryId,
         type: payload.type,
         isActive: payload.isActive,
@@ -330,6 +342,7 @@ export default function AdminProductsPage() {
               setItems((prev) => prev.filter((it) => it.id !== id))
             }}
             updatePrice={updatePrice}
+            updateDeposit={updateDeposit}
             updateName={updateName}
             updateDescription={updateDescription}
             moveCategory={moveCategory}
@@ -354,6 +367,7 @@ type ProductCardProps = {
   onDelete: (id: string) => Promise<void>
   onError: (msg: string) => void
   updatePrice: (id: string, priceCents: number) => Promise<void>
+  updateDeposit: (id: string, depositCents: number) => Promise<void>
   updateName: (id: string, name: string) => Promise<void>
   updateDescription: (id: string, description: string | null) => Promise<void>
   moveCategory: (id: string, categoryId: string) => Promise<void>
@@ -373,6 +387,7 @@ function ProductCardEditable({
   onDelete,
   onError,
   updatePrice,
+  updateDeposit,
   updateName,
   updateDescription,
   moveCategory,
@@ -385,6 +400,8 @@ function ProductCardEditable({
   const [name, setName] = useState(product.name)
   const initialPrice = (product.priceCents / 100).toFixed(2)
   const [priceInput, setPriceInput] = useState(initialPrice)
+  const initialDeposit = ((product.depositCents ?? 0) / 100).toFixed(2)
+  const [depositInput, setDepositInput] = useState(initialDeposit)
   const [description, setDescription] = useState(product.description ?? "")
   const [categoryId, setCategoryId] = useState(product.category?.id ?? "")
   const [jetonId, setJetonId] = useState(product.jeton?.id ?? "")
@@ -399,6 +416,7 @@ function ProductCardEditable({
   useEffect(() => {
     setName(product.name)
     setPriceInput((product.priceCents / 100).toFixed(2))
+    setDepositInput(((product.depositCents ?? 0) / 100).toFixed(2))
     setDescription(product.description ?? "")
     setCategoryId(product.category?.id ?? "")
     setJetonId(product.jeton?.id ?? "")
@@ -411,6 +429,7 @@ function ProductCardEditable({
   const currentStockValue = typeof product.stock === "number" ? product.stock : 0
   const currentStockLabel = typeof product.stock === "number" ? product.stock : "–"
   const parsedPrice = parsePrice(priceInput)
+  const parsedDeposit = parsePrice(depositInput)
   const trimmedName = name.trim()
   const parsedDelta = deltaInput.trim() === "" ? 0 : parseInt(deltaInput, 10)
   const deltaValid = deltaInput.trim() === "" || !isNaN(parsedDelta)
@@ -418,12 +437,15 @@ function ProductCardEditable({
   const jetonRequired = product.type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
 
   const priceDirty = parsedPrice != null ? parsedPrice !== product.priceCents : priceInput !== initialPrice
+  const depositDirty =
+    parsedDeposit != null ? parsedDeposit !== (product.depositCents ?? 0) : depositInput !== initialDeposit
   const deltaDirty = deltaInput.trim() !== "" && parsedDelta !== 0
   const trimmedDescription = description.trim()
   const descriptionDirty = trimmedDescription !== (product.description ?? "")
   const dirty =
     trimmedName !== product.name ||
     priceDirty ||
+    (product.type === "simple" && depositDirty) ||
     descriptionDirty ||
     categoryId !== (product.category?.id ?? "") ||
     jetonId !== (product.jeton?.id ?? "") ||
@@ -434,6 +456,7 @@ function ProductCardEditable({
     trimmedName.length > 0 &&
     parsedPrice != null &&
     parsedPrice >= 0 &&
+    (product.type !== "simple" || (parsedDeposit != null && parsedDeposit >= 0)) &&
     deltaValid &&
     newStock >= 0 &&
     (!jetonRequired || !!jetonId)
@@ -442,6 +465,12 @@ function ProductCardEditable({
     // Normalize to two decimals if valid
     if (parsedPrice != null) {
       setPriceInput((parsedPrice / 100).toFixed(2))
+    }
+  }
+
+  function onDepositBlur() {
+    if (parsedDeposit != null) {
+      setDepositInput((parsedDeposit / 100).toFixed(2))
     }
   }
 
@@ -463,6 +492,8 @@ function ProductCardEditable({
       const updates: Array<Promise<void>> = []
       if (trimmedName !== product.name) updates.push(updateName(product.id, trimmedName))
       if (parsedPrice != null && parsedPrice !== product.priceCents) updates.push(updatePrice(product.id, parsedPrice))
+      if (product.type === "simple" && parsedDeposit != null && parsedDeposit !== (product.depositCents ?? 0))
+        updates.push(updateDeposit(product.id, parsedDeposit))
       if (descriptionDirty) updates.push(updateDescription(product.id, trimmedDescription || null))
       if (categoryId !== (product.category?.id ?? "")) updates.push(moveCategory(product.id, categoryId))
       if (jetonId !== (product.jeton?.id ?? "")) updates.push(updateJeton(product.id, jetonId || null))
@@ -479,6 +510,8 @@ function ProductCardEditable({
         ...product,
         name: trimmedName,
         priceCents: parsedPrice ?? product.priceCents,
+        depositCents:
+          product.type === "simple" ? (parsedDeposit ?? product.depositCents ?? 0) : (product.depositCents ?? 0),
         description: descriptionDirty ? trimmedDescription || null : product.description,
         category: categoryId
           ? { id: categoryId, name: categories.find((c) => c.id === categoryId)?.name ?? product.category?.name ?? "" }
@@ -578,6 +611,29 @@ function ProductCardEditable({
               <p className="text-destructive text-xs">Preis muss 0 oder höher sein.</p>
             )}
           </div>
+
+          {product.type === "simple" && (
+            <div className="space-y-1">
+              <Label htmlFor={`deposit-${product.id}`}>Depot (CHF)</Label>
+              <Input
+                id={`deposit-${product.id}`}
+                inputMode="decimal"
+                value={depositInput}
+                onChange={(e) => {
+                  setDepositInput(e.target.value)
+                  setStatus("idle")
+                  setFieldError(null)
+                }}
+                onBlur={onDepositBlur}
+                aria-invalid={parsedDeposit == null || parsedDeposit < 0}
+              />
+              {parsedDeposit == null || parsedDeposit < 0 ? (
+                <p className="text-destructive text-xs">Depot muss 0 oder höher sein.</p>
+              ) : (
+                <p className="text-muted-foreground text-xs">Rückerstattbares Depot pro Stück. 0 = kein Depot.</p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label id={categoryLabelId} htmlFor={`category-${product.id}`}>
@@ -780,6 +836,7 @@ type CreateProductCardProps = {
   createProduct: (payload: {
     name: string
     priceCents: number
+    depositCents?: number
     categoryId: string
     type: "simple" | "menu"
     isActive: boolean
@@ -807,6 +864,7 @@ function CreateProductCard({
   const [submitted, setSubmitted] = useState(false)
   const [name, setName] = useState("")
   const [priceInput, setPriceInput] = useState("")
+  const [depositInput, setDepositInput] = useState("")
   const [categoryId, setCategoryId] = useState<string>("")
   const [type, setType] = useState<"simple" | "menu">("simple")
   const [jetonId, setJetonId] = useState<string>("")
@@ -817,6 +875,8 @@ function CreateProductCard({
   const [description, setDescription] = useState<string>("")
 
   const parsedPrice = parsePrice(priceInput)
+  const parsedDeposit = depositInput.trim() === "" ? 0 : parsePrice(depositInput)
+  const depositValid = parsedDeposit != null && parsedDeposit >= 0
   const trimmedName = name.trim()
   const jetonRequired = type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
   const stockValid = initialStock === "" || initialStock >= 0
@@ -824,6 +884,7 @@ function CreateProductCard({
     trimmedName.length > 0 &&
     parsedPrice != null &&
     parsedPrice >= 0 &&
+    depositValid &&
     !!categoryId &&
     !jetonRequired &&
     stockValid &&
@@ -832,6 +893,7 @@ function CreateProductCard({
   const reset = () => {
     setName("")
     setPriceInput("")
+    setDepositInput("")
     setCategoryId("")
     setType("simple")
     setJetonId("")
@@ -857,6 +919,7 @@ function CreateProductCard({
       const res = await createProduct({
         name: trimmedName,
         priceCents: parsedPrice ?? 0,
+        depositCents: type === "simple" ? (parsedDeposit ?? 0) : 0,
         categoryId,
         type,
         isActive,
@@ -870,6 +933,7 @@ function CreateProductCard({
         id: newId,
         name: trimmedName,
         priceCents: parsedPrice ?? 0,
+        depositCents: type === "simple" ? (parsedDeposit ?? 0) : 0,
         isActive,
         category: category ? { id: categoryId, name: category.name } : undefined,
         jeton: jetonId ? jetons.find((j) => j.id === jetonId) : undefined,
@@ -934,6 +998,24 @@ function CreateProductCard({
               <p className="text-destructive text-xs">Preis muss 0 oder höher sein.</p>
             )}
           </div>
+          {type === "simple" && (
+            <div className="space-y-1">
+              <Label htmlFor="new-deposit">Depot (CHF)</Label>
+              <Input
+                id="new-deposit"
+                inputMode="decimal"
+                value={depositInput}
+                onChange={(e) => setDepositInput(e.target.value)}
+                placeholder="0.00"
+                aria-invalid={submitted && !depositValid}
+              />
+              {submitted && !depositValid ? (
+                <p className="text-destructive text-xs">Depot muss 0 oder höher sein.</p>
+              ) : (
+                <p className="text-muted-foreground text-xs">Rückerstattbares Depot pro Stück. Leer = kein Depot.</p>
+              )}
+            </div>
+          )}
           <div className="space-y-1">
             <Label htmlFor="new-category">Kategorie</Label>
             <Select value={categoryId || undefined} onValueChange={setCategoryId}>
