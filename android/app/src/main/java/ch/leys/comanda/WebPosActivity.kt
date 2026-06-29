@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -64,15 +65,70 @@ private fun parseBranding(obj: JSONObject): ReceiptBranding {
     ) else ReceiptBranding(null, null, null, null, null)
 }
 
+/** One refunded/redeemable line on a slip. */
+private data class ReceiptLine(
+    val title: String,
+    val quantity: Int,
+    val unitPriceCents: Long,
+    val configuration: List<Pair<String, String>>
+)
+
+/** Receipt kind sent by the web POS. Absent/unknown ⇒ "sale" (back-compat). */
+private fun receiptKind(obj: JSONObject): String =
+    when (obj.optString("kind", "sale").lowercase()) {
+        "refund" -> "refund"
+        "pickup" -> "pickup"
+        "void" -> "void"
+        else -> "sale"
+    }
+
+private fun prettyRefundMethod(method: String): String = when (method.lowercase()) {
+    "twint" -> "TWINT"
+    "cash-out", "cashout" -> "Cash-out"
+    "cash" -> "Bar"
+    "card" -> "Karte"
+    else -> method
+}
+
+private fun moneyStr(currency: String, cents: Long): String =
+    String.format("%s %.2f", currency, cents.toDouble() / 100.0)
+
+private fun parseReceiptLines(obj: JSONObject): List<ReceiptLine> {
+    val arr = obj.optJSONArray("items") ?: return emptyList()
+    val out = ArrayList<ReceiptLine>(arr.length())
+    for (i in 0 until arr.length()) {
+        val it = arr.optJSONObject(i) ?: continue
+        val cfg = ArrayList<Pair<String, String>>()
+        it.optJSONArray("configuration")?.let { ca ->
+            for (j in 0 until ca.length()) {
+                val c = ca.optJSONObject(j) ?: continue
+                cfg.add(c.optString("slot") to c.optString("choice"))
+            }
+        }
+        out.add(
+            ReceiptLine(
+                title = it.optString("title").ifBlank { "Artikel" },
+                quantity = it.optInt("quantity", 1),
+                unitPriceCents = it.optLong("unitPriceCents", -1L),
+                configuration = cfg
+            )
+        )
+    }
+    return out
+}
+
 class WebPosActivity : ComponentActivity() {
 
     companion object {
         private const val REQ_LOGIN = 1001
         private const val REQ_CHECKOUT = 1002
+        private const val REQ_CAMERA = 3001
     }
 
     private lateinit var webView: WebView
     private var pendingPayment: PendingPayment? = null
+    // WebView camera permission request held while the OS CAMERA grant is pending
+    private var pendingCameraRequest: PermissionRequest? = null
     // Store last successful SumUp transaction details by correlationId/reference
     private val txByCorrelation: MutableMap<String, JSONObject> = mutableMapOf()
     // Last successful transaction (fallback when correlationId is not provided)
@@ -232,7 +288,38 @@ class WebPosActivity : ComponentActivity() {
                 }
             }
         }
-        wv.webChromeClient = WebChromeClient()
+        wv.webChromeClient = object : WebChromeClient() {
+            // The web station scanner (html5-qrcode) calls getUserMedia; grant the camera so it runs in-app.
+            override fun onPermissionRequest(request: PermissionRequest) {
+                val wantsCamera = request.resources.any { it == PermissionRequest.RESOURCE_VIDEO_CAPTURE }
+                if (!wantsCamera) {
+                    request.deny()
+                    return
+                }
+                if (ContextCompat.checkSelfPermission(this@WebPosActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    request.grant(arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE))
+                } else {
+                    pendingCameraRequest = request
+                    ActivityCompat.requestPermissions(this@WebPosActivity, arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
+                }
+            }
+
+            override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                if (pendingCameraRequest == request) pendingCameraRequest = null
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_CAMERA) {
+            val req = pendingCameraRequest
+            pendingCameraRequest = null
+            if (req != null) {
+                val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                if (granted) req.grant(arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) else req.deny()
+            }
+        }
     }
 
     inner class PosBridge {
@@ -689,6 +776,9 @@ class WebPosActivity : ComponentActivity() {
                 val fmt = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY)
                 fmt.format(java.util.Date(whenMs))
             } catch (_: Throwable) { "" }
+            val kind = receiptKind(obj)
+            val depositCents = obj.optLong("depositCents", -1L)
+            val refundCents = obj.optLong("refundCents", -1L)
             val lines = StringBuilder()
             val headerName = branding.displayName ?: "Comanda"
             lines.append("[C]<b>$headerName</b>\n")
@@ -699,34 +789,15 @@ class WebPosActivity : ComponentActivity() {
                 }
             }
             if (dateStr.isNotEmpty()) lines.append("[C]$dateStr\n")
-            if (totalCents >= 0) {
-                val amt = String.format("%s %.2f", currency, totalCents.toDouble() / 100.0)
-                lines.append("Total: $amt\n")
-            }
-            val methodPretty = if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
-            lines.append("Zahlart: ${methodPretty}\n")
-            if (method.equals("cash", ignoreCase = true)) {
-                val rec = obj.optLong("amountReceivedCents", -1L)
-                val chg = obj.optLong("changeCents", -1L)
-                if (rec >= 0) {
-                    val recStr = String.format("%s %.2f", currency, rec.toDouble() / 100.0)
-                    lines.append("Erhalten: $recStr\n")
-                }
-                if (chg >= 0) {
-                    val chgStr = String.format("%s %.2f", currency, chg.toDouble() / 100.0)
-                    lines.append("Rückgeld: $chgStr\n")
-                }
-            }
-            lines.append("Bestellung: ${orderId}\n")
-            lines.append("\n")
-            if (pickupQr.isNotEmpty()) {
+
+            val appendQr: (String) -> Unit = { data ->
                 try {
                     val hints = mapOf(
                         EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
                         EncodeHintType.MARGIN to 2
                     )
                     val qrBitmapSize = 320
-                    val matrix = QRCodeWriter().encode(pickupQr, BarcodeFormat.QR_CODE, qrBitmapSize, qrBitmapSize, hints)
+                    val matrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, qrBitmapSize, qrBitmapSize, hints)
                     val qrBmp = Bitmap.createBitmap(qrBitmapSize, qrBitmapSize, Bitmap.Config.RGB_565)
                     for (x in 0 until qrBitmapSize) {
                         for (yy in 0 until qrBitmapSize) {
@@ -736,6 +807,58 @@ class WebPosActivity : ComponentActivity() {
                     val imgHex = com.dantsu.escposprinter.textparser.PrinterTextParserImg.bitmapToHexadecimalString(printer, qrBmp)
                     lines.append("[C]<img>$imgHex</img>\n")
                 } catch (_: Throwable) {}
+            }
+            val appendItems: () -> Unit = {
+                for (it in parseReceiptLines(obj)) {
+                    val qtyTitle = "${it.quantity}x ${it.title}"
+                    if (it.unitPriceCents >= 0) {
+                        lines.append("[L]$qtyTitle[R]${moneyStr(currency, it.unitPriceCents * it.quantity)}\n")
+                    } else {
+                        lines.append("[L]$qtyTitle\n")
+                    }
+                    for ((slot, choice) in it.configuration) lines.append("[L]  - $slot: $choice\n")
+                }
+            }
+
+            when (kind) {
+                "refund" -> {
+                    lines.append("[C]<b>Rückerstattung</b>\n")
+                    appendItems()
+                    val amt = if (refundCents >= 0) refundCents else totalCents
+                    if (amt >= 0) lines.append("[L]Rückerstattung[R]-${moneyStr(currency, amt)}\n")
+                    lines.append("Methode: ${prettyRefundMethod(method)}\n")
+                    lines.append("Bestellung: ${orderId}\n")
+                }
+                "pickup" -> {
+                    lines.append("[C]<b>Abhol-Quittung</b>\n")
+                    appendItems()
+                    lines.append("Bestellung: ${orderId}\n")
+                    lines.append("\n")
+                    if (pickupQr.isNotEmpty()) appendQr(pickupQr)
+                    lines.append("[C]Alte Quittung ungültig\n")
+                }
+                "void" -> {
+                    lines.append("[C]<b>Storniert</b>\n")
+                    val amt = if (refundCents >= 0) refundCents else totalCents
+                    if (amt >= 0) lines.append("[L]Rückerstattung[R]-${moneyStr(currency, amt)}\n")
+                    if (method.isNotBlank()) lines.append("Methode: ${prettyRefundMethod(method)}\n")
+                    lines.append("Bestellung: ${orderId}\n")
+                }
+                else -> {
+                    if (totalCents >= 0) lines.append("Total: ${moneyStr(currency, totalCents)}\n")
+                    if (depositCents > 0) lines.append("davon Depot: ${moneyStr(currency, depositCents)}\n")
+                    val methodPretty = if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
+                    lines.append("Zahlart: ${methodPretty}\n")
+                    if (method.equals("cash", ignoreCase = true)) {
+                        val rec = obj.optLong("amountReceivedCents", -1L)
+                        val chg = obj.optLong("changeCents", -1L)
+                        if (rec >= 0) lines.append("Erhalten: ${moneyStr(currency, rec)}\n")
+                        if (chg >= 0) lines.append("Rückgeld: ${moneyStr(currency, chg)}\n")
+                    }
+                    lines.append("Bestellung: ${orderId}\n")
+                    lines.append("\n")
+                    if (pickupQr.isNotEmpty()) appendQr(pickupQr)
+                }
             }
             val thankYou = branding.thankYou ?: "Danke!"
             lines.append("[C]$thankYou\n\n")
@@ -860,6 +983,7 @@ class WebPosActivity : ComponentActivity() {
     }
 
     private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null, null)): Bitmap {
+        if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
         val width = 384
         val padding = 10
         val headerSize = 24f
@@ -910,6 +1034,8 @@ class WebPosActivity : ComponentActivity() {
             if (hasQr) h += qrSize + lineSpacing
             // Total
             h += (fm.bottom - fm.top).toInt() + lineSpacing
+            // Deposit line (optional, small)
+            if (obj.optLong("depositCents", -1L) > 0) h += lineH + lineSpacing
             // Payment line
             h += (fm.bottom - fm.top).toInt() + lineSpacing
             // Cash: received + change (up to two small lines)
@@ -1014,6 +1140,17 @@ class WebPosActivity : ComponentActivity() {
             y += (fm.bottom - fm.top) + lineSpacing
         }
 
+        // Deposit line (optional)
+        run {
+            val depositCents = obj.optLong("depositCents", -1L)
+            if (depositCents > 0) {
+                val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
+                val d = "davon Depot: ${moneyStr(currency, depositCents)}"
+                canvas.drawText(ellipsize(d, small, (width - padding * 2).toFloat()), padding.toFloat(), y - fmSmall.top, small)
+                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
+            }
+        }
+
         // Payment line with capitalized method
         run {
             val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
@@ -1062,6 +1199,123 @@ class WebPosActivity : ComponentActivity() {
             y += bottomPad
         }
 
+        return bmp
+    }
+
+    // Raster renderer for non-sale slips (refund / pickup re-issue / void) on Phomemo-class printers.
+    private fun renderSlipBitmap(obj: JSONObject, branding: ReceiptBranding): Bitmap {
+        val width = 384
+        val padding = 10
+        val headerSize = 24f
+        val titleSize = 22f
+        val fontSize = 20f
+        val smallSize = 18f
+        val lineSpacing = 8
+        val headerTopPad = 12
+        val headerBottomPad = 6
+        val bottomPad = 56
+        val qrSize = 320
+        val logoMaxHeight = 160
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = fontSize }
+        val bold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = headerSize; isFakeBoldText = true }
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = titleSize; isFakeBoldText = true }
+        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = smallSize }
+
+        val kind = receiptKind(obj)
+        val currency = branding.currency ?: obj.optString("currency", "CHF")
+        val orderId = obj.optString("orderId", "-")
+        val method = obj.optString("method", "")
+        val totalCents = obj.optLong("totalCents", -1L)
+        val refundCents = obj.optLong("refundCents", -1L)
+        val refundAmount = if (refundCents >= 0) refundCents else totalCents
+        val pickupQr = obj.optString("pickupQr", "")
+        val orderTs = obj.optLong("orderTimestamp", -1L)
+        val dateStr = try {
+            val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
+            java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date(whenMs))
+        } catch (_: Throwable) { "" }
+
+        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
+            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
+
+        class Row(val height: Int, val draw: (Canvas, Float) -> Unit)
+        val rows = ArrayList<Row>()
+        fun gap(h: Int) { rows.add(Row(h) { _, _ -> }) }
+        fun textRow(text: String, p: Paint, center: Boolean) {
+            val fm = Paint.FontMetrics(); p.getFontMetrics(fm)
+            val display = ellipsize(text, p, (width - padding * 2).toFloat())
+            rows.add(Row((fm.bottom - fm.top).toInt() + lineSpacing) { c, y ->
+                val x = if (center) ((width - p.measureText(display)) / 2f).coerceAtLeast(padding.toFloat()) else padding.toFloat()
+                c.drawText(display, x, y - fm.top, p)
+            })
+        }
+        fun twoColRow(left: String, right: String, p: Paint) {
+            val fm = Paint.FontMetrics(); p.getFontMetrics(fm)
+            rows.add(Row((fm.bottom - fm.top).toInt() + lineSpacing) { c, y ->
+                val rw = p.measureText(right)
+                val l = ellipsize(left, p, ((width - padding * 2).toFloat() - rw - 8f).coerceAtLeast(0f))
+                c.drawText(l, padding.toFloat(), y - fm.top, p)
+                c.drawText(right, width - padding - rw, y - fm.top, p)
+            })
+        }
+        fun qrRow(data: String) {
+            val qrBmp = try {
+                val hints = mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2)
+                val matrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, qrSize, qrSize, hints)
+                Bitmap.createBitmap(qrSize, qrSize, Bitmap.Config.RGB_565).also { bm ->
+                    for (x in 0 until qrSize) for (yy in 0 until qrSize) bm.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
+                }
+            } catch (_: Throwable) { null }
+            if (qrBmp != null) rows.add(Row(qrSize + lineSpacing) { c, y -> c.drawBitmap(qrBmp, (width - qrSize) / 2f, y, null) })
+        }
+
+        gap(headerTopPad)
+        if (logoBitmap != null) {
+            rows.add(Row(logoBitmap.height + headerBottomPad) { c, y ->
+                c.drawBitmap(logoBitmap, ((width - logoBitmap.width) / 2f).coerceAtLeast(0f), y, null)
+            })
+        } else {
+            textRow(branding.displayName ?: "Comanda", bold, center = true)
+            gap(headerBottomPad)
+        }
+        (branding.address?.split("\n")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList())
+            .forEach { textRow(it, small, center = true) }
+        if (dateStr.isNotEmpty()) textRow(dateStr, small, center = true)
+
+        val titleText = when (kind) { "refund" -> "Rückerstattung"; "pickup" -> "Abhol-Quittung"; else -> "Storniert" }
+        textRow(titleText, titlePaint, center = true)
+        gap(lineSpacing)
+
+        if (kind == "refund" || kind == "pickup") {
+            for (it in parseReceiptLines(obj)) {
+                val qtyTitle = "${it.quantity}x ${it.title}"
+                if (it.unitPriceCents >= 0) twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), paint)
+                else textRow(qtyTitle, paint, center = false)
+                for ((slot, choice) in it.configuration) textRow("  - $slot: $choice", small, center = false)
+            }
+        }
+
+        if (kind == "refund" || kind == "void") {
+            if (refundAmount >= 0) twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", paint)
+            if (method.isNotBlank()) textRow("Methode: ${prettyRefundMethod(method)}", small, center = false)
+        }
+
+        textRow("Bestellung: $orderId", small, center = false)
+
+        if (kind == "pickup" && pickupQr.isNotEmpty()) {
+            gap(lineSpacing)
+            qrRow(pickupQr)
+            textRow("Alte Quittung ungültig", small, center = true)
+        }
+        gap(bottomPad)
+
+        val totalH = rows.sumOf { it.height }.coerceAtLeast(200)
+        val bmp = Bitmap.createBitmap(width, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        canvas.drawColor(Color.WHITE)
+        var y = 0f
+        for (r in rows) { r.draw(canvas, y); y += r.height }
         return bmp
     }
 
