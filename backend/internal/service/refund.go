@@ -199,8 +199,6 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 	}, nil
 }
 
-// ListRefunds returns a page of the tenant's refunds for the admin audit
-// surface, most recent first.
 func (s *refundService) ListRefunds(ctx context.Context, limit, offset int) ([]*ent.Refund, error) {
 	return s.refunds.List(ctx, limit, offset)
 }

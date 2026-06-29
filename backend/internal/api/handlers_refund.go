@@ -157,8 +157,6 @@ func (h *Handlers) doCancelOrder(w http.ResponseWriter, r *http.Request, orderID
 	response.WriteJSON(w, http.StatusCreated, toAPIRefund(ref))
 }
 
-// ListRefunds returns a page of the tenant's refunds for the admin audit
-// surface. RLS scopes the rows to the request tenant.
 // (GET /refunds)
 func (h *Handlers) ListRefunds(w http.ResponseWriter, r *http.Request, params generated.ListRefundsParams) {
 	limit := 50

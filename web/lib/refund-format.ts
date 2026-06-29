@@ -43,7 +43,6 @@ export const REFUND_STATUS_COLORS: Record<RefundStatus, string> = {
   failed: "bg-red-100 text-red-800",
 }
 
-// Parses a CHF amount string ("12.50", "12,50") into cents, or null if invalid.
 export function parseChfToCents(input: string): number | null {
   const norm = input.replace(",", ".").trim()
   if (!norm) return null
