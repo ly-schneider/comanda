@@ -30,6 +30,7 @@ func NewRepositories() fx.Option {
 			repository.NewOrderPaymentRepository,
 			repository.NewOrderLineRepository,
 			repository.NewOrderLineRedemptionRepository,
+			repository.NewRefundRepository,
 			repository.NewInventoryLedgerRepository,
 			repository.NewAdminInviteRepository,
 			repository.NewOwnerInviteRepository,

@@ -41,6 +41,7 @@ type WebhookResult struct {
 	GatewayID     int
 	Status        string
 	ContactEmail  string
+	AmountCents   int
 	IsSuccess     bool
 	IsFailure     bool
 	IsRefund      bool
@@ -51,6 +52,7 @@ type WebhookResult struct {
 type Provider interface {
 	CreateCheckout(ctx context.Context, req CheckoutRequest) (*CheckoutResult, error)
 	GetCheckout(ctx context.Context, gatewayID int) (*CheckoutResult, error)
+	Refund(ctx context.Context, transactionID int, amountCents int) error
 	VerifyWebhook(body []byte, signature string) bool
 	ParseWebhook(body []byte) (*WebhookResult, error)
 }
@@ -99,6 +101,10 @@ func (p *payrexxProvider) GetCheckout(ctx context.Context, gatewayID int) (*Chec
 	return &CheckoutResult{GatewayID: gw.ID, Link: gw.Link, Status: gw.Status, ReferenceID: gw.ReferenceID}, nil
 }
 
+func (p *payrexxProvider) Refund(ctx context.Context, transactionID int, amountCents int) error {
+	return p.client.RefundTransaction(ctx, transactionID, amountCents)
+}
+
 func (p *payrexxProvider) VerifyWebhook(body []byte, signature string) bool {
 	return payrexx.VerifyWebhookSignature(body, signature, p.webhookSecret)
 }
@@ -114,6 +120,7 @@ func (p *payrexxProvider) ParseWebhook(body []byte) (*WebhookResult, error) {
 		TransactionID: txn.ID,
 		Status:        txn.Status,
 		ContactEmail:  txn.Contact.Email,
+		AmountCents:   txn.Amount,
 		IsSuccess:     txn.IsSuccessStatus(),
 		IsFailure:     txn.IsFailedStatus(),
 		IsRefund:      txn.IsRefundStatus(),

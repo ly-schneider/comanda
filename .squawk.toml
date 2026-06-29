@@ -15,6 +15,10 @@
 #   - ban-drop-column: column removals are deliberate schema changes shipped
 #     atomically with the web+backend in one deploy, so the stale-client risk
 #     the rule guards against does not apply here.
+#   - prefer-bigint-over-int: Ent `field.Int` generates INTEGER columns (as on the
+#     existing order/order_line counts and ids); use `field.Int64` for a real BIGINT.
+#   - require-enum-value-ordering: enum values are appended with `ALTER TYPE ... ADD
+#     VALUE`; their positional ordering is never relied on.
 excluded_rules = [
   "prefer-text-field",
   "require-timeout-settings",
@@ -23,4 +27,6 @@ excluded_rules = [
   "constraint-missing-not-valid",
   "adding-foreign-key-constraint",
   "ban-drop-column",
+  "prefer-bigint-over-int",
+  "require-enum-value-ordering",
 ]

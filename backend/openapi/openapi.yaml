@@ -28,6 +28,8 @@ tags:
     description: Menu product configuration with slots and options
   - name: Orders
     description: Order management (shop and POS origins)
+  - name: Refunds
+    description: Per-order refunds (line, arbitrary, cancellation) for POS operators and admins
   - name: Payments
     description: Payment processing (Payrexx gateway, cash, card, TWINT)
   - name: Users
@@ -104,8 +106,23 @@ paths:
 
   /orders:
     $ref: "paths/orders.yaml#/collection"
+  /orders/lookup:
+    $ref: "paths/refunds.yaml#/orders-lookup"
   /orders/{orderId}:
     $ref: "paths/orders.yaml#/item"
+  /orders/{orderId}/refunds:
+    $ref: "paths/refunds.yaml#/order-refunds"
+  /orders/{orderId}/refunds/arbitrary:
+    $ref: "paths/refunds.yaml#/order-refunds-arbitrary"
+  /orders/{orderId}/cancel:
+    $ref: "paths/refunds.yaml#/order-cancel"
+
+  /pos/orders/lookup:
+    $ref: "paths/refunds.yaml#/pos-orders-lookup"
+  /pos/orders/{orderId}/refunds:
+    $ref: "paths/refunds.yaml#/pos-order-refunds"
+  /pos/orders/{orderId}/cancel:
+    $ref: "paths/refunds.yaml#/pos-order-cancel"
 
   /orders/{orderId}/payment:
     $ref: "paths/payments.yaml#/order-payment"

@@ -38,7 +38,7 @@ func (Order) Fields() []ent.Field {
 			Nillable(),
 		field.Int64("total_cents"),
 		field.Enum("status").
-			Values("pending", "paid", "cancelled", "refunded").
+			Values("pending", "paid", "cancelled", "refunded", "partially_refunded").
 			StorageKey("status"),
 		field.Enum("origin").
 			Values("shop", "pos").
@@ -73,5 +73,6 @@ func (Order) Edges() []ent.Edge {
 		edge.To("lines", OrderLine.Type),
 		edge.To("inventory_ledger_entries", InventoryLedger.Type),
 		edge.To("club100_redemptions", Club100Redemption.Type),
+		edge.To("refunds", Refund.Type),
 	}
 }

@@ -13,6 +13,7 @@ import (
 // real HandlePayrexxWebhook flow without standing up the full FX graph.
 func NewWebhookHandlers(
 	payments service.PaymentService,
+	refunds service.RefundService,
 	privileged *ent.Client,
 	appDB *database.AppClient,
 	providers *payment.Factory,
@@ -20,6 +21,7 @@ func NewWebhookHandlers(
 ) *Handlers {
 	return &Handlers{
 		payments:   payments,
+		refunds:    refunds,
 		privileged: privileged,
 		appDB:      appDB,
 		providers:  providers,

@@ -77,5 +77,6 @@ func (OrderLine) Edges() []ent.Edge {
 		edge.To("redemption", OrderLineRedemption.Type).
 			Unique(),
 		edge.To("inventory_ledger_entries", InventoryLedger.Type),
+		edge.To("refund_lines", RefundLine.Type),
 	}
 }

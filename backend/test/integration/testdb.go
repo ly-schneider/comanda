@@ -183,6 +183,8 @@ func (tdb *TestDB) Cleanup(t *testing.T) {
 		"idempotency",
 		"order_line_redemption",
 		"inventory_ledger",
+		"refund_line",
+		"refund",
 		"order_payment",
 		"order_line",
 		"\"order\"",
@@ -231,6 +233,7 @@ type Repositories struct {
 	OrderLine         pgRepo.OrderLineRepository
 	OrderPayment      pgRepo.OrderPaymentRepository
 	OrderRedemption   pgRepo.OrderLineRedemptionRepository
+	Refund            pgRepo.RefundRepository
 	Club100Redemption pgRepo.Club100RedemptionRepository
 	Inventory         pgRepo.InventoryLedgerRepository
 	Device            pgRepo.DeviceRepository
@@ -254,6 +257,7 @@ func NewRepositories(client *ent.Client) *Repositories {
 		OrderLine:         pgRepo.NewOrderLineRepository(client),
 		OrderPayment:      pgRepo.NewOrderPaymentRepository(client),
 		OrderRedemption:   pgRepo.NewOrderLineRedemptionRepository(client),
+		Refund:            pgRepo.NewRefundRepository(client),
 		Club100Redemption: pgRepo.NewClub100RedemptionRepository(client),
 		Inventory:         pgRepo.NewInventoryLedgerRepository(client),
 		Device:            pgRepo.NewDeviceRepository(client),

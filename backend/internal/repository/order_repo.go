@@ -16,6 +16,9 @@ type OrderRepository interface {
 	Create(ctx context.Context, totalCents int64, status order.Status, origin order.Origin, customerID, contactEmail, paymentAttemptID *string, payrexxGatewayID, payrexxTransactionID *int) (*ent.Order, error)
 	GetByID(ctx context.Context, id string) (*ent.Order, error)
 	GetByIDWithRelations(ctx context.Context, id string) (*ent.Order, error)
+	// LockByID takes a FOR UPDATE row lock on the order within the request tx so
+	// concurrent mutations of the same order (e.g. simultaneous refunds) serialize.
+	LockByID(ctx context.Context, id string) error
 	GetByCustomerID(ctx context.Context, customerID string) ([]*ent.Order, error)
 	GetByStatus(ctx context.Context, status order.Status) ([]*ent.Order, error)
 	GetByDateRange(ctx context.Context, start, end time.Time) ([]*ent.Order, error)
@@ -24,6 +27,11 @@ type OrderRepository interface {
 	UpdateStatus(ctx context.Context, id string, status order.Status) error
 	// SetQRPayload stores the signed, self-contained pickup QR token on the order.
 	SetQRPayload(ctx context.Context, id string, token string) error
+	// ClearQRPayload removes the pickup token, e.g. after a full cancellation.
+	ClearQRPayload(ctx context.Context, id string) error
+	// FindByIDPrefix returns up to limit orders whose id starts with prefix,
+	// tenant-scoped, newest first. Powers POS order-id typeahead lookup.
+	FindByIDPrefix(ctx context.Context, prefix string, limit int) ([]*ent.Order, error)
 
 	ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string) ([]*ent.Order, int64, error)
 	ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error)
@@ -99,6 +107,25 @@ func (r *orderRepo) GetByID(ctx context.Context, id string) (*ent.Order, error) 
 		return nil, translateError(err)
 	}
 	return e, nil
+}
+
+func (r *orderRepo) LockByID(ctx context.Context, id string) error {
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	err := r.ec(ctx).Order.Query().
+		Where(order.ID(id)).
+		Modify(func(s *sql.Selector) {
+			s.Select(s.C(order.FieldID)).ForUpdate()
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return translateError(err)
+	}
+	if len(rows) == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *orderRepo) GetByIDWithRelations(ctx context.Context, id string) (*ent.Order, error) {
@@ -216,6 +243,30 @@ func (r *orderRepo) SetQRPayload(ctx context.Context, id string, token string) e
 		SetQrPayload(token).
 		Save(ctx)
 	return translateError(err)
+}
+
+func (r *orderRepo) ClearQRPayload(ctx context.Context, id string) error {
+	_, err := r.ec(ctx).Order.UpdateOneID(id).
+		ClearQrPayload().
+		Save(ctx)
+	return translateError(err)
+}
+
+func (r *orderRepo) FindByIDPrefix(ctx context.Context, prefix string, limit int) ([]*ent.Order, error) {
+	if prefix == "" {
+		return nil, nil
+	}
+	rows, err := r.ec(ctx).Order.Query().
+		Where(func(s *sql.Selector) {
+			s.Where(sql.HasPrefix(s.C(order.FieldID), prefix))
+		}).
+		Order(order.ByCreatedAt(entDescOpt())).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return rows, nil
 }
 
 func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string) ([]*ent.Order, int64, error) {

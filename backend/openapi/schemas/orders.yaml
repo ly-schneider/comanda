@@ -1,10 +1,11 @@
 OrderStatus:
   type: string
-  enum: [pending, paid, cancelled, refunded]
+  enum: [pending, paid, cancelled, refunded, partially_refunded]
   description: |
     Valid transitions:
     - `pending` -> `paid`, `cancelled`
-    - `paid` -> `cancelled`, `refunded`
+    - `paid` -> `cancelled`, `refunded`, `partially_refunded`
+    - `partially_refunded` -> `partially_refunded`, `refunded`, `cancelled`
     - `cancelled` -> (terminal)
     - `refunded` -> (terminal)
 

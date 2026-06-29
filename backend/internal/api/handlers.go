@@ -23,6 +23,7 @@ type Handlers struct {
 	products      service.ProductService
 	orders        service.OrderService
 	payments      service.PaymentService
+	refunds       service.RefundService
 	qrKeys        service.QRKeyService
 	pos           service.POSService
 	settings      service.SettingsService
@@ -65,6 +66,7 @@ type HandlersDeps struct {
 	Products      service.ProductService
 	Orders        service.OrderService
 	Payments      service.PaymentService
+	Refunds       service.RefundService
 	QRKeys        service.QRKeyService
 	POS           service.POSService
 	Settings      service.SettingsService
@@ -97,6 +99,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		products:      deps.Products,
 		orders:        deps.Orders,
 		payments:      deps.Payments,
+		refunds:       deps.Refunds,
 		qrKeys:        deps.QRKeys,
 		pos:           deps.POS,
 		settings:      deps.Settings,

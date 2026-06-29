@@ -152,6 +152,13 @@ func NewRouter(
 			pos.Get("/club100/remaining/{elvantoPersonId}", wrapper.GetClub100Remaining)
 			pos.Patch("/pos/products/{productId}/inventory", wrapper.AdjustProductInventory)
 			pos.Patch("/pos/products/{productId}/active", wrapper.SetProductActive)
+
+			// Refunds (operator surface): lookup, view, line refund, cancel.
+			// Arbitrary refunds are admin-only and have no POS route.
+			pos.Get("/pos/orders/lookup", wrapper.LookupPosOrders)
+			pos.Get("/pos/orders/{orderId}/refunds", wrapper.GetPosRefundView)
+			pos.Post("/pos/orders/{orderId}/refunds", wrapper.CreatePosLineRefund)
+			pos.Post("/pos/orders/{orderId}/cancel", wrapper.CancelPosOrder)
 		})
 
 		// ── Orders (anonymous allowed, blocked when disabled) ────
@@ -216,6 +223,14 @@ func NewRouter(
 
 			ops.Patch("/orders/{orderId}", wrapper.UpdateOrderStatus)
 
+			// Refunds (admin surface): lookup, view, line refund, cancel — the
+			// same operations POS operators get, on the staff/ops tier. Arbitrary
+			// refunds are gated higher (see the app-admin group).
+			ops.Get("/orders/lookup", wrapper.LookupOrders)
+			ops.Get("/orders/{orderId}/refunds", wrapper.GetRefundView)
+			ops.Post("/orders/{orderId}/refunds", wrapper.CreateLineRefund)
+			ops.Post("/orders/{orderId}/cancel", wrapper.CancelOrder)
+
 			ops.Get("/stations", wrapper.ListStations)
 			ops.Get("/stations/{stationId}", wrapper.GetStation)
 			ops.Patch("/stations/{stationId}", wrapper.RenameStation)
@@ -257,6 +272,10 @@ func NewRouter(
 			appadmin.Use(betterAuthMw.RequireTenantRole(auth.TierAppAdmin))
 			csrf := middleware.NewCSRFMiddleware()
 			appadmin.Use(csrf.Require)
+
+			// Arbitrary (discretionary) refund: a strictly higher gate than line
+			// refunds/cancel (which are ops-tier). App-admin only; no POS route.
+			appadmin.Post("/orders/{orderId}/refunds/arbitrary", wrapper.CreateArbitraryRefund)
 
 			appadmin.Get("/settings", wrapper.GetSettings)
 			appadmin.Patch("/settings", wrapper.UpdateSettings)
