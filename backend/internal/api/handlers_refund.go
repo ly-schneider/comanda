@@ -10,13 +10,11 @@ import (
 	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/refund"
+	nanoid "backend/internal/id"
 	"backend/internal/response"
 	"backend/internal/service"
 )
 
-// ── Actor resolution ────────────────────────────────────────────────────────
-
-// posRefundActor builds the operator actor for a POS-device request.
 func posRefundActor(ctx context.Context) (service.RefundActor, bool) {
 	deviceID, ok := auth.GetDeviceID(ctx)
 	if !ok {
@@ -29,7 +27,6 @@ func posRefundActor(ctx context.Context) (service.RefundActor, bool) {
 	}, true
 }
 
-// adminRefundActor builds the admin actor for a session-authenticated request.
 func adminRefundActor(ctx context.Context) (service.RefundActor, bool) {
 	userID, ok := auth.GetUserID(ctx)
 	if !ok {
@@ -62,6 +59,10 @@ func (h *Handlers) doRefundLookup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) doRefundView(w http.ResponseWriter, r *http.Request, orderID string) {
+	if !nanoid.Valid(orderID) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
 	view, err := h.refunds.GetRefundView(r.Context(), orderID)
 	if err != nil {
 		writeRefundError(w, err)
@@ -71,6 +72,10 @@ func (h *Handlers) doRefundView(w http.ResponseWriter, r *http.Request, orderID 
 }
 
 func (h *Handlers) doLineRefund(w http.ResponseWriter, r *http.Request, orderID string, actor service.RefundActor) {
+	if !nanoid.Valid(orderID) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
 	var body generated.LineRefundRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
@@ -98,6 +103,10 @@ func (h *Handlers) doLineRefund(w http.ResponseWriter, r *http.Request, orderID 
 }
 
 func (h *Handlers) doCancelOrder(w http.ResponseWriter, r *http.Request, orderID string, actor service.RefundActor) {
+	if !nanoid.Valid(orderID) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
 	var reason *string
 	var body generated.CancelOrderRequest
 	// Body is optional; ignore a missing/empty payload.
@@ -115,8 +124,6 @@ func (h *Handlers) doCancelOrder(w http.ResponseWriter, r *http.Request, orderID
 	}
 	response.WriteJSON(w, http.StatusCreated, toAPIRefund(ref))
 }
-
-// ── POS device surface (operator) ───────────────────────────────────────────
 
 // (GET /pos/orders/lookup)
 func (h *Handlers) LookupPosOrders(w http.ResponseWriter, r *http.Request) {
@@ -147,8 +154,6 @@ func (h *Handlers) CancelPosOrder(w http.ResponseWriter, r *http.Request, orderI
 	}
 	h.doCancelOrder(w, r, orderId, actor)
 }
-
-// ── Authenticated admin surface ─────────────────────────────────────────────
 
 // (GET /orders/lookup)
 func (h *Handlers) LookupOrders(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +190,10 @@ func (h *Handlers) CancelOrder(w http.ResponseWriter, r *http.Request, orderId s
 // have no route to this action.
 // (POST /orders/{orderId}/refunds/arbitrary)
 func (h *Handlers) CreateArbitraryRefund(w http.ResponseWriter, r *http.Request, orderId string) {
+	if !nanoid.Valid(orderId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
 	actor, ok := adminRefundActor(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -207,8 +216,6 @@ func (h *Handlers) CreateArbitraryRefund(w http.ResponseWriter, r *http.Request,
 	}
 	response.WriteJSON(w, http.StatusCreated, toAPIRefund(ref))
 }
-
-// ── Mappers ─────────────────────────────────────────────────────────────────
 
 func toAPIRefund(e *ent.Refund) generated.Refund {
 	r := generated.Refund{

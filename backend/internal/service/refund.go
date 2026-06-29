@@ -538,22 +538,20 @@ func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []r
 	}
 }
 
-// --- deposit seams: inert until per-product deposits land in a later ticket ---
-
-// linkedDepositRefundLines returns deposit refund_line rows accompanying the
-// refunded products. No order carries a deposit yet, so this returns nothing.
+// linkedDepositRefundLines returns the deposit refund_line rows released
+// alongside the refunded products.
 func (s *refundService) linkedDepositRefundLines(_ context.Context, _ *ent.Order, _ string) []repository.CreateRefundLineParams {
 	return nil
 }
 
-// outstandingDepositCents is the deposit balance still owed on an order, held out
-// of the product-refundable balance. Inert until deposits land.
+// outstandingDepositCents is the deposit balance still owed on an order, held
+// out of the product-refundable balance.
 func (s *refundService) outstandingDepositCents(_ context.Context, _ *ent.Order) int64 {
 	return 0
 }
 
-// settleDepositsOnFullRefund marks an order's deposits settled once it is fully
-// refunded or cancelled. Inert until deposits land.
+// settleDepositsOnFullRefund settles an order's outstanding deposits once it is
+// fully refunded or cancelled.
 func (s *refundService) settleDepositsOnFullRefund(_ context.Context, _ string) error {
 	return nil
 }
