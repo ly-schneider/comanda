@@ -22,8 +22,8 @@ type ProductService interface {
 	GetAll(ctx context.Context) ([]*ent.Product, error)
 	GetByCategory(ctx context.Context, categoryID string) ([]*ent.Product, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
-	Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
-	Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
+	Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
+	Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
 	Delete(ctx context.Context, id string) error
 	CountActiveWithoutJeton(ctx context.Context) (int64, error)
 	CountByJetonIDs(ctx context.Context, ids []string) (map[string]int64, error)
@@ -147,16 +147,16 @@ func (s *productService) GetByIDs(ctx context.Context, ids []string) ([]*ent.Pro
 	return result, nil
 }
 
-func (s *productService) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	created, err := s.productRepo.Create(ctx, categoryID, productType, name, priceCents, isActive, image, description, jetonID)
+func (s *productService) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+	created, err := s.productRepo.Create(ctx, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID)
 	if err == nil {
 		s.cache.invalidate()
 	}
 	return created, err
 }
 
-func (s *productService) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	updated, err := s.productRepo.Update(ctx, id, categoryID, productType, name, priceCents, isActive, image, description, jetonID)
+func (s *productService) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+	updated, err := s.productRepo.Update(ctx, id, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID)
 	if err == nil {
 		s.cache.invalidate()
 	}

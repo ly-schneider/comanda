@@ -55,6 +55,7 @@ func (h *Handlers) CreateMenu(w http.ResponseWriter, r *http.Request) {
 		product.TypeMenu,
 		body.Name,
 		priceCents,
+		0,    // menus carry no deposit
 		true, // isActive
 		body.Image,
 		description,
@@ -128,6 +129,7 @@ func (h *Handlers) UpdateMenu(w http.ResponseWriter, r *http.Request, menuId str
 		product.TypeMenu,
 		name,
 		priceCents,
+		existing.DepositCents,
 		isActive,
 		image,
 		description,

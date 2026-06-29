@@ -46,6 +46,8 @@ func (Product) Fields() []ent.Field {
 			Nillable(),
 		field.Int64("price_cents").
 			Default(0),
+		field.Int64("deposit_cents").
+			Default(0),
 		field.String("jeton_id").MaxLen(12).
 			Optional().
 			Nillable(),
