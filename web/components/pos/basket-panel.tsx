@@ -38,9 +38,17 @@ type ReceiptBranding = {
   address: string | null
   currency: string
 }
+// Slip variant for the native renderer; absent ⇒ "sale".
+type ReceiptKind = "sale" | "refund" | "pickup" | "void"
+type RefundMethod = "cash-out" | "twint"
 type Receipt = {
-  method: PosPaymentMethod
+  kind?: ReceiptKind
+  method: PosPaymentMethod | RefundMethod
   totalCents: number
+  // Deposit portion included in totalCents (sale slips).
+  depositCents?: number
+  // Refund magnitude for refund/void slips; rendered negative.
+  refundCents?: number
   orderId?: string
   items?: Array<{
     title: string
@@ -691,8 +699,10 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           : tender === "twint"
             ? "TWINT-Zahlung"
             : "Gratis"
-  const paymentMethodLabel = (method: PosPaymentMethod) => {
+  const paymentMethodLabel = (method: PosPaymentMethod | RefundMethod) => {
     switch (method) {
+      case "cash-out":
+        return "Cash-out"
       case "cash":
         return "Bar"
       case "card":
