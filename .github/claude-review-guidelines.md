@@ -219,6 +219,12 @@ VariantProps`; theme via CSS vars (never hardcoded hex). Images use `next/image`
   artifact. Flag an endpoint added in Go without an `openapi.yaml` change, or
   changes to the Ent feature-flag list (`intercept`/`privacy` are load-bearing
   for RLS).
+- **HTTP routes are OpenAPI-first.** Every endpoint registers in `router.go`
+  through the generated `wrapper.X` (operationId == the Go handler method); only
+  `/health` and `/ping` are exempt infra probes. Flag any route wired as
+  `apiHandlers.X` or an inline `func(...)` closure in `router.go` instead of
+  `wrapper.X` — it bypasses the spec/codegen and drops the endpoint from the
+  OpenAPI surface, even if `openapi.yaml` was also edited.
 - **Migrations are Atlas-managed, `YYYYMMDDHHMMSS_<slug>.sql`, append-only**, with
   a committed `atlas.sum`, and must replay on **PostgreSQL 17** (prod is PG17 —
   no PG18-only SQL). Flag: edits to an already-applied migration; a new migration
