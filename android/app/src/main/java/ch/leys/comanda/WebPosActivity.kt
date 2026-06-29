@@ -73,7 +73,7 @@ private data class ReceiptLine(
     val configuration: List<Pair<String, String>>
 )
 
-/** Receipt kind sent by the web POS. Absent/unknown ⇒ "sale" (back-compat). */
+/** Receipt kind sent by the web POS; absent or unknown ⇒ "sale". */
 private fun receiptKind(obj: JSONObject): String =
     when (obj.optString("kind", "sale").lowercase()) {
         "refund" -> "refund"

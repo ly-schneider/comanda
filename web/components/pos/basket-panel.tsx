@@ -38,14 +38,14 @@ type ReceiptBranding = {
   address: string | null
   currency: string
 }
-// Slip variant printed by the native renderer. Absent ⇒ "sale" (back-compat).
+// Slip variant for the native renderer; absent ⇒ "sale".
 type ReceiptKind = "sale" | "refund" | "pickup" | "void"
 type RefundMethod = "cash-out" | "twint"
 type Receipt = {
   kind?: ReceiptKind
   method: PosPaymentMethod | RefundMethod
   totalCents: number
-  // Deposit portion included in totalCents (sale slips). Inert until deposits land (T2).
+  // Deposit portion included in totalCents (sale slips).
   depositCents?: number
   // Refund magnitude for refund/void slips; rendered negative.
   refundCents?: number
