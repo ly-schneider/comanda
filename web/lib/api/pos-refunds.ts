@@ -2,12 +2,8 @@ import { deviceFetch } from "@/hooks/use-device-fetch"
 import { readErrorMessage } from "@/lib/http"
 import type { AdminOrder, Refund, RefundView } from "@/types/refund"
 
-// POS-scoped refund/return/cancel client. Device-token auth (Bearer) carries no
-// cookies, so these endpoints are not CSRF-protected. Routing (cash-out vs
-// automated TWINT) is decided server-side from the original payment method;
-// the operator never passes a routing hint, and arbitrary refunds are
-// admin-only (no POS route).
-
+// Device-token (Bearer) auth carries no cookies, so these are not CSRF-protected.
+// Arbitrary refunds are admin-only — no POS route.
 export interface OrderLookupResult {
   items: AdminOrder[]
 }
@@ -32,8 +28,7 @@ const jsonInit = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
-// `q` is an order-id prefix (typeahead) or a signed pickup token (scan); the
-// backend verifies a token server-side and returns the single matching order.
+// `q` is an order-id prefix or a signed pickup token; the backend verifies a token and returns its order.
 export async function lookupPosOrders(q: string): Promise<OrderLookupResult> {
   const res = await deviceFetch(`/api/v1/pos/orders/lookup?q=${encodeURIComponent(q)}`)
   return readJson<OrderLookupResult>(res)

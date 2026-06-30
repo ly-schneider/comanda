@@ -90,7 +90,6 @@ export function OrderRefundPanel() {
     }
   }, [])
 
-  // Debounced order-id prefix typeahead.
   useEffect(() => {
     const q = query.trim()
     if (selectedId) return

@@ -125,9 +125,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
   const originalTotal = cart.totalCents
   const discountAmount = club100Discount?.totalDiscountCents ?? 0
   const total = originalTotal - discountAmount
-  // Returnable-container deposit rides on top of the product price and is never
-  // discounted (it is refunded on return, not revenue). Real tenders collect it;
-  // gratis comps stay product-only.
+  // Deposit is never discounted (refunded on return, not revenue). Real tenders
+  // collect it; gratis comps stay product-only.
   const depositCents = cartDepositCents(cart.items)
   const payableTotal = total + depositCents
   const receivedCents = useMemo(() => Math.round((parseFloat(received || "0") || 0) * 100), [received])

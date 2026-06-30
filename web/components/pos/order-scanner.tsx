@@ -10,9 +10,7 @@ interface OrderScannerProps {
   onScan: (raw: string) => void
 }
 
-// Reuses the station scanner plugin (back camera, Android WebView grants the
-// camera automatically). Mounts only while open so the camera is released on
-// close; locks after the first decode so a single QR fires once.
+// The Android WebView grants the camera; mounts only while open so it releases on close.
 export function OrderScanner({ open, onOpenChange, onScan }: OrderScannerProps) {
   const lockedRef = useRef(false)
 
