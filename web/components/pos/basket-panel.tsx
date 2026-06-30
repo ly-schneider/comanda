@@ -16,7 +16,13 @@ import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { Club100Person } from "@/lib/api/club100"
-import { formatChf } from "@/lib/utils"
+import {
+  getPosBridge as getBridge,
+  type Receipt,
+  type ReceiptBranding,
+  type ReceiptRefundMethod,
+} from "@/lib/pos/receipt"
+import { cartDepositCents, formatChf } from "@/lib/utils"
 
 import type { CartItem } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
@@ -32,40 +38,6 @@ import type {
 import type { ProductSummaryDTO } from "@/types/product"
 
 type Tender = PosPaymentMethod | null
-type ReceiptBranding = {
-  displayName: string
-  logoUrl: string | null
-  address: string | null
-  currency: string
-}
-// Slip variant for the native renderer; absent ⇒ "sale".
-type ReceiptKind = "sale" | "refund" | "pickup" | "void"
-type RefundMethod = "cash-out" | "twint"
-type Receipt = {
-  kind?: ReceiptKind
-  method: PosPaymentMethod | RefundMethod
-  totalCents: number
-  // Deposit portion included in totalCents (sale slips).
-  depositCents?: number
-  // Refund magnitude for refund/void slips; rendered negative.
-  refundCents?: number
-  orderId?: string
-  items?: Array<{
-    title: string
-    quantity: number
-    unitPriceCents: number
-    configuration?: Array<{ slot: string; choice: string }>
-  }>
-  pickupQr?: string | null
-  branding?: ReceiptBranding
-}
-
-type PosBridge = {
-  print?: (s: string) => void
-  payWithCard?: (p: { amountCents: number; currency: string; reference: string } | string) => void
-}
-
-const getBridge = () => (globalThis as unknown as { PosBridge?: PosBridge }).PosBridge
 
 type JetonTotal = { id: string; name: string; color: string; count: number }
 
@@ -153,8 +125,12 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
   const originalTotal = cart.totalCents
   const discountAmount = club100Discount?.totalDiscountCents ?? 0
   const total = originalTotal - discountAmount
+  // Deposit is never discounted (refunded on return, not revenue). Real tenders
+  // collect it; gratis comps stay product-only.
+  const depositCents = cartDepositCents(cart.items)
+  const payableTotal = total + depositCents
   const receivedCents = useMemo(() => Math.round((parseFloat(received || "0") || 0) * 100), [received])
-  const changeCents = Math.max(0, receivedCents - total)
+  const changeCents = Math.max(0, receivedCents - payableTotal)
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevItemCount = useRef(cart.items.length)
   const pendingPrintsRef = useRef<
@@ -419,7 +395,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
             pendingPrintsRef.current.set(queued.localId, {
               template: {
                 method: "card",
-                totalCents: total,
+                totalCents: payableTotal,
+                depositCents: depositCents > 0 ? depositCents : undefined,
                 items: printItems,
                 orderTimestamp: Date.now(),
                 branding: receiptBranding,
@@ -463,6 +440,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     canPrint,
     emitInventoryDecrement,
     selectedGratisInfo,
+    payableTotal,
+    depositCents,
   ])
 
   useEffect(() => {
@@ -547,7 +526,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       pendingPrintsRef.current.set(queued.localId, {
         template: {
           method: "cash",
-          totalCents: total,
+          totalCents: payableTotal,
+          depositCents: depositCents > 0 ? depositCents : undefined,
           items: printItems,
           orderTimestamp: Date.now(),
           branding: receiptBranding,
@@ -568,6 +548,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     cart.items,
     originalTotal,
     total,
+    payableTotal,
+    depositCents,
     canPrint,
     jetonMode,
     shouldPrint,
@@ -611,7 +593,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       pendingPrintsRef.current.set(queued.localId, {
         template: {
           method: "twint",
-          totalCents: total,
+          totalCents: payableTotal,
+          depositCents: depositCents > 0 ? depositCents : undefined,
           items: printItems,
           orderTimestamp: Date.now(),
           branding: receiptBranding,
@@ -637,6 +620,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     buildPrintItems,
     originalTotal,
     total,
+    payableTotal,
+    depositCents,
     canPrint,
     clearCart,
     clearClub100Discount,
@@ -653,7 +638,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     const bridge = getBridge()
     if (bridge && typeof bridge.payWithCard === "function") {
       const ref = `pos_${Date.now()}`
-      const payload = { amountCents: total, currency: "CHF", reference: ref }
+      const payload = { amountCents: payableTotal, currency: "CHF", reference: ref }
       setCardRef(ref)
       setCardError(null)
       setCardSuccess(false)
@@ -668,7 +653,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
         bridge.payWithCard(payload)
       }
     }
-  }, [total, jetonMode, hasMissingJeton])
+  }, [payableTotal, jetonMode, hasMissingJeton])
 
   const handlePrint = useCallback(() => {
     setPrinting(true)
@@ -699,7 +684,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           : tender === "twint"
             ? "TWINT-Zahlung"
             : "Gratis"
-  const paymentMethodLabel = (method: PosPaymentMethod | RefundMethod) => {
+  const paymentMethodLabel = (method: PosPaymentMethod | ReceiptRefundMethod) => {
     switch (method) {
       case "cash-out":
         return "Cash-out"
@@ -930,6 +915,18 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
               </Button>
             </div>
           )}
+          {depositCents > 0 && (
+            <div className="text-muted-foreground flex flex-col gap-1 pb-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span>Zwischensumme</span>
+                <span>{formatChf(total)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Depot</span>
+                <span>{formatChf(depositCents)}</span>
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between pb-2">
             <div className="flex flex-col">
               <p className="text-base font-semibold">Total</p>
@@ -937,9 +934,11 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
             </div>
             <div className="flex flex-col items-end">
               {discountAmount > 0 && (
-                <span className="text-muted-foreground text-sm line-through">{formatChf(originalTotal)}</span>
+                <span className="text-muted-foreground text-sm line-through">
+                  {formatChf(originalTotal + depositCents)}
+                </span>
               )}
-              <p className="text-base font-semibold">{formatChf(total)}</p>
+              <p className="text-base font-semibold">{formatChf(payableTotal)}</p>
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -1067,7 +1066,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
             <div className="mt-2 space-y-3">
               <div className="flex items-center justify-between">
                 <span>Gesamt</span>
-                <span>{formatChf(total)}</span>
+                <span>{formatChf(payableTotal)}</span>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="received">Erhaltener Betrag</Label>
@@ -1125,7 +1124,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
               <div className="flex flex-col gap-2">
                 <Button
                   className="h-12 w-full rounded-xl text-base"
-                  disabled={receivedCents < total || busy}
+                  disabled={receivedCents < payableTotal || busy}
                   onClick={startCashPayment}
                 >
                   Barzahlung abschliessen
@@ -1158,7 +1157,13 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => openReceipt({ method: "card", totalCents: total })}
+                    onClick={() =>
+                      openReceipt({
+                        method: "card",
+                        totalCents: payableTotal,
+                        depositCents: depositCents > 0 ? depositCents : undefined,
+                      })
+                    }
                   >
                     Überspringen
                   </Button>
@@ -1175,7 +1180,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
             <div className="mt-2 space-y-3">
               <div className="flex items-center justify-between">
                 <span>Gesamt</span>
-                <span>{formatChf(total)}</span>
+                <span>{formatChf(payableTotal)}</span>
               </div>
               <div className="grid gap-2">
                 <Button className="h-12 w-full rounded-xl text-base" disabled={busy} onClick={startTwintPayment}>

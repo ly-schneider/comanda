@@ -8,6 +8,7 @@ import { ProductConfigurationModal } from "@/components/cart/product-configurati
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import { BasketPanel } from "@/components/pos/basket-panel"
 import { InventoryManagement } from "@/components/pos/inventory-management"
+import { OrderRefundPanel } from "@/components/pos/order-refund-panel"
 import { POSHeader } from "@/components/pos/pos-header"
 import { ProductGrid } from "@/components/pos/product-grid"
 import { StuckOrdersDialog } from "@/components/pos/stuck-orders-dialog"
@@ -381,6 +382,9 @@ function PosInner() {
               <TabsTrigger value="kasse" className="rounded-[10px]">
                 Kasse
               </TabsTrigger>
+              <TabsTrigger value="bestellungen" className="rounded-[10px]">
+                Bestellungen
+              </TabsTrigger>
               <TabsTrigger value="verwalten" className="rounded-[10px]">
                 Verwalten
               </TabsTrigger>
@@ -424,6 +428,9 @@ function PosInner() {
               />
             )}
           </div>
+        </TabsContent>
+        <TabsContent value="bestellungen" className="mt-0 min-h-0 flex-1 overflow-hidden">
+          <OrderRefundPanel />
         </TabsContent>
         <TabsContent value="verwalten" className="mt-0 min-h-0 flex-1 overflow-hidden">
           <InventoryManagement
