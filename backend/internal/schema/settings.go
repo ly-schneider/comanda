@@ -93,6 +93,11 @@ func (Settings) Fields() []ent.Field {
 		field.String("payment_provider").
 			MaxLen(50).
 			Default("payrexx"),
+		// Identifier, not a credential — stored plaintext (unlike payrexx_*_enc).
+		field.String("sumup_merchant_code").
+			MaxLen(255).
+			Optional().
+			Nillable(),
 		// Opaque token routing inbound webhooks to a tenant before any tenant
 		// context exists, so it is unique-indexed and never the raw tenant_id.
 		// Resolving by token still requires the tenant's secret to verify the HMAC.

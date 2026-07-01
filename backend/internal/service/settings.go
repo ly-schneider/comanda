@@ -88,22 +88,23 @@ func PlatformBrandingDefaults() *BrandingView {
 // = leave unchanged; pointer to "" on a nillable text field = clear (NULL).
 // Colors and currency, when present, must be non-empty and well-formed.
 type BrandingInput struct {
-	DisplayName     *string
-	LogoURL         *string
-	FaviconURL      *string
-	ColorPrimary    *string
-	ColorPrimaryFg  *string
-	ColorSecondary  *string
-	ColorBackground *string
-	ColorForeground *string
-	FontKey         *string
-	RadiusKey       *string
-	ContactEmail    *string
-	ContactPhone    *string
-	LegalName       *string
-	LegalAddress    *string
-	Currency        *string
-	PaymentProvider *string
+	DisplayName       *string
+	LogoURL           *string
+	FaviconURL        *string
+	ColorPrimary      *string
+	ColorPrimaryFg    *string
+	ColorSecondary    *string
+	ColorBackground   *string
+	ColorForeground   *string
+	FontKey           *string
+	RadiusKey         *string
+	ContactEmail      *string
+	ContactPhone      *string
+	LegalName         *string
+	LegalAddress      *string
+	Currency          *string
+	PaymentProvider   *string
+	SumupMerchantCode *string
 }
 
 type MissingJetonForActiveProductsError struct {
@@ -253,6 +254,10 @@ func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) 
 			return ErrInvalidBranding
 		}
 	}
+	if in.SumupMerchantCode != nil {
+		trimmed := strings.TrimSpace(*in.SumupMerchantCode)
+		in.SumupMerchantCode = &trimmed
+	}
 
 	return s.settings.UpdateBranding(ctx, repository.BrandingUpdate{
 		DisplayName:            in.DisplayName,
@@ -271,6 +276,7 @@ func (s *settingsService) UpdateBranding(ctx context.Context, in BrandingInput) 
 		LegalAddress:           in.LegalAddress,
 		Currency:               in.Currency,
 		PaymentProvider:        in.PaymentProvider,
+		SumupMerchantCode:      in.SumupMerchantCode,
 	})
 }
 

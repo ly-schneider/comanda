@@ -68,6 +68,10 @@ Settings:
       description: ISO 4217 currency code (3 uppercase letters)
     paymentProvider:
       type: string
+    sumupMerchantCode:
+      type: string
+      nullable: true
+      description: SumUp merchant code for card payments (non-secret identifier)
     updatedAt:
       type: string
       format: date-time
@@ -120,6 +124,10 @@ SettingsUpdate:
       type: string
     paymentProvider:
       type: string
+    sumupMerchantCode:
+      type: string
+      nullable: true
+      description: SumUp merchant code; send "" or null to clear
 
 Branding:
   type: object

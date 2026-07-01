@@ -133,6 +133,47 @@ func TestUpdateBrandingValidation(t *testing.T) {
 	}
 }
 
+func TestUpdateBrandingSumupMerchantCode(t *testing.T) {
+	t.Run("stores trimmed code", func(t *testing.T) {
+		repo := &fakeSettingsRepo{}
+		err := newSvc(repo).UpdateBranding(context.Background(), BrandingInput{SumupMerchantCode: strptr("  MC12345 ")})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.branding == nil || repo.branding.SumupMerchantCode == nil {
+			t.Fatal("code did not reach the repo")
+		}
+		if *repo.branding.SumupMerchantCode != "MC12345" {
+			t.Fatalf("SumupMerchantCode = %q, want trimmed MC12345", *repo.branding.SumupMerchantCode)
+		}
+	})
+
+	t.Run("whitespace-only clears to empty (NULL)", func(t *testing.T) {
+		repo := &fakeSettingsRepo{}
+		err := newSvc(repo).UpdateBranding(context.Background(), BrandingInput{SumupMerchantCode: strptr("   ")})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.branding == nil || repo.branding.SumupMerchantCode == nil || *repo.branding.SumupMerchantCode != "" {
+			t.Fatalf("cleared code should reach the repo as empty string, got %#v", repo.branding)
+		}
+	})
+
+	t.Run("nil leaves the field untouched", func(t *testing.T) {
+		repo := &fakeSettingsRepo{}
+		err := newSvc(repo).UpdateBranding(context.Background(), BrandingInput{DisplayName: strptr("Acme")})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if repo.branding == nil {
+			t.Fatal("valid input should reach the repo")
+		}
+		if repo.branding.SumupMerchantCode != nil {
+			t.Fatal("nil sumup code must stay nil (unchanged)")
+		}
+	})
+}
+
 func TestGetBrandingPlatformShortCircuit(t *testing.T) {
 	repo := &fakeSettingsRepo{}
 	ctx := enttenant.WithPlatform(context.Background())
