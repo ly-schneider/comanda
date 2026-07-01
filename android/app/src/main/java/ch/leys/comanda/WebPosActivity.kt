@@ -19,6 +19,7 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import android.webkit.CookieManager
@@ -36,6 +37,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.sumup.merchant.reader.api.SumUpAPI
 import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpPayment
+import com.sumup.checkout.core.models.TransactionInfo
 import java.math.BigDecimal
 import org.json.JSONObject
 import android.widget.Toast
@@ -604,21 +606,19 @@ class WebPosActivity : ComponentActivity() {
                 if (rc == SumUpAPI.Response.ResultCode.SUCCESSFUL) {
                     val txCode = bundle.getString(SumUpAPI.Response.TX_CODE)
 
-                    // Read TX_INFO parcelable via reflection for broad SDK compatibility
                     val txJson = JSONObject()
-                    try {
-                        val parcel = try { data?.getParcelableExtra<android.os.Parcelable>(SumUpAPI.Response.TX_INFO) } catch (_: Throwable) { null }
-                        if (parcel != null) {
-                            fun getString(method: String): String? = try { parcel.javaClass.getMethod(method).invoke(parcel)?.toString() } catch (_: Throwable) { null }
-                            // These getters correspond to SDK’s TransactionInfo fields
-                            getString("getLastFourDigits")?.let { txJson.put("cardLast4", it) }
-                            getString("getCardType")?.let { txJson.put("cardType", it) }
-                            getString("getEntryMode")?.let { txJson.put("entryMode", it) }
-                            getString("getCurrency")?.let { txJson.put("currency", it) }
-                            getString("getTransactionCode")?.let { code -> txJson.put("txId", code) }
-                            getString("getStatus")?.let { s -> txJson.put("status", s) }
-                        }
-                    } catch (_: Throwable) { /* ignore */ }
+                    val txInfo = try {
+                        IntentCompat.getParcelableExtra(data, SumUpAPI.Response.TX_INFO, TransactionInfo::class.java)
+                    } catch (_: Throwable) { null }
+                    txInfo?.let { info ->
+                        // Card brand + last4 live on the nested Card object, not flat on TransactionInfo
+                        info.card?.type?.let { txJson.put("cardType", it) }
+                        info.card?.last4Digits?.let { txJson.put("cardLast4", it) }
+                        info.entryMode?.let { txJson.put("entryMode", it) }
+                        info.currency?.let { txJson.put("currency", it) }
+                        info.transactionCode?.let { txJson.put("txId", it) }
+                        info.status?.let { txJson.put("status", it) }
+                    }
 
                     // Always include txId (from bundle) and correlation id
                     if (!txJson.has("txId")) txJson.put("txId", txCode ?: "")
