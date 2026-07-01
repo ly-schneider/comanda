@@ -275,6 +275,7 @@ class WebPosActivity : ComponentActivity() {
     // Switching tenants: wipe the old session (device token in localStorage + auth cookies) so the app re-pairs.
     private fun onTenantHostChanged() {
         try { WebStorage.getInstance().deleteAllData() } catch (_: Throwable) {}
+        DeviceConfig.clearTenantConfig(this)
         val cm = CookieManager.getInstance()
         cm.removeAllCookies(null)
         cm.flush()
@@ -400,6 +401,19 @@ class WebPosActivity : ComponentActivity() {
                     JSONObject().put("success", false).put("error", e.message ?: "invalid_request").put("correlationId", ref)
                 )
             }
+        }
+
+        // Called from JS after /pos/me loads: PosBridge.setTenantConfig({ sumupMerchantCode, tenantName })
+        @JavascriptInterface
+        fun setTenantConfig(json: String) {
+            try {
+                val obj = JSONObject(json)
+                val merchant = if (obj.isNull("sumupMerchantCode")) null
+                    else obj.optString("sumupMerchantCode").ifBlank { null }
+                val name = if (obj.isNull("tenantName")) null
+                    else obj.optString("tenantName").ifBlank { null }
+                DeviceConfig.setTenantConfig(this@WebPosActivity, merchant, name)
+            } catch (_: Throwable) {}
         }
 
         // Called from JS: PosBridge.print(jsonStringOrObject)
@@ -617,6 +631,26 @@ class WebPosActivity : ComponentActivity() {
         }
 
         if (SumUpAPI.isLoggedIn()) {
+            val status = SumUpGuardrail.evaluate(
+                DeviceConfig.expectedSumUpMerchant(this),
+                loggedIn = true,
+                currentMerchant = try { SumUpAPI.getCurrentMerchant()?.merchantCode } catch (_: Throwable) { null }
+            )
+            if (status is SumUpGuardrail.Status.Mismatch) {
+                sendEvent(
+                    "comanda:sumup:result",
+                    JSONObject()
+                        .put("success", false)
+                        .put(
+                            "error",
+                            "Falsches SumUp-Konto: angemeldet als ${status.current}, erwartet ${status.expected}. " +
+                                "Bitte in der Geräte-Einrichtung das richtige Konto anmelden."
+                        )
+                        .put("correlationId", p.reference)
+                )
+                pendingPayment = null
+                return
+            }
             SumUpAPI.checkout(this, payment, REQ_CHECKOUT)
         } else {
             val login = SumUpLogin.builder(BuildConfig.SUMUP_AFFILIATE_KEY).build()

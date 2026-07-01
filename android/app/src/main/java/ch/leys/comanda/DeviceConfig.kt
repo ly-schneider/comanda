@@ -7,6 +7,8 @@ object DeviceConfig {
     private const val PREFS = "pos_prefs"
     private const val KEY_HOST = "pos_host_override"
     private const val KEY_RECENT = "pos_recent_hosts"
+    private const val KEY_SUMUP_EXPECTED = "sumup_expected_merchant"
+    private const val KEY_TENANT_NAME = "tenant_display_name"
     private const val MAX_RECENT = 5
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -26,6 +28,23 @@ object DeviceConfig {
 
     fun clearHostOverride(ctx: Context) {
         prefs(ctx).edit().remove(KEY_HOST).apply()
+    }
+
+    fun expectedSumUpMerchant(ctx: Context): String? =
+        prefs(ctx).getString(KEY_SUMUP_EXPECTED, null)?.ifBlank { null }
+
+    fun tenantDisplayName(ctx: Context): String? =
+        prefs(ctx).getString(KEY_TENANT_NAME, null)?.ifBlank { null }
+
+    fun setTenantConfig(ctx: Context, expectedMerchant: String?, displayName: String?) {
+        prefs(ctx).edit()
+            .putString(KEY_SUMUP_EXPECTED, expectedMerchant)
+            .putString(KEY_TENANT_NAME, displayName)
+            .apply()
+    }
+
+    fun clearTenantConfig(ctx: Context) {
+        prefs(ctx).edit().remove(KEY_SUMUP_EXPECTED).remove(KEY_TENANT_NAME).apply()
     }
 
     fun recentHosts(ctx: Context): List<String> =
