@@ -110,6 +110,7 @@ type BrandingUpdate struct {
 	LegalAddress           *string
 	Currency               *string
 	PaymentProvider        *string
+	SumupMerchantCode      *string
 }
 
 type settingsRepo struct {
@@ -354,6 +355,10 @@ func (r *settingsRepo) UpdateBranding(ctx context.Context, b BrandingUpdate) err
 		func(s string) { create.SetLegalAddress(s) },
 		func(s string) { up.SetLegalAddress(s) },
 		func() { up.ClearLegalAddress() })
+	addNillable(b.SumupMerchantCode,
+		func(s string) { create.SetSumupMerchantCode(s) },
+		func(s string) { up.SetSumupMerchantCode(s) },
+		func() { up.ClearSumupMerchantCode() })
 
 	addRequired(b.ColorPrimary,
 		func(s string) { create.SetColorPrimary(s) },

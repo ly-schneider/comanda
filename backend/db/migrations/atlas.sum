@@ -1,4 +1,4 @@
-h1:z0YOaKvH315uQKr2laSF3kiq1wzT/Grd8PmM9WRUvHY=
+h1:PoWU2tl/h9oAS0UcpXuP+519PV+9Nr5bJKn6Gu8LcJI=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -30,3 +30,4 @@ h1:z0YOaKvH315uQKr2laSF3kiq1wzT/Grd8PmM9WRUvHY=
 20260703000000_settings_payrexx_last_webhook_at.sql h1:kc2vRfWCM2sc0aLSxGgoiyoU54Fxgg0H5DUlwnJWT6I=
 20260704000000_refund_engine.sql h1:YqhuuvdjWb82VmTi+O3PxN0hzyD2O4pzmchZLgNxqRM=
 20260705000000_product_deposit.sql h1:uex1/lCSa8bYC/xF1HcvaduVGmuMfrxaR2Wxq8oF4uY=
+20260706000000_add_settings_sumup_merchant_code.sql h1:6g9+/Yo8gOHsnZ0QDIvG5clyDjCK1zEM4CinD/yDA7E=

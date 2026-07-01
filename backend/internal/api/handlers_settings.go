@@ -77,20 +77,21 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in := service.BrandingInput{
-			DisplayName:     body.DisplayName,
-			ColorPrimary:    body.ColorPrimary,
-			ColorPrimaryFg:  body.ColorPrimaryForeground,
-			ColorSecondary:  body.ColorSecondary,
-			ColorBackground: body.ColorBackground,
-			ColorForeground: body.ColorForeground,
-			FontKey:         body.FontKey,
-			RadiusKey:       body.RadiusKey,
-			ContactEmail:    body.ContactEmail,
-			ContactPhone:    body.ContactPhone,
-			LegalName:       body.LegalName,
-			LegalAddress:    body.LegalAddress,
-			Currency:        body.Currency,
-			PaymentProvider: body.PaymentProvider,
+			DisplayName:       body.DisplayName,
+			ColorPrimary:      body.ColorPrimary,
+			ColorPrimaryFg:    body.ColorPrimaryForeground,
+			ColorSecondary:    body.ColorSecondary,
+			ColorBackground:   body.ColorBackground,
+			ColorForeground:   body.ColorForeground,
+			FontKey:           body.FontKey,
+			RadiusKey:         body.RadiusKey,
+			ContactEmail:      body.ContactEmail,
+			ContactPhone:      body.ContactPhone,
+			LegalName:         body.LegalName,
+			LegalAddress:      body.LegalAddress,
+			Currency:          body.Currency,
+			PaymentProvider:   body.PaymentProvider,
+			SumupMerchantCode: body.SumupMerchantCode,
 		}
 		if err := h.settings.UpdateBranding(ctx, in); err != nil {
 			if errors.Is(err, service.ErrInvalidBranding) {
@@ -148,6 +149,7 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 		LegalAddress:           e.LegalAddress,
 		Currency:               ptr(e.Currency),
 		PaymentProvider:        ptr(e.PaymentProvider),
+		SumupMerchantCode:      e.SumupMerchantCode,
 		UpdatedAt:              ptr(e.UpdatedAt),
 	}
 
@@ -182,5 +184,6 @@ func brandingPresent(b *generated.SettingsUpdate) bool {
 		b.LegalName != nil ||
 		b.LegalAddress != nil ||
 		b.Currency != nil ||
-		b.PaymentProvider != nil
+		b.PaymentProvider != nil ||
+		b.SumupMerchantCode != nil
 }
