@@ -51,9 +51,7 @@ function pushTenantConfigToNative(device: PosDeviceResponse) {
         tenantName: device.settings?.displayName ?? null,
       })
     )
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function MobileTabBar({
