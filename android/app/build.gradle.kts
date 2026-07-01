@@ -58,6 +58,10 @@ android {
         buildConfigField("String", "POS_URL", "\"http://localhost:3000/pos\"")
         buildConfigField("boolean", "DEV_BUILD", "true")
         buildConfigField("String", "UPDATE_CHECK_URL", "\"\"")
+
+        // Owner-set PIN gating Device Setup; required for release builds (checked below).
+        val setupPin = (project.findProperty("setupPin") as String?) ?: System.getenv("SETUP_PIN")
+        buildConfigField("String", "SETUP_PIN", "\"${setupPin ?: ""}\"")
     }
 
     buildFeatures {
@@ -114,6 +118,11 @@ android {
             val posUrlRelease = posUrl ?: "https://example.com/pos"
             buildConfigField("String", "POS_URL", "\"$posUrlRelease\"")
             buildConfigField("boolean", "DEV_BUILD", "false")
+
+            val setupPin = (project.findProperty("setupPin") as String?) ?: System.getenv("SETUP_PIN")
+            if (buildingRelease && setupPin.isNullOrBlank()) {
+                throw GradleException("SETUP_PIN (or -PsetupPin) must be set for release builds")
+            }
 
             val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
             buildConfigField("String", "UPDATE_CHECK_URL", "\"${appendChannel(updateCheckUrl, "production")}\"")
