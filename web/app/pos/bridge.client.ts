@@ -14,6 +14,7 @@ declare global {
         startDiscovery?: () => boolean
         stopDiscovery?: () => void
         pair?: (address?: string | null) => boolean
+        setTenantConfig?: (s: string) => void
       }
     | undefined
   // window.BFS shape (optional)

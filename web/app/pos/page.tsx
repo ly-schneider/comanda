@@ -40,7 +40,18 @@ type PosDeviceResponse = {
   status: string
   model?: string
   os?: string
-  settings?: { posMode?: PosFulfillmentMode }
+  settings?: { posMode?: PosFulfillmentMode; sumupMerchantCode?: string | null; displayName?: string | null }
+}
+
+function pushTenantConfigToNative(device: PosDeviceResponse) {
+  try {
+    globalThis.PosBridge?.setTenantConfig?.(
+      JSON.stringify({
+        sumupMerchantCode: device.settings?.sumupMerchantCode ?? null,
+        tenantName: device.settings?.displayName ?? null,
+      })
+    )
+  } catch {}
 }
 
 function MobileTabBar({
@@ -154,6 +165,7 @@ function PosInner() {
           cardCapable: null,
           mode: device.settings?.posMode,
         })
+        pushTenantConfigToNative(device)
       } catch {
         setStatus({ exists: false, approved: false })
       }
@@ -281,6 +293,7 @@ function PosInner() {
               cardCapable: null,
               mode: device.settings?.posMode,
             })
+            pushTenantConfigToNative(device)
           } catch {}
         }
       })()
