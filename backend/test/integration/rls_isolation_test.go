@@ -94,8 +94,6 @@ func TestRLSIsolation(t *testing.T) {
 			require.Equal(t, 1, count(t, tx, `SELECT count(*) FROM settings`))
 			require.Equal(t, 1, count(t, tx, `SELECT count(*) FROM idempotency`))
 			require.Equal(t, 0, count(t, tx, `SELECT count(*) FROM "order" WHERE id = $1`, ordB))
-
-			// The tenant sees only its own settings row, hence its own SumUp code.
 			require.Equal(t, []string{"SUMUP-A"}, scanNames(t, tx, `SELECT sumup_merchant_code FROM settings`))
 		})
 	})
