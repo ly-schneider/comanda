@@ -107,6 +107,7 @@ jobs:
           POS_URL: ${{ secrets.POS_URL }}
           ORG_GRADLE_PROJECT_sumupAffiliateKey: ${{ secrets.SUMUP_AFFILIATE_KEY }}
           ORG_GRADLE_PROJECT_posUrl: ${{ secrets.POS_URL }}
+          ORG_GRADLE_PROJECT_setupPin: ${{ secrets.ANDROID_SETUP_PIN }}
           ORG_GRADLE_PROJECT_comandaEnv: ${{ inputs.environment }}
           COMANDA_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           COMANDA_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

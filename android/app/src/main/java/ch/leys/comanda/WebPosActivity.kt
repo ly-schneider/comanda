@@ -6,17 +6,20 @@ import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
@@ -128,7 +131,27 @@ class WebPosActivity : ComponentActivity() {
     }
 
     private lateinit var webView: WebView
+    private var allowedHost: String? = null
     private var pendingPayment: PendingPayment? = null
+
+    // Hidden operator gesture: long-press the top-left corner to open Device Setup.
+    private val gestureDetector by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(e: MotionEvent) {
+                val corner = resources.displayMetrics.density * 72f
+                if (e.x <= corner && e.y <= corner) openDeviceSetup()
+            }
+        })
+    }
+
+    private val setupLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+            if (res.resultCode == RESULT_OK &&
+                res.data?.getBooleanExtra(DeviceSetupActivity.EXTRA_HOST_CHANGED, false) == true
+            ) {
+                onTenantHostChanged()
+            }
+        }
     // WebView camera permission request held while the OS CAMERA grant is pending
     private var pendingCameraRequest: PermissionRequest? = null
     // Store last successful SumUp transaction details by correlationId/reference
@@ -214,6 +237,7 @@ class WebPosActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        allowedHost = DeviceConfig.effectiveAllowedHost(this)
         webView = WebView(this)
         configureWebView(webView)
         setContentView(webView)
@@ -221,7 +245,7 @@ class WebPosActivity : ComponentActivity() {
         // Bridge for PosBridge.* calls from /pos page
         webView.addJavascriptInterface(PosBridge(), "PosBridge")
 
-        webView.loadUrl(BuildConfig.POS_URL)
+        webView.loadUrl(DeviceConfig.effectivePosUrl(this))
 
         AppUpdateChecker(this).checkForUpdate()
     }
@@ -236,6 +260,28 @@ class WebPosActivity : ComponentActivity() {
             }
         } catch (_: Throwable) {}
         unregisterBtReceiver()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        // Watch for the setup gesture without consuming events — the WebView still handles them.
+        try { gestureDetector.onTouchEvent(ev) } catch (_: Throwable) {}
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun openDeviceSetup() {
+        setupLauncher.launch(Intent(this, DeviceSetupActivity::class.java))
+    }
+
+    // Switching tenants: wipe the old session (device token in localStorage + auth cookies) so the app re-pairs.
+    private fun onTenantHostChanged() {
+        try { WebStorage.getInstance().deleteAllData() } catch (_: Throwable) {}
+        val cm = CookieManager.getInstance()
+        cm.removeAllCookies(null)
+        cm.flush()
+        webView.clearHistory()
+        allowedHost = DeviceConfig.effectiveAllowedHost(this)
+        webView.loadUrl(DeviceConfig.effectivePosUrl(this))
+        try { Toast.makeText(this, "Host aktualisiert", Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -264,8 +310,6 @@ class WebPosActivity : ComponentActivity() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
             WebSettingsCompat.setForceDark(s, WebSettingsCompat.FORCE_DARK_AUTO)
         }
-
-        val allowedHost = Uri.parse(BuildConfig.POS_URL).host
 
         // Allow cookies for cross-domain auth flows; third-party cookies only in dev
         val cm = CookieManager.getInstance()
