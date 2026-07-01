@@ -19,7 +19,8 @@ export function AccountHeader() {
   const nav = [
     { href: base, label: "Übersicht", exact: true },
     { href: `${base}/branding`, label: "Marke", exact: false },
-    { href: `${base}/payrexx`, label: "Zahlungen", exact: false },
+    { href: `${base}/payrexx`, label: "Payrexx", exact: false },
+    { href: `${base}/sumup`, label: "SumUp", exact: false },
     { href: `${base}/domains`, label: "Domains", exact: false },
     { href: `${base}/invites`, label: "Einladungen", exact: false },
   ]
