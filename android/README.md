@@ -2,6 +2,8 @@
 
 Android POS terminal application for Comanda — provides on-site payment processing via SumUp card terminals, QR code scanning, and thermal receipt printing.
 
+> **Setting up tablets for an event, or cutting a release?** See **[PROVISIONING.md](./PROVISIONING.md)** — the single-app release flow and the per-event tablet provisioning runbook (Device Setup, SumUp login, pairing, teardown). This README covers development and build details.
+
 ## Architecture
 
 The app uses **Kotlin + Jetpack Compose** with two distinct activities:
