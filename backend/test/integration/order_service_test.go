@@ -2,12 +2,14 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	entOrder "backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
 	entProduct "backend/internal/generated/ent/product"
+	"backend/internal/repository"
 	"backend/internal/service"
 
 	nanoid "backend/internal/id"
@@ -163,6 +165,34 @@ func TestOrderService_ListAdmin(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, int64(0), total)
 		require.Empty(t, orders)
+	})
+
+	t.Run("ListAdmin search matches id prefix, contact email, and card transaction code", func(t *testing.T) {
+		email := "sumup.search@example.com"
+		emailOrder, err := repos.Order.Create(ctx, 900, entOrder.StatusPending, entOrder.OriginShop, nil, &email, nil, nil, nil)
+		require.NoError(t, err)
+
+		cardOrder := fixtures.CreateOrder(1200, entOrder.StatusPending, entOrder.OriginPos)
+		txCode := "SUMUP-TX-9F2K"
+		require.NoError(t, repos.Order.SetPosPaymentCard(ctx, cardOrder.ID, nil, 1200, &repository.CardMeta{TransactionID: &txCode}))
+
+		search := func(q string) []string {
+			params := service.OrderListParams{Query: &q}
+			orders, _, err := svc.ListAdmin(ctx, params)
+			require.NoError(t, err)
+			ids := make([]string, len(orders))
+			for i, o := range orders {
+				ids[i] = o.ID
+			}
+			return ids
+		}
+
+		require.Equal(t, []string{cardOrder.ID}, search(txCode))
+		require.Equal(t, []string{cardOrder.ID}, search(strings.ToLower(txCode)), "card transaction code match is case-insensitive")
+		require.Empty(t, search(txCode[:len(txCode)-2]), "card transaction code is a full-value match, not a prefix")
+
+		require.Equal(t, []string{emailOrder.ID}, search("search@example"))
+		require.Contains(t, search(emailOrder.ID[:8]), emailOrder.ID)
 	})
 }
 

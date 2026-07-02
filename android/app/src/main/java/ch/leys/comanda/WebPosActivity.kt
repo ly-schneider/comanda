@@ -232,7 +232,9 @@ class WebPosActivity : ComponentActivity() {
     data class PendingPayment(
         val amountCents: Long,
         val currency: String,
-        val reference: String
+        val reference: String,
+        val title: String?,
+        val items: String?
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -397,7 +399,9 @@ class WebPosActivity : ComponentActivity() {
                     )
                     return
                 }
-                val pending = PendingPayment(amountCents, currency, ref)
+                val title = obj.optString("title").ifBlank { null }
+                val items = obj.optString("items").ifBlank { null }
+                val pending = PendingPayment(amountCents, currency, ref, title, items)
                 runOnUiThread { startSumUpCheckout(pending) }
             } catch (e: Exception) {
                 sendEvent(
@@ -610,14 +614,20 @@ class WebPosActivity : ComponentActivity() {
 
     private fun startSumUpCheckout(p: PendingPayment) {
         pendingPayment = p
+        val checkoutTitle = (p.title?.takeIf { it.isNotBlank() } ?: "POS ${p.reference}").let {
+            if (it.length > 120) it.substring(0, 119) + "…" else it
+        }
         val payment = try {
-            SumUpPayment.builder()
+            val builder = SumUpPayment.builder()
                 .total(BigDecimal(p.amountCents).divide(BigDecimal(100)))
                 .currency(SumUpPayment.Currency.valueOf(p.currency))
-                .title("POS ${p.reference}")
+                .title(checkoutTitle)
                 .foreignTransactionId(p.reference)
                 .skipSuccessScreen()
-                .build()
+            p.items?.takeIf { it.isNotBlank() }?.let { info ->
+                builder.addAdditionalInfo("Artikel", if (info.length > 500) info.substring(0, 500) else info)
+            }
+            builder.build()
         } catch (t: Throwable) {
             sendEvent(
                 "comanda:sumup:result",
@@ -850,6 +860,7 @@ class WebPosActivity : ComponentActivity() {
             val totalCents = obj.optLong("totalCents", -1)
             val orderId = obj.optString("orderId", "-")
             val method = obj.optString("method", "card")
+            val cardTxId = obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }
             val pickupQr = obj.optString("pickupQr", "")
             val currency = branding.currency ?: obj.optString("currency", "CHF")
             val orderTs = obj.optLong("orderTimestamp", -1L)
@@ -931,6 +942,9 @@ class WebPosActivity : ComponentActivity() {
                     if (depositCents > 0) lines.append("davon Depot: ${moneyStr(currency, depositCents)}\n")
                     val methodPretty = if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
                     lines.append("Zahlart: ${methodPretty}\n")
+                    if (method.equals("card", ignoreCase = true) && cardTxId.isNotBlank()) {
+                        lines.append("Trans.-Nr.: ${cardTxId}\n")
+                    }
                     if (method.equals("cash", ignoreCase = true)) {
                         val rec = obj.optLong("amountReceivedCents", -1L)
                         val chg = obj.optLong("changeCents", -1L)
@@ -1120,8 +1134,13 @@ class WebPosActivity : ComponentActivity() {
             if (obj.optLong("depositCents", -1L) > 0) h += lineH + lineSpacing
             // Payment line
             h += (fm.bottom - fm.top).toInt() + lineSpacing
-            // Cash: received + change (up to two small lines)
             val methodForHeight = obj.optString("method", "card")
+            if (methodForHeight.equals("card", ignoreCase = true) &&
+                obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }.isNotBlank()
+            ) {
+                h += lineH + lineSpacing
+            }
+            // Cash: received + change (up to two small lines)
             if (methodForHeight.equals("cash", ignoreCase = true)) {
                 val rec = obj.optLong("amountReceivedCents", -1L)
                 val chg = obj.optLong("changeCents", -1L)
@@ -1241,6 +1260,16 @@ class WebPosActivity : ComponentActivity() {
             val payText = ellipsize(payLine, paint, (width - padding * 2).toFloat())
             canvas.drawText(payText, padding.toFloat(), y - fm.top, paint)
             y += (fm.bottom - fm.top) + lineSpacing
+        }
+
+        run {
+            val cardTxId = obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }
+            if (method.equals("card", ignoreCase = true) && cardTxId.isNotBlank()) {
+                val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
+                val txLine = ellipsize("Trans.-Nr.: $cardTxId", small, (width - padding * 2).toFloat())
+                canvas.drawText(txLine, padding.toFloat(), y - fmSmall.top, small)
+                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
+            }
         }
 
         // Cash details

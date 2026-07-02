@@ -22,6 +22,7 @@ export type Receipt = {
   // Rendered negative on refund/void slips.
   refundCents?: number
   orderId?: string
+  cardTransactionId?: string
   items?: Array<{
     title: string
     quantity: number
@@ -32,9 +33,31 @@ export type Receipt = {
   branding?: ReceiptBranding
 }
 
+export type CardCheckoutPayload = {
+  amountCents: number
+  currency: string
+  reference: string
+  title?: string
+  items?: string
+}
+
 export type PosBridge = {
   print?: (s: string) => void
-  payWithCard?: (p: { amountCents: number; currency: string; reference: string } | string) => void
+  payWithCard?: (p: CardCheckoutPayload | string) => void
+}
+
+export function buildCardCheckoutSummary(items: NonNullable<Receipt["items"]>): {
+  title: string
+  details: string
+} {
+  const title = items.map((it) => `${it.quantity}× ${it.title}`).join(", ")
+  const details = items
+    .map((it) => {
+      const cfg = it.configuration?.map((c) => `${c.slot}: ${c.choice}`).join(", ")
+      return cfg ? `${it.quantity}× ${it.title} (${cfg})` : `${it.quantity}× ${it.title}`
+    })
+    .join("\n")
+  return { title, details }
 }
 
 export function getPosBridge(): PosBridge | undefined {

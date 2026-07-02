@@ -185,6 +185,10 @@ export default function AdminOrderDetailPage() {
                 <span className="uppercase">{posMethod || "–"}</span>
               </div>
               <div>
+                <span className="text-muted-foreground">Trans.-Nr.:</span>{" "}
+                <span className="font-mono text-xs">{primaryPayment?.cardTransactionId || "–"}</span>
+              </div>
+              <div>
                 <span className="text-muted-foreground">Payrexx Gateway:</span>{" "}
                 <span className="text-xs">{order.payrexxGatewayId ?? "–"}</span>
               </div>
