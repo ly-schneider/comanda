@@ -326,8 +326,12 @@ class WebPosActivity : ComponentActivity() {
             ): Boolean {
                 val url = request.url
                 val host = url.host
-                // Allow in-app only the configured host; open others externally
-                return if (host != null && host == allowedHost) {
+                // Allow in-app only the configured host; open others externally.
+                // Cloudflare Access team domains stay in-app so the transparent
+                // WARP login redirect on gated hosts can complete in the WebView.
+                val inApp = host != null &&
+                    (host == allowedHost || host.endsWith(".cloudflareaccess.com"))
+                return if (inApp) {
                     false
                 } else {
                     startActivity(Intent(Intent.ACTION_VIEW, url))
