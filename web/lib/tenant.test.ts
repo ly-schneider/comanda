@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getPublicHost, normalizeHost, parseTenantHost } from "./tenant"
+import { getPublicHost, normalizeHost, parseTenantHost, platformOrigin } from "./tenant"
 
 describe("parseTenantHost", () => {
   // Platform bare hosts
@@ -62,6 +62,32 @@ describe("parseTenantHost", () => {
   // Case-insensitive
   it("is case-insensitive", () => {
     expect(parseTenantHost("ACME.comanda.leys.ch")).toEqual({ type: "tenant-subdomain", slug: "acme" })
+  })
+})
+
+describe("platformOrigin", () => {
+  it("maps a custom domain to the prod hub", () => {
+    expect(platformOrigin({ hostname: "incil.lyschneider.ch", protocol: "https:", port: "" })).toBe(
+      "https://comanda.leys.ch"
+    )
+  })
+  it("maps a prod tenant subdomain to the prod hub", () => {
+    expect(platformOrigin({ hostname: "acme.comanda.leys.ch", protocol: "https:", port: "" })).toBe(
+      "https://comanda.leys.ch"
+    )
+  })
+  it("maps a staging tenant subdomain to the staging hub", () => {
+    expect(platformOrigin({ hostname: "acme.staging.comanda.leys.ch", protocol: "https:", port: "" })).toBe(
+      "https://staging.comanda.leys.ch"
+    )
+  })
+  it("keeps the current protocol and port on dev localhost", () => {
+    expect(platformOrigin({ hostname: "acme.localhost", protocol: "http:", port: "3000" })).toBe(
+      "http://localhost:3000"
+    )
+  })
+  it("omits the port when none is set in dev", () => {
+    expect(platformOrigin({ hostname: "localhost", protocol: "http:", port: "" })).toBe("http://localhost")
   })
 })
 

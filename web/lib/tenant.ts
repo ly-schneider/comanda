@@ -106,6 +106,24 @@ export function appEnvFromHost(hostname: string): "dev" | "staging" | "prod" {
 }
 
 /**
+ * Origin of the platform management hub for the environment the current
+ * location belongs to. Cross-host flows that must land the session cookie on
+ * the platform apex — e.g. an admin invite captured on a tenant domain, where
+ * login must happen on comanda.leys.ch, not the tenant host — redirect here.
+ * In dev the hub shares the current protocol/port on bare localhost.
+ */
+export function platformOrigin(location: { hostname: string; protocol: string; port: string }): string {
+  switch (appEnvFromHost(location.hostname)) {
+    case "dev":
+      return `${location.protocol}//localhost${location.port ? `:${location.port}` : ""}`
+    case "staging":
+      return "https://staging.comanda.leys.ch"
+    default:
+      return "https://comanda.leys.ch"
+  }
+}
+
+/**
  * Extract the canonical public host from an incoming request.
  *
  * Respects X-Forwarded-Host (set by the load balancer / Traefik in prod),

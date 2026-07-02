@@ -1,13 +1,21 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import AuthHeader from "@/components/layout/auth-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
-import { authClient } from "@/lib/auth-client"
+import { platformOrigin } from "@/lib/tenant"
+
+// The invite is captured on the tenant host (where app_current_org_id() binds
+// the membership), but login must happen on the platform hub so the session
+// cookie is scoped there — a cross-host redirect the tenant-host session can't
+// carry. The login page forwards an already-authenticated hub session to /admin.
+function platformLoginURL(): string {
+  return `${platformOrigin(window.location)}/login?next=/admin`
+}
 
 export default function AcceptInviteClient() {
   const sp = useSearchParams()
@@ -20,19 +28,18 @@ export default function AcceptInviteClient() {
   const [role, setRole] = useState<string | null>(null)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
-  const router = useRouter()
-  const { data: session } = authClient.useSession()
 
   const roleLabel = role ? (ROLE_LABELS_DE[role] ?? null) : null
 
   const disabled = useMemo(() => submitting || !firstName || !token, [submitting, firstName, token])
 
-  // If user is already authenticated, redirect to admin
+  // Membership is bound; move to the platform hub to log in with a correctly
+  // scoped session instead of staying on the tenant host.
   useEffect(() => {
-    if (session?.user && success) {
-      router.replace("/admin")
+    if (success) {
+      window.location.assign(platformLoginURL())
     }
-  }, [session, success, router])
+  }, [success])
 
   useEffect(() => {
     let cancelled = false
@@ -108,9 +115,9 @@ export default function AcceptInviteClient() {
                 : "Deine Einladung wurde erfolgreich angenommen."}
             </p>
             <p className="text-muted-foreground text-sm">
-              Melde dich jetzt an, um auf das Admin-Dashboard zuzugreifen.
+              Du wirst zur Anmeldung auf der Verwaltungsplattform weitergeleitet.
             </p>
-            <Button className="rounded-pill h-10" onClick={() => router.push("/login?next=/admin")}>
+            <Button className="rounded-pill h-10" onClick={() => window.location.assign(platformLoginURL())}>
               Zur Anmeldung
             </Button>
           </div>
