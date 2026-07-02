@@ -53,7 +53,6 @@ func NewRouter(
 	sentryHandler := sentryhttp.New(sentryhttp.Options{Repanic: true})
 	r.Use(sentryHandler.Handle)
 	r.Use(middleware.TraceRoute)
-	r.Use(middleware.SentryLoggerMiddleware)
 	r.Use(middleware.HTTPMetrics)
 	r.Use(securityMw.SecurityHeaders)
 	r.Use(securityMw.CacheControlForSensitive)

@@ -53,11 +53,12 @@ func LogHTTPErrors(next http.Handler) http.Handler {
 			zap.String("request_id", reqID),
 		}
 
+		// Warn/error entries reach Sentry logs through the zap tee core.
 		switch {
 		case rec.status >= 500:
 			trace.Tag(r.Context(), "http.status_code", fmt.Sprintf("%d", rec.status))
 			trace.Tag(r.Context(), "error", "true")
-			zap.L().Error("http request", fields...)
+			zap.L().Error(fmt.Sprintf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path), fields...)
 
 			if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
 				hub.WithScope(func(scope *sentry.Scope) {
@@ -67,25 +68,9 @@ func LogHTTPErrors(next http.Handler) http.Handler {
 					hub.CaptureMessage(fmt.Sprintf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path))
 				})
 			}
-
-			SentryLogger(r.Context()).Error().
-				Int("status", rec.status).
-				String("method", r.Method).
-				String("path", r.URL.Path).
-				Float64("latency_ms", latencyMs).
-				String("request_id", reqID).
-				Emitf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path)
 		case rec.status >= 400:
 			trace.Tag(r.Context(), "http.status_code", fmt.Sprintf("%d", rec.status))
-			zap.L().Warn("http request", fields...)
-
-			SentryLogger(r.Context()).Warn().
-				Int("status", rec.status).
-				String("method", r.Method).
-				String("path", r.URL.Path).
-				Float64("latency_ms", latencyMs).
-				String("request_id", reqID).
-				Emitf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path)
+			zap.L().Warn(fmt.Sprintf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path), fields...)
 		default:
 			zap.L().Info("http request", fields...)
 		}
