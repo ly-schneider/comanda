@@ -1134,7 +1134,6 @@ class WebPosActivity : ComponentActivity() {
             if (obj.optLong("depositCents", -1L) > 0) h += lineH + lineSpacing
             // Payment line
             h += (fm.bottom - fm.top).toInt() + lineSpacing
-            // Card transaction number (small)
             val methodForHeight = obj.optString("method", "card")
             if (methodForHeight.equals("card", ignoreCase = true) &&
                 obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }.isNotBlank()
@@ -1263,7 +1262,6 @@ class WebPosActivity : ComponentActivity() {
             y += (fm.bottom - fm.top) + lineSpacing
         }
 
-        // Card transaction number
         run {
             val cardTxId = obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }
             if (method.equals("card", ignoreCase = true) && cardTxId.isNotBlank()) {
