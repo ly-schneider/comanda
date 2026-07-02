@@ -108,9 +108,11 @@ Release builds require a PKCS12 keystore configured via environment variables:
 | `COMANDA_UPLOAD_STORE_FILE`     | Path to keystore file                      |
 | `COMANDA_UPLOAD_STORE_PASSWORD` | Keystore password                          |
 | `COMANDA_UPLOAD_KEY_ALIAS`      | Key alias                                  |
-| `COMANDA_UPLOAD_KEY_PASSWORD`   | Key password                               |
+| `COMANDA_UPLOAD_KEY_PASSWORD`   | Key password (same as store password)      |
 | `SUMUP_AFFILIATE_KEY`           | SumUp affiliate key (required for release) |
 | `POS_URL`                       | Production POS URL (required for release)  |
+
+The signing key is permanent: tablets only accept updates signed with the same key as the installed APK, so rotating it means reinstalling every device. Generate it once, keep it out of the repo, and back up the `.jks` plus password in the password manager.
 
 ### Generating a Keystore
 
@@ -118,21 +120,32 @@ Release builds require a PKCS12 keystore configured via environment variables:
 keytool -genkeypair -v \
   -keystore comanda-upload.jks \
   -storepass "<password>" \
-  -alias comandaUpload \
   -keypass "<password>" \
+  -alias comandaUpload \
   -keyalg RSA -keysize 4096 \
-  -validity 365 -storetype JKS \
+  -validity 10000 -storetype PKCS12 \
   -dname "CN=Comanda,OU=Mobile Development,O=Comanda"
-
-# Convert to PKCS12
-keytool -importkeystore \
-  -srckeystore comanda-upload.jks \
-  -destkeystore comanda-upload.jks \
-  -deststoretype pkcs12
 
 # Base64 encode for CI secrets
 base64 -i comanda-upload.jks | pbcopy
 ```
+
+PKCS12 keystores use one password for store and key — set both to the same value.
+
+### GitHub Environment secrets
+
+The release workflow (`.github/workflows/android-release.yml`) runs in the `staging` or `production` GitHub Environment. One keystore is shared across both. Each environment needs:
+
+| Name                         | Kind     | Value                                                                    |
+| ---------------------------- | -------- | ------------------------------------------------------------------------ |
+| `ANDROID_KEYSTORE_BASE64`    | secret   | base64 of `comanda-upload.jks`                                            |
+| `ANDROID_KEYSTORE_PASSWORD`  | secret   | keystore password                                                         |
+| `ANDROID_KEY_ALIAS`          | secret   | `comandaUpload`                                                           |
+| `ANDROID_KEY_ALIAS_PASSWORD` | secret   | key password (same as keystore password)                                  |
+| `SUMUP_AFFILIATE_KEY`        | secret   | shared SumUp affiliate key                                                |
+| `POS_URL`                    | secret   | default POS URL a fresh install points at (overridden in Device Setup)    |
+| `ANDROID_SETUP_PIN`          | secret   | Device Setup PIN                                                          |
+| `UPDATE_CHECK_URL`           | variable | `https://api.<domain>/v1/android/latest` (channel appended at build time) |
 
 ## Hardware Integration
 
