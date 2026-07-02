@@ -17,6 +17,8 @@ import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { Club100Person } from "@/lib/api/club100"
 import {
+  buildCardCheckoutSummary,
+  type CardCheckoutPayload,
   getPosBridge as getBridge,
   type Receipt,
   type ReceiptBranding,
@@ -397,6 +399,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                 method: "card",
                 totalCents: payableTotal,
                 depositCents: depositCents > 0 ? depositCents : undefined,
+                cardTransactionId: d.txId || undefined,
                 items: printItems,
                 orderTimestamp: Date.now(),
                 branding: receiptBranding,
@@ -448,7 +451,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     try {
       type Bridge = {
         print?: (s: string) => void
-        payWithCard?: (p: { amountCents: number; currency: string; reference: string }) => void
+        payWithCard?: (p: CardCheckoutPayload) => void
       }
       const g = globalThis as unknown as { PosBridge?: Bridge }
       const bridge = g.PosBridge
@@ -638,7 +641,14 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     const bridge = getBridge()
     if (bridge && typeof bridge.payWithCard === "function") {
       const ref = `pos_${Date.now()}`
-      const payload = { amountCents: payableTotal, currency: "CHF", reference: ref }
+      const { title, details } = buildCardCheckoutSummary(buildPrintItems())
+      const payload: CardCheckoutPayload = {
+        amountCents: payableTotal,
+        currency: "CHF",
+        reference: ref,
+        title: title || undefined,
+        items: details || undefined,
+      }
       setCardRef(ref)
       setCardError(null)
       setCardSuccess(false)
@@ -653,7 +663,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
         bridge.payWithCard(payload)
       }
     }
-  }, [payableTotal, jetonMode, hasMissingJeton])
+  }, [payableTotal, jetonMode, hasMissingJeton, buildPrintItems])
 
   const handlePrint = useCallback(() => {
     setPrinting(true)

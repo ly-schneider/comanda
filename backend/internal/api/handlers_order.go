@@ -68,6 +68,12 @@ func (h *Handlers) ListOrders(w http.ResponseWriter, r *http.Request, params gen
 		toStr := params.DateTo.Format("2006-01-02T15:04:05Z07:00")
 		listParams.To = &toStr
 	}
+	if params.Q != nil {
+		q := strings.TrimSpace(*params.Q)
+		if q != "" {
+			listParams.Query = &q
+		}
+	}
 
 	orders, _, err := h.orders.ListAdmin(ctx, listParams)
 	if err != nil {

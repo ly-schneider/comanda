@@ -288,6 +288,7 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 					func(s *sql.Selector) {
 						s.Where(sql.Like(s.C(order.FieldID)+"::text", searchPattern+"%"))
 					},
+					order.HasPaymentsWith(orderpayment.CardTransactionIDEqualFold(searchPattern)),
 				),
 			)
 		}

@@ -39,6 +39,13 @@ collection:
         schema:
           type: string
           format: date-time
+      - name: q
+        in: query
+        description: |
+          Admin free-text search. Matches on order id (prefix), contact email,
+          and the SumUp card transaction code.
+        schema:
+          type: string
     responses:
       "200":
         description: Order list

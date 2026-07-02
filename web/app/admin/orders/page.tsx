@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
@@ -12,6 +13,7 @@ type OrderPayment = {
   method?: string
   amountCents?: number | null
   paidAt?: string | null
+  cardTransactionId?: string | null
 }
 
 type Order = {
@@ -36,8 +38,15 @@ type Order = {
 export default function AdminOrdersPage() {
   const fetchAuth = useAuthorizedFetch()
   const [status, _setStatus] = useState<string>("all")
+  const [search, setSearch] = useState<string>("")
+  const [appliedSearch, setAppliedSearch] = useState<string>("")
   const [items, setItems] = useState<Order[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +54,7 @@ export default function AdminOrdersPage() {
       try {
         const qs = new URLSearchParams()
         if (status && status !== "all") qs.set("status", status)
+        if (appliedSearch) qs.set("q", appliedSearch)
         const url = `/api/v1/orders${qs.toString() ? `?${qs.toString()}` : ""}`
         const res = await fetchAuth(url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -58,14 +68,22 @@ export default function AdminOrdersPage() {
     return () => {
       cancelled = true
     }
-  }, [fetchAuth, status])
+  }, [fetchAuth, status, appliedSearch])
 
   // CSV export UI not present; omit unused helper
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Bestellungen</h1>
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Suche: ID, E-Mail, Trans.-Nr."
+          className="w-full sm:w-72"
+          aria-label="Bestellungen durchsuchen"
+        />
       </div>
 
       {error && <div className="text-sm text-red-600">{error}</div>}
@@ -87,6 +105,7 @@ export default function AdminOrdersPage() {
                 <TableHead className="whitespace-nowrap">Kontakt E-Mail</TableHead>
                 <TableHead className="whitespace-nowrap">Benutzer</TableHead>
                 <TableHead className="whitespace-nowrap">Methode</TableHead>
+                <TableHead className="whitespace-nowrap">Trans.-Nr.</TableHead>
                 <TableHead className="whitespace-nowrap">Payrexx Gateway</TableHead>
                 <TableHead className="whitespace-nowrap">Payrexx Txn</TableHead>
                 <TableHead className="whitespace-nowrap">Payment Attempt</TableHead>
@@ -122,6 +141,7 @@ export default function AdminOrdersPage() {
                     <TableCell>{o.contactEmail || "–"}</TableCell>
                     <TableCell>{userLink}</TableCell>
                     <TableCell className="uppercase">{posMethod}</TableCell>
+                    <TableCell className="font-mono text-xs">{primaryPayment?.cardTransactionId || "–"}</TableCell>
                     <TableCell className="text-xs">{o.payrexxGatewayId ?? "–"}</TableCell>
                     <TableCell className="text-xs">{o.payrexxTransactionId ?? "–"}</TableCell>
                     <TableCell className="text-xs">{o.paymentAttemptId || "–"}</TableCell>
