@@ -205,6 +205,13 @@ paths:
   /platform/tenants/{tenantId}/owner-invite:
     $ref: "paths/platform.yaml#/owner-invite"
 
+  /platform/qa/runs:
+    $ref: "paths/platform-qa.yaml#/collection"
+  /platform/qa/runs/{runId}:
+    $ref: "paths/platform-qa.yaml#/item"
+  /platform/qa/runs/{runId}/results/{testKey}:
+    $ref: "paths/platform-qa.yaml#/result"
+
   /account/tenants:
     $ref: "paths/account.yaml#/tenants"
   /account/{accountTenant}/tenant:

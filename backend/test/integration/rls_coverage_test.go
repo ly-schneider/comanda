@@ -135,6 +135,34 @@ func TestOrgScopedRLSPolicies(t *testing.T) {
 	}
 }
 
+// platformOnlyRLSTables are platform-plane tables (no tenant_id) whose every
+// access requires app_is_platform_admin().
+var platformOnlyRLSTables = []string{"qa_test_run", "qa_test_result"}
+
+// TestRLSPlatformOnlyPolicies pins the platform-only classification: gate
+// solely on app_is_platform_admin(), never on a tenant leg.
+func TestRLSPlatformOnlyPolicies(t *testing.T) {
+	env := newRLSEnv(t)
+
+	for _, table := range platformOnlyRLSTables {
+		var qual, withCheck *string
+		err := env.priv.QueryRow(`
+			SELECT qual, with_check
+			FROM pg_policies
+			WHERE schemaname = 'public' AND tablename = $1 AND policyname = $2
+		`, table, table+"_platform_only").Scan(&qual, &withCheck)
+		require.NoErrorf(t, err, "policy %s_platform_only not found", table)
+
+		for _, clause := range []*string{qual, withCheck} {
+			require.NotNilf(t, clause, "policy %s_platform_only missing a USING/WITH CHECK clause", table)
+			require.Containsf(t, *clause, "app_is_platform_admin()",
+				"policy %s_platform_only must gate on platform-admin", table)
+			require.NotContainsf(t, *clause, "app_current_tenant_id()",
+				"platform-only table %q must not gate on tenant_id", table)
+		}
+	}
+}
+
 // scopedRLSTables are the tenant-scoped tables whose isolation policy must carry
 // the platform-admin bypass (OR app_is_platform_admin()). Mirrors the scoped
 // array in the migrations plus the tenant root and tenant_domain.

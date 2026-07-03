@@ -1,0 +1,317 @@
+collection:
+  get:
+    tags: [Platform]
+    summary: List QA test runs
+    description: Platform-admin only. Lists all manual-QA runs with result counts.
+    operationId: listQaRuns
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: QA run list
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/QaRun"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  post:
+    tags: [Platform]
+    summary: Create a QA test run
+    description: Platform-admin only. Starts a new named manual-QA pass.
+    operationId: createQaRun
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/QaRunCreate"
+    responses:
+      "201":
+        description: QA run created
+        content:
+          application/json:
+            schema:
+              $ref: "#/QaRun"
+      "400":
+        description: Invalid name or note
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+item:
+  parameters:
+    - name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Platform]
+    summary: Get a QA test run with its results
+    operationId: getQaRun
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: QA run with results
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run, results]
+              properties:
+                run:
+                  $ref: "#/QaRun"
+                results:
+                  type: array
+                  items:
+                    $ref: "#/QaResult"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Run not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+  patch:
+    tags: [Platform]
+    summary: Rename a QA test run or edit its note
+    operationId: updateQaRun
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/QaRunUpdate"
+    responses:
+      "200":
+        description: Updated QA run
+        content:
+          application/json:
+            schema:
+              $ref: "#/QaRun"
+      "400":
+        description: Invalid name or note
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Run not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+  delete:
+    tags: [Platform]
+    summary: Delete a QA test run and all its results
+    operationId: deleteQaRun
+    security:
+      - sessionAuth: []
+    responses:
+      "204":
+        description: Run deleted
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Run not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+result:
+  parameters:
+    - name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: testKey
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Platform]
+    summary: Set a test's result within a QA run
+    description: >
+      Platform-admin only. Full-replace upsert of one test's outcome: omitting
+      `status` stores "not tested" (–), omitting `note` clears the note. The
+      test key references the checklist definition shipped with the web app.
+    operationId: upsertQaResult
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/QaResultUpdate"
+    responses:
+      "200":
+        description: Stored result
+        content:
+          application/json:
+            schema:
+              $ref: "#/QaResult"
+      "400":
+        description: Invalid test key, status, or note
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Run not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+QaRun:
+  type: object
+  required: [id, name, successCount, errorCount, createdAt]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    note:
+      type: string
+    successCount:
+      type: integer
+      description: Number of results recorded as success.
+    errorCount:
+      type: integer
+      description: Number of results recorded as error.
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+QaRunCreate:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+      example: Staging pre-launch 2026-07
+    note:
+      type: string
+
+QaRunUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    note:
+      type: string
+
+QaResult:
+  type: object
+  required: [testKey, updatedAt]
+  properties:
+    testKey:
+      type: string
+    status:
+      type: string
+      enum: [success, error]
+      description: Omitted when the test is recorded as "not tested" (–).
+    note:
+      type: string
+    updatedAt:
+      type: string
+      format: date-time
+
+QaResultUpdate:
+  type: object
+  properties:
+    status:
+      type: string
+      enum: [success, error]
+      description: Omit to store "not tested" (–).
+    note:
+      type: string
+      description: Omit to clear the note.

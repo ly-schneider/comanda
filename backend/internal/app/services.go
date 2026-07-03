@@ -42,6 +42,7 @@ func NewServices() fx.Option {
 			service.NewDomainService,
 			service.NewTenantService,
 			service.NewAccountService,
+			service.NewQaService,
 		),
 	)
 }

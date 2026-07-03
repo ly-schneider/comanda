@@ -310,6 +310,13 @@ func NewRouter(
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
 			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
+
+			pa.Get("/platform/qa/runs", wrapper.ListQaRuns)
+			pa.Post("/platform/qa/runs", wrapper.CreateQaRun)
+			pa.Get("/platform/qa/runs/{runId}", wrapper.GetQaRun)
+			pa.Patch("/platform/qa/runs/{runId}", wrapper.UpdateQaRun)
+			pa.Delete("/platform/qa/runs/{runId}", wrapper.DeleteQaRun)
+			pa.Put("/platform/qa/runs/{runId}/results/{testKey}", wrapper.UpsertQaResult)
 		})
 
 		// ── Account hub: tenant listing (platform host; pre-selection) ─
