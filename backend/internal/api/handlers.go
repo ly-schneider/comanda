@@ -39,6 +39,7 @@ type Handlers struct {
 	domains       service.DomainService
 	tenants       service.TenantService
 	account       service.AccountService
+	qa            service.QaService
 	verification  repository.VerificationRepository
 	idempotency   repository.IdempotencyRepository
 	blobStore     *blobstore.Client
@@ -82,6 +83,7 @@ type HandlersDeps struct {
 	Domains       service.DomainService
 	Tenants       service.TenantService
 	Account       service.AccountService
+	Qa            service.QaService
 	Verification  repository.VerificationRepository
 	Idempotency   repository.IdempotencyRepository
 	BlobStore     *blobstore.Client `optional:"true"`
@@ -115,6 +117,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		domains:       deps.Domains,
 		tenants:       deps.Tenants,
 		account:       deps.Account,
+		qa:            deps.Qa,
 		verification:  deps.Verification,
 		idempotency:   deps.Idempotency,
 		blobStore:     deps.BlobStore,

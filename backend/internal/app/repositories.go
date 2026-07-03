@@ -44,6 +44,7 @@ func NewRepositories() fx.Option {
 			repository.NewVolunteerRedemptionRepository,
 			repository.NewTenantDomainRepository,
 			repository.NewTenantRepository,
+			repository.NewQaRepository,
 		),
 	)
 }
