@@ -5,7 +5,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { TenantBrandingProvider } from "@/contexts/branding-context"
 import { buildThemeCss } from "@/lib/branding-theme"
 import { FONT_VARS } from "@/lib/fonts"
-import { getBranding } from "@/lib/server/branding"
+import { getBranding, isTenantSuspended } from "@/lib/server/branding"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +34,21 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const branding = await getBranding()
+
+  if (await isTenantSuspended()) {
+    return (
+      <html lang="de" className={FONT_VARS}>
+        <body>
+          <main className="flex min-h-screen flex-col items-center justify-center gap-2 px-6 text-center">
+            <h1 className="text-2xl font-semibold">Vorübergehend nicht verfügbar</h1>
+            <p className="text-muted-foreground max-w-md">
+              Dieser Anbieter ist zurzeit deaktiviert. Bitte versuche es später erneut.
+            </p>
+          </main>
+        </body>
+      </html>
+    )
+  }
 
   // Per-tenant accents, font, and corner radii injected over the fixed white
   // base. Values are backend-validated hex / allow-listed keys (see buildThemeCss).

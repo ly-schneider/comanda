@@ -44,14 +44,24 @@ const DEFAULTS: Branding = {
   currency: "CHF",
 }
 
-export const getBranding = cache(async (): Promise<Branding> => {
+const fetchBranding = cache(async (): Promise<{ branding: Branding; suspended: boolean }> => {
   try {
     const host = await getRequestHost()
     const extraHeaders: Record<string, string> = {}
     if (host) extraHeaders["X-Forwarded-Host"] = host
     const data = await apiRequest<Branding>("/v1/branding", { headers: extraHeaders })
-    return { ...DEFAULTS, ...data, colors: { ...DEFAULTS.colors, ...data.colors } }
-  } catch {
-    return DEFAULTS
+    return {
+      branding: { ...DEFAULTS, ...data, colors: { ...DEFAULTS.colors, ...data.colors } },
+      suspended: false,
+    }
+  } catch (error) {
+    // The backend 403s every request on a suspended tenant's hosts; /v1/branding
+    // is otherwise public, so a 403 here can only mean tenant_suspended.
+    const suspended = typeof error === "object" && error !== null && (error as { status?: number }).status === 403
+    return { branding: DEFAULTS, suspended }
   }
 })
+
+export const getBranding = async (): Promise<Branding> => (await fetchBranding()).branding
+
+export const isTenantSuspended = async (): Promise<boolean> => (await fetchBranding()).suspended

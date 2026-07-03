@@ -14,7 +14,6 @@ import (
 	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/tenant"
-	"backend/internal/generated/ent/tenantdomain"
 	"backend/internal/repository"
 	"backend/internal/response"
 
@@ -70,6 +69,7 @@ type resolution struct {
 	tenantID   string
 	hasTenant  bool
 	isPlatform bool // platform host -> allowed no-tenant context
+	suspended  bool // tenant resolved but status=suspended -> all traffic 403s
 }
 
 // Resolve resolves the tenant for the request from the public Host and stores
@@ -97,6 +97,12 @@ func (m *TenantMiddleware) Resolve(next http.Handler) http.Handler {
 			return
 		}
 
+		if res.suspended {
+			writeJSONError(w, http.StatusForbidden, "tenant_suspended",
+				"This tenant is suspended.")
+			return
+		}
+
 		if res.hasTenant {
 			ctx = auth.WithTenantID(ctx, res.tenantID)
 		} else if res.isPlatform {
@@ -117,7 +123,7 @@ func (m *TenantMiddleware) resolve(ctx context.Context, r *http.Request) (resolu
 			if err != nil {
 				return resolution{}, err
 			}
-			return resolution{tenantID: t.ID, hasTenant: true}, nil
+			return tenantResolution(t.ID, t.Status), nil
 		}
 	}
 
@@ -129,16 +135,20 @@ func (m *TenantMiddleware) resolve(ctx context.Context, r *http.Request) (resolu
 	// does not control and have traffic attributed to it. Platform-assigned
 	// hosts are verified by construction (see the backfill migration).
 	if host != "" {
-		d, err := m.privileged.TenantDomain.Query().
-			Where(
-				tenantdomain.HostnameEQ(host),
-				tenantdomain.VerifiedAtNotNil(),
-			).
-			Only(ctx)
+		var (
+			tenantID string
+			status   tenant.Status
+		)
+		err := m.privilegedDB.QueryRowContext(ctx, `
+			SELECT t.id, t.status
+			FROM tenant t
+			JOIN tenant_domain d ON d.tenant_id = t.id
+			WHERE d.hostname = $1 AND d.verified_at IS NOT NULL
+		`, host).Scan(&tenantID, &status)
 		if err == nil {
-			return resolution{tenantID: d.TenantID, hasTenant: true}, nil
+			return tenantResolution(tenantID, status), nil
 		}
-		if !ent.IsNotFound(err) {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return resolution{}, err
 		}
 
@@ -154,10 +164,18 @@ func (m *TenantMiddleware) resolve(ctx context.Context, r *http.Request) (resolu
 		if err != nil {
 			return resolution{}, err
 		}
-		return resolution{tenantID: t.ID, hasTenant: true}, nil
+		return tenantResolution(t.ID, t.Status), nil
 	}
 
 	return resolution{}, errUnknownHost
+}
+
+func tenantResolution(tenantID string, status tenant.Status) resolution {
+	return resolution{
+		tenantID:  tenantID,
+		hasTenant: true,
+		suspended: status == tenant.StatusSuspended,
+	}
 }
 
 // requestHost returns the lowercased, port-stripped public host for the
