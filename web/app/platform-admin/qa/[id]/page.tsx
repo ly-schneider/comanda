@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Download } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
+import { qaExportFilename, qaRunToCsv, qaRunToMarkdown } from "@/lib/qa-export"
 import { QA_SECTIONS, QA_TEST_COUNT, type QaStatus } from "@/lib/qa-tests"
 import { cn } from "@/lib/utils"
 
@@ -125,6 +126,21 @@ export default function QaRunPage() {
     return stats
   }, [results])
 
+  function exportRun(format: "csv" | "md") {
+    if (!run) return
+    // BOM so Excel reads the UTF-8 umlauts correctly.
+    const content = format === "csv" ? "\uFEFF" + qaRunToCsv(results) : qaRunToMarkdown(run, results)
+    const blob = new Blob([content], {
+      type: format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8",
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = qaExportFilename(run.name, format)
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const totals = useMemo(() => {
     let success = 0
     let errors = 0
@@ -157,10 +173,18 @@ export default function QaRunPage() {
         </Link>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
           <h1 className="font-primary text-2xl">{run.name}</h1>
-          <p className="text-muted-foreground text-sm">
-            {totals.done}/{QA_TEST_COUNT} erfasst · {totals.success} ✓
-            {totals.error > 0 && <span className="text-destructive"> · {totals.error} ✗</span>}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-muted-foreground text-sm">
+              {totals.done}/{QA_TEST_COUNT} erfasst · {totals.success} ✓
+              {totals.error > 0 && <span className="text-destructive"> · {totals.error} ✗</span>}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => exportRun("csv")}>
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => exportRun("md")}>
+              <Download className="h-4 w-4" /> Markdown
+            </Button>
+          </div>
         </div>
         <Progress value={(totals.done / QA_TEST_COUNT) * 100} className="mt-3" />
       </div>
