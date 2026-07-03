@@ -63,6 +63,11 @@ export default function ProfilePage() {
     try {
       const result = await authClient.deleteUser()
       if (result.error) {
+        // Without a password credential, deletion needs a recent sign-in
+        // (Better Auth fresh-session check).
+        if (result.error.code === "SESSION_EXPIRED") {
+          throw new Error("Bitte melde dich erneut an, um dein Konto zu löschen.")
+        }
         throw new Error(result.error.message || "Konto konnte nicht gelöscht werden")
       }
       await signOut()
