@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
 
-// Same-host login: the session cookie must land where /admin lives.
 const LOGIN_URL = "/login?next=/admin"
 
 export default function AcceptInviteClient() {

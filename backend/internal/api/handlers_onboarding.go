@@ -49,8 +49,7 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request, _
 	})
 }
 
-// Platform-assigned subdomains are seeded verified but tokenless; only
-// token-bearing BYO domains count.
+// Platform-assigned subdomains are seeded verified but tokenless.
 func hasVerifiedBYODomain(domains []*ent.TenantDomain) bool {
 	for _, d := range domains {
 		if d.VerifiedAt != nil && d.VerificationToken != "" {

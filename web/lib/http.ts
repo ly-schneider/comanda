@@ -1,7 +1,5 @@
 const GENERIC_DE = "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
 
-// Backend codes and sentinel messages (e.g. "jeton_required") mapped to
-// user-facing German; the backend's English text is never shown.
 const ERROR_MESSAGES_DE: Record<string, string> = {
   invalid_body: "Ungültige Eingabe. Bitte prüfe die Felder.",
   validation_error: "Ungültige Eingabe. Bitte prüfe die Felder.",
@@ -36,7 +34,7 @@ const ERROR_MESSAGES_DE: Record<string, string> = {
 
 export type ApiErrorInfo = {
   code: string | null
-  // Sentinel service message (e.g. "jeton_required") for cause-specific branching.
+  // Sentinel service message (e.g. "jeton_required").
   raw: string | null
   messageDe: string
 }

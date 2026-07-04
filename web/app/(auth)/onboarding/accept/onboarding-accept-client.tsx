@@ -145,7 +145,6 @@ export default function OnboardingAcceptClient() {
     }
   }
 
-  // Auto-send once on verify; the button stays as the retry path.
   const otpAutoSentRef = useRef(false)
   useEffect(() => {
     if (step !== "send-otp" || otpAutoSentRef.current) return
