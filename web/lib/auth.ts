@@ -225,6 +225,10 @@ export const auth = betterAuth({
     emailOTP({
       otpLength: 6,
       expiresIn: 300, // 5 minutes
+      // Defaults (3 req/60s per IP, 3 wrong codes) are too strict: NAT'd venues
+      // share an IP, and one typo'd code eats a third of the budget.
+      rateLimit: { window: 60, max: 10 },
+      allowedAttempts: 5,
       sendVerificationOTP: async ({ email, type }, ctx) => {
         // OTP is not sent over the network — the backend reads it directly from
         // the verification table by email (identifier). We forward the tenant
