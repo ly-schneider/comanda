@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { PasswordInput } from "@/components/ui/password-input"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
+import { readApiError } from "@/lib/http"
 
 type PayrexxState = "not_started" | "api_connected" | "configured"
 
@@ -47,14 +48,13 @@ function ValueRow({ label, children }: { label: string; children: React.ReactNod
   )
 }
 
-const apiErrorsDe: Record<string, string> = {
+const payrexxErrorsDe: Record<string, string> = {
   configure_failed: "Payrexx-Zugangsdaten konnten nicht überprüft werden. Prüfe Instanz und API-Key.",
-  invalid_body: "Ungültige Eingabe. Bitte prüfe die Felder.",
 }
 
 async function errorMessage(res: Response, fallback: string) {
-  const j = (await res.json().catch(() => ({}))) as { code?: string }
-  return (j.code && apiErrorsDe[j.code]) || fallback
+  const info = await readApiError(res, fallback)
+  return (info.code && payrexxErrorsDe[info.code]) || info.messageDe
 }
 
 type ApiFieldKey = "instance" | "apiSecret"
