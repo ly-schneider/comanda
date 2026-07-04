@@ -47,9 +47,15 @@ function ValueRow({ label, children }: { label: string; children: React.ReactNod
   )
 }
 
+const apiErrorsDe: Record<string, string> = {
+  configure_failed: "Payrexx-Zugangsdaten konnten nicht überprüft werden. Prüfe Instanz und API-Key.",
+  invalid_body: "Ungültige Eingabe. Bitte prüfe die Felder.",
+}
+
+// Backend error messages are English; show mapped German copy instead.
 async function errorMessage(res: Response, fallback: string) {
-  const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
-  return j.message || j.detail || fallback
+  const j = (await res.json().catch(() => ({}))) as { code?: string }
+  return (j.code && apiErrorsDe[j.code]) || fallback
 }
 
 // PayrexxBindingForm is the shared per-tenant Payrexx connection editor, split

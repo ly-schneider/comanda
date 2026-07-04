@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { authClient } from "@/lib/auth/client"
+import { authErrorDe } from "@/lib/auth/localization-de"
 
 // Identity + quick name edit + sign out, shared by the account hub and
 // platform-admin chrome so both surfaces show who is signed in.
@@ -43,7 +44,7 @@ export function UserMenu() {
     setError(null)
     try {
       const result = await authClient.updateUser({ name: name.trim() })
-      if (result.error) throw new Error(result.error.message || "Name konnte nicht gespeichert werden")
+      if (result.error) throw new Error(authErrorDe(result.error, "Name konnte nicht gespeichert werden"))
       setEditing(false)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Name konnte nicht gespeichert werden")

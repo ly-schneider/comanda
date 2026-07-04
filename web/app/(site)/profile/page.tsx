@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { authClient } from "@/lib/auth/client"
+import { authErrorDe } from "@/lib/auth/localization-de"
 
 export default function ProfilePage() {
   const { signOut, user, isLoading: authLoading } = useAuth()
@@ -46,7 +47,7 @@ export default function ProfilePage() {
     try {
       const result = await authClient.updateUser({ name })
       if (result.error) {
-        throw new Error(result.error.message || "Profil konnte nicht aktualisiert werden")
+        throw new Error(authErrorDe(result.error, "Profil konnte nicht aktualisiert werden"))
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Profil konnte nicht aktualisiert werden"
@@ -66,7 +67,7 @@ export default function ProfilePage() {
         if (result.error.code === "SESSION_EXPIRED") {
           throw new Error("Bitte melde dich erneut an, um dein Konto zu löschen.")
         }
-        throw new Error(result.error.message || "Konto konnte nicht gelöscht werden")
+        throw new Error(authErrorDe(result.error, "Konto konnte nicht gelöscht werden"))
       }
       await signOut()
       router.push("/")
