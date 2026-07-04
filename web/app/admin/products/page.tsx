@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
 import { getCSRFToken } from "@/lib/csrf"
-import { readErrorMessage } from "@/lib/http"
+import { readApiError, readErrorMessage } from "@/lib/http"
 import type { Jeton, PosFulfillmentMode } from "@/types/jeton"
 
 type Product = {
@@ -174,9 +174,9 @@ export default function AdminProductsPage() {
       body: JSON.stringify({ isActive }),
     })
     if (!res.ok) {
-      const msg = await readErrorMessage(res)
-      if (msg === "jeton_required") throw new Error("Bitte zuerst einen Jeton zuweisen.")
-      throw new Error(msg)
+      const err = await readApiError(res)
+      if (err.raw === "jeton_required") throw new Error("Bitte zuerst einen Jeton zuweisen.")
+      throw new Error(err.messageDe)
     }
   }
 
@@ -207,9 +207,9 @@ export default function AdminProductsPage() {
       body: JSON.stringify({ jetonId }),
     })
     if (!res.ok) {
-      const msg = await readErrorMessage(res)
-      if (msg === "jeton_required") throw new Error("Im Jeton-Modus ist ein Jeton Pflicht.")
-      throw new Error(msg)
+      const err = await readApiError(res)
+      if (err.raw === "jeton_required") throw new Error("Im Jeton-Modus ist ein Jeton Pflicht.")
+      throw new Error(err.messageDe)
     }
   }
 
