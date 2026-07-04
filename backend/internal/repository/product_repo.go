@@ -17,8 +17,12 @@ func NewProductRepository(client *ent.Client) *ProductRepository {
 	return &ProductRepository{client: client}
 }
 
+func (r *ProductRepository) ec(ctx context.Context) *ent.Client {
+	return ClientFromContext(ctx, r.client)
+}
+
 func (r *ProductRepository) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	builder := r.client.Product.Create().
+	builder := r.ec(ctx).Product.Create().
 		SetCategoryID(categoryID).
 		SetType(productType).
 		SetName(name).
@@ -42,7 +46,7 @@ func (r *ProductRepository) Create(ctx context.Context, categoryID string, produ
 }
 
 func (r *ProductRepository) GetByID(ctx context.Context, id string) (*ent.Product, error) {
-	e, err := r.client.Product.Get(ctx, id)
+	e, err := r.ec(ctx).Product.Get(ctx, id)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -50,7 +54,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, id string) (*ent.Produc
 }
 
 func (r *ProductRepository) GetByIDWithRelations(ctx context.Context, id string) (*ent.Product, error) {
-	e, err := r.client.Product.Query().
+	e, err := r.ec(ctx).Product.Query().
 		Where(product.ID(id)).
 		WithCategory().
 		WithJeton().
@@ -69,7 +73,7 @@ func (r *ProductRepository) GetByIDWithRelations(ctx context.Context, id string)
 }
 
 func (r *ProductRepository) GetAll(ctx context.Context) ([]*ent.Product, error) {
-	rows, err := r.client.Product.Query().
+	rows, err := r.ec(ctx).Product.Query().
 		WithCategory().
 		WithJeton().
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
@@ -88,7 +92,7 @@ func (r *ProductRepository) GetAll(ctx context.Context) ([]*ent.Product, error) 
 }
 
 func (r *ProductRepository) GetAllActive(ctx context.Context) ([]*ent.Product, error) {
-	rows, err := r.client.Product.Query().
+	rows, err := r.ec(ctx).Product.Query().
 		Where(product.IsActive(true)).
 		WithCategory().
 		WithJeton().
@@ -108,7 +112,7 @@ func (r *ProductRepository) GetAllActive(ctx context.Context) ([]*ent.Product, e
 }
 
 func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID string) ([]*ent.Product, error) {
-	rows, err := r.client.Product.Query().
+	rows, err := r.ec(ctx).Product.Query().
 		Where(product.CategoryIDEQ(categoryID)).
 		WithCategory().
 		WithJeton().
@@ -128,7 +132,7 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID string
 }
 
 func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID string) ([]*ent.Product, error) {
-	rows, err := r.client.Product.Query().
+	rows, err := r.ec(ctx).Product.Query().
 		Where(
 			product.CategoryIDEQ(categoryID),
 			product.IsActive(true),
@@ -151,7 +155,7 @@ func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID 
 }
 
 func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error) {
-	rows, err := r.client.Product.Query().
+	rows, err := r.ec(ctx).Product.Query().
 		Where(product.IDIn(ids...)).
 		WithCategory().
 		WithJeton().
@@ -163,7 +167,7 @@ func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.
 }
 
 func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	builder := r.client.Product.UpdateOneID(id).
+	builder := r.ec(ctx).Product.UpdateOneID(id).
 		SetCategoryID(categoryID).
 		SetType(productType).
 		SetName(name).
@@ -193,12 +197,12 @@ func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, p
 }
 
 func (r *ProductRepository) Delete(ctx context.Context, id string) error {
-	return translateError(r.client.Product.DeleteOneID(id).Exec(ctx))
+	return translateError(r.ec(ctx).Product.DeleteOneID(id).Exec(ctx))
 }
 
 func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *bool, limit, offset int) ([]*ent.Product, int64, error) {
 	// Build count query
-	countQ := r.client.Product.Query().
+	countQ := r.ec(ctx).Product.Query().
 		Where(product.TypeEQ(product.TypeMenu))
 	if active != nil {
 		countQ = countQ.Where(product.IsActive(*active))
@@ -212,7 +216,7 @@ func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *boo
 	}
 
 	// Build data query
-	dataQ := r.client.Product.Query().
+	dataQ := r.ec(ctx).Product.Query().
 		Where(product.TypeEQ(product.TypeMenu)).
 		WithCategory().
 		WithJeton().
@@ -242,7 +246,7 @@ func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *boo
 }
 
 func (r *ProductRepository) CountActiveWithoutJeton(ctx context.Context) (int64, error) {
-	count, err := r.client.Product.Query().
+	count, err := r.ec(ctx).Product.Query().
 		Where(
 			product.IsActive(true),
 			product.TypeEQ(product.TypeSimple),
@@ -266,7 +270,7 @@ func (r *ProductRepository) CountByJetonIDs(ctx context.Context, ids []string) (
 		JetonID string `json:"jeton_id"`
 		Count   int    `json:"count"`
 	}
-	err := r.client.Product.Query().
+	err := r.ec(ctx).Product.Query().
 		Where(
 			product.JetonIDIn(ids...),
 			product.TypeEQ(product.TypeSimple),
@@ -285,7 +289,7 @@ func (r *ProductRepository) CountByJetonIDs(ctx context.Context, ids []string) (
 }
 
 func (r *ProductRepository) UpdateJeton(ctx context.Context, id string, jetonID *string) error {
-	builder := r.client.Product.UpdateOneID(id)
+	builder := r.ec(ctx).Product.UpdateOneID(id)
 	if jetonID != nil {
 		builder.SetJetonID(*jetonID)
 	} else {

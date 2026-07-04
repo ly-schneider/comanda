@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"backend/internal/generated/ent"
+	"backend/internal/repository"
 
 	"golang.org/x/sync/singleflight"
 )
@@ -62,7 +63,14 @@ func (c *catalogCache) set(key string, gen uint64, products []*ent.Product, expi
 	c.mu.Unlock()
 }
 
+// Entries and singleflight are tenant-keyed; no-tenant requests bypass the cache.
 func (c *catalogCache) load(ctx context.Context, key string, loader func(context.Context) ([]*ent.Product, error)) ([]*ent.Product, error) {
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok {
+		return loader(ctx)
+	}
+	key = tenantID + ":" + key
+
 	now := time.Now()
 	gen := c.generation()
 	if v, ok := c.get(key, gen, now); ok {

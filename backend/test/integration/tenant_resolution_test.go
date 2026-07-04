@@ -244,3 +244,44 @@ func TestPlatformHostContext(t *testing.T) {
 		require.Empty(t, body, "non-admin platform context must read no rows")
 	})
 }
+
+// TestSuspendedTenantBlocked: a suspended tenant's hosts 403 at resolution;
+// reactivating restores traffic.
+func TestSuspendedTenantBlocked(t *testing.T) {
+	env := newRLSEnv(t)
+
+	tenantA := env.seedTenant(t, "susp-a-"+randSuffix())
+	host := "susp-" + randSuffix() + ".comanda.test"
+	env.seedDomain(t, tenantA, host)
+	env.privExec(t, `INSERT INTO category (id, name, tenant_id) VALUES ($1, 'SuspA', $2)`, nanoid.New(), tenantA)
+
+	h := env.buildResolverStack(nil, true)
+
+	t.Run("active tenant serves traffic", func(t *testing.T) {
+		code, body := doGet(t, h, host, nil)
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, "SuspA", body)
+	})
+
+	env.privExec(t, `UPDATE tenant SET status = 'suspended' WHERE id = $1`, tenantA)
+
+	t.Run("suspended tenant host is 403", func(t *testing.T) {
+		code, body := doGet(t, h, host, nil)
+		require.Equal(t, http.StatusForbidden, code)
+		require.Contains(t, body, "tenant_suspended")
+	})
+
+	t.Run("suspended tenant via trusted header is 403", func(t *testing.T) {
+		code, body := doGet(t, h, "unknown-"+randSuffix()+".test", map[string]string{middleware.TenantHeader: tenantA})
+		require.Equal(t, http.StatusForbidden, code)
+		require.Contains(t, body, "tenant_suspended")
+	})
+
+	env.privExec(t, `UPDATE tenant SET status = 'active' WHERE id = $1`, tenantA)
+
+	t.Run("reactivated tenant serves traffic again", func(t *testing.T) {
+		code, body := doGet(t, h, host, nil)
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, "SuspA", body)
+	})
+}

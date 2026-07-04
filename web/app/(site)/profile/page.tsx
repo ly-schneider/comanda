@@ -63,6 +63,9 @@ export default function ProfilePage() {
     try {
       const result = await authClient.deleteUser()
       if (result.error) {
+        if (result.error.code === "SESSION_EXPIRED") {
+          throw new Error("Bitte melde dich erneut an, um dein Konto zu löschen.")
+        }
         throw new Error(result.error.message || "Konto konnte nicht gelöscht werden")
       }
       await signOut()
