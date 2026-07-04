@@ -37,3 +37,18 @@ export const authLocalizationDe = {
 } as const
 
 export type AuthLocalizationDe = typeof authLocalizationDe
+
+const authErrorCodesDe: Record<string, string> = {
+  INVALID_OTP: "Ungültiger Code. Bitte überprüfe deine Eingabe.",
+  OTP_EXPIRED: "Der Code ist abgelaufen. Bitte fordere einen neuen an.",
+  TOO_MANY_ATTEMPTS: "Zu viele Fehlversuche. Bitte fordere einen neuen Code an.",
+  SESSION_EXPIRED: "Bitte melde dich erneut an.",
+}
+
+type AuthError = { code?: string | null; message?: string | null; status?: number } | null | undefined
+
+export function authErrorDe(error: AuthError, fallback: string): string {
+  if (error?.status === 429) return "Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut."
+  const mapped = error?.code ? authErrorCodesDe[error.code] : undefined
+  return mapped ?? fallback
+}

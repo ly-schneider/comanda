@@ -3,6 +3,17 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -118,8 +129,6 @@ export default function ManageTenantPage() {
     )
   }
 
-  // The tenant's storefront lives on its subdomain, derived from the platform
-  // host the operator is on (env-agnostic: localhost / staging / prod).
   const tenantBaseUrl =
     typeof window !== "undefined" ? `${window.location.protocol}//${tenant.slug}.${window.location.host}` : ""
   const onboardingSteps = [
@@ -161,9 +170,30 @@ export default function ManageTenantPage() {
           </div>
           <div className="flex gap-2 pt-2">
             {tenant.status === "active" ? (
-              <Button variant="destructive" size="sm" disabled={busy} onClick={() => setStatus("suspended")}>
-                Sperren
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={busy}>
+                    Sperren
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Tenant sperren?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Shop, Admin und API dieses Tenants sind danach sofort gesperrt.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => setStatus("suspended")}
+                    >
+                      Sperren
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             ) : (
               <Button variant="primary" size="sm" disabled={busy} onClick={() => setStatus("active")}>
                 Aktivieren

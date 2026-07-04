@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useAccountTenant } from "@/components/account/account-tenant-context"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -31,6 +41,10 @@ export default function AccountInvitesPage() {
   const [items, setItems] = useState<Invite[]>([])
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"email", string>>>({})
+  const [creating, setCreating] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [revokeId, setRevokeId] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     try {
@@ -48,18 +62,32 @@ export default function AccountInvitesPage() {
   }, [reload])
 
   async function createInvite() {
-    if (!email.trim()) return
-    const res = await fetchAuth(base, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRF": getCSRFToken() || "" },
-      body: JSON.stringify({ email: email.trim(), memberRole: "admin" }),
-    })
-    if (!res.ok) {
-      setError(await readErrorMessage(res))
+    const trimmed = email.trim()
+    if (!trimmed) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setFieldErrors({ email: "Ungültige E-Mail-Adresse." })
       return
     }
-    setEmail("")
-    await reload()
+    setCreating(true)
+    try {
+      const res = await fetchAuth(base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF": getCSRFToken() || "" },
+        body: JSON.stringify({ email: trimmed, memberRole: "admin" }),
+      })
+      if (!res.ok) {
+        setError(await readErrorMessage(res, "Einladung konnte nicht gesendet werden."))
+        return
+      }
+      setEmail("")
+      setFieldErrors({})
+      setError(null)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+      await reload()
+    } finally {
+      setCreating(false)
+    }
   }
 
   async function deleteInvite(id: string) {
@@ -84,15 +112,28 @@ export default function AccountInvitesPage() {
         </p>
       </div>
       {error && <div className="text-sm text-red-600">{error}</div>}
+      {success && (
+        <div role="status" className="rounded bg-green-100 px-3 py-2 text-sm text-green-800">
+          Einladung gesendet
+        </div>
+      )}
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="E-Mail-Adresse"
-          className="h-8 w-72"
-        />
-        <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()}>
+      <div className="flex items-start gap-2">
+        <div>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (fieldErrors.email) setFieldErrors({})
+            }}
+            placeholder="E-Mail-Adresse"
+            className="h-8 w-72"
+            aria-invalid={!!fieldErrors.email}
+          />
+          {fieldErrors.email && <p className="text-destructive mt-1 text-sm">{fieldErrors.email}</p>}
+        </div>
+        <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()} disabled={creating}>
           Einladen
         </Button>
       </div>
@@ -119,8 +160,8 @@ export default function AccountInvitesPage() {
                   <TableCell className="whitespace-nowrap">{new Date(i.createdAt).toLocaleString("de-CH")}</TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(i.expiresAt).toLocaleString("de-CH")}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="destructive" onClick={() => void deleteInvite(i.id)}>
-                      Löschen
+                    <Button size="sm" variant="destructive" onClick={() => setRevokeId(i.id)}>
+                      Zurückziehen
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -129,6 +170,34 @@ export default function AccountInvitesPage() {
           </Table>
         </div>
       </TableContainer>
+
+      <AlertDialog
+        open={revokeId !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeId(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Einladung zurückziehen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Die Einladung wird widerrufen und kann nicht mehr verwendet werden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (revokeId) void deleteInvite(revokeId)
+                setRevokeId(null)
+              }}
+            >
+              Zurückziehen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
 import { getCSRFToken } from "@/lib/csrf"
-import { readErrorMessage } from "@/lib/http"
+import { readApiError, readErrorMessage } from "@/lib/http"
 import type { Jeton, PosFulfillmentMode } from "@/types/jeton"
 
 type Product = {
@@ -51,6 +51,7 @@ export default function AdminProductsPage() {
   const [jetons, setJetons] = useState<Jeton[]>([])
   const [posMode, setPosMode] = useState<PosFulfillmentMode>("QR_CODE")
   const [createOpen, setCreateOpen] = useState(false)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -174,9 +175,9 @@ export default function AdminProductsPage() {
       body: JSON.stringify({ isActive }),
     })
     if (!res.ok) {
-      const msg = await readErrorMessage(res)
-      if (msg === "jeton_required") throw new Error("Bitte zuerst einen Jeton zuweisen.")
-      throw new Error(msg)
+      const err = await readApiError(res)
+      if (err.raw === "jeton_required") throw new Error("Bitte zuerst einen Jeton zuweisen.")
+      throw new Error(err.messageDe)
     }
   }
 
@@ -207,9 +208,9 @@ export default function AdminProductsPage() {
       body: JSON.stringify({ jetonId }),
     })
     if (!res.ok) {
-      const msg = await readErrorMessage(res)
-      if (msg === "jeton_required") throw new Error("Im Jeton-Modus ist ein Jeton Pflicht.")
-      throw new Error(msg)
+      const err = await readApiError(res)
+      if (err.raw === "jeton_required") throw new Error("Im Jeton-Modus ist ein Jeton Pflicht.")
+      throw new Error(err.messageDe)
     }
   }
 
@@ -311,6 +312,11 @@ export default function AdminProductsPage() {
         <Button onClick={() => setCreateOpen(true)}>Produkt hinzufügen</Button>
       </div>
       {error && <div className="text-sm text-red-600">{error}</div>}
+      {successMsg && (
+        <div role="status" className="rounded bg-green-100 px-3 py-2 text-green-800">
+          {successMsg}
+        </div>
+      )}
       <CreateProductCard
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -320,6 +326,8 @@ export default function AdminProductsPage() {
         onError={(msg) => setError(msg)}
         onCreated={(p) => {
           setItems((prev) => [p, ...prev])
+          setSuccessMsg("Produkt erstellt")
+          setTimeout(() => setSuccessMsg(null), 3000)
         }}
         createProduct={createProduct}
         adjustInventory={adjustInventory}
@@ -981,9 +989,12 @@ function CreateProductCard({
               id="new-name"
               value={name}
               placeholder="Produktname"
+              maxLength={20}
               onChange={(e) => setName(e.target.value)}
               autoFocus
+              aria-invalid={submitted && !trimmedName}
             />
+            {submitted && !trimmedName && <p className="text-destructive text-xs">Name ist erforderlich.</p>}
           </div>
           <div className="space-y-1">
             <Label htmlFor="new-price">Preis (CHF)</Label>

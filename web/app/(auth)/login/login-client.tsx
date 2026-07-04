@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { Label } from "@/components/ui/label"
 import { authClient, emailOtp, signIn } from "@/lib/auth/client"
+import { authErrorDe } from "@/lib/auth/localization-de"
 import { postAuthPath } from "@/lib/post-auth"
 
 type LoginStep = "email" | "otp"
@@ -63,7 +64,7 @@ export default function LoginClient() {
         type: "sign-in",
       })
       if (result.error) {
-        setError(result.error.message || "Fehler beim Senden des Codes.")
+        setError(authErrorDe(result.error, "Fehler beim Senden des Codes."))
         setLoading(false)
         return
       }
@@ -87,7 +88,7 @@ export default function LoginClient() {
         otp,
       })
       if (result.error) {
-        setError(result.error.message || "Ungültiger Code. Bitte erneut versuchen.")
+        setError(authErrorDe(result.error, "Ungültiger Code. Bitte erneut versuchen."))
         setLoading(false)
         return
       }
@@ -107,7 +108,7 @@ export default function LoginClient() {
         type: "sign-in",
       })
       if (result.error) {
-        setError(result.error.message || "Fehler beim Senden des Codes.")
+        setError(authErrorDe(result.error, "Fehler beim Senden des Codes."))
       }
     } catch {
       setError("Fehler beim Senden des Codes.")

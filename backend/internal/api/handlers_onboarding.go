@@ -6,6 +6,7 @@ import (
 
 	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
+	"backend/internal/generated/ent"
 	"backend/internal/response"
 )
 
@@ -36,14 +37,6 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request, _
 		return
 	}
 
-	hasVerifiedDomain := false
-	for _, d := range domains {
-		if d.VerifiedAt != nil {
-			hasVerifiedDomain = true
-			break
-		}
-	}
-
 	response.WriteJSON(w, http.StatusOK, generated.OnboardingStatus{
 		CompletedAt: s.OnboardingCompletedAt,
 		Steps: generated.OnboardingSteps{
@@ -51,9 +44,19 @@ func (h *Handlers) GetOnboardingStatus(w http.ResponseWriter, r *http.Request, _
 			// contact email. Logo and colours are optional polish, not a gate.
 			Brand:    nonEmpty(s.LegalName) && nonEmpty(s.LegalAddress) && nonEmpty(s.ContactEmail),
 			Payments: s.PayrexxConfiguredAt != nil,
-			Domain:   hasVerifiedDomain,
+			Domain:   hasVerifiedBYODomain(domains),
 		},
 	})
+}
+
+// Platform-assigned subdomains are seeded verified but tokenless.
+func hasVerifiedBYODomain(domains []*ent.TenantDomain) bool {
+	for _, d := range domains {
+		if d.VerifiedAt != nil && d.VerificationToken != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // CompleteOnboarding marks the wizard as finished (or dismissed) for the tenant.

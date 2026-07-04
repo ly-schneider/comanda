@@ -7,15 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ROLE_LABELS_DE } from "@/lib/auth/rbac"
-import { platformOrigin } from "@/lib/tenant"
 
-// The invite is captured on the tenant host (where app_current_org_id() binds
-// the membership), but login must happen on the platform hub so the session
-// cookie is scoped there — a cross-host redirect the tenant-host session can't
-// carry. The login page forwards an already-authenticated hub session to /admin.
-function platformLoginURL(): string {
-  return `${platformOrigin(window.location)}/login?next=/admin`
-}
+const LOGIN_URL = "/login?next=/admin"
 
 export default function AcceptInviteClient() {
   const sp = useSearchParams()
@@ -33,11 +26,9 @@ export default function AcceptInviteClient() {
 
   const disabled = useMemo(() => submitting || !firstName || !token, [submitting, firstName, token])
 
-  // Membership is bound; move to the platform hub to log in with a correctly
-  // scoped session instead of staying on the tenant host.
   useEffect(() => {
     if (success) {
-      window.location.assign(platformLoginURL())
+      window.location.assign(LOGIN_URL)
     }
   }, [success])
 
@@ -114,10 +105,8 @@ export default function AcceptInviteClient() {
                 ? `Deine Einladung als ${roleLabel} wurde erfolgreich angenommen.`
                 : "Deine Einladung wurde erfolgreich angenommen."}
             </p>
-            <p className="text-muted-foreground text-sm">
-              Du wirst zur Anmeldung auf der Verwaltungsplattform weitergeleitet.
-            </p>
-            <Button className="rounded-pill h-10" onClick={() => window.location.assign(platformLoginURL())}>
+            <p className="text-muted-foreground text-sm">Du wirst zur Anmeldung weitergeleitet.</p>
+            <Button className="rounded-pill h-10" onClick={() => window.location.assign(LOGIN_URL)}>
               Zur Anmeldung
             </Button>
           </div>
@@ -137,6 +126,10 @@ export default function AcceptInviteClient() {
         <div className="mt-12 space-y-4">
           {loading ? (
             <p>Prüfe Einladung...</p>
+          ) : !email ? (
+            <p className="text-center text-sm text-red-600">
+              {error ?? "Diese Einladung ist ungültig oder abgelaufen."}
+            </p>
           ) : (
             <div className="space-y-3">
               <div className="flex flex-col gap-2">

@@ -29,6 +29,8 @@ export default function AdminCategoriesPage() {
   const [position, setPosition] = useState<string>("0")
   const [posDrafts, setPosDrafts] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     void reload()
@@ -48,25 +50,34 @@ export default function AdminCategoriesPage() {
   }
 
   async function createCategory() {
-    if (!name.trim()) return
+    if (!name.trim()) {
+      setNameError("Name ist erforderlich.")
+      return
+    }
+    setNameError(null)
     const pos = position.trim() === "" ? 0 : Number(position)
     if (!Number.isFinite(pos) || pos < 0) {
       setError("Position muss >= 0 sein")
       return
     }
-    const csrf = getCSRFToken()
-    const res = await fetchAuth(`/api/v1/categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-      body: JSON.stringify({ name: name.trim(), position: pos }),
-    })
-    if (!res.ok) {
-      setError(await readErrorMessage(res))
-      return
+    setCreating(true)
+    try {
+      const csrf = getCSRFToken()
+      const res = await fetchAuth(`/api/v1/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
+        body: JSON.stringify({ name: name.trim(), position: pos }),
+      })
+      if (!res.ok) {
+        setError(await readErrorMessage(res))
+        return
+      }
+      setName("")
+      setPosition("0")
+      await reload()
+    } finally {
+      setCreating(false)
     }
-    setName("")
-    setPosition("0")
-    await reload()
   }
 
   // removed unused rename() helper; name+active are updated together
@@ -137,13 +148,20 @@ export default function AdminCategoriesPage() {
       <h1 className="text-xl font-semibold">Kategorien</h1>
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Neue Kategorie"
-          className="h-8 w-64"
-        />
+      <div className="flex items-start gap-2">
+        <div className="space-y-1">
+          <Input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameError) setNameError(null)
+            }}
+            placeholder="Neue Kategorie"
+            className="h-8 w-64"
+            aria-invalid={!!nameError}
+          />
+          {nameError && <p className="text-destructive text-sm">{nameError}</p>}
+        </div>
         <Input
           type="number"
           value={position}
@@ -151,7 +169,7 @@ export default function AdminCategoriesPage() {
           placeholder="Position"
           className="h-8 w-24"
         />
-        <Button variant="outline" size="sm" className="h-8" onClick={() => void createCategory()}>
+        <Button variant="outline" size="sm" className="h-8" disabled={creating} onClick={() => void createCategory()}>
           Erstellen
         </Button>
       </div>
