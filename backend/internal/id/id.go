@@ -7,15 +7,18 @@ import (
 )
 
 const (
-	Alphabet = "123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-"
-	Length   = 12
+	// No 0OoIiJjLl confusables; no '-'/'_' (invalid at K8s label-value edges).
+	Alphabet = "123456789ABCDEFGHKMNPQRSTUVWXYZabcdefghkmnpqrstuvwxyz"
+	// Validation also accepts '-'/'_': existing rows and seed sentinels carry them.
+	validChars = Alphabet + "-_"
+	Length     = 12
 )
 
-var inAlphabet [256]bool
+var validChar [256]bool
 
 func init() {
-	for i := 0; i < len(Alphabet); i++ {
-		inAlphabet[Alphabet[i]] = true
+	for i := 0; i < len(validChars); i++ {
+		validChar[validChars[i]] = true
 	}
 }
 
@@ -28,7 +31,7 @@ func Valid(s string) bool {
 		return false
 	}
 	for i := 0; i < len(s); i++ {
-		if !inAlphabet[s[i]] {
+		if !validChar[s[i]] {
 			return false
 		}
 	}
