@@ -157,8 +157,7 @@ export const auth = betterAuth({
 
   // Map core table fields to snake_case (PostgreSQL convention)
   user: {
-    // No password to confirm with (OTP/OAuth only), so deletion relies on the
-    // fresh-session check: sessions older than session.freshAge are rejected.
+    // OTP/OAuth only — no password to confirm, so deletion relies on the fresh-session check.
     deleteUser: { enabled: true },
     fields: {
       emailVerified: "email_verified",

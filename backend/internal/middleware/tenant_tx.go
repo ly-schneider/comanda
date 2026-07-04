@@ -69,7 +69,7 @@ type resolution struct {
 	tenantID   string
 	hasTenant  bool
 	isPlatform bool // platform host -> allowed no-tenant context
-	suspended  bool // tenant resolved but status=suspended -> all traffic 403s
+	suspended  bool // status=suspended -> all traffic 403s
 }
 
 // Resolve resolves the tenant for the request from the public Host and stores

@@ -63,9 +63,7 @@ func (c *catalogCache) set(key string, gen uint64, products []*ent.Product, expi
 	c.mu.Unlock()
 }
 
-// load caches per tenant: entries and singleflight groups are keyed by the
-// request tenant so one tenant's catalog is never served to another. Requests
-// without a tenant in context (platform paths) bypass the cache entirely.
+// Entries and singleflight are tenant-keyed; no-tenant requests bypass the cache.
 func (c *catalogCache) load(ctx context.Context, key string, loader func(context.Context) ([]*ent.Product, error)) ([]*ent.Product, error) {
 	tenantID, ok := repository.TenantIDFromContext(ctx)
 	if !ok {

@@ -9,12 +9,9 @@ import (
 	"testing"
 )
 
-// TestReposResolveClientFromContext fails when a repository method reads the
-// injected ent client field directly instead of going through the ec(ctx)
-// helper. The injected client is the raw RLS-bound app pool with no
-// app.tenant_id GUC, so bypassing ClientFromContext fail-closes every read to
-// zero rows and every write to a 42501 RLS violation — silently, because the
-// fallback only misbehaves outside tests that use a privileged client.
+// TestReposResolveClientFromContext fails any repo method that reads the
+// injected client field directly instead of via ec(ctx): the raw app pool has
+// no app.tenant_id GUC, so RLS silently fail-closes.
 func TestReposResolveClientFromContext(t *testing.T) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool {

@@ -55,8 +55,7 @@ const fetchBranding = cache(async (): Promise<{ branding: Branding; suspended: b
       suspended: false,
     }
   } catch (error) {
-    // The backend 403s every request on a suspended tenant's hosts; /v1/branding
-    // is otherwise public, so a 403 here can only mean tenant_suspended.
+    // /v1/branding is public, so a 403 can only mean the tenant is suspended.
     const suspended = typeof error === "object" && error !== null && (error as { status?: number }).status === 403
     return { branding: DEFAULTS, suspended }
   }

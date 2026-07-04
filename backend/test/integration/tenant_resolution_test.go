@@ -245,9 +245,8 @@ func TestPlatformHostContext(t *testing.T) {
 	})
 }
 
-// TestSuspendedTenantBlocked: a suspended tenant's hosts serve nothing — every
-// request is rejected 403 at resolution, before any tx opens. Reactivating
-// restores traffic.
+// TestSuspendedTenantBlocked: a suspended tenant's hosts 403 at resolution;
+// reactivating restores traffic.
 func TestSuspendedTenantBlocked(t *testing.T) {
 	env := newRLSEnv(t)
 
