@@ -29,6 +29,8 @@ export default function AdminInvitesPage() {
   const [email, setEmail] = useState("")
   const [memberRole, setMemberRole] = useState<InviteMemberRole>("staff")
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"email", string>>>({})
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     void reload()
@@ -47,20 +49,31 @@ export default function AdminInvitesPage() {
   }
 
   async function createInvite() {
-    if (!email.trim()) return
-    const csrf = getCSRFToken()
-    const res = await fetchAuth(`/api/v1/invites`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-      body: JSON.stringify({ email: email.trim(), memberRole }),
-    })
-    if (!res.ok) {
-      setError(await readErrorMessage(res))
+    const trimmed = email.trim()
+    if (!trimmed) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setFieldErrors({ email: "Ungültige E-Mail-Adresse." })
       return
     }
-    setEmail("")
-    setMemberRole("staff")
-    await reload()
+    setCreating(true)
+    try {
+      const csrf = getCSRFToken()
+      const res = await fetchAuth(`/api/v1/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
+        body: JSON.stringify({ email: trimmed, memberRole }),
+      })
+      if (!res.ok) {
+        setError(await readErrorMessage(res, "Einladung konnte nicht gesendet werden."))
+        return
+      }
+      setEmail("")
+      setMemberRole("staff")
+      setFieldErrors({})
+      await reload()
+    } finally {
+      setCreating(false)
+    }
   }
 
   async function deleteInvite(id: string) {
@@ -85,13 +98,21 @@ export default function AdminInvitesPage() {
       </div>
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="flex items-center gap-2">
-        <Input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="E-Mail-Adresse"
-          className="h-8 w-72"
-        />
+      <div className="flex items-start gap-2">
+        <div>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (fieldErrors.email) setFieldErrors({})
+            }}
+            placeholder="E-Mail-Adresse"
+            className="h-8 w-72"
+            aria-invalid={!!fieldErrors.email}
+          />
+          {fieldErrors.email && <p className="text-destructive mt-1 text-sm">{fieldErrors.email}</p>}
+        </div>
         <Select value={memberRole} onValueChange={(v) => setMemberRole(v as InviteMemberRole)}>
           <SelectTrigger className="h-8 w-44">
             <SelectValue />
@@ -102,7 +123,7 @@ export default function AdminInvitesPage() {
             <SelectItem value="catalog">{ROLE_LABELS_DE.catalog}</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()}>
+        <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()} disabled={creating}>
           Einladen
         </Button>
       </div>
