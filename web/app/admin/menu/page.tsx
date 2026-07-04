@@ -826,7 +826,13 @@ function CreateMenuDialog({
             <Input
               id="create-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                setErrors((prev) => {
+                  const { name: _, ...rest } = prev
+                  return rest
+                })
+              }}
               maxLength={20}
               aria-invalid={!!errors.name}
             />
@@ -834,7 +840,16 @@ function CreateMenuDialog({
           </div>
           <div className="space-y-2">
             <Label>Kategorie</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select
+              value={categoryId}
+              onValueChange={(v) => {
+                setCategoryId(v)
+                setErrors((prev) => {
+                  const { category: _, ...rest } = prev
+                  return rest
+                })
+              }}
+            >
               <SelectTrigger aria-invalid={!!errors.category}>
                 <SelectValue placeholder="Kategorie wählen" />
               </SelectTrigger>
@@ -854,7 +869,13 @@ function CreateMenuDialog({
               id="create-price"
               inputMode="decimal"
               value={priceInput}
-              onChange={(e) => setPriceInput(e.target.value)}
+              onChange={(e) => {
+                setPriceInput(e.target.value)
+                setErrors((prev) => {
+                  const { price: _, ...rest } = prev
+                  return rest
+                })
+              }}
               placeholder="z.B. 12.50"
               aria-invalid={!!errors.price}
             />
@@ -917,6 +938,7 @@ function EditMenuDialog({
   const [description, setDescription] = useState("")
   const [isActive, setIsActive] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "price", string>>>({})
 
   useEffect(() => {
     if (menu) {
@@ -925,6 +947,7 @@ function EditMenuDialog({
       setImage(menu.image)
       setDescription(menu.description ?? "")
       setIsActive(menu.isActive)
+      setFieldErrors({})
     }
   }, [menu])
 
@@ -941,12 +964,18 @@ function EditMenuDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!menu || !dirty) return
+    if (!menu) return
+    const errs: Partial<Record<"name" | "price", string>> = {}
+    if (!name.trim()) errs.name = "Name ist erforderlich."
+    const cents = parsePriceInputToCents(priceInput)
+    if (cents === null || cents < 0) errs.price = "Preis muss 0 oder höher sein."
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
+    if (!dirty) return
     setSaving(true)
     try {
       const patch: Parameters<typeof apiUpdateMenu>[2] = {}
       if (name.trim() !== menu.name) patch.name = name.trim()
-      const cents = parsePriceInputToCents(priceInput)
       if (cents !== null && cents !== menu.priceCents) patch.priceCents = cents
       const trimmedDescription = description.trim()
       if (trimmedDescription !== (menu.description ?? "")) {
@@ -1007,7 +1036,21 @@ function EditMenuDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-name">Name</Label>
-              <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} />
+              <Input
+                id="edit-name"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  if (fieldErrors.name)
+                    setFieldErrors((p) => {
+                      const { name: _, ...rest } = p
+                      return rest
+                    })
+                }}
+                maxLength={20}
+                aria-invalid={!!fieldErrors.name}
+              />
+              {fieldErrors.name && <p className="text-destructive text-xs">{fieldErrors.name}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-price">Preis (CHF)</Label>
@@ -1015,8 +1058,17 @@ function EditMenuDialog({
                 id="edit-price"
                 inputMode="decimal"
                 value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
+                onChange={(e) => {
+                  setPriceInput(e.target.value)
+                  if (fieldErrors.price)
+                    setFieldErrors((p) => {
+                      const { price: _, ...rest } = p
+                      return rest
+                    })
+                }}
+                aria-invalid={!!fieldErrors.price}
               />
+              {fieldErrors.price && <p className="text-destructive text-xs">{fieldErrors.price}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-description">Beschreibung</Label>

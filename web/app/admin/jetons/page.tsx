@@ -46,6 +46,7 @@ export default function AdminJetonsPage() {
   const [formName, setFormName] = useState("")
   const [formColor, setFormColor] = useState("#FACC15")
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "color", string>>>({})
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<Jeton | null>(null)
   const [products, setProducts] = useState<ProductSummaryDTO[]>([])
@@ -103,6 +104,7 @@ export default function AdminJetonsPage() {
     setFormName("")
     setFormColor("#FACC15")
     setFormError(null)
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -111,22 +113,16 @@ export default function AdminJetonsPage() {
     setFormName(j.name)
     setFormColor(j.color)
     setFormError(null)
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
   async function saveJeton() {
-    if (!formName.trim()) {
-      setFormError("Name darf nicht leer sein.")
-      return
-    }
-    if (!formColor.trim()) {
-      setFormError("Bitte eine Farbe wählen oder einen HEX-Wert eingeben.")
-      return
-    }
-    if (!hexPattern.test(formColor)) {
-      setFormError("HEX-Farbe muss sechsstellig sein.")
-      return
-    }
+    const errs: Partial<Record<"name" | "color", string>> = {}
+    if (!formName.trim()) errs.name = "Name darf nicht leer sein."
+    if (!formColor.trim() || !hexPattern.test(formColor)) errs.color = "HEX-Farbe muss sechsstellig sein."
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
     setSaving(true)
     setFormError(null)
     try {
@@ -333,7 +329,10 @@ export default function AdminJetonsPage() {
         open={dialogOpen}
         onOpenChange={(v) => {
           setDialogOpen(v)
-          if (!v) setFormError(null)
+          if (!v) {
+            setFormError(null)
+            setFieldErrors({})
+          }
         }}
       >
         <DialogContent>
@@ -343,7 +342,20 @@ export default function AdminJetonsPage() {
           <div className="grid gap-3">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" value={formName} onChange={(e) => setFormName(e.target.value)} />
+              <Input
+                id="name"
+                value={formName}
+                onChange={(e) => {
+                  setFormName(e.target.value)
+                  if (fieldErrors.name)
+                    setFieldErrors((p) => {
+                      const { name: _, ...rest } = p
+                      return rest
+                    })
+                }}
+                aria-invalid={!!fieldErrors.name}
+              />
+              {fieldErrors.name && <p className="text-destructive text-sm">{fieldErrors.name}</p>}
             </div>
             <div className="grid gap-2">
               <Label>Farbpalette</Label>
@@ -368,8 +380,22 @@ export default function AdminJetonsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="hex">Eigene HEX-Farbe</Label>
-              <Input id="hex" placeholder="#FFAA00" value={formColor} onChange={(e) => setFormColor(e.target.value)} />
+              <Input
+                id="hex"
+                placeholder="#FFAA00"
+                value={formColor}
+                onChange={(e) => {
+                  setFormColor(e.target.value)
+                  if (fieldErrors.color)
+                    setFieldErrors((p) => {
+                      const { color: _, ...rest } = p
+                      return rest
+                    })
+                }}
+                aria-invalid={!!fieldErrors.color}
+              />
               <p className="text-muted-foreground text-xs">Palette-Auswahl oder manuell eingeben.</p>
+              {fieldErrors.color && <p className="text-destructive text-sm">{fieldErrors.color}</p>}
             </div>
             <div className="grid gap-2">
               <Label>Vorschau</Label>
