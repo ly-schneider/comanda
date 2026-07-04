@@ -28,6 +28,8 @@ export type BrandingSettings = {
 
 const CURRENCY_OPTIONS = ["CHF", "EUR"] as const
 
+type ValidatedField = "colorPrimary" | "colorSecondary" | "currency"
+
 const HEX_RE = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
 
 function isValidHex(v: string) {
@@ -42,6 +44,7 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
   const [settings, setSettings] = useState<BrandingSettings>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ValidatedField, string>>>({})
   const [success, setSuccess] = useState(false)
 
   const [logoUploading, setLogoUploading] = useState(false)
@@ -77,7 +80,15 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
   }, [fetchAuth, basePath])
 
   function field<K extends keyof BrandingSettings>(key: K) {
-    return (value: BrandingSettings[K]) => setSettings((prev) => ({ ...prev, [key]: value }))
+    return (value: BrandingSettings[K]) => {
+      setSettings((prev) => ({ ...prev, [key]: value }))
+      setFieldErrors((prev) => {
+        if (!(key in prev)) return prev
+        const next = { ...prev }
+        delete next[key as ValidatedField]
+        return next
+      })
+    }
   }
 
   async function save() {
@@ -99,14 +110,18 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
         currency: settings.currency,
       }
 
-      const hexFields = ["colorPrimary", "colorSecondary"] as const
-      for (const f of hexFields) {
+      const errs: Partial<Record<ValidatedField, string>> = {}
+      for (const f of ["colorPrimary", "colorSecondary"] as const) {
         const v = body[f]
-        if (v && !isValidHex(v)) {
-          setError(`Ungültiger Hex-Wert für ${f}: ${v}`)
-          setSaving(false)
-          return
-        }
+        if (!v || !isValidHex(v)) errs[f] = "Ungültiger Hex-Wert, z. B. #0a0a0a."
+      }
+      if (!CURRENCY_OPTIONS.includes((settings.currency ?? "") as (typeof CURRENCY_OPTIONS)[number])) {
+        errs.currency = "Bitte eine Währung wählen."
+      }
+      setFieldErrors(errs)
+      if (Object.keys(errs).length > 0) {
+        setSaving(false)
+        return
       }
 
       const res = await fetchAuth(basePath, {
@@ -217,7 +232,7 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
           <div className="space-y-2">
             <Label htmlFor="currency">Währung</Label>
             <Select value={settings.currency ?? "CHF"} onValueChange={(v) => field("currency")(v)}>
-              <SelectTrigger id="currency" className="max-w-28 rounded-xl">
+              <SelectTrigger id="currency" className="max-w-28 rounded-xl" aria-invalid={!!fieldErrors.currency}>
                 <SelectValue placeholder="CHF" />
               </SelectTrigger>
               <SelectContent>
@@ -228,6 +243,7 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
                 ))}
               </SelectContent>
             </Select>
+            {fieldErrors.currency && <p className="text-destructive text-sm">{fieldErrors.currency}</p>}
           </div>
         </CardContent>
       </Card>
@@ -353,8 +369,15 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
                     className="max-w-32 rounded-xl font-mono text-sm"
                     placeholder="#000000"
                     maxLength={9}
+                    aria-invalid={!!fieldErrors[key]}
+                    aria-describedby={fieldErrors[key] ? `${key}-error` : undefined}
                   />
                 </div>
+                {fieldErrors[key] && (
+                  <p id={`${key}-error`} className="text-destructive text-sm">
+                    {fieldErrors[key]}
+                  </p>
+                )}
               </div>
             </div>
           ))}
