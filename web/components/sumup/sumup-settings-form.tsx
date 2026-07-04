@@ -17,10 +17,6 @@ async function errorMessage(res: Response, fallback: string) {
   return j.message || j.detail || fallback
 }
 
-// SumUpSettingsForm edits the tenant's expected SumUp merchant code — the account
-// its POS tablets must be logged into. It is a non-secret identifier, so it rides
-// the shared account-hub settings endpoint (GET/PATCH .../settings); sending an
-// empty string clears it and turns the on-device guardrail back to warn-only.
 export function SumUpSettingsForm({ basePath }: { basePath: string }) {
   const fetchAuth = useAuthorizedFetch()
 
@@ -29,6 +25,7 @@ export function SumUpSettingsForm({ basePath }: { basePath: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldError, setFieldError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
@@ -55,9 +52,16 @@ export function SumUpSettingsForm({ basePath }: { basePath: string }) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
     setError(null)
     setSuccess(false)
+
+    if (code.length > 0 && code.trim() === "") {
+      setFieldError("Bitte einen gültigen Händler-Code eingeben.")
+      return
+    }
+    setFieldError(null)
+
+    setSaving(true)
     try {
       const csrf = getCSRFToken()
       const res = await fetchAuth(basePath, {
@@ -114,13 +118,18 @@ export function SumUpSettingsForm({ basePath }: { basePath: string }) {
               <Input
                 id="sumup-merchant-code"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => {
+                  setCode(e.target.value)
+                  if (fieldError) setFieldError(null)
+                }}
                 placeholder="z. B. MC7A2K9P"
                 className="rounded-xl font-mono"
                 autoComplete="off"
                 spellCheck={false}
                 disabled={loading || saving}
+                aria-invalid={!!fieldError}
               />
+              {fieldError && <p className="text-destructive text-sm">{fieldError}</p>}
               <p className="text-muted-foreground text-xs">
                 Findest du unter <span className="font-mono">me.sumup.com</span> oben links unter deinem Geschäftsnamen
                 (in der SumUp-API «merchant_code»).

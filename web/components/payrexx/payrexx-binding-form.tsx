@@ -52,17 +52,13 @@ const apiErrorsDe: Record<string, string> = {
   invalid_body: "Ungültige Eingabe. Bitte prüfe die Felder.",
 }
 
-// Backend error messages are English; show mapped German copy instead.
 async function errorMessage(res: Response, fallback: string) {
   const j = (await res.json().catch(() => ({}))) as { code?: string }
   return (j.code && apiErrorsDe[j.code]) || fallback
 }
 
-// PayrexxBindingForm is the shared per-tenant Payrexx connection editor, split
-// into two stages that mirror how Payrexx works: first connect the API (instance
-// + API key, validated live), then register the webhook — Payrexx only generates
-// the webhook signing secret after the merchant creates the webhook from the URL
-// shown here. Secrets are write-only; the GET status never returns them.
+type ApiFieldKey = "instance" | "apiSecret"
+
 export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePath: string; heading?: string }) {
   const fetchAuth = useAuthorizedFetch()
 
@@ -72,6 +68,7 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
   const [webhookSecret, setWebhookSecret] = useState("")
 
   const [connecting, setConnecting] = useState(false)
+  const [apiFieldErrors, setApiFieldErrors] = useState<Partial<Record<ApiFieldKey, string>>>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [apiSuccess, setApiSuccess] = useState(false)
 
@@ -97,12 +94,28 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
   const apiConnected = state === "api_connected" || state === "configured"
   const configured = state === "configured"
 
+  function clearApiField(key: ApiFieldKey) {
+    setApiFieldErrors((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
   async function connectApi(e: React.FormEvent) {
     e.preventDefault()
-    setConnecting(true)
     setApiError(null)
     setApiSuccess(false)
     setTestResult(null)
+
+    const errs: Partial<Record<ApiFieldKey, string>> = {}
+    if (!instance.trim()) errs.instance = "Instanzname ist erforderlich."
+    if (!apiSecret.trim()) errs.apiSecret = "API-Key ist erforderlich."
+    setApiFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
+
+    setConnecting(true)
     try {
       const csrf = getCSRFToken()
       const res = await fetchAuth(`${basePath}/api`, {
@@ -202,14 +215,18 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
               <Input
                 id="payrexx-instance"
                 value={instance}
-                onChange={(e) => setInstance(e.target.value)}
+                onChange={(e) => {
+                  setInstance(e.target.value)
+                  clearApiField("instance")
+                }}
                 placeholder="meine-instanz"
                 className="rounded-xl"
                 autoComplete="off"
                 spellCheck={false}
                 disabled={connecting}
-                required
+                aria-invalid={!!apiFieldErrors.instance}
               />
+              {apiFieldErrors.instance && <p className="text-destructive text-sm">{apiFieldErrors.instance}</p>}
               <p className="text-muted-foreground text-xs">
                 Der Teil vor <span className="font-mono">.payrexx.com</span>.
               </p>
@@ -219,13 +236,17 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
               <PasswordInput
                 id="payrexx-api-secret"
                 value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
+                onChange={(e) => {
+                  setApiSecret(e.target.value)
+                  clearApiField("apiSecret")
+                }}
                 placeholder={apiConnected ? "••••••••  (zum Ändern neu eingeben)" : ""}
                 className="rounded-xl font-mono"
                 autoComplete="off"
                 disabled={connecting}
-                required
+                aria-invalid={!!apiFieldErrors.apiSecret}
               />
+              {apiFieldErrors.apiSecret && <p className="text-destructive text-sm">{apiFieldErrors.apiSecret}</p>}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3 text-sm">
