@@ -225,8 +225,7 @@ export const auth = betterAuth({
     emailOTP({
       otpLength: 6,
       expiresIn: 300, // 5 minutes
-      // Defaults (3 req/60s per IP, 3 wrong codes) are too strict: NAT'd venues
-      // share an IP, and one typo'd code eats a third of the budget.
+      // Defaults (3/60s per IP, 3 attempts) are too strict for NAT'd venues.
       rateLimit: { window: 60, max: 10 },
       allowedAttempts: 5,
       sendVerificationOTP: async ({ email, type }, ctx) => {

@@ -47,8 +47,7 @@ const authErrorCodesDe: Record<string, string> = {
 
 type AuthError = { code?: string | null; message?: string | null; status?: number } | null | undefined
 
-// Better Auth error messages are English; show mapped German copy and never
-// leak the raw message.
+// Better Auth messages are English; map to German, never leak the raw text.
 export function authErrorDe(error: AuthError, fallback: string): string {
   if (error?.status === 429) return "Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut."
   const mapped = error?.code ? authErrorCodesDe[error.code] : undefined
