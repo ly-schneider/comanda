@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
+import { readApiError } from "@/lib/http"
 
-// Mirrors the backend slug rules (service/tenant.go) for fast client feedback;
-// the backend remains authoritative (incl. the reserved-slug list).
 const SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+
+type FieldKey = "name" | "slug"
 
 export default function NewTenantPage() {
   const router = useRouter()
@@ -20,23 +21,30 @@ export default function NewTenantPage() {
   const [name, setName] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The new tenant's subdomain is <slug> under the platform host the operator is
-  // on, so the preview stays correct across dev / staging / prod.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({})
   const [platformHost, setPlatformHost] = useState("")
   useEffect(() => {
     setPlatformHost(window.location.host)
   }, [])
 
+  function clearField(key: FieldKey) {
+    setFieldErrors((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
   async function submit() {
     setError(null)
-    if (!name.trim()) {
-      setError("Name erforderlich")
-      return
-    }
-    if (!SLUG_RE.test(slug)) {
-      setError("Ungültiger Slug (Kleinbuchstaben, Ziffern, Bindestriche)")
-      return
-    }
+    const errs: Partial<Record<FieldKey, string>> = {}
+    if (!name.trim()) errs.name = "Name ist erforderlich."
+    if (!SLUG_RE.test(slug))
+      errs.slug = "Ungültiger Slug. Erlaubt: Kleinbuchstaben, Ziffern und Bindestriche (nicht am Anfang oder Ende)."
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) return
+
     setSaving(true)
     try {
       const res = await fetchAuth("/api/v1/platform/tenants", {
@@ -45,13 +53,19 @@ export default function NewTenantPage() {
         body: JSON.stringify({ slug, name }),
       })
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
-        throw new Error(j.message || j.detail || `Error ${res.status}`)
+        const info = await readApiError(res)
+        if (info.code === "slug_taken") {
+          setFieldErrors({ slug: "Dieser Slug ist bereits vergeben." })
+        } else {
+          setError(info.messageDe)
+        }
+        return
       }
       const t = (await res.json()) as { id: string }
       router.push(`/platform-admin/tenants/${t.id}`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erstellen fehlgeschlagen")
+    } catch {
+      setError("Erstellen fehlgeschlagen. Bitte versuche es erneut.")
+    } finally {
       setSaving(false)
     }
   }
@@ -74,17 +88,32 @@ export default function NewTenantPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Bistro" />
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                clearField("name")
+              }}
+              placeholder="Acme Bistro"
+              aria-invalid={!!fieldErrors.name}
+            />
+            {fieldErrors.name && <p className="text-destructive text-sm">{fieldErrors.name}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="slug">Slug</Label>
             <Input
               id="slug"
               value={slug}
-              onChange={(e) => setSlug(e.target.value.toLowerCase().trim())}
+              onChange={(e) => {
+                setSlug(e.target.value.toLowerCase().trim())
+                clearField("slug")
+              }}
               placeholder="acme"
               maxLength={63}
+              aria-invalid={!!fieldErrors.slug}
             />
+            {fieldErrors.slug && <p className="text-destructive text-sm">{fieldErrors.slug}</p>}
             <p className="text-muted-foreground text-xs">
               Subdomain: {slug || "<slug>"}.{platformHost || "…"}
             </p>
