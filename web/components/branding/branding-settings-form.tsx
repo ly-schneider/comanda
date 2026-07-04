@@ -26,6 +26,8 @@ export type BrandingSettings = {
   currency?: string
 }
 
+const CURRENCY_OPTIONS = ["CHF", "EUR"] as const
+
 const HEX_RE = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/
 
 function isValidHex(v: string) {
@@ -113,8 +115,12 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string; detail?: string }
-        throw new Error(j.message || j.detail || `Error ${res.status}`)
+        const j = (await res.json().catch(() => ({}))) as { code?: string }
+        throw new Error(
+          j.code === "invalid_body"
+            ? "Ungültige Eingabe: Bitte prüfe Farben (Hex) und Währung."
+            : "Speichern fehlgeschlagen. Bitte versuche es erneut."
+        )
       }
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
@@ -210,14 +216,18 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
           </div>
           <div className="space-y-2">
             <Label htmlFor="currency">Währung</Label>
-            <Input
-              id="currency"
-              value={settings.currency ?? ""}
-              onChange={(e) => field("currency")(e.target.value.toUpperCase())}
-              className="max-w-28 rounded-xl"
-              placeholder="CHF"
-              maxLength={3}
-            />
+            <Select value={settings.currency ?? "CHF"} onValueChange={(v) => field("currency")(v)}>
+              <SelectTrigger id="currency" className="max-w-28 rounded-xl">
+                <SelectValue placeholder="CHF" />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCY_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
