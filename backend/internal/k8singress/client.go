@@ -37,6 +37,8 @@ const (
 	annoArgoSyncValue      = "Prune=false"
 	annoArgoCompareOptions = "argocd.argoproj.io/compare-options"
 	annoArgoCompareValue   = "IgnoreExtraneous"
+	annoTenantDomainID     = "comanda.leys.ch/tenant-domain-id"
+	annoTenantID           = "comanda.leys.ch/tenant-id"
 )
 
 // Reconciler converges cluster state for verified custom domains.
@@ -121,22 +123,24 @@ func restConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-// ownerLabels are the labels every managed object carries. The managed-by label
-// scopes GC; the tenant labels make ownership auditable and let GC map a stray
-// object back to its domain row.
+// ownerLabels scope GC and map objects back to their domain row. Values are
+// hashed (labelID) — a nanoid ending in '-'/'_' fails label validation;
+// the raw ids live in annotations.
 func ownerLabels(domainID, tenantID string) map[string]string {
 	return map[string]string{
 		labelManagedBy:      labelManagedByValue,
-		labelTenantDomainID: domainID,
-		labelTenantID:       tenantID,
+		labelTenantDomainID: labelID(domainID),
+		labelTenantID:       labelID(tenantID),
 	}
 }
 
-// argoAnnotations opt every managed object out of ArgoCD's prune + self-heal so
-// the GitOps controller treats them as externally owned.
-func argoAnnotations() map[string]string {
+// ownerAnnotations opt managed objects out of ArgoCD's prune + self-heal and
+// carry the raw row ids (annotation values are charset-unrestricted).
+func ownerAnnotations(domainID, tenantID string) map[string]string {
 	return map[string]string{
 		annoArgoSyncOptions:    annoArgoSyncValue,
 		annoArgoCompareOptions: annoArgoCompareValue,
+		annoTenantDomainID:     domainID,
+		annoTenantID:           tenantID,
 	}
 }

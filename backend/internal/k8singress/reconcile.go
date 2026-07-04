@@ -95,7 +95,7 @@ func (r *reconciler) reconcileDomains(ctx context.Context, domains []domain) err
 			continue
 		}
 
-		live[d.id] = struct{}{}
+		live[labelID(d.id)] = struct{}{}
 		if err := r.applyDomain(ctx, d, plan.issuer); err != nil {
 			r.logger.Warn("k8singress: apply domain failed",
 				zap.String("domainId", d.id),
@@ -138,7 +138,7 @@ func (r *reconciler) applyIngress(ctx context.Context, d domain) error {
 
 	ing := netv1ac.Ingress(name, r.cfg.Namespace).
 		WithLabels(ownerLabels(d.id, d.tenantID)).
-		WithAnnotations(argoAnnotations()).
+		WithAnnotations(ownerAnnotations(d.id, d.tenantID)).
 		WithSpec(netv1ac.IngressSpec().
 			WithIngressClassName(r.cfg.ClassName).
 			WithTLS(netv1ac.IngressTLS().
@@ -167,7 +167,7 @@ func (r *reconciler) applyCertificate(ctx context.Context, d domain, issuer stri
 
 	cert := cmac.Certificate(name, r.cfg.Namespace).
 		WithLabels(ownerLabels(d.id, d.tenantID)).
-		WithAnnotations(argoAnnotations()).
+		WithAnnotations(ownerAnnotations(d.id, d.tenantID)).
 		WithSpec(cmac.CertificateSpec().
 			WithSecretName(secret).
 			WithDNSNames(d.hostname).
