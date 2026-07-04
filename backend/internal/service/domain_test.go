@@ -168,12 +168,15 @@ func TestNewVerificationToken(t *testing.T) {
 	}
 }
 
-// mockResolver is a table-test DNSResolver.
+// mockResolver is a table-test DNSResolver. hosts maps a name to its resolved
+// addresses; names absent from the map are NXDOMAIN.
 type mockResolver struct {
 	cname    string
 	cnameErr error
 	txts     []string
 	txtErr   error
+	hosts    map[string][]string
+	hostErr  error
 }
 
 func (m mockResolver) LookupCNAME(_ context.Context, _ string) (string, error) {
@@ -184,6 +187,17 @@ func (m mockResolver) LookupTXT(_ context.Context, _ string) ([]string, error) {
 	return m.txts, m.txtErr
 }
 
+func (m mockResolver) LookupHost(_ context.Context, host string) ([]string, error) {
+	if m.hostErr != nil {
+		return nil, m.hostErr
+	}
+	addrs, ok := m.hosts[host]
+	if !ok {
+		return nil, notFoundErr()
+	}
+	return addrs, nil
+}
+
 func notFoundErr() error {
 	return &net.DNSError{Err: "no such host", IsNotFound: true}
 }
@@ -192,13 +206,16 @@ func TestDomainVerified(t *testing.T) {
 	const target = "ingress.comanda.leys.ch"
 	const token = "tok123"
 
+	const originHost = "direct.comanda.leys.ch"
+
 	cases := []struct {
-		name     string
-		resolver mockResolver
-		target   string
-		token    string
-		want     bool
-		wantErr  bool
+		name       string
+		resolver   mockResolver
+		target     string
+		token      string
+		originHost string
+		want       bool
+		wantErr    bool
 	}{
 		{
 			name:     "both records present and matching",
@@ -245,11 +262,60 @@ func TestDomainVerified(t *testing.T) {
 			resolver: mockResolver{cnameErr: &net.DNSError{Err: "server misbehaving", IsTemporary: true}},
 			target:   target, token: token, wantErr: true,
 		},
+		{
+			name: "origin check: hostname resolves to origin addresses",
+			resolver: mockResolver{
+				cname: "ingress.comanda.leys.ch.", txts: []string{token},
+				hosts: map[string][]string{
+					"shop.example.com": {"46.224.196.14"},
+					originHost:         {"46.224.196.14", "2a01:db8::1"},
+				},
+			},
+			target: target, token: token, originHost: originHost, want: true,
+		},
+		{
+			name: "origin check: hostname behind foreign proxy rejected",
+			resolver: mockResolver{
+				cname: "ingress.comanda.leys.ch.", txts: []string{token},
+				hosts: map[string][]string{
+					"shop.example.com": {"188.114.96.12", "188.114.97.12"},
+					originHost:         {"46.224.196.14"},
+				},
+			},
+			target: target, token: token, originHost: originHost, want: false,
+		},
+		{
+			name: "origin check: mixed addresses rejected",
+			resolver: mockResolver{
+				cname: "ingress.comanda.leys.ch.", txts: []string{token},
+				hosts: map[string][]string{
+					"shop.example.com": {"46.224.196.14", "188.114.96.12"},
+					originHost:         {"46.224.196.14"},
+				},
+			},
+			target: target, token: token, originHost: originHost, want: false,
+		},
+		{
+			name: "origin check: hostname without addresses not verified",
+			resolver: mockResolver{
+				cname: "ingress.comanda.leys.ch.", txts: []string{token},
+				hosts: map[string][]string{originHost: {"46.224.196.14"}},
+			},
+			target: target, token: token, originHost: originHost, want: false,
+		},
+		{
+			name: "origin check: unresolvable origin host surfaces as error",
+			resolver: mockResolver{
+				cname: "ingress.comanda.leys.ch.", txts: []string{token},
+				hosts: map[string][]string{"shop.example.com": {"46.224.196.14"}},
+			},
+			target: target, token: token, originHost: originHost, wantErr: true,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := domainVerified(context.Background(), tc.resolver, "shop.example.com", tc.token, tc.target)
+			got, err := domainVerified(context.Background(), tc.resolver, "shop.example.com", tc.token, tc.target, tc.originHost)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
