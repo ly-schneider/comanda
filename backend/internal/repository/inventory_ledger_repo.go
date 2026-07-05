@@ -209,9 +209,7 @@ func (r *inventoryLedgerRepo) GetCurrentStockBatch(ctx context.Context, productI
 	return stocks, nil
 }
 
-// GetCurrentStockByVariantBatch sums ledger deltas per variant for the given
-// products. Keys are variant ids; product-level rows (variant_id IS NULL) are
-// excluded, so variant stock starts at zero until seeded per variant.
+// Keys are variant ids; product-level rows (variant_id IS NULL) are excluded.
 func (r *inventoryLedgerRepo) GetCurrentStockByVariantBatch(ctx context.Context, productIDs []string) (map[string]int, error) {
 	if len(productIDs) == 0 {
 		return make(map[string]int), nil

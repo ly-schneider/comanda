@@ -255,9 +255,6 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		productMap[p.ID] = p
 	}
 
-	// Resolve variant selections up front: a product with variants requires a
-	// valid, active variantId; one without forbids it. The resolved variant
-	// drives unit price, the order-line snapshot, and per-variant stock checks.
 	variantByItem := make(map[int]*ent.ProductVariant, len(in.Items))
 	for i, it := range in.Items {
 		p, ok := productMap[it.ProductID]
@@ -324,7 +321,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		return nil, fmt.Errorf("order exceeds TWINT max (5000 CHF)")
 	}
 
-	// Validate inventory availability; variant items draw on per-variant stock.
+	// Validate inventory availability
 	type stockRequirement struct{ productID, variantID string }
 	requiredQuantities := make(map[stockRequirement]int)
 	for i, it := range in.Items {
@@ -499,8 +496,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		if _, err := s.inventoryRepo.CreateMany(ctx, inventoryEntries); err != nil {
 			return nil, fmt.Errorf("reserve inventory: %w", err)
 		}
-		// Pre-stock lookup keys are variant ids for variant rows and product ids
-		// otherwise; both are nanoids, so one merged map cannot collide.
+		// One merged pre-stock map: variant-id and product-id keys are disjoint nanoids.
 		preStock := make(map[string]int, len(preloadedStock)+len(preloadedVariantStock))
 		for k, v := range preloadedStock {
 			preStock[k] = v
@@ -1056,10 +1052,8 @@ func safeStr(p *string) string {
 	return *p
 }
 
-// publishInventoryUpdates fans ledger deltas out to SSE subscribers, grouped
-// by (product, variant). Stock keys are variant ids for variant rows and
-// product ids otherwise (disjoint nanoid spaces); preStock carries pre-insert
-// values under the same keys, anything missing is re-read post-insert.
+// Stock keys are variant ids for variant rows, product ids otherwise; preStock
+// carries pre-insert values under the same keys, anything missing is re-read.
 func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []repository.InventoryLedgerCreateParams, preStock map[string]int) {
 	if s.inventoryHub == nil {
 		return
@@ -1132,8 +1126,7 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 	}
 }
 
-// displayTitle composes the customer-facing line title; the variant value is
-// stored separately because title is capped at 40 chars in the DB.
+// The variant value is stored apart from title (varchar(40) can't absorb it).
 func displayTitle(title string, variantValue *string) string {
 	if variantValue == nil || *variantValue == "" {
 		return title

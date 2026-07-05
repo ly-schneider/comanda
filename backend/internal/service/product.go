@@ -50,10 +50,8 @@ type ProductService interface {
 	RemoveSlotOption(ctx context.Context, menuID, slotID, optionProductID string) error
 }
 
-// VariantInput describes one variant in a create/update payload. Entries with
-// an ID update the existing row; entries without one are created; existing
-// rows absent from the payload are deleted, or archived when order lines or
-// ledger rows still reference them.
+// Entries with an ID update, without one create; existing rows absent from the
+// payload are deleted, or archived when order lines or ledger rows reference them.
 type VariantInput struct {
 	ID                   *string
 	Value                string
@@ -223,9 +221,6 @@ func validateVariantInputs(productType product.Type, variants []VariantInput) er
 	return nil
 }
 
-// reconcileVariants applies the desired variant set: inputs with an ID update,
-// inputs without one create, and existing rows missing from the payload are
-// deleted — or archived when order lines or ledger rows still reference them.
 func (s *productService) reconcileVariants(ctx context.Context, productID string, variants []VariantInput) error {
 	if len(variants) > 0 {
 		usedAsOption, err := s.menuSlotOptionRepo.CountByOptionProductID(ctx, productID)

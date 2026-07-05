@@ -35,8 +35,7 @@ func (h *Handlers) StreamInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The snapshot maps product ids to product-level stock and variant ids to
-	// per-variant stock; the two nanoid key spaces are disjoint.
+	// Variant ids join the snapshot map; the nanoid key spaces are disjoint.
 	variantStocks, err := h.products.GetVariantStockBatch(ctx, ids)
 	if err != nil {
 		_, _ = w.Write([]byte("event: error\ndata: {\"error\":\"failed to load stock\"}\n\n"))

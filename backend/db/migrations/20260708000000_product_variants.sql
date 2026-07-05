@@ -1,12 +1,6 @@
--- Product variants: selectable options on simple products (e.g. t-shirt sizes),
--- each with a signed price adjustment on top of the product's base price and
--- its own availability. Order lines and inventory ledger rows carry the chosen
--- variant; variant_value on order_line is a display snapshot that survives
--- variant archival or deletion.
---
--- Pre-variant inventory_ledger rows (variant_id IS NULL) stay as product-level
--- history; per-variant stock sums start at zero and are seeded via
--- opening_balance entries carrying a variant_id.
+-- Product variants (e.g. t-shirt sizes). Pre-variant inventory_ledger rows
+-- (variant_id IS NULL) stay as product-level history; per-variant stock sums
+-- start at zero and are seeded via opening_balance entries with a variant_id.
 
 CREATE TABLE product_variant (
     id VARCHAR(12) PRIMARY KEY,

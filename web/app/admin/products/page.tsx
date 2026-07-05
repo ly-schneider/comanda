@@ -603,8 +603,8 @@ function ProductCardEditable({
       if (deltaDirty) updates.push(adjustInventory(product.id, parsedDelta))
       await Promise.all(updates)
 
-      // Saved variants come back from the server so new rows carry their ids —
-      // without them a second save would re-create instead of update.
+      // The server response carries new variants' ids; without them a second
+      // save would re-create instead of update.
       let updatedVariants = product.variants
       if (variantsDirty) {
         const saved = await updateVariants(
@@ -622,7 +622,6 @@ function ProductCardEditable({
         updatedVariants = saved.map((v) => ({ ...v, stock: stockById.get(v.id) ?? v.stock }))
       }
 
-      // Apply per-variant inventory adjustments sequentially after the main save
       for (const v of variants) {
         const varDelta = v.varDeltaInput.trim() === "" ? 0 : parseInt(v.varDeltaInput, 10)
         if (!isNaN(varDelta) && varDelta !== 0 && v.id) {

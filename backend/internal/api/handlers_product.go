@@ -111,8 +111,7 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusCreated, toAPIProduct(prod))
 }
 
-// toVariantInputs converts the API variant payload; nil means "leave variants
-// unchanged" while an empty slice removes them all.
+// nil leaves variants unchanged; an empty slice removes them all.
 func toVariantInputs(variants *[]generated.VariantUpsert) []service.VariantInput {
 	if variants == nil {
 		return nil
@@ -289,8 +288,6 @@ func (h *Handlers) GetProductInventory(w http.ResponseWriter, r *http.Request, p
 	response.WriteJSON(w, http.StatusOK, inv)
 }
 
-// buildInventory assembles the product-level stock plus, for variant products,
-// the per-variant breakdown.
 func (h *Handlers) buildInventory(ctx context.Context, prod *ent.Product) (generated.Inventory, error) {
 	stock, err := h.products.GetStock(ctx, prod.ID)
 	if err != nil {

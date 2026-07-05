@@ -208,7 +208,6 @@ function PosInner() {
         }
       }
 
-      // Update variant stock when the product has variants
       if (p.variants && p.variants.length > 0) {
         const updatedVariants = p.variants.map((v) => {
           const vStock = stockMap.get(v.id)
@@ -282,7 +281,7 @@ function PosInner() {
         const current = stockSnapshotRef.current.get(key) ?? 0
         stockSnapshotRef.current.set(key, Math.max(0, current + delta))
       })
-      // Apply to products (including variant-level stock)
+      // Apply to products
       setProducts((prev) => ({
         ...prev,
         items: prev.items.map((p) => {

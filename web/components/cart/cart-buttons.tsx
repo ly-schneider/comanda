@@ -18,7 +18,6 @@ export function CartButtons({ product, configuration, onConfigureProduct, disabl
 
   const productHasVariants = product.type !== "menu" && hasVariants(product)
 
-  // For variant products, show total across all variant cart entries
   const quantity = configuration
     ? getItemQuantity(product.id, configuration)
     : product.type === "menu"
