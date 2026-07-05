@@ -20,6 +20,7 @@ func NewRepositories() fx.Option {
 		fx.Provide(
 			repository.NewCategoryRepository,
 			repository.NewProductRepository,
+			repository.NewProductVariantRepository,
 			repository.NewJetonRepository,
 			repository.NewMenuSlotRepository,
 			repository.NewMenuSlotOptionRepository,

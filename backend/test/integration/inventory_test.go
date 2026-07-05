@@ -26,7 +26,7 @@ func TestInventoryRepository_CRUD(t *testing.T) {
 	product := fixtures.CreateProduct("Cola", category.ID, 350, productEnum.TypeSimple, nil)
 
 	t.Run("Create inventory entry", func(t *testing.T) {
-		entry, err := repos.Inventory.Create(ctx, product.ID, 100, inventoryledger.ReasonOpeningBalance, nil, nil, nil, nil)
+		entry, err := repos.Inventory.Create(ctx, product.ID, 100, inventoryledger.ReasonOpeningBalance, nil, nil, nil, nil, nil)
 		require.NoError(t, err)
 		require.NotEqual(t, "", entry.ID)
 	})
@@ -166,7 +166,7 @@ func TestInventoryManagement_OrderFlow(t *testing.T) {
 		fixtures.AddInventory(cola.ID, -2, inventoryledger.ReasonSale)
 
 		// Link to order (optional)
-		_, err = repos.Inventory.Create(ctx, cola.ID, 0, inventoryledger.ReasonSale, &order.ID, nil, nil, nil)
+		_, err = repos.Inventory.Create(ctx, cola.ID, 0, inventoryledger.ReasonSale, &order.ID, nil, nil, nil, nil)
 		require.NoError(t, err)
 
 		newStock, err := repos.Inventory.GetCurrentStock(ctx, cola.ID)

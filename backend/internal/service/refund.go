@@ -283,6 +283,7 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 		lineSpecs = append(lineSpecs, refundLineSpec{
 			orderLineID: line.ID,
 			productID:   line.ProductID,
+			variantID:   line.VariantID,
 			productType: productTypeOf(line),
 			lineType:    line.LineType,
 			quantity:    rl.Quantity,
@@ -360,6 +361,7 @@ func (s *refundService) CancelOrder(ctx context.Context, in CancelOrderInput) (*
 		lineSpecs = append(lineSpecs, refundLineSpec{
 			orderLineID: l.ID,
 			productID:   l.ProductID,
+			variantID:   l.VariantID,
 			productType: productTypeOf(l),
 			lineType:    l.LineType,
 			quantity:    remaining,
@@ -659,6 +661,7 @@ func (s *refundService) restoreInventory(ctx context.Context, orderID string, li
 			Reason:      inventoryledger.ReasonRefund,
 			OrderID:     &orderID,
 			OrderLineID: &olID,
+			VariantID:   ls.variantID,
 		})
 	}
 	if len(entries) == 0 {
@@ -675,26 +678,47 @@ func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []r
 	if s.inventoryHub == nil {
 		return
 	}
+	type stockKey struct{ productID, variantID string }
+	keys := make([]stockKey, 0, len(entries))
+	deltaByKey := make(map[stockKey]int)
 	productIDs := make([]string, 0, len(entries))
-	deltaByProduct := make(map[string]int)
+	seenProducts := make(map[string]struct{}, len(entries))
 	for _, e := range entries {
-		if _, seen := deltaByProduct[e.ProductID]; !seen {
+		key := stockKey{productID: e.ProductID}
+		if e.VariantID != nil {
+			key.variantID = *e.VariantID
+		}
+		if _, seen := deltaByKey[key]; !seen {
+			keys = append(keys, key)
+		}
+		deltaByKey[key] += e.Delta
+		if _, seen := seenProducts[e.ProductID]; !seen {
+			seenProducts[e.ProductID] = struct{}{}
 			productIDs = append(productIDs, e.ProductID)
 		}
-		deltaByProduct[e.ProductID] += e.Delta
 	}
 	stocks, err := s.inventory.GetCurrentStockBatch(ctx, productIDs)
 	if err != nil {
 		return
 	}
+	variantStocks, err := s.inventory.GetCurrentStockByVariantBatch(ctx, productIDs)
+	if err != nil {
+		return
+	}
 	now := time.Now()
-	for _, pid := range productIDs {
-		s.inventoryHub.Publish(inventory.Update{
-			ProductID: pid,
-			NewStock:  stocks[pid],
-			Delta:     deltaByProduct[pid],
+	for _, key := range keys {
+		update := inventory.Update{
+			ProductID: key.productID,
+			NewStock:  stocks[key.productID],
+			Delta:     deltaByKey[key],
 			Timestamp: now,
-		})
+		}
+		if key.variantID != "" {
+			vid := key.variantID
+			update.VariantID = &vid
+			update.NewStock = variantStocks[vid]
+		}
+		s.inventoryHub.Publish(update)
 	}
 }
 
@@ -731,6 +755,7 @@ func (s *refundService) settleDepositsOnFullRefund(ctx context.Context, ord *ent
 type refundLineSpec struct {
 	orderLineID string
 	productID   string
+	variantID   *string
 	productType product.Type
 	lineType    orderline.LineType
 	quantity    int

@@ -33,6 +33,7 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 	repos := NewRepositories(staticClient)
 	svc := service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,
@@ -69,7 +70,7 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 		ctx, _, cleanup := env.appRequestTx(t, tenantA)
 		defer cleanup()
 
-		created, err := svc.Create(ctx, catA, product.TypeSimple, "NewA", 500, 0, true, nil, nil, nil)
+		created, err := svc.Create(ctx, catA, product.TypeSimple, "NewA", 500, 0, true, nil, nil, nil, nil, nil)
 		require.NoError(t, err, "create must run on the GUC-bound request tx, not the raw app pool")
 		require.Equal(t, tenantA, created.TenantID)
 

@@ -226,6 +226,7 @@ type Repositories struct {
 	Client            *ent.Client
 	Category          pgRepo.CategoryRepository
 	Product           *pgRepo.ProductRepository
+	ProductVariant    pgRepo.ProductVariantRepository
 	Jeton             pgRepo.JetonRepository
 	MenuSlot          pgRepo.MenuSlotRepository
 	MenuSlotOption    pgRepo.MenuSlotOptionRepository
@@ -250,6 +251,7 @@ func NewRepositories(client *ent.Client) *Repositories {
 		Client:            client,
 		Category:          pgRepo.NewCategoryRepository(client),
 		Product:           pgRepo.NewProductRepository(client),
+		ProductVariant:    pgRepo.NewProductVariantRepository(client),
 		Jeton:             pgRepo.NewJetonRepository(client),
 		MenuSlot:          pgRepo.NewMenuSlotRepository(client),
 		MenuSlotOption:    pgRepo.NewMenuSlotOptionRepository(client),
@@ -331,6 +333,7 @@ func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.Prod
 func NewProductSvc(repos *Repositories) service.ProductService {
 	return service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,
@@ -360,7 +363,7 @@ func (f *Fixtures) CreateJeton(name, color string) *ent.Jeton {
 
 // CreateProduct creates a test product.
 func (f *Fixtures) CreateProduct(name string, categoryID string, priceCents int64, productType product.Type, jetonID *string) *ent.Product {
-	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, 0, true, nil, nil, jetonID)
+	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, 0, true, nil, nil, jetonID, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create product: %v", err))
 	}
@@ -369,7 +372,7 @@ func (f *Fixtures) CreateProduct(name string, categoryID string, priceCents int6
 
 // CreateProductWithDeposit creates a simple test product carrying a per-unit deposit.
 func (f *Fixtures) CreateProductWithDeposit(name string, categoryID string, priceCents, depositCents int64) *ent.Product {
-	p, err := f.repos.Product.Create(f.ctx, categoryID, product.TypeSimple, name, priceCents, depositCents, true, nil, nil, nil)
+	p, err := f.repos.Product.Create(f.ctx, categoryID, product.TypeSimple, name, priceCents, depositCents, true, nil, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create product: %v", err))
 	}
@@ -430,9 +433,27 @@ func (f *Fixtures) CreateDevice(name, deviceKey string, deviceType device.Type, 
 
 // AddInventory adds inventory for a product.
 func (f *Fixtures) AddInventory(productID string, delta int, reason inventoryledger.Reason) *ent.InventoryLedger {
-	entry, err := f.repos.Inventory.Create(f.ctx, productID, delta, reason, nil, nil, nil, nil)
+	entry, err := f.repos.Inventory.Create(f.ctx, productID, delta, reason, nil, nil, nil, nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create inventory entry: %v", err))
+	}
+	return entry
+}
+
+// CreateVariant creates a test product variant.
+func (f *Fixtures) CreateVariant(productID, value string, priceAdjustmentCents int64, isActive bool, sequence int) *ent.ProductVariant {
+	v, err := f.repos.ProductVariant.Create(f.ctx, productID, value, priceAdjustmentCents, isActive, sequence)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create variant: %v", err))
+	}
+	return v
+}
+
+// AddVariantInventory adds inventory for a specific variant.
+func (f *Fixtures) AddVariantInventory(productID, variantID string, delta int, reason inventoryledger.Reason) *ent.InventoryLedger {
+	entry, err := f.repos.Inventory.Create(f.ctx, productID, delta, reason, nil, nil, nil, nil, &variantID)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create variant inventory entry: %v", err))
 	}
 	return entry
 }

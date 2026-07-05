@@ -31,6 +31,7 @@ type POSCheckoutItem struct {
 	ProductID     string            `json:"productId"`
 	Quantity      int               `json:"quantity"`
 	Configuration map[string]string `json:"configuration,omitempty"`
+	VariantID     *string           `json:"variantId,omitempty"`
 }
 
 type posService struct {

@@ -22,8 +22,8 @@ type ProductService interface {
 	GetAll(ctx context.Context) ([]*ent.Product, error)
 	GetByCategory(ctx context.Context, categoryID string) ([]*ent.Product, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
-	Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
-	Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error)
+	Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error)
+	Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error)
 	Delete(ctx context.Context, id string) error
 	CountActiveWithoutJeton(ctx context.Context) (int64, error)
 	CountByJetonIDs(ctx context.Context, ids []string) (map[string]int64, error)
@@ -32,7 +32,8 @@ type ProductService interface {
 	// Inventory
 	GetStock(ctx context.Context, id string) (int64, error)
 	GetStockBatch(ctx context.Context, ids []string) (map[string]int, error)
-	AdjustStock(ctx context.Context, id string, delta int64, reason string) error
+	GetVariantStockBatch(ctx context.Context, ids []string) (map[string]int, error)
+	AdjustStock(ctx context.Context, id string, variantID *string, delta int64, reason string) error
 	ListInventoryHistory(ctx context.Context, productID string, limit, offset int) ([]*ent.InventoryLedger, error)
 
 	// Menus
@@ -49,8 +50,21 @@ type ProductService interface {
 	RemoveSlotOption(ctx context.Context, menuID, slotID, optionProductID string) error
 }
 
+// VariantInput describes one variant in a create/update payload. Entries with
+// an ID update the existing row; entries without one are created; existing
+// rows absent from the payload are deleted, or archived when order lines or
+// ledger rows still reference them.
+type VariantInput struct {
+	ID                   *string
+	Value                string
+	PriceAdjustmentCents int64
+	IsActive             bool
+	Sequence             int
+}
+
 type productService struct {
 	productRepo        *repository.ProductRepository
+	variantRepo        repository.ProductVariantRepository
 	categoryRepo       repository.CategoryRepository
 	menuSlotRepo       repository.MenuSlotRepository
 	menuSlotOptionRepo repository.MenuSlotOptionRepository
@@ -62,6 +76,7 @@ type productService struct {
 
 func NewProductService(
 	productRepo *repository.ProductRepository,
+	variantRepo repository.ProductVariantRepository,
 	categoryRepo repository.CategoryRepository,
 	menuSlotRepo repository.MenuSlotRepository,
 	menuSlotOptionRepo repository.MenuSlotOptionRepository,
@@ -71,6 +86,7 @@ func NewProductService(
 ) ProductService {
 	return &productService{
 		productRepo:        productRepo,
+		variantRepo:        variantRepo,
 		categoryRepo:       categoryRepo,
 		menuSlotRepo:       menuSlotRepo,
 		menuSlotOptionRepo: menuSlotOptionRepo,
@@ -147,20 +163,126 @@ func (s *productService) GetByIDs(ctx context.Context, ids []string) ([]*ent.Pro
 	return result, nil
 }
 
-func (s *productService) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	created, err := s.productRepo.Create(ctx, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID)
-	if err == nil {
-		s.cache.invalidate()
+func (s *productService) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error) {
+	if err := validateVariantInputs(productType, variants); err != nil {
+		return nil, err
 	}
-	return created, err
+	created, err := s.productRepo.Create(ctx, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID, variantLabel)
+	if err != nil {
+		return nil, err
+	}
+	if len(variants) > 0 {
+		if err := s.reconcileVariants(ctx, created.ID, variants); err != nil {
+			return nil, err
+		}
+	}
+	s.cache.invalidate()
+	return s.productRepo.GetByIDWithRelations(ctx, created.ID)
 }
 
-func (s *productService) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
-	updated, err := s.productRepo.Update(ctx, id, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID)
-	if err == nil {
-		s.cache.invalidate()
+func (s *productService) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error) {
+	if variants != nil {
+		if err := validateVariantInputs(productType, variants); err != nil {
+			return nil, err
+		}
 	}
-	return updated, err
+	updated, err := s.productRepo.Update(ctx, id, categoryID, productType, name, priceCents, depositCents, isActive, image, description, jetonID, variantLabel)
+	if err != nil {
+		return nil, err
+	}
+	// nil leaves existing variants untouched; an empty slice removes them all.
+	if variants != nil {
+		if err := s.reconcileVariants(ctx, id, variants); err != nil {
+			return nil, err
+		}
+	}
+	s.cache.invalidate()
+	return s.productRepo.GetByIDWithRelations(ctx, updated.ID)
+}
+
+func validateVariantInputs(productType product.Type, variants []VariantInput) error {
+	if len(variants) == 0 {
+		return nil
+	}
+	if productType != product.TypeSimple {
+		return fmt.Errorf("variants are only allowed on simple products")
+	}
+	seen := make(map[string]struct{}, len(variants))
+	for _, v := range variants {
+		if v.Value == "" {
+			return fmt.Errorf("variant value must not be empty")
+		}
+		if len(v.Value) > 20 {
+			return fmt.Errorf("variant value exceeds 20 characters: %s", v.Value)
+		}
+		if _, dup := seen[v.Value]; dup {
+			return fmt.Errorf("duplicate variant value: %s", v.Value)
+		}
+		seen[v.Value] = struct{}{}
+	}
+	return nil
+}
+
+// reconcileVariants applies the desired variant set: inputs with an ID update,
+// inputs without one create, and existing rows missing from the payload are
+// deleted — or archived when order lines or ledger rows still reference them.
+func (s *productService) reconcileVariants(ctx context.Context, productID string, variants []VariantInput) error {
+	if len(variants) > 0 {
+		usedAsOption, err := s.menuSlotOptionRepo.CountByOptionProductID(ctx, productID)
+		if err != nil {
+			return err
+		}
+		if usedAsOption > 0 {
+			return fmt.Errorf("products used as menu options cannot have variants")
+		}
+	}
+
+	existing, err := s.variantRepo.GetByProductID(ctx, productID)
+	if err != nil {
+		return err
+	}
+	existingByID := make(map[string]*ent.ProductVariant, len(existing))
+	for _, v := range existing {
+		existingByID[v.ID] = v
+	}
+
+	kept := make(map[string]struct{}, len(variants))
+	for _, in := range variants {
+		if in.ID != nil {
+			cur, ok := existingByID[*in.ID]
+			if !ok {
+				return fmt.Errorf("variant does not belong to product: %s", *in.ID)
+			}
+			kept[cur.ID] = struct{}{}
+			if _, err := s.variantRepo.Update(ctx, cur.ID, in.Value, in.PriceAdjustmentCents, in.IsActive, in.Sequence); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := s.variantRepo.Create(ctx, productID, in.Value, in.PriceAdjustmentCents, in.IsActive, in.Sequence); err != nil {
+			return err
+		}
+	}
+
+	for _, cur := range existing {
+		if _, ok := kept[cur.ID]; ok {
+			continue
+		}
+		referenced, err := s.variantRepo.IsReferenced(ctx, cur.ID)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			if _, err := s.variantRepo.Update(ctx, cur.ID, cur.Value, cur.PriceAdjustmentCents, false, cur.Sequence); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.variantRepo.Delete(ctx, cur.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *productService) Delete(ctx context.Context, id string) error {
@@ -170,6 +292,12 @@ func (s *productService) Delete(ctx context.Context, id string) error {
 	}
 	if len(slots) > 0 {
 		_ = s.menuSlotRepo.DeleteByMenuProductID(ctx, id)
+	}
+	variants, _ := s.variantRepo.GetByProductID(ctx, id)
+	for _, v := range variants {
+		if err := s.variantRepo.Delete(ctx, v.ID); err != nil {
+			return err
+		}
 	}
 	err := s.productRepo.Delete(ctx, id)
 	if err == nil {
@@ -210,6 +338,10 @@ func (s *productService) GetStockBatch(ctx context.Context, ids []string) (map[s
 	return s.inventoryRepo.GetCurrentStockBatch(ctx, ids)
 }
 
+func (s *productService) GetVariantStockBatch(ctx context.Context, ids []string) (map[string]int, error) {
+	return s.inventoryRepo.GetCurrentStockByVariantBatch(ctx, ids)
+}
+
 func (s *productService) ListInventoryHistory(ctx context.Context, productID string, limit, offset int) ([]*ent.InventoryLedger, error) {
 	if limit <= 0 {
 		limit = 50
@@ -220,7 +352,27 @@ func (s *productService) ListInventoryHistory(ctx context.Context, productID str
 	return s.inventoryRepo.GetByProductIDWithPagination(ctx, productID, limit, offset)
 }
 
-func (s *productService) AdjustStock(ctx context.Context, id string, delta int64, reason string) error {
+func (s *productService) AdjustStock(ctx context.Context, id string, variantID *string, delta int64, reason string) error {
+	hasVariants, err := s.variantRepo.ExistsForProduct(ctx, id)
+	if err != nil {
+		return err
+	}
+	if hasVariants && variantID == nil {
+		return fmt.Errorf("variantId is required for products with variants")
+	}
+	if !hasVariants && variantID != nil {
+		return fmt.Errorf("variantId is not allowed for products without variants")
+	}
+	if variantID != nil {
+		variant, err := s.variantRepo.GetByID(ctx, *variantID)
+		if err != nil {
+			return err
+		}
+		if variant.ProductID != id {
+			return fmt.Errorf("variant does not belong to product: %s", *variantID)
+		}
+	}
+
 	r := inventoryledger.ReasonManualAdjust
 	switch reason {
 	case string(inventoryledger.ReasonOpeningBalance):
@@ -238,15 +390,22 @@ func (s *productService) AdjustStock(ctx context.Context, id string, delta int64
 	if uid, ok := auth.GetUserID(ctx); ok {
 		createdBy = &uid
 	}
-	_, err := s.inventoryRepo.Create(ctx, id, int(delta), r, nil, nil, nil, createdBy)
-	if err != nil {
+	if _, err := s.inventoryRepo.Create(ctx, id, int(delta), r, nil, nil, nil, createdBy, variantID); err != nil {
 		return err
 	}
 	if s.inventoryHub != nil {
-		newStock, stockErr := s.inventoryRepo.GetCurrentStock(ctx, id)
+		newStock := 0
+		var stockErr error
+		if variantID != nil {
+			variantStocks, err := s.inventoryRepo.GetCurrentStockByVariantBatch(ctx, []string{id})
+			newStock, stockErr = variantStocks[*variantID], err
+		} else {
+			newStock, stockErr = s.inventoryRepo.GetCurrentStock(ctx, id)
+		}
 		if stockErr == nil {
 			s.inventoryHub.Publish(inventory.Update{
 				ProductID: id,
+				VariantID: variantID,
 				NewStock:  newStock,
 				Delta:     int(delta),
 				Timestamp: time.Now(),
@@ -351,6 +510,13 @@ func (s *productService) ReorderMenuSlots(ctx context.Context, menuID string, po
 }
 
 func (s *productService) AddSlotOption(ctx context.Context, menuID, slotID string, productID string) (*ent.MenuSlotOption, error) {
+	hasVariants, err := s.variantRepo.ExistsForProduct(ctx, productID)
+	if err != nil {
+		return nil, err
+	}
+	if hasVariants {
+		return nil, fmt.Errorf("products with variants cannot be menu options")
+	}
 	opt, err := s.menuSlotOptionRepo.Create(ctx, slotID, productID)
 	if err == nil {
 		s.cache.invalidate()

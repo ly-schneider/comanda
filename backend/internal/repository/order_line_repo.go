@@ -35,6 +35,8 @@ type OrderLineCreateParams struct {
 	ParentLineID   *string
 	MenuSlotID     *string
 	MenuSlotName   *string
+	VariantID      *string
+	VariantValue   *string
 }
 
 type orderLineRepo struct {
@@ -97,6 +99,12 @@ func (r *orderLineRepo) CreateBatch(ctx context.Context, lines []OrderLineCreate
 		}
 		if line.MenuSlotName != nil {
 			b.SetMenuSlotName(*line.MenuSlotName)
+		}
+		if line.VariantID != nil {
+			b.SetVariantID(*line.VariantID)
+		}
+		if line.VariantValue != nil {
+			b.SetVariantValue(*line.VariantValue)
 		}
 		builders[i] = b
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 type InventoryLedgerRepository interface {
-	Create(ctx context.Context, productID string, delta int, reason inventoryledger.Reason, orderID, orderLineID, deviceID *string, createdBy *string) (*ent.InventoryLedger, error)
+	Create(ctx context.Context, productID string, delta int, reason inventoryledger.Reason, orderID, orderLineID, deviceID *string, createdBy *string, variantID *string) (*ent.InventoryLedger, error)
 	CreateMany(ctx context.Context, entries []InventoryLedgerCreateParams) ([]*ent.InventoryLedger, error)
 	GetByID(ctx context.Context, id string) (*ent.InventoryLedger, error)
 	GetByProductID(ctx context.Context, productID string) ([]*ent.InventoryLedger, error)
@@ -19,6 +19,7 @@ type InventoryLedgerRepository interface {
 	GetByDateRange(ctx context.Context, start, end time.Time) ([]*ent.InventoryLedger, error)
 	GetCurrentStock(ctx context.Context, productID string) (int, error)
 	GetCurrentStockBatch(ctx context.Context, productIDs []string) (map[string]int, error)
+	GetCurrentStockByVariantBatch(ctx context.Context, productIDs []string) (map[string]int, error)
 	SumByProductIDs(ctx context.Context, ids []string) (map[string]int64, error)
 }
 
@@ -31,6 +32,7 @@ type InventoryLedgerCreateParams struct {
 	OrderLineID *string
 	DeviceID    *string
 	CreatedBy   *string
+	VariantID   *string
 }
 
 type inventoryLedgerRepo struct {
@@ -45,7 +47,7 @@ func (r *inventoryLedgerRepo) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
-func (r *inventoryLedgerRepo) Create(ctx context.Context, productID string, delta int, reason inventoryledger.Reason, orderID, orderLineID, deviceID *string, createdBy *string) (*ent.InventoryLedger, error) {
+func (r *inventoryLedgerRepo) Create(ctx context.Context, productID string, delta int, reason inventoryledger.Reason, orderID, orderLineID, deviceID *string, createdBy *string, variantID *string) (*ent.InventoryLedger, error) {
 	builder := r.ec(ctx).InventoryLedger.Create().
 		SetProductID(productID).
 		SetDelta(delta).
@@ -61,6 +63,9 @@ func (r *inventoryLedgerRepo) Create(ctx context.Context, productID string, delt
 	}
 	if createdBy != nil {
 		builder.SetCreatedBy(*createdBy)
+	}
+	if variantID != nil {
+		builder.SetVariantID(*variantID)
 	}
 	created, err := builder.Save(ctx)
 	if err != nil {
@@ -90,6 +95,9 @@ func (r *inventoryLedgerRepo) CreateMany(ctx context.Context, entries []Inventor
 		}
 		if entry.CreatedBy != nil {
 			b.SetCreatedBy(*entry.CreatedBy)
+		}
+		if entry.VariantID != nil {
+			b.SetVariantID(*entry.VariantID)
 		}
 		builders[i] = b
 	}
@@ -197,6 +205,41 @@ func (r *inventoryLedgerRepo) GetCurrentStockBatch(ctx context.Context, productI
 		if _, ok := stocks[id]; !ok {
 			stocks[id] = 0
 		}
+	}
+	return stocks, nil
+}
+
+// GetCurrentStockByVariantBatch sums ledger deltas per variant for the given
+// products. Keys are variant ids; product-level rows (variant_id IS NULL) are
+// excluded, so variant stock starts at zero until seeded per variant.
+func (r *inventoryLedgerRepo) GetCurrentStockByVariantBatch(ctx context.Context, productIDs []string) (map[string]int, error) {
+	if len(productIDs) == 0 {
+		return make(map[string]int), nil
+	}
+
+	var results []struct {
+		VariantID string `json:"variant_id"`
+		Stock     int    `json:"stock"`
+	}
+	err := r.ec(ctx).InventoryLedger.Query().
+		Where(
+			inventoryledger.ProductIDIn(productIDs...),
+			inventoryledger.VariantIDNotNil(),
+		).
+		Modify(func(s *sql.Selector) {
+			s.Select(
+				s.C(inventoryledger.FieldVariantID),
+				sql.As(sql.Sum(s.C(inventoryledger.FieldDelta)), "stock"),
+			).GroupBy(s.C(inventoryledger.FieldVariantID))
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	stocks := make(map[string]int, len(results))
+	for _, r := range results {
+		stocks[r.VariantID] = r.Stock
 	}
 	return stocks, nil
 }

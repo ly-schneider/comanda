@@ -42,6 +42,7 @@ const tenantColumn = "tenant_id"
 // test guards the DB side, and TestScopedTypesMatchSchema guards this side.
 var scopedTypes = map[string]struct{}{
 	ent.TypeProduct:                  {},
+	ent.TypeProductVariant:           {},
 	ent.TypeCategory:                 {},
 	ent.TypeJeton:                    {},
 	ent.TypeMenuSlot:                 {},
