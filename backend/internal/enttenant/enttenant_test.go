@@ -22,6 +22,7 @@ import (
 	"backend/internal/generated/ent/orderlineredemption"
 	"backend/internal/generated/ent/orderpayment"
 	"backend/internal/generated/ent/product"
+	"backend/internal/generated/ent/productvariant"
 	"backend/internal/generated/ent/refund"
 	"backend/internal/generated/ent/refundline"
 	"backend/internal/generated/ent/settings"
@@ -37,6 +38,7 @@ const tenantColumnName = "tenant_id"
 // Kept here (test-side) so the assertion below is fully self-checking.
 var typeToTable = map[string]string{
 	"Product":                  product.Table,
+	"ProductVariant":           productvariant.Table,
 	"Category":                 category.Table,
 	"Jeton":                    jeton.Table,
 	"MenuSlot":                 menuslot.Table,

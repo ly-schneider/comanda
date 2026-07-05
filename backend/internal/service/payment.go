@@ -94,6 +94,8 @@ type CheckoutItemInput struct {
 	Quantity  int    `json:"quantity"`
 	// Configuration maps slotID -> selected productID for menu items.
 	Configuration map[string]string `json:"configuration,omitempty"`
+	// VariantID selects a variant; required iff the product defines variants.
+	VariantID *string `json:"variantId,omitempty"`
 }
 
 type CheckoutPreparation struct {
@@ -206,9 +208,10 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}
 
 	var (
-		products       []*ent.Product
-		slots          []*ent.MenuSlot
-		preloadedStock map[string]int
+		products              []*ent.Product
+		slots                 []*ent.MenuSlot
+		preloadedStock        map[string]int
+		preloadedVariantStock map[string]int
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -235,6 +238,14 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		}
 		return nil
 	})
+	g.Go(func() error {
+		var err error
+		preloadedVariantStock, err = s.inventoryRepo.GetCurrentStockByVariantBatch(gctx, ids)
+		if err != nil {
+			return fmt.Errorf("check variant inventory: %w", err)
+		}
+		return nil
+	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
@@ -242,6 +253,41 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	productMap := make(map[string]*ent.Product, len(products))
 	for _, p := range products {
 		productMap[p.ID] = p
+	}
+
+	variantByItem := make(map[int]*ent.ProductVariant, len(in.Items))
+	for i, it := range in.Items {
+		p, ok := productMap[it.ProductID]
+		if !ok {
+			return nil, fmt.Errorf("unknown product: %s", it.ProductID)
+		}
+		variants := p.Edges.Variants
+		if len(variants) == 0 {
+			if it.VariantID != nil {
+				return nil, fmt.Errorf("product has no variants: %s", p.Name)
+			}
+			continue
+		}
+		if it.VariantID == nil {
+			return nil, fmt.Errorf("variant selection required for %s", p.Name)
+		}
+		if !nanoid.Valid(*it.VariantID) {
+			return nil, fmt.Errorf("invalid variantId: %s", *it.VariantID)
+		}
+		var selected *ent.ProductVariant
+		for _, v := range variants {
+			if v.ID == *it.VariantID {
+				selected = v
+				break
+			}
+		}
+		if selected == nil {
+			return nil, fmt.Errorf("variant does not belong to product: %s", *it.VariantID)
+		}
+		if !selected.IsActive {
+			return nil, fmt.Errorf("variant not available: %s (%s)", p.Name, selected.Value)
+		}
+		variantByItem[i] = selected
 	}
 
 	slotByID := make(map[string]*ent.MenuSlot, len(slots))
@@ -257,12 +303,13 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 
 	// Calculate total and validate
 	var totalCents int64
-	for _, it := range in.Items {
-		p, ok := productMap[it.ProductID]
-		if !ok {
-			return nil, fmt.Errorf("unknown product: %s", it.ProductID)
+	for i, it := range in.Items {
+		p := productMap[it.ProductID]
+		unitPriceCents := p.PriceCents
+		if v := variantByItem[i]; v != nil {
+			unitPriceCents += v.PriceAdjustmentCents
 		}
-		lineCents := (p.PriceCents + p.DepositCents) * int64(it.Quantity)
+		lineCents := (unitPriceCents + p.DepositCents) * int64(it.Quantity)
 		totalCents += lineCents
 
 		// TWINT limit: 5000 CHF per transaction
@@ -275,26 +322,42 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	}
 
 	// Validate inventory availability
-	requiredQuantities := make(map[string]int)
-	for _, it := range in.Items {
+	type stockRequirement struct{ productID, variantID string }
+	requiredQuantities := make(map[stockRequirement]int)
+	for i, it := range in.Items {
 		p := productMap[it.ProductID]
 		if p.Type == product.TypeSimple {
-			requiredQuantities[it.ProductID] += it.Quantity
+			key := stockRequirement{productID: it.ProductID}
+			if v := variantByItem[i]; v != nil {
+				key.variantID = v.ID
+			}
+			requiredQuantities[key] += it.Quantity
 		}
 		for _, childID := range it.Configuration {
 			if childID == "" {
 				continue
 			}
-			requiredQuantities[childID] += it.Quantity
+			requiredQuantities[stockRequirement{productID: childID}] += it.Quantity
 		}
 	}
 
-	for pid, required := range requiredQuantities {
-		available := preloadedStock[pid]
+	for req, required := range requiredQuantities {
+		available := preloadedStock[req.productID]
+		if req.variantID != "" {
+			available = preloadedVariantStock[req.variantID]
+		}
 		if available < required {
 			pName := "unknown"
-			if p, ok := productMap[pid]; ok {
+			if p, ok := productMap[req.productID]; ok {
 				pName = p.Name
+				if req.variantID != "" {
+					for _, v := range p.Edges.Variants {
+						if v.ID == req.variantID {
+							pName = displayTitle(p.Name, &v.Value)
+							break
+						}
+					}
+				}
 			}
 			return nil, fmt.Errorf("insufficient inventory for %s: requested %d, available %d", pName, required, available)
 		}
@@ -315,7 +378,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	var orderLines []repository.OrderLineCreateParams
 	var inventoryEntries []repository.InventoryLedgerCreateParams
 
-	for _, it := range in.Items {
+	for i, it := range in.Items {
 		p := productMap[it.ProductID]
 
 		// Determine parent line type
@@ -333,6 +396,11 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 			Title:          p.Name,
 			Quantity:       it.Quantity,
 			UnitPriceCents: p.PriceCents,
+		}
+		if v := variantByItem[i]; v != nil {
+			parentLine.VariantID = &v.ID
+			parentLine.VariantValue = &v.Value
+			parentLine.UnitPriceCents = p.PriceCents + v.PriceAdjustmentCents
 		}
 		orderLines = append(orderLines, parentLine)
 
@@ -352,12 +420,16 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 
 		// Reserve inventory for simple products
 		if p.Type == product.TypeSimple && it.Quantity > 0 {
-			inventoryEntries = append(inventoryEntries, repository.InventoryLedgerCreateParams{
+			entry := repository.InventoryLedgerCreateParams{
 				ProductID: p.ID,
 				Delta:     -it.Quantity,
 				Reason:    inventoryledger.ReasonSale,
 				OrderID:   &ord.ID,
-			})
+			}
+			if v := variantByItem[i]; v != nil {
+				entry.VariantID = &v.ID
+			}
+			inventoryEntries = append(inventoryEntries, entry)
 		}
 
 		// Process menu configurations
@@ -384,6 +456,9 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 				}
 
 				childProd := productMap[childProdID]
+				if len(childProd.Edges.Variants) > 0 {
+					return nil, fmt.Errorf("menu option cannot have variants: %s", childProd.Name)
+				}
 				slotName := slot.Name
 				childLine := repository.OrderLineCreateParams{
 					OrderID:        ord.ID,
@@ -421,7 +496,15 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		if _, err := s.inventoryRepo.CreateMany(ctx, inventoryEntries); err != nil {
 			return nil, fmt.Errorf("reserve inventory: %w", err)
 		}
-		s.publishInventoryUpdates(ctx, inventoryEntries, preloadedStock)
+		// One merged pre-stock map: variant-id and product-id keys are disjoint nanoids.
+		preStock := make(map[string]int, len(preloadedStock)+len(preloadedVariantStock))
+		for k, v := range preloadedStock {
+			preStock[k] = v
+		}
+		for k, v := range preloadedVariantStock {
+			preStock[k] = v
+		}
+		s.publishInventoryUpdates(ctx, inventoryEntries, preStock)
 	}
 
 	// An order is redeemed offline from its signed token, so one without a token
@@ -443,7 +526,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		charged := line.ParentLineID == nil || line.LineType == orderline.LineTypeDeposit
 		if charged && line.UnitPriceCents > 0 && line.Quantity > 0 {
 			lineItems = append(lineItems, payment.LineItem{
-				Name:     line.Title,
+				Name:     displayTitle(line.Title, line.VariantValue),
 				Quantity: line.Quantity,
 				Amount:   int(line.UnitPriceCents),
 			})
@@ -676,6 +759,7 @@ func (s *paymentService) CleanupPendingOrderByID(ctx context.Context, orderID st
 					Delta:     line.Quantity, // Positive to add back
 					Reason:    inventoryledger.ReasonCorrection,
 					OrderID:   &orderID,
+					VariantID: line.VariantID,
 				})
 			}
 		}
@@ -892,7 +976,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 	for _, l := range lines {
 		if l.ParentLineID != nil {
 			childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], ReceiptLineItem{
-				Title:    l.Title,
+				Title:    displayTitle(l.Title, l.VariantValue),
 				Quantity: l.Quantity,
 				Cents:    l.UnitPriceCents,
 			})
@@ -904,7 +988,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 	items := make([]ReceiptLineItem, 0, len(roots))
 	for _, r := range roots {
 		items = append(items, ReceiptLineItem{
-			Title:    r.Title,
+			Title:    displayTitle(r.Title, r.VariantValue),
 			Quantity: r.Quantity,
 			Cents:    r.UnitPriceCents,
 			Children: childrenByParent[r.ID],
@@ -968,29 +1052,47 @@ func safeStr(p *string) string {
 	return *p
 }
 
+// Stock keys are variant ids for variant rows, product ids otherwise; preStock
+// carries pre-insert values under the same keys, anything missing is re-read.
 func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []repository.InventoryLedgerCreateParams, preStock map[string]int) {
 	if s.inventoryHub == nil {
 		return
 	}
-	productIDs := make([]string, 0, len(entries))
-	deltaByProduct := make(map[string]int)
+	type stockKey struct{ productID, variantID string }
+	keys := make([]stockKey, 0, len(entries))
+	deltaByKey := make(map[stockKey]int)
 	for _, entry := range entries {
-		if _, seen := deltaByProduct[entry.ProductID]; !seen {
-			productIDs = append(productIDs, entry.ProductID)
+		key := stockKey{productID: entry.ProductID}
+		if entry.VariantID != nil {
+			key.variantID = *entry.VariantID
 		}
-		deltaByProduct[entry.ProductID] += entry.Delta
+		if _, seen := deltaByKey[key]; !seen {
+			keys = append(keys, key)
+		}
+		deltaByKey[key] += entry.Delta
 	}
-	stocks := make(map[string]int, len(productIDs))
-	missing := make([]string, 0)
-	for _, pid := range productIDs {
-		if pre, ok := preStock[pid]; ok {
-			stocks[pid] = pre + deltaByProduct[pid]
+
+	stockID := func(key stockKey) string {
+		if key.variantID != "" {
+			return key.variantID
+		}
+		return key.productID
+	}
+
+	stocks := make(map[string]int, len(keys))
+	missingProducts := make([]string, 0)
+	missingVariantProducts := make([]string, 0)
+	for _, key := range keys {
+		if pre, ok := preStock[stockID(key)]; ok {
+			stocks[stockID(key)] = pre + deltaByKey[key]
+		} else if key.variantID != "" {
+			missingVariantProducts = append(missingVariantProducts, key.productID)
 		} else {
-			missing = append(missing, pid)
+			missingProducts = append(missingProducts, key.productID)
 		}
 	}
-	if len(missing) > 0 {
-		fetched, err := s.inventoryRepo.GetCurrentStockBatch(ctx, missing)
+	if len(missingProducts) > 0 {
+		fetched, err := s.inventoryRepo.GetCurrentStockBatch(ctx, missingProducts)
 		if err != nil {
 			return
 		}
@@ -998,13 +1100,36 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 			stocks[pid] = v
 		}
 	}
-	now := time.Now()
-	for _, productID := range productIDs {
-		s.inventoryHub.Publish(inventory.Update{
-			ProductID: productID,
-			NewStock:  stocks[productID],
-			Delta:     deltaByProduct[productID],
-			Timestamp: now,
-		})
+	if len(missingVariantProducts) > 0 {
+		fetched, err := s.inventoryRepo.GetCurrentStockByVariantBatch(ctx, missingVariantProducts)
+		if err != nil {
+			return
+		}
+		for vid, v := range fetched {
+			stocks[vid] = v
+		}
 	}
+
+	now := time.Now()
+	for _, key := range keys {
+		update := inventory.Update{
+			ProductID: key.productID,
+			NewStock:  stocks[stockID(key)],
+			Delta:     deltaByKey[key],
+			Timestamp: now,
+		}
+		if key.variantID != "" {
+			vid := key.variantID
+			update.VariantID = &vid
+		}
+		s.inventoryHub.Publish(update)
+	}
+}
+
+// The variant value is stored apart from title (varchar(40) can't absorb it).
+func displayTitle(title string, variantValue *string) string {
+	if variantValue == nil || *variantValue == "" {
+		return title
+	}
+	return title + " (" + *variantValue + ")"
 }

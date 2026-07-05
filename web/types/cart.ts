@@ -10,6 +10,7 @@ export interface CartItem {
   product: ProductDTO
   quantity: number
   configuration?: CartItemConfiguration
+  variantId?: string
   totalPriceCents: Cents
 }
 
@@ -20,11 +21,11 @@ export interface Cart {
 
 export interface CartContextType {
   cart: Cart
-  addToCart: (product: ProductDTO, configuration?: CartItemConfiguration) => void
+  addToCart: (product: ProductDTO, configuration?: CartItemConfiguration, variantId?: string) => void
   removeFromCart: (itemId: string) => void
   updateQuantity: (itemId: string, quantity: number) => void
   updateItemConfiguration: (oldItemId: string, product: ProductDTO, configuration?: CartItemConfiguration) => void
   clearCart: () => void
-  getItemQuantity: (productId: string, configuration?: CartItemConfiguration) => number
+  getItemQuantity: (productId: string, configuration?: CartItemConfiguration, variantId?: string) => number
   getTotalProductQuantity: (productId: string) => number
 }

@@ -7,6 +7,7 @@ import (
 
 type Update struct {
 	ProductID string    `json:"productId"`
+	VariantID *string   `json:"variantId,omitempty"`
 	NewStock  int       `json:"newStock"`
 	Delta     int       `json:"delta"`
 	Timestamp time.Time `json:"timestamp"`

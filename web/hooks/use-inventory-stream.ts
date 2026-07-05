@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 
 type InventoryUpdate = {
   productId: string
+  variantId?: string | null
   newStock: number
   delta: number
   timestamp: string
@@ -41,7 +42,8 @@ export function useInventoryStream({ onUpdate, enabled = true }: UseInventoryStr
     es.addEventListener("inventory-update", (e: MessageEvent) => {
       try {
         const update = JSON.parse(e.data) as InventoryUpdate
-        onUpdateRef.current(new Map([[update.productId, update.newStock]]))
+        const key = update.variantId ?? update.productId
+        onUpdateRef.current(new Map([[key, update.newStock]]))
       } catch {}
     })
 

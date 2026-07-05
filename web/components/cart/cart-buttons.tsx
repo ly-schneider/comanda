@@ -3,6 +3,7 @@
 import { Minus, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
+import { hasVariants } from "@/lib/variants"
 import { CartItemConfiguration, ProductDTO } from "@/types"
 
 interface CartButtonsProps {
@@ -15,19 +16,23 @@ interface CartButtonsProps {
 export function CartButtons({ product, configuration, onConfigureProduct, disabled }: CartButtonsProps) {
   const { addToCart, updateQuantity, getItemQuantity, getTotalProductQuantity, cart } = useCart()
 
-  // For menu products without specific configuration, show total quantity across all configurations
+  const productHasVariants = product.type !== "menu" && hasVariants(product)
+
   const quantity = configuration
     ? getItemQuantity(product.id, configuration)
     : product.type === "menu"
       ? getTotalProductQuantity(product.id)
-      : getItemQuantity(product.id, configuration)
+      : productHasVariants
+        ? getTotalProductQuantity(product.id)
+        : getItemQuantity(product.id, configuration)
 
-  const maxQty = typeof product.availableQuantity === "number" ? product.availableQuantity : undefined
+  const maxQty =
+    !productHasVariants && typeof product.availableQuantity === "number" ? product.availableQuantity : undefined
   const reachedMax = typeof maxQty === "number" && quantity >= maxQty
 
   const handleAdd = () => {
     if (disabled || reachedMax) return
-    if (product.type === "menu" && !configuration && onConfigureProduct) {
+    if ((product.type === "menu" || productHasVariants) && !configuration && onConfigureProduct) {
       onConfigureProduct()
     } else {
       addToCart(product, configuration)
@@ -66,19 +71,16 @@ export function CartButtons({ product, configuration, onConfigureProduct, disabl
   const handleIncrease = () => {
     if (disabled || reachedMax) return
     if (configuration) {
-      // For specific configuration, update that item
       const itemId = `${product.id}-${JSON.stringify(configuration)}`
       const currentItem = cart.items.find((item) => item.id === itemId)
       if (currentItem) {
         updateQuantity(currentItem.id, currentItem.quantity + 1)
       }
-    } else if (product.type === "menu") {
-      // For menu products without configuration, open configuration modal instead
+    } else if (product.type === "menu" || productHasVariants) {
       if (onConfigureProduct) {
         onConfigureProduct()
       }
     } else {
-      // For simple products
       const itemId = `${product.id}-`
       const currentItem = cart.items.find((item) => item.id === itemId)
       if (currentItem) {

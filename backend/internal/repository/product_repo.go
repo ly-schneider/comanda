@@ -5,9 +5,14 @@ import (
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/product"
+	"backend/internal/generated/ent/productvariant"
 
 	"entgo.io/ent/dialect/sql"
 )
+
+func variantsOrdered(q *ent.ProductVariantQuery) {
+	q.Order(productvariant.BySequence(), productvariant.ByValue())
+}
 
 type ProductRepository struct {
 	client *ent.Client
@@ -21,7 +26,7 @@ func (r *ProductRepository) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
-func (r *ProductRepository) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+func (r *ProductRepository) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string) (*ent.Product, error) {
 	builder := r.ec(ctx).Product.Create().
 		SetCategoryID(categoryID).
 		SetType(productType).
@@ -37,6 +42,9 @@ func (r *ProductRepository) Create(ctx context.Context, categoryID string, produ
 	}
 	if jetonID != nil {
 		builder.SetJetonID(*jetonID)
+	}
+	if variantLabel != nil {
+		builder.SetVariantLabel(*variantLabel)
 	}
 	created, err := builder.Save(ctx)
 	if err != nil {
@@ -58,6 +66,7 @@ func (r *ProductRepository) GetByIDWithRelations(ctx context.Context, id string)
 		Where(product.ID(id)).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
 			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
@@ -76,6 +85,7 @@ func (r *ProductRepository) GetAll(ctx context.Context) ([]*ent.Product, error) 
 	rows, err := r.ec(ctx).Product.Query().
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
 			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
@@ -96,6 +106,7 @@ func (r *ProductRepository) GetAllActive(ctx context.Context) ([]*ent.Product, e
 		Where(product.IsActive(true)).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
 			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
@@ -116,6 +127,7 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID string
 		Where(product.CategoryIDEQ(categoryID)).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
 			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
@@ -139,6 +151,7 @@ func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID 
 		).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(q *ent.MenuSlotQuery) {
 			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
@@ -159,6 +172,7 @@ func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.
 		Where(product.IDIn(ids...)).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		All(ctx)
 	if err != nil {
 		return nil, translateError(err)
@@ -166,7 +180,7 @@ func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.
 	return rows, nil
 }
 
-func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string) (*ent.Product, error) {
+func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string) (*ent.Product, error) {
 	builder := r.ec(ctx).Product.UpdateOneID(id).
 		SetCategoryID(categoryID).
 		SetType(productType).
@@ -188,6 +202,11 @@ func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, p
 		builder.SetJetonID(*jetonID)
 	} else {
 		builder.ClearJetonID()
+	}
+	if variantLabel != nil {
+		builder.SetVariantLabel(*variantLabel)
+	} else {
+		builder.ClearVariantLabel()
 	}
 	updated, err := builder.Save(ctx)
 	if err != nil {
@@ -220,6 +239,7 @@ func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *boo
 		Where(product.TypeEQ(product.TypeMenu)).
 		WithCategory().
 		WithJeton().
+		WithVariants(variantsOrdered).
 		WithMenuSlots(func(msq *ent.MenuSlotQuery) {
 			msq.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {

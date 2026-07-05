@@ -235,7 +235,10 @@ export default function AdminOrderDetailPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="truncate font-medium">{parent.title}</p>
+                              <p className="truncate font-medium">
+                                {parent.title}
+                                {parent.variantValue ? ` (${parent.variantValue})` : ""}
+                              </p>
                               {!isBundle && <RedemptionBadge redemption={parent.redemption} />}
                             </div>
                           </div>

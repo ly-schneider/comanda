@@ -53,6 +53,10 @@ func (Product) Fields() []ent.Field {
 			Nillable(),
 		field.Bool("is_active").
 			Default(true),
+		field.String("variant_label").
+			MaxLen(20).
+			Optional().
+			Nillable(),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),
@@ -74,6 +78,7 @@ func (Product) Edges() []ent.Edge {
 			Field("jeton_id").
 			Unique(),
 		edge.To("menu_slots", MenuSlot.Type),
+		edge.To("variants", ProductVariant.Type),
 		edge.From("menu_slot_options", MenuSlot.Type).
 			Ref("option_products").
 			Through("menu_slot_option_links", MenuSlotOption.Type),

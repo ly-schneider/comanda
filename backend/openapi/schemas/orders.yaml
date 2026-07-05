@@ -120,6 +120,14 @@ OrderLine:
       type: string
       maxLength: 20
       nullable: true
+    variantId:
+      type: string
+      nullable: true
+    variantValue:
+      type: string
+      maxLength: 20
+      nullable: true
+      description: Variant value snapshot at time of order (e.g. "M")
     productImage:
       type: string
       nullable: true
@@ -193,6 +201,9 @@ OrderCreate:
           quantity:
             type: integer
             minimum: 1
+          variantId:
+            type: string
+            description: Required for products with variants; forbidden otherwise
           menuSelections:
             type: array
             description: Required for menu-type products. One selection per slot.

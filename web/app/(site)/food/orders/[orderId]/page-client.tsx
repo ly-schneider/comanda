@@ -243,6 +243,7 @@ export default function OrderPageClient() {
                         <div className="min-w-0">
                           <p className={`truncate font-medium ${fullyRefunded ? "line-through" : ""}`}>
                             {parent.title}
+                            {parent.variantValue ? ` (${parent.variantValue})` : ""}
                           </p>
                           {parent.productDescription && (
                             <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs whitespace-pre-line">

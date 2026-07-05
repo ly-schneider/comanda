@@ -40,6 +40,16 @@ Product:
       nullable: true
     isActive:
       type: boolean
+    variantLabel:
+      type: string
+      nullable: true
+      maxLength: 20
+      description: Heading for the variant picker (e.g. "Grösse")
+    variants:
+      type: array
+      items:
+        $ref: "#/ProductVariant"
+      description: Selectable variants; only present on simple products that define them
     # Admin-only fields
     createdAt:
       type: string
@@ -64,6 +74,50 @@ Product:
       items:
         $ref: "menus.yaml#/MenuSlotSummary"
       description: Only present for menu-type products
+
+ProductVariant:
+  type: object
+  required: [id, value, priceAdjustmentCents, isActive, sequence]
+  properties:
+    id:
+      type: string
+    value:
+      type: string
+      maxLength: 20
+      description: Variant value shown to customers (e.g. "M")
+    priceAdjustmentCents:
+      type: integer
+      format: int64
+      description: Signed delta on the product's base price in cents (CHF)
+    isActive:
+      type: boolean
+    sequence:
+      type: integer
+    stock:
+      type: integer
+      description: Current variant inventory level (computed from ledger)
+      x-admin-only: true
+
+VariantUpsert:
+  type: object
+  required: [value]
+  properties:
+    id:
+      type: string
+      description: Present to update an existing variant; omitted to create one
+    value:
+      type: string
+      maxLength: 20
+    priceAdjustmentCents:
+      type: integer
+      format: int64
+      default: 0
+    isActive:
+      type: boolean
+      default: true
+    sequence:
+      type: integer
+      default: 0
 
 ProductCreate:
   type: object
@@ -93,6 +147,13 @@ ProductCreate:
       description: Refundable per-unit deposit in cents (CHF)
     jetonId:
       type: string
+    variantLabel:
+      type: string
+      maxLength: 20
+    variants:
+      type: array
+      items:
+        $ref: "#/VariantUpsert"
 
 ProductUpdate:
   type: object
@@ -123,6 +184,19 @@ ProductUpdate:
     jetonId:
       type: string
       nullable: true
+    variantLabel:
+      type: string
+      nullable: true
+      maxLength: 20
+    variants:
+      type: array
+      items:
+        $ref: "#/VariantUpsert"
+      description: |
+        Full desired variant set: entries with an id update, entries without
+        create, existing variants missing from the list are removed (archived
+        when already referenced by orders). Omit the field to leave variants
+        unchanged.
 
 ProductImageResponse:
   type: object
@@ -148,9 +222,23 @@ Inventory:
       type: string
     quantity:
       type: integer
+    variants:
+      type: array
+      items:
+        $ref: "#/VariantInventory"
+      description: Per-variant stock; only present for products with variants
     updatedAt:
       type: string
       format: date-time
+
+VariantInventory:
+  type: object
+  required: [variantId, quantity]
+  properties:
+    variantId:
+      type: string
+    quantity:
+      type: integer
 
 InventoryAdjustment:
   type: object
@@ -161,6 +249,9 @@ InventoryAdjustment:
       description: Positive to add, negative to remove
     reason:
       $ref: "#/InventoryReason"
+    variantId:
+      type: string
+      description: Required for products with variants; forbidden otherwise
 
 InventoryReason:
   type: string
@@ -191,6 +282,9 @@ InventoryLedgerEntry:
       type: string
       nullable: true
     createdBy:
+      type: string
+      nullable: true
+    variantId:
       type: string
       nullable: true
 

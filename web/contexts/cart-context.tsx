@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, ReactNode, useContext, useEffect, useReducer } from "react"
+import { findVariant, variantUnitPrice } from "@/lib/variants"
 import { ProductDTO } from "@/types"
 import { Cart, CartContextType, CartItem, CartItemConfiguration } from "@/types/cart"
 
@@ -40,20 +41,24 @@ function loadCartFromStorage(): Cart | null {
 }
 
 type CartAction =
-  | { type: "ADD_TO_CART"; product: ProductDTO; configuration?: CartItemConfiguration }
+  | { type: "ADD_TO_CART"; product: ProductDTO; configuration?: CartItemConfiguration; variantId?: string }
   | { type: "REMOVE_FROM_CART"; itemId: string }
   | { type: "UPDATE_QUANTITY"; itemId: string; quantity: number }
   | { type: "REPLACE_ITEM"; oldItemId: string; product: ProductDTO; configuration?: CartItemConfiguration }
   | { type: "CLEAR_CART" }
   | { type: "LOAD_FROM_STORAGE"; cart: Cart }
 
-function generateCartItemId(product: ProductDTO, configuration?: CartItemConfiguration): string {
+function generateCartItemId(product: ProductDTO, configuration?: CartItemConfiguration, variantId?: string): string {
   const configStr = configuration ? JSON.stringify(configuration) : ""
-  return `${product.id}-${configStr}`
+  const variantPart = variantId ? `:${variantId}` : ""
+  return `${product.id}-${configStr}${variantPart}`
 }
 
-function calculateItemPrice(product: ProductDTO): number {
-  // All products (both simple and menu) use their defined priceCents
+function calculateItemPrice(product: ProductDTO, variantId?: string): number {
+  if (variantId) {
+    const variant = findVariant(product, variantId)
+    if (variant) return variantUnitPrice(product, variant)
+  }
   return product.priceCents
 }
 
@@ -62,7 +67,7 @@ function cartReducer(state: Cart, action: CartAction): Cart {
 
   switch (action.type) {
     case "ADD_TO_CART": {
-      const itemId = generateCartItemId(action.product, action.configuration)
+      const itemId = generateCartItemId(action.product, action.configuration, action.variantId)
       const existingItemIndex = state.items.findIndex((item) => item.id === itemId)
 
       if (existingItemIndex >= 0) {
@@ -73,6 +78,7 @@ function cartReducer(state: Cart, action: CartAction): Cart {
             id: existingItem.id,
             product: existingItem.product,
             configuration: existingItem.configuration,
+            variantId: existingItem.variantId,
             totalPriceCents: existingItem.totalPriceCents,
             quantity: existingItem.quantity + 1,
           }
@@ -94,7 +100,8 @@ function cartReducer(state: Cart, action: CartAction): Cart {
         product: action.product,
         quantity: 1,
         configuration: action.configuration,
-        totalPriceCents: calculateItemPrice(action.product),
+        variantId: action.variantId,
+        totalPriceCents: calculateItemPrice(action.product, action.variantId),
       }
 
       const updatedItems = [...state.items, newItem]
@@ -230,8 +237,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const addToCart = (product: ProductDTO, configuration?: CartItemConfiguration) => {
-    dispatch({ type: "ADD_TO_CART", product, configuration })
+  const addToCart = (product: ProductDTO, configuration?: CartItemConfiguration, variantId?: string) => {
+    dispatch({ type: "ADD_TO_CART", product, configuration, variantId })
   }
 
   const updateItemConfiguration = (oldItemId: string, product: ProductDTO, configuration?: CartItemConfiguration) => {
@@ -250,8 +257,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "CLEAR_CART" })
   }
 
-  const getItemQuantity = (productId: string, configuration?: CartItemConfiguration): number => {
-    const itemId = generateCartItemId({ id: productId } as ProductDTO, configuration)
+  const getItemQuantity = (productId: string, configuration?: CartItemConfiguration, variantId?: string): number => {
+    const itemId = generateCartItemId({ id: productId } as ProductDTO, configuration, variantId)
     const item = cart.items.find((item) => item.id === itemId)
     return item ? item.quantity : 0
   }

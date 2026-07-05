@@ -33,6 +33,7 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 	repos := NewRepositories(staticClient)
 	svc := service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,
@@ -69,7 +70,7 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 		ctx, _, cleanup := env.appRequestTx(t, tenantA)
 		defer cleanup()
 
-		created, err := svc.Create(ctx, catA, product.TypeSimple, "NewA", 500, 0, true, nil, nil, nil)
+		created, err := svc.Create(ctx, catA, product.TypeSimple, "NewA", 500, 0, true, nil, nil, nil, nil, nil)
 		require.NoError(t, err, "create must run on the GUC-bound request tx, not the raw app pool")
 		require.Equal(t, tenantA, created.TenantID)
 
@@ -86,5 +87,26 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, all, 1)
 		require.Equal(t, prodB, all[0].ID)
+	})
+
+	t.Run("variants are tenant-isolated", func(t *testing.T) {
+		variantA := nanoid.New()
+		env.privExec(t, `INSERT INTO product_variant (id, product_id, value, tenant_id) VALUES ($1, $2, 'M', $3)`, variantA, prodA, tenantA)
+
+		ctxA, _, cleanupA := env.appRequestTx(t, tenantA)
+		defer cleanupA()
+		mine, err := repos.ProductVariant.GetByProductID(ctxA, prodA)
+		require.NoError(t, err)
+		require.Len(t, mine, 1)
+		require.Equal(t, variantA, mine[0].ID)
+
+		ctxB, _, cleanupB := env.appRequestTx(t, tenantB)
+		defer cleanupB()
+		leaked, err := repos.ProductVariant.GetByProductID(ctxB, prodA)
+		require.NoError(t, err)
+		require.Empty(t, leaked, "tenant B must not see tenant A's variants")
+
+		_, err = repos.ProductVariant.GetByID(ctxB, variantA)
+		require.Error(t, err, "direct variant lookup across tenants must fail")
 	})
 }

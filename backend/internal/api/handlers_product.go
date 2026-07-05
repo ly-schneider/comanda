@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/product"
 	"backend/internal/response"
+	"backend/internal/service"
 
 	nanoid "backend/internal/id"
 	"go.uber.org/zap"
@@ -45,6 +47,11 @@ func (h *Handlers) ListProducts(w http.ResponseWriter, r *http.Request, params g
 			if s, ok := stocks[p.ID]; ok {
 				apiProducts[i].Stock = &s
 			}
+		}
+	}
+	if variantStocks, err := h.products.GetVariantStockBatch(ctx, ids); err == nil {
+		for i := range apiProducts {
+			setVariantStocks(&apiProducts[i], variantStocks)
 		}
 	}
 
@@ -94,12 +101,58 @@ func (h *Handlers) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		body.Image,
 		description,
 		jetonID,
+		normalizeVariantLabel(body.VariantLabel),
+		toVariantInputs(body.Variants),
 	)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusCreated, toAPIProduct(prod))
+}
+
+// nil leaves variants unchanged; an empty slice removes them all.
+func toVariantInputs(variants *[]generated.VariantUpsert) []service.VariantInput {
+	if variants == nil {
+		return nil
+	}
+	inputs := make([]service.VariantInput, 0, len(*variants))
+	for i, v := range *variants {
+		in := service.VariantInput{Value: v.Value, IsActive: true, Sequence: i}
+		if v.Id != nil {
+			id := *v.Id
+			in.ID = &id
+		}
+		if v.PriceAdjustmentCents != nil {
+			in.PriceAdjustmentCents = *v.PriceAdjustmentCents
+		}
+		if v.IsActive != nil {
+			in.IsActive = *v.IsActive
+		}
+		if v.Sequence != nil {
+			in.Sequence = *v.Sequence
+		}
+		inputs = append(inputs, in)
+	}
+	return inputs
+}
+
+func normalizeVariantLabel(label *string) *string {
+	if label == nil || *label == "" {
+		return nil
+	}
+	return label
+}
+
+func setVariantStocks(p *generated.Product, stocks map[string]int) {
+	if p.Variants == nil {
+		return
+	}
+	variants := *p.Variants
+	for i := range variants {
+		s := stocks[variants[i].Id]
+		variants[i].Stock = &s
+	}
 }
 
 // GetProduct returns a single product by ID.
@@ -116,6 +169,9 @@ func (h *Handlers) GetProduct(w http.ResponseWriter, r *http.Request, productId 
 	if stock, err := h.products.GetStock(ctx, id); err == nil {
 		s := int(stock)
 		ap.Stock = &s
+	}
+	if variantStocks, err := h.products.GetVariantStockBatch(ctx, []string{id}); err == nil {
+		setVariantStocks(&ap, variantStocks)
 	}
 	response.WriteJSON(w, http.StatusOK, ap)
 }
@@ -175,6 +231,10 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 		id := string(*body.JetonId)
 		jetonID = &id
 	}
+	variantLabel := existing.VariantLabel
+	if body.VariantLabel != nil {
+		variantLabel = normalizeVariantLabel(body.VariantLabel)
+	}
 
 	prod, err := h.products.Update(
 		ctx,
@@ -188,6 +248,8 @@ func (h *Handlers) UpdateProduct(w http.ResponseWriter, r *http.Request, product
 		image,
 		description,
 		jetonID,
+		variantLabel,
+		toVariantInputs(body.Variants),
 	)
 	if err != nil {
 		writeEntError(w, err)
@@ -212,22 +274,44 @@ func (h *Handlers) GetProductInventory(w http.ResponseWriter, r *http.Request, p
 	ctx := r.Context()
 	id := productId
 
-	// Verify product exists.
-	_, err := h.products.GetByID(ctx, id)
+	prod, err := h.products.GetByIDWithRelations(ctx, id)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
 
-	stock, err := h.products.GetStock(ctx, id)
+	inv, err := h.buildInventory(ctx, prod)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, generated.Inventory{
-		ProductId: string(id),
+	response.WriteJSON(w, http.StatusOK, inv)
+}
+
+func (h *Handlers) buildInventory(ctx context.Context, prod *ent.Product) (generated.Inventory, error) {
+	stock, err := h.products.GetStock(ctx, prod.ID)
+	if err != nil {
+		return generated.Inventory{}, err
+	}
+	inv := generated.Inventory{
+		ProductId: prod.ID,
 		Quantity:  int(stock),
-	})
+	}
+	if len(prod.Edges.Variants) > 0 {
+		variantStocks, err := h.products.GetVariantStockBatch(ctx, []string{prod.ID})
+		if err != nil {
+			return generated.Inventory{}, err
+		}
+		items := make([]generated.VariantInventory, 0, len(prod.Edges.Variants))
+		for _, v := range prod.Edges.Variants {
+			items = append(items, generated.VariantInventory{
+				VariantId: v.ID,
+				Quantity:  variantStocks[v.ID],
+			})
+		}
+		inv.Variants = &items
+	}
+	return inv, nil
 }
 
 // GetProductInventoryHistory returns paginated inventory ledger entries for a product.
@@ -277,27 +361,23 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	id := productId
 
-	// Verify product exists.
-	_, err := h.products.GetByID(ctx, id)
+	prod, err := h.products.GetByIDWithRelations(ctx, id)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
 
-	if err := h.products.AdjustStock(ctx, id, int64(body.Delta), string(body.Reason)); err != nil {
+	if err := h.products.AdjustStock(ctx, id, body.VariantId, int64(body.Delta), string(body.Reason)); err != nil {
 		writeEntError(w, err)
 		return
 	}
 
-	stock, err := h.products.GetStock(ctx, id)
+	inv, err := h.buildInventory(ctx, prod)
 	if err != nil {
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, generated.Inventory{
-		ProductId: string(id),
-		Quantity:  int(stock),
-	})
+	response.WriteJSON(w, http.StatusOK, inv)
 }
 
 // SetProductActive toggles isActive for a product or menu from a POS device.
@@ -337,6 +417,8 @@ func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request, prod
 		existing.Image,
 		existing.Description,
 		existing.JetonID,
+		existing.VariantLabel,
+		nil,
 	)
 	if err != nil {
 		writeEntError(w, err)
@@ -414,7 +496,7 @@ func (h *Handlers) UploadProductImage(w http.ResponseWriter, r *http.Request, pr
 		return
 	}
 
-	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, &url, existing.Description, existing.JetonID)
+	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, &url, existing.Description, existing.JetonID, existing.VariantLabel, nil)
 	if err != nil {
 		writeEntError(w, err)
 		return
@@ -439,7 +521,7 @@ func (h *Handlers) DeleteProductImage(w http.ResponseWriter, r *http.Request, pr
 		}
 	}
 
-	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, nil, existing.Description, existing.JetonID)
+	_, err = h.products.Update(ctx, id, existing.CategoryID, existing.Type, existing.Name, existing.PriceCents, existing.DepositCents, existing.IsActive, nil, existing.Description, existing.JetonID, existing.VariantLabel, nil)
 	if err != nil {
 		writeEntError(w, err)
 		return

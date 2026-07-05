@@ -138,6 +138,7 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 		ci := service.CheckoutItemInput{
 			ProductID: item.ProductId,
 			Quantity:  item.Quantity,
+			VariantID: item.VariantId,
 		}
 		if item.MenuSelections != nil {
 			ci.Configuration = make(map[string]string, len(*item.MenuSelections))

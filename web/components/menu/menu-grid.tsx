@@ -4,9 +4,11 @@ import Image from "next/image"
 import { useState } from "react"
 import { CartButtons } from "@/components/cart/cart-buttons"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
+import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useCart } from "@/contexts/cart-context"
 import { formatChf } from "@/lib/utils"
+import { hasVariants } from "@/lib/variants"
 import { ListResponse, ProductDTO } from "@/types"
 
 export function MenuGrid({ products }: { products: ListResponse<ProductDTO> }) {
@@ -35,11 +37,13 @@ export function MenuGrid({ products }: { products: ListResponse<ProductDTO> }) {
 
 function MenuProductCard({ product }: { product: ProductDTO }) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+  const [isVariantPickerOpen, setIsVariantPickerOpen] = useState(false)
   const { addToCart, getItemQuantity, getTotalProductQuantity } = useCart()
   const isMenu = product.type === "menu"
+  const productHasVariants = !isMenu && hasVariants(product)
   const isAvailable = isMenu || product.isAvailable !== false
-  const isLowStock = !isMenu && product.isLowStock === true
-  const availableQty = isMenu ? null : (product.availableQuantity ?? null)
+  const isLowStock = !isMenu && !productHasVariants && product.isLowStock === true
+  const availableQty = isMenu || productHasVariants ? null : (product.availableQuantity ?? null)
   const isActive = product.isActive !== false
   const disabled = !isAvailable || !isActive
 
@@ -55,8 +59,9 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
   const handleCardActivate = () => {
     if (disabled || reachedMax) return
     if (product.type === "menu") {
-      // Open configuration for menu products when no specific config is chosen
       handleConfigureProduct()
+    } else if (productHasVariants) {
+      setIsVariantPickerOpen(true)
     } else {
       addToCart(product)
     }
@@ -142,6 +147,12 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
         product={product}
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
+      />
+
+      <VariantPickerModal
+        product={product}
+        isOpen={isVariantPickerOpen}
+        onClose={() => setIsVariantPickerOpen(false)}
       />
     </>
   )

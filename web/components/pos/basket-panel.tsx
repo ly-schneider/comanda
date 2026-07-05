@@ -25,6 +25,7 @@ import {
   type ReceiptRefundMethod,
 } from "@/lib/pos/receipt"
 import { cartDepositCents, formatChf } from "@/lib/utils"
+import { findVariant, hasVariants, variantPickerLabel } from "@/lib/variants"
 
 import type { CartItem } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
@@ -46,6 +47,15 @@ type JetonTotal = { id: string; name: string; color: string; count: number }
 function toMenuSelections(config?: Record<string, string>) {
   if (!config) return undefined
   return Object.entries(config).map(([slotId, productId]) => ({ slotId, productId }))
+}
+
+function buildOrderItems(items: CartItem[]) {
+  return items.map((it) => ({
+    productId: it.product.id,
+    quantity: it.quantity,
+    menuSelections: toMenuSelections(it.configuration),
+    variantId: it.variantId,
+  }))
 }
 
 function textColorForBg(hex: string) {
@@ -86,7 +96,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
   const getMaxQuantity = useCallback(
     (item: CartItem): number | null => {
       if (!stockMap || item.product.type === "menu") return null
-      return stockMap.get(item.product.id) ?? null
+      const key = item.variantId ?? item.product.id
+      return stockMap.get(key) ?? null
     },
     [stockMap]
   )
@@ -199,6 +210,12 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
         }
       }
+      if (it.variantId && hasVariants(it.product)) {
+        const variant = findVariant(it.product, it.variantId)
+        if (variant) {
+          cfg.push({ slot: variantPickerLabel(it.product), choice: variant.value })
+        }
+      }
       return {
         title: it.product.name,
         quantity: it.quantity,
@@ -241,7 +258,12 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
   const emitInventoryDecrement = useCallback((items: typeof cart.items) => {
     const decrements = new Map<string, number>()
     for (const item of items) {
-      decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
+      if (item.variantId) {
+        decrements.set(item.variantId, (decrements.get(item.variantId) || 0) - item.quantity)
+        decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
+      } else {
+        decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
+      }
       if (item.product.type === "menu" && item.configuration && item.product.menu?.slots) {
         for (const [slotId, productId] of Object.entries(item.configuration)) {
           const slot = item.product.menu.slots.find((s) => s.id === slotId)
@@ -363,11 +385,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
         if (!showCard) return
 
         if (d.success) {
-          const itemsBody = cart.items.map((it) => ({
-            productId: it.product.id,
-            quantity: it.quantity,
-            menuSelections: toMenuSelections(it.configuration),
-          }))
+          const itemsBody = buildOrderItems(cart.items)
           const printItems = buildPrintItems()
           const jetons = computeJetonTotals()
 
@@ -508,11 +526,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     setBusy(true)
     setError(null)
 
-    const items = cart.items.map((it) => ({
-      productId: it.product.id,
-      quantity: it.quantity,
-      menuSelections: toMenuSelections(it.configuration),
-    }))
+    const items = buildOrderItems(cart.items)
     const printItems = buildPrintItems()
     const jetons = computeJetonTotals()
 
@@ -575,11 +589,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     setBusy(true)
     setError(null)
 
-    const items = cart.items.map((it) => ({
-      productId: it.product.id,
-      quantity: it.quantity,
-      menuSelections: toMenuSelections(it.configuration),
-    }))
+    const items = buildOrderItems(cart.items)
     const printItems = buildPrintItems()
     const jetons = computeJetonTotals()
 
@@ -724,11 +734,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
         return
       }
 
-      const items = cart.items.map((it) => ({
-        productId: it.product.id,
-        quantity: it.quantity,
-        menuSelections: toMenuSelections(it.configuration),
-      }))
+      const items = buildOrderItems(cart.items)
       const printItems = buildPrintItems()
       const jetons = computeJetonTotals()
 

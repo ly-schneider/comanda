@@ -21,6 +21,7 @@ func TestProductService_ListProducts(t *testing.T) {
 
 	svc := service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,
@@ -93,6 +94,7 @@ func TestProductService_MenuProducts(t *testing.T) {
 
 	svc := service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,
@@ -161,6 +163,7 @@ func TestProductService_EmptyResults(t *testing.T) {
 
 	svc := service.NewProductService(
 		repos.Product,
+		repos.ProductVariant,
 		repos.Category,
 		repos.MenuSlot,
 		repos.MenuSlotOption,

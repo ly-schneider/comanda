@@ -25,6 +25,8 @@ export interface AdminOrderLine {
   parentLineId?: string | null
   menuSlotId?: string | null
   menuSlotName?: string | null
+  variantId?: string | null
+  variantValue?: string | null
   productImage?: string | null
   productDescription?: string | null
   childLines?: AdminOrderLine[] | null
@@ -90,6 +92,8 @@ export interface RefundViewLine {
   orderLineId: string
   productId: string
   title: string
+  variantId?: string | null
+  variantValue?: string | null
   unitPriceCents: Cents
   boughtQuantity: number
   refundedQuantity: number

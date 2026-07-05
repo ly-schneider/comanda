@@ -4,6 +4,7 @@ import { Minus, Pen, Plus, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { formatChf } from "@/lib/utils"
+import { findVariant, variantPickerLabel } from "@/lib/variants"
 import { CartItem } from "@/types/cart"
 
 export interface CartItemDiscountInfo {
@@ -180,6 +181,24 @@ export function CartItemDisplay({
                   {item.product.description}
                 </p>
               )}
+              {item.variantId &&
+                (() => {
+                  const variant = findVariant(item.product, item.variantId)
+                  if (!variant) return null
+                  return (
+                    <div className="mt-0.5 flex flex-row flex-wrap gap-1.5">
+                      <div
+                        className={`text-muted-foreground border-border rounded-lg border p-1 ${
+                          isPOS ? "text-[10px]" : "text-xs"
+                        }`}
+                      >
+                        <p className="font-medium">
+                          {variantPickerLabel(item.product)}: {variant.value}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })()}
               <div className="flex items-center gap-2">
                 {isFullyDiscounted ? (
                   <>

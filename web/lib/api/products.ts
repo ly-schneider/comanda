@@ -1,4 +1,4 @@
-import type { ListResponse, ProductDTO, ProductSummaryDTO } from "@/types"
+import type { ListResponse, ProductDTO, ProductSummaryDTO, ProductVariantDTO } from "@/types"
 import { apiRequest } from "../api"
 
 export interface ListProductsParams {
@@ -25,9 +25,19 @@ interface RawMenuSlot {
   options?: RawSlotOption[]
 }
 
-interface RawProduct extends ProductDTO {
+interface RawVariant {
+  id: string
+  value: string
+  priceAdjustmentCents?: number
+  isActive: boolean
+  sequence: number
+  stock?: number | null
+}
+
+interface RawProduct extends Omit<ProductDTO, "variants"> {
   stock?: number
   menuSlots?: RawMenuSlot[]
+  variants?: RawVariant[]
 }
 
 function normalizeProduct(raw: RawProduct): ProductDTO {
@@ -35,7 +45,28 @@ function normalizeProduct(raw: RawProduct): ProductDTO {
 
   const isMenu = raw.type === "menu"
   const stock = raw.stock
-  if (!isMenu && typeof stock === "number") {
+
+  if (raw.variants && raw.variants.length > 0) {
+    product.variants = raw.variants.map((v): ProductVariantDTO => {
+      const variantStock = typeof v.stock === "number" ? v.stock : null
+      return {
+        id: v.id,
+        value: v.value,
+        priceAdjustmentCents: v.priceAdjustmentCents ?? 0,
+        isActive: v.isActive,
+        sequence: v.sequence,
+        stock: variantStock,
+        availableQuantity: variantStock,
+        isAvailable: variantStock === null ? true : variantStock > 0,
+        isLowStock: variantStock !== null && variantStock > 0 && variantStock <= 10,
+      }
+    })
+    const active = product.variants.filter((v) => v.isActive)
+    const anyActiveAvailable = active.some((v) => v.isAvailable !== false)
+    product.isAvailable = anyActiveAvailable
+    product.isLowStock = anyActiveAvailable && active.some((v) => v.isLowStock === true)
+    product.availableQuantity = active.reduce((s, v) => s + (v.availableQuantity ?? 0), 0)
+  } else if (!isMenu && typeof stock === "number") {
     product.availableQuantity = stock
     product.isAvailable = stock > 0
     product.isLowStock = stock > 0 && stock <= 10

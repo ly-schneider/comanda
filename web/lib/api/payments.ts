@@ -4,6 +4,7 @@ export interface CheckoutItem {
   productId: string
   quantity: number
   menuSelections?: { slotId: string; productId: string }[]
+  variantId?: string
 }
 
 export interface CreateOrderRequest {

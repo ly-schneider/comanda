@@ -49,6 +49,9 @@ func (InventoryLedger) Fields() []ent.Field {
 		field.String("created_by").
 			Optional().
 			Nillable(),
+		field.String("variant_id").MaxLen(12).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -70,6 +73,10 @@ func (InventoryLedger) Edges() []ent.Edge {
 		edge.From("device", Device.Type).
 			Ref("inventory_ledger_entries").
 			Field("device_id").
+			Unique(),
+		edge.From("variant", ProductVariant.Type).
+			Ref("inventory_ledger_entries").
+			Field("variant_id").
 			Unique(),
 	}
 }

@@ -35,9 +35,22 @@ func (h *Handlers) StreamInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	snapshot := make(map[string]int, len(stocks))
+	// Variant ids join the snapshot map; the nanoid key spaces are disjoint.
+	variantStocks, err := h.products.GetVariantStockBatch(ctx, ids)
+	if err != nil {
+		_, _ = w.Write([]byte("event: error\ndata: {\"error\":\"failed to load stock\"}\n\n"))
+		_ = rc.Flush()
+		return
+	}
+
+	snapshot := make(map[string]int, len(stocks)+len(variantStocks))
 	for id, stock := range stocks {
 		snapshot[id] = stock
+	}
+	for _, p := range products {
+		for _, v := range p.Edges.Variants {
+			snapshot[v.ID] = variantStocks[v.ID]
+		}
 	}
 
 	data, _ := json.Marshal(snapshot)

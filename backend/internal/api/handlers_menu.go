@@ -60,6 +60,8 @@ func (h *Handlers) CreateMenu(w http.ResponseWriter, r *http.Request) {
 		body.Image,
 		description,
 		nil, // no jeton for menus
+		nil,
+		nil,
 	)
 	if err != nil {
 		writeEntError(w, err)
@@ -134,6 +136,8 @@ func (h *Handlers) UpdateMenu(w http.ResponseWriter, r *http.Request, menuId str
 		image,
 		description,
 		nil, // no jeton for menus
+		nil,
+		nil,
 	)
 	if err != nil {
 		writeEntError(w, err)

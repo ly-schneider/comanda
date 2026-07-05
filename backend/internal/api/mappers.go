@@ -71,6 +71,7 @@ func toAPIProduct(e *ent.Product) generated.Product {
 		DepositCents: e.DepositCents,
 		JetonId:      (*string)(e.JetonID),
 		IsActive:     e.IsActive,
+		VariantLabel: e.VariantLabel,
 		CreatedAt:    ptr(e.CreatedAt),
 		UpdatedAt:    ptr(e.UpdatedAt),
 	}
@@ -94,6 +95,21 @@ func toAPIProduct(e *ent.Product) generated.Product {
 			summaries = append(summaries, toAPIMenuSlotSummary(s))
 		}
 		p.MenuSlots = &summaries
+	}
+
+	// Map Variants edge if loaded.
+	if variants, err := e.Edges.VariantsOrErr(); err == nil && len(variants) > 0 {
+		apiVariants := make([]generated.ProductVariant, 0, len(variants))
+		for _, v := range variants {
+			apiVariants = append(apiVariants, generated.ProductVariant{
+				Id:                   v.ID,
+				Value:                v.Value,
+				PriceAdjustmentCents: v.PriceAdjustmentCents,
+				IsActive:             v.IsActive,
+				Sequence:             v.Sequence,
+			})
+		}
+		p.Variants = &apiVariants
 	}
 
 	return p
@@ -198,6 +214,8 @@ func toAPIOrderLine(e *ent.OrderLine) generated.OrderLine {
 		ParentLineId:   (*string)(e.ParentLineID),
 		MenuSlotId:     (*string)(e.MenuSlotID),
 		MenuSlotName:   e.MenuSlotName,
+		VariantId:      (*string)(e.VariantID),
+		VariantValue:   e.VariantValue,
 	}
 
 	if e.Edges.Product != nil {
@@ -517,6 +535,9 @@ func toAPIInventoryLedgerEntry(e *ent.InventoryLedger) generated.InventoryLedger
 	}
 	if e.DeviceID != nil {
 		entry.DeviceId = (*string)(e.DeviceID)
+	}
+	if e.VariantID != nil {
+		entry.VariantId = (*string)(e.VariantID)
 	}
 	return entry
 }
