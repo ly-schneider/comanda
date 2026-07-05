@@ -5,14 +5,18 @@ import (
 	"encoding/hex"
 )
 
-// resourceName derives an RFC-1123-compliant Kubernetes object name from a
-// domain row id. The nanoid alphabet contains uppercase letters and '_', both
-// illegal in K8s resource names, so the id is hashed rather than used directly.
-// Only host/dnsNames ever carry the actual hostname; resource/secret names are
-// always id-derived to keep them deterministic and DNS-safe.
+// labelID hashes a row id into a surrogate valid anywhere Kubernetes
+// restricts charsets — nanoid ids may contain uppercase/'_' or start/end with
+// '-'/'_', all illegal in resource names or at label-value edges.
+func labelID(rowID string) string {
+	sum := sha256.Sum256([]byte(rowID))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// resourceName is the RFC-1123 object name for a domain row; hostnames only
+// ever appear in host/dnsNames fields.
 func resourceName(domainID string) string {
-	sum := sha256.Sum256([]byte(domainID))
-	return "domain-" + hex.EncodeToString(sum[:])[:16]
+	return "domain-" + labelID(domainID)
 }
 
 // tlsSecretName is the Secret cert-manager writes the issued certificate to.

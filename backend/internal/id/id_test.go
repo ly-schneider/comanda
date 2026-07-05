@@ -68,8 +68,8 @@ func TestValid(t *testing.T) {
 }
 
 func TestAlphabetInvariants(t *testing.T) {
-	if len(Alphabet) != 55 {
-		t.Fatalf("alphabet length = %d, want 55", len(Alphabet))
+	if len(Alphabet) != 53 {
+		t.Fatalf("alphabet length = %d, want 53", len(Alphabet))
 	}
 	seen := map[rune]bool{}
 	for _, c := range Alphabet {
@@ -81,6 +81,14 @@ func TestAlphabetInvariants(t *testing.T) {
 	for _, c := range "0OoIiJjLl" {
 		if seen[c] {
 			t.Fatalf("confusable %q must not be in alphabet", c)
+		}
+	}
+	for _, c := range "-_" {
+		if seen[c] {
+			t.Fatalf("%q must not be generated (invalid at K8s label-value edges)", c)
+		}
+		if !Valid(strings.Repeat(string(c), Length)) {
+			t.Fatalf("%q must validate (existing rows carry it)", c)
 		}
 	}
 }

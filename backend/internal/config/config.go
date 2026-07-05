@@ -36,6 +36,11 @@ type CustomDomainConfig struct {
 	// CNAMETarget is the value tenants point their custom domain's CNAME at, and
 	// the host the ownership check requires the CNAME to resolve to.
 	CNAMETarget string
+	// OriginHost is a DNS-only hostname resolving straight to the platform's
+	// ingress. When set, verification also requires the custom domain to resolve
+	// to a subset of its addresses — a matching CNAME alone can still dead-end
+	// at a proxy that doesn't know the hostname.
+	OriginHost string
 	// VerifyInterval is how often the background verifier re-checks DNS for
 	// not-yet-verified domains.
 	VerifyInterval time.Duration
@@ -241,6 +246,7 @@ func Load() Config {
 		CustomDomain: CustomDomainConfig{
 			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
 			CNAMETarget:      strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_CNAME_TARGET"))),
+			OriginHost:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_ORIGIN_HOST"))),
 			VerifyInterval:   getEnvDurationWithDefault("CUSTOM_DOMAIN_VERIFY_INTERVAL", 60*time.Second),
 			UnverifiedTTL:    getEnvDurationWithDefault("CUSTOM_DOMAIN_UNVERIFIED_TTL", 7*24*time.Hour),
 			SweepInterval:    getEnvDurationWithDefault("CUSTOM_DOMAIN_SWEEP_INTERVAL", time.Hour),

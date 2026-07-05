@@ -9,8 +9,8 @@
 
 CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
 LANGUAGE sql VOLATILE AS $$
-  SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZ_abcdefghkmnpqrstuvwxyz-',
-                           (floor(random()*55))::int + 1, 1), '')
+  SELECT string_agg(substr('123456789ABCDEFGHKMNPQRSTUVWXYZabcdefghkmnpqrstuvwxyz',
+                           (floor(random()*53))::int + 1, 1), '')
   FROM generate_series(1, 12)
 $$;
 

@@ -39,6 +39,7 @@ const verifyTXTPrefix = "_comanda-verify."
 type DNSResolver interface {
 	LookupCNAME(ctx context.Context, host string) (string, error)
 	LookupTXT(ctx context.Context, name string) ([]string, error)
+	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
 type netResolver struct {
@@ -56,6 +57,10 @@ func (n *netResolver) LookupCNAME(ctx context.Context, host string) (string, err
 
 func (n *netResolver) LookupTXT(ctx context.Context, name string) ([]string, error) {
 	return n.r.LookupTXT(ctx, name)
+}
+
+func (n *netResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return n.r.LookupHost(ctx, host)
 }
 
 // DomainView is the API-facing representation of a custom domain plus the DNS
@@ -196,7 +201,7 @@ func (s *domainService) VerifyNow(ctx context.Context, id string) (*ent.TenantDo
 	if d.VerifiedAt != nil {
 		return d, nil
 	}
-	ok, err := domainVerified(ctx, s.resolver, d.Hostname, d.VerificationToken, s.cfg.CustomDomain.CNAMETarget)
+	ok, err := domainVerified(ctx, s.resolver, d.Hostname, d.VerificationToken, s.cfg.CustomDomain.CNAMETarget, s.cfg.CustomDomain.OriginHost)
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +224,12 @@ func (s *domainService) View(d *ent.TenantDomain) *DomainView {
 	}
 }
 
-// domainVerified is the pure ownership decision: ownership requires BOTH the
-// CNAME to resolve to the configured target AND a matching TXT token. Requiring
-// the CNAME (not just the TXT) ensures traffic actually routes to the platform
-// before a certificate is requested. An empty cnameTarget disables verification.
-func domainVerified(ctx context.Context, resolver DNSResolver, hostname, token, cnameTarget string) (bool, error) {
+// domainVerified is the pure ownership-and-routing decision: CNAME at the
+// configured target, matching TXT token, and (when originHost is set) the
+// hostname resolving to the platform's own addresses — so traffic actually
+// reaches the platform before a certificate is requested. An empty cnameTarget
+// disables verification.
+func domainVerified(ctx context.Context, resolver DNSResolver, hostname, token, cnameTarget, originHost string) (bool, error) {
 	if cnameTarget == "" || token == "" {
 		return false, nil
 	}
@@ -239,6 +245,13 @@ func domainVerified(ctx context.Context, resolver DNSResolver, hostname, token, 
 		return false, nil
 	}
 
+	if originHost != "" {
+		ok, err := resolvesToOrigin(ctx, resolver, hostname, originHost)
+		if err != nil || !ok {
+			return false, err
+		}
+	}
+
 	txts, err := resolver.LookupTXT(ctx, verifyTXTPrefix+hostname)
 	if err != nil {
 		if isDNSNotFound(err) {
@@ -252,6 +265,53 @@ func domainVerified(ctx context.Context, resolver DNSResolver, hostname, token, 
 		}
 	}
 	return false, nil
+}
+
+// resolvesToOrigin reports whether every address the hostname resolves to is
+// one of the origin host's. A matching CNAME alone cannot prove routing: a
+// chain through a proxied record resolves to the proxy's anycast addresses,
+// where unknown hostnames (browser traffic and ACME challenges alike) get an
+// error, never the platform.
+func resolvesToOrigin(ctx context.Context, resolver DNSResolver, hostname, originHost string) (bool, error) {
+	originAddrs, err := resolver.LookupHost(ctx, originHost)
+	if err != nil {
+		// The origin host is platform-controlled: any failure, incl. NXDOMAIN, is
+		// a platform problem — surface it so the verifier logs and retries.
+		return false, err
+	}
+	origin := make(map[string]struct{}, len(originAddrs))
+	for _, a := range originAddrs {
+		origin[canonicalIP(a)] = struct{}{}
+	}
+	if len(origin) == 0 {
+		return false, errors.New("origin host resolved to no addresses")
+	}
+
+	addrs, err := resolver.LookupHost(ctx, hostname)
+	if err != nil {
+		if isDNSNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if len(addrs) == 0 {
+		return false, nil
+	}
+	for _, a := range addrs {
+		if _, ok := origin[canonicalIP(a)]; !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// canonicalIP normalizes IPs so equivalent v4/v6 spellings compare equal.
+func canonicalIP(s string) string {
+	s = strings.TrimSpace(s)
+	if ip := net.ParseIP(s); ip != nil {
+		return ip.String()
+	}
+	return s
 }
 
 // cnameMatches reports whether the resolved CNAME points at the configured

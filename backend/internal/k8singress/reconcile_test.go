@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -64,7 +65,8 @@ func TestReconcileAppliesIngressAndCertificate(t *testing.T) {
 	store := newRecordingStore()
 	r, k8s, cm := newTestReconciler(store)
 
-	d := domain{id: "AB_cd-EF_gh1", tenantID: "tenant______1", hostname: "shop.example.com"}
+	// Ids start/end with '-'/'_' — illegal at K8s label-value edges if used raw.
+	d := domain{id: "_AB-cd_EFgh-", tenantID: "cmqHhMw--qv_", hostname: "shop.example.com"}
 	if err := r.reconcileDomains(context.Background(), []domain{d}); err != nil {
 		t.Fatalf("reconcileDomains: %v", err)
 	}
@@ -78,8 +80,16 @@ func TestReconcileAppliesIngressAndCertificate(t *testing.T) {
 	if ing.Labels[labelManagedBy] != labelManagedByValue {
 		t.Errorf("ingress missing managed-by label: %v", ing.Labels)
 	}
-	if ing.Labels[labelTenantDomainID] != d.id || ing.Labels[labelTenantID] != d.tenantID {
+	if ing.Labels[labelTenantDomainID] != labelID(d.id) || ing.Labels[labelTenantID] != labelID(d.tenantID) {
 		t.Errorf("ingress owner labels wrong: %v", ing.Labels)
+	}
+	for k, v := range ing.Labels {
+		if errs := validation.IsValidLabelValue(v); len(errs) > 0 {
+			t.Errorf("ingress label %q has invalid value %q: %v", k, v, errs)
+		}
+	}
+	if ing.Annotations[annoTenantDomainID] != d.id || ing.Annotations[annoTenantID] != d.tenantID {
+		t.Errorf("ingress raw-id annotations wrong: %v", ing.Annotations)
 	}
 	if ing.Annotations[annoArgoSyncOptions] != annoArgoSyncValue || ing.Annotations[annoArgoCompareOptions] != annoArgoCompareValue {
 		t.Errorf("ingress missing argo annotations: %v", ing.Annotations)
@@ -116,6 +126,11 @@ func TestReconcileAppliesIngressAndCertificate(t *testing.T) {
 	}
 	if cert.Labels[labelManagedBy] != labelManagedByValue {
 		t.Errorf("certificate missing managed-by label: %v", cert.Labels)
+	}
+	for k, v := range cert.Labels {
+		if errs := validation.IsValidLabelValue(v); len(errs) > 0 {
+			t.Errorf("certificate label %q has invalid value %q: %v", k, v, errs)
+		}
 	}
 	if cert.Annotations[annoArgoSyncOptions] != annoArgoSyncValue {
 		t.Errorf("certificate missing argo annotation: %v", cert.Annotations)
