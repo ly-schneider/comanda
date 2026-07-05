@@ -44,6 +44,7 @@ export interface QueuedOrderItem {
   productId: string
   quantity: number
   menuSelections?: Array<{ slotId: string; productId: string }>
+  variantId?: string
 }
 
 export interface ReceiptItem {

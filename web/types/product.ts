@@ -19,6 +19,18 @@ export interface Product {
   updatedAt: string // ISO date
 }
 
+export interface ProductVariantDTO {
+  id: string
+  value: string
+  priceAdjustmentCents: Cents
+  isActive: boolean
+  sequence: number
+  stock?: number | null
+  availableQuantity?: number | null
+  isAvailable?: boolean
+  isLowStock?: boolean
+}
+
 export interface ProductSummaryDTO {
   id: string
   category: CategoryDTO
@@ -29,6 +41,8 @@ export interface ProductSummaryDTO {
   priceCents: Cents
   depositCents: Cents
   isActive: boolean
+  variantLabel?: string | null
+  variants?: ProductVariantDTO[]
   availableQuantity?: number | null
   isAvailable?: boolean
   isLowStock?: boolean

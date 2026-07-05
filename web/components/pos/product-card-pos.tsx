@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useCart } from "@/contexts/cart-context"
+import { hasVariants } from "@/lib/variants"
 import type { ProductDTO } from "@/types"
 
 function formatPriceLabel(cents: number): string {
@@ -18,17 +19,18 @@ function formatPriceLabel(cents: number): string {
 export function ProductCardPOS({ product, onConfigure }: { product: ProductDTO; onConfigure: () => void }) {
   const { addToCart, getTotalProductQuantity } = useCart()
   const isMenu = product.type === "menu"
+  const productHasVariants = !isMenu && hasVariants(product)
   const isAvailable = isMenu || product.isAvailable !== false
-  const isLowStock = !isMenu && product.isLowStock === true
-  const availableQty = isMenu ? null : (product.availableQuantity ?? null)
+  const isLowStock = !isMenu && !productHasVariants && product.isLowStock === true
+  const availableQty = isMenu || productHasVariants ? null : (product.availableQuantity ?? null)
   const isActive = product.isActive !== false
   const cartQuantity = getTotalProductQuantity(product.id)
-  const atMaxInventory = !isMenu && availableQty !== null && cartQuantity >= availableQty
+  const atMaxInventory = !isMenu && !productHasVariants && availableQty !== null && cartQuantity >= availableQty
   const disabled = !isAvailable || !isActive || atMaxInventory
 
   const handleAdd = () => {
     if (disabled) return
-    if (product.type === "menu") onConfigure()
+    if (isMenu || productHasVariants) onConfigure()
     else addToCart(product)
   }
 

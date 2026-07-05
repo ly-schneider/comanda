@@ -26,6 +26,15 @@ import { getCSRFToken } from "@/lib/csrf"
 import { readApiError, readErrorMessage } from "@/lib/http"
 import type { Jeton, PosFulfillmentMode } from "@/types/jeton"
 
+type ProductVariant = {
+  id?: string
+  value: string
+  priceAdjustmentCents: number
+  isActive: boolean
+  sequence: number
+  stock?: number | null
+}
+
 type Product = {
   id: string
   name: string
@@ -38,6 +47,8 @@ type Product = {
   stock?: number | null
   jeton?: Jeton
   type: "simple" | "menu"
+  variantLabel?: string | null
+  variants?: ProductVariant[]
 }
 type Category = { id: string; name: string; isActive: boolean; position: number }
 const NO_JETON_VALUE = "__none__"
@@ -190,14 +201,41 @@ export default function AdminProductsPage() {
     if (!res.ok) throw new Error("Produkt löschen fehlgeschlagen")
   }
 
-  async function adjustInventory(id: string, delta: number) {
+  async function adjustInventory(id: string, delta: number, variantId?: string) {
     const csrf = getCSRFToken()
+    const body: Record<string, unknown> = { delta, reason: "manual_adjust" }
+    if (variantId) body.variantId = variantId
     const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(id)}/inventory`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-      body: JSON.stringify({ delta, reason: "manual_adjust" }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) throw new Error(await readErrorMessage(res))
+  }
+
+  async function updateVariants(
+    id: string,
+    variantLabel: string | null,
+    variants: ProductVariant[]
+  ): Promise<ProductVariant[]> {
+    const csrf = getCSRFToken()
+    const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
+      body: JSON.stringify({
+        variantLabel: variantLabel ?? "",
+        variants: variants.map((v, idx) => ({
+          id: v.id,
+          value: v.value,
+          priceAdjustmentCents: v.priceAdjustmentCents,
+          isActive: v.isActive,
+          sequence: idx + 1,
+        })),
+      }),
+    })
+    if (!res.ok) throw new Error(await readErrorMessage(res))
+    const data = (await res.json()) as { variants?: ProductVariant[] }
+    return data.variants ?? []
   }
 
   async function updateJeton(id: string, jetonId: string | null) {
@@ -357,6 +395,7 @@ export default function AdminProductsPage() {
             setActive={setActive}
             updateJeton={updateJeton}
             adjustInventory={adjustInventory}
+            updateVariants={updateVariants}
             uploadImage={uploadProductImage}
             deleteImage={deleteProductImage}
           />
@@ -381,9 +420,18 @@ type ProductCardProps = {
   moveCategory: (id: string, categoryId: string) => Promise<void>
   setActive: (id: string, isActive: boolean) => Promise<void>
   updateJeton: (id: string, jetonId: string | null) => Promise<void>
-  adjustInventory: (id: string, delta: number) => Promise<void>
+  adjustInventory: (id: string, delta: number, variantId?: string) => Promise<void>
+  updateVariants: (id: string, variantLabel: string | null, variants: ProductVariant[]) => Promise<ProductVariant[]>
   uploadImage: (id: string, file: File) => Promise<string>
   deleteImage: (id: string) => Promise<void>
+}
+
+function parseAdjustment(input: string): number | null {
+  const norm = input.replace(",", ".").trim()
+  if (!norm) return 0
+  const val = Number(norm)
+  if (!isFinite(val) || Number.isNaN(val)) return null
+  return Math.round(val * 100)
 }
 
 function ProductCardEditable({
@@ -402,6 +450,7 @@ function ProductCardEditable({
   setActive,
   updateJeton,
   adjustInventory,
+  updateVariants,
   uploadImage,
   deleteImage,
 }: ProductCardProps) {
@@ -421,6 +470,15 @@ function ProductCardEditable({
   const categoryLabelId = `category-label-${product.id}`
   const jetonLabelId = `jeton-label-${product.id}`
 
+  const [variantLabel, setVariantLabel] = useState(product.variantLabel ?? "")
+  const [variants, setVariants] = useState<(ProductVariant & { adjInput: string; varDeltaInput: string })[]>(() =>
+    (product.variants ?? []).map((v) => ({
+      ...v,
+      adjInput: v.priceAdjustmentCents === 0 ? "" : (v.priceAdjustmentCents / 100).toFixed(2),
+      varDeltaInput: "",
+    }))
+  )
+
   useEffect(() => {
     setName(product.name)
     setPriceInput((product.priceCents / 100).toFixed(2))
@@ -430,6 +488,14 @@ function ProductCardEditable({
     setJetonId(product.jeton?.id ?? "")
     setIsActiveLocal(product.isActive)
     setDeltaInput("")
+    setVariantLabel(product.variantLabel ?? "")
+    setVariants(
+      (product.variants ?? []).map((v) => ({
+        ...v,
+        adjInput: v.priceAdjustmentCents === 0 ? "" : (v.priceAdjustmentCents / 100).toFixed(2),
+        varDeltaInput: "",
+      }))
+    )
     setStatus("idle")
     setFieldError(null)
   }, [product])
@@ -450,6 +516,26 @@ function ProductCardEditable({
   const deltaDirty = deltaInput.trim() !== "" && parsedDelta !== 0
   const trimmedDescription = description.trim()
   const descriptionDirty = trimmedDescription !== (product.description ?? "")
+
+  const variantsHaveErrors = variants.some((v) => parseAdjustment(v.adjInput) === null || !v.value.trim())
+  const variantsDirty =
+    product.type === "simple" &&
+    (variantLabel !== (product.variantLabel ?? "") ||
+      variants.length !== (product.variants ?? []).length ||
+      variants.some((v, i) => {
+        const orig = (product.variants ?? [])[i]
+        if (!orig) return true
+        const adj = parseAdjustment(v.adjInput)
+        return (
+          v.id !== orig.id ||
+          v.value.trim() !== orig.value ||
+          adj !== orig.priceAdjustmentCents ||
+          v.isActive !== orig.isActive
+        )
+      }))
+  const variantDeltas = variants.filter((v) => v.varDeltaInput.trim() !== "" && parseInt(v.varDeltaInput, 10) !== 0)
+  const variantDeltasDirty = variantDeltas.length > 0
+
   const dirty =
     trimmedName !== product.name ||
     priceDirty ||
@@ -458,7 +544,9 @@ function ProductCardEditable({
     categoryId !== (product.category?.id ?? "") ||
     jetonId !== (product.jeton?.id ?? "") ||
     isActive !== product.isActive ||
-    deltaDirty
+    deltaDirty ||
+    variantsDirty ||
+    variantDeltasDirty
 
   const valid =
     trimmedName.length > 0 &&
@@ -467,7 +555,8 @@ function ProductCardEditable({
     (product.type !== "simple" || (parsedDeposit != null && parsedDeposit >= 0)) &&
     deltaValid &&
     newStock >= 0 &&
-    (!jetonRequired || !!jetonId)
+    (!jetonRequired || !!jetonId) &&
+    !variantsHaveErrors
 
   function onPriceBlur() {
     // Normalize to two decimals if valid
@@ -514,6 +603,36 @@ function ProductCardEditable({
       if (deltaDirty) updates.push(adjustInventory(product.id, parsedDelta))
       await Promise.all(updates)
 
+      // Saved variants come back from the server so new rows carry their ids —
+      // without them a second save would re-create instead of update.
+      let updatedVariants = product.variants
+      if (variantsDirty) {
+        const saved = await updateVariants(
+          product.id,
+          variantLabel.trim() || null,
+          variants.map((v, idx) => ({
+            id: v.id,
+            value: v.value.trim(),
+            priceAdjustmentCents: parseAdjustment(v.adjInput) ?? 0,
+            isActive: v.isActive,
+            sequence: idx + 1,
+          }))
+        )
+        const stockById = new Map(variants.filter((v) => v.id).map((v) => [v.id, v.stock]))
+        updatedVariants = saved.map((v) => ({ ...v, stock: stockById.get(v.id) ?? v.stock }))
+      }
+
+      // Apply per-variant inventory adjustments sequentially after the main save
+      for (const v of variants) {
+        const varDelta = v.varDeltaInput.trim() === "" ? 0 : parseInt(v.varDeltaInput, 10)
+        if (!isNaN(varDelta) && varDelta !== 0 && v.id) {
+          await adjustInventory(product.id, varDelta, v.id)
+          updatedVariants = updatedVariants?.map((uv) =>
+            uv.id === v.id && typeof uv.stock === "number" ? { ...uv, stock: uv.stock + varDelta } : uv
+          )
+        }
+      }
+
       const updated: Product = {
         ...product,
         name: trimmedName,
@@ -527,8 +646,17 @@ function ProductCardEditable({
         jeton: jetonId ? jetons.find((j) => j.id === jetonId) : undefined,
         isActive,
         stock: typeof product.stock === "number" ? product.stock + parsedDelta : product.stock,
+        variantLabel: variantLabel.trim() || null,
+        variants: updatedVariants,
       }
       setDeltaInput("")
+      setVariants(
+        (updatedVariants ?? []).map((v) => ({
+          ...v,
+          adjInput: v.priceAdjustmentCents === 0 ? "" : (v.priceAdjustmentCents / 100).toFixed(2),
+          varDeltaInput: "",
+        }))
+      )
       setStatus("saved")
       onUpdated(updated)
       setTimeout(() => setStatus("idle"), 2000)
@@ -700,6 +828,181 @@ function ProductCardEditable({
             {jetonRequired && <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>}
           </div>
           {product.type === "simple" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Varianten</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setVariants((prev) => [
+                      ...prev,
+                      {
+                        value: "",
+                        priceAdjustmentCents: 0,
+                        isActive: true,
+                        sequence: prev.length + 1,
+                        adjInput: "",
+                        varDeltaInput: "",
+                      },
+                    ])
+                    setStatus("idle")
+                    setFieldError(null)
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  Variante
+                </Button>
+              </div>
+
+              {variants.length > 0 && (
+                <div className="space-y-1">
+                  <Label htmlFor={`variant-label-${product.id}`} className="text-xs">
+                    Bezeichnung (z. B. Grösse)
+                  </Label>
+                  <Input
+                    id={`variant-label-${product.id}`}
+                    value={variantLabel}
+                    placeholder="Variante"
+                    maxLength={20}
+                    onChange={(e) => {
+                      setVariantLabel(e.target.value)
+                      setStatus("idle")
+                      setFieldError(null)
+                    }}
+                  />
+                </div>
+              )}
+
+              {variants.map((v, idx) => {
+                const adj = parseAdjustment(v.adjInput)
+                return (
+                  <div key={idx} className="space-y-2 rounded-lg border p-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={v.value}
+                        placeholder="Wert (z. B. M)"
+                        maxLength={20}
+                        className="flex-1"
+                        onChange={(e) => {
+                          setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, value: e.target.value } : x)))
+                          setStatus("idle")
+                          setFieldError(null)
+                        }}
+                      />
+                      <Input
+                        value={v.adjInput}
+                        placeholder="Aufpreis"
+                        inputMode="decimal"
+                        className="w-24"
+                        aria-label="Aufpreis (CHF)"
+                        onChange={(e) => {
+                          setVariants((prev) =>
+                            prev.map((x, i) => (i === idx ? { ...x, adjInput: e.target.value } : x))
+                          )
+                          setStatus("idle")
+                          setFieldError(null)
+                        }}
+                      />
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Label htmlFor={`var-active-${product.id}-${idx}`} className="sr-only">
+                          Aktiv
+                        </Label>
+                        <Switch
+                          id={`var-active-${product.id}-${idx}`}
+                          checked={v.isActive}
+                          onCheckedChange={(checked) => {
+                            setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, isActive: checked } : x)))
+                            setStatus("idle")
+                            setFieldError(null)
+                          }}
+                          aria-label="Variante aktiv"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => {
+                            setVariants((prev) => prev.filter((_, i) => i !== idx))
+                            setStatus("idle")
+                            setFieldError(null)
+                          }}
+                          aria-label="Variante entfernen"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {adj === null && v.adjInput.trim() !== "" && (
+                      <p className="text-destructive text-xs">Ungültiger Aufpreis.</p>
+                    )}
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground shrink-0">
+                        Lager:{" "}
+                        <span className="text-foreground rounded border px-1.5 py-0.5">
+                          {typeof v.stock === "number" ? v.stock : "–"}
+                        </span>
+                      </span>
+                      {v.id && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => {
+                              const cur = v.varDeltaInput.trim() === "" ? 0 : parseInt(v.varDeltaInput, 10) || 0
+                              setVariants((prev) =>
+                                prev.map((x, i) => (i === idx ? { ...x, varDeltaInput: String(cur - 1) } : x))
+                              )
+                            }}
+                            aria-label="Variante Bestand verringern"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={v.varDeltaInput}
+                            placeholder="0"
+                            className="h-6 w-14 [appearance:textfield] text-center text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            onChange={(e) => {
+                              setVariants((prev) =>
+                                prev.map((x, i) => (i === idx ? { ...x, varDeltaInput: e.target.value } : x))
+                              )
+                              setStatus("idle")
+                              setFieldError(null)
+                            }}
+                            aria-label="Variante Bestand anpassen"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => {
+                              const cur = v.varDeltaInput.trim() === "" ? 0 : parseInt(v.varDeltaInput, 10) || 0
+                              setVariants((prev) =>
+                                prev.map((x, i) => (i === idx ? { ...x, varDeltaInput: String(cur + 1) } : x))
+                              )
+                            }}
+                            aria-label="Variante Bestand erhöhen"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {product.type === "simple" && variants.length === 0 && (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end">
               <div className="space-y-1">
                 <Label>Lager</Label>

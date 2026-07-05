@@ -24,6 +24,8 @@ export interface OrderItem {
   parentItemId: string | null
   menuSlotId: string | null
   menuSlotName: string | null
+  variantId?: string | null
+  variantValue?: string | null
   isRedeemed: boolean
   redeemedAt: string | null // ISO date
 }

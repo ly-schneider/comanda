@@ -32,6 +32,7 @@ export function CheckoutClient() {
         menuSelections: i.configuration
           ? Object.entries(i.configuration).map(([slotId, productId]) => ({ slotId, productId }))
           : undefined,
+        variantId: i.variantId,
       }))
 
       // Step 1: Create order

@@ -363,7 +363,10 @@ function ItemOverview({ view }: { view: RefundView }) {
         {view.lines.map((l) => (
           <div key={l.orderLineId} className="flex items-center justify-between gap-3 text-sm">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium">{l.title}</span>
+              <span className="truncate font-medium">
+                {l.title}
+                {l.variantValue ? ` (${l.variantValue})` : ""}
+              </span>
               {l.redeemed && (
                 <span className="inline-flex shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                   Bereits eingelöst

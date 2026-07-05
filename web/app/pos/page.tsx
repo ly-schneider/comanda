@@ -5,6 +5,7 @@ import "./bridge.client"
 import { Banknote, CreditCard, QrCode, ShoppingCart, UtensilsCrossed } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
+import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import { BasketPanel } from "@/components/pos/basket-panel"
 import { InventoryManagement } from "@/components/pos/inventory-management"
@@ -22,6 +23,7 @@ import { useOrderQueue } from "@/hooks/use-order-queue"
 import { listProducts } from "@/lib/api/products"
 import { getDeviceToken } from "@/lib/device-auth"
 import { cn, formatChf } from "@/lib/utils"
+import { hasVariants } from "@/lib/variants"
 import type { ListResponse, ProductDTO } from "@/types"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type { PosPaymentMethod } from "@/types/order-queue"
@@ -102,6 +104,8 @@ function PosInner() {
   const [products, setProducts] = useState<ListResponse<ProductDTO>>({ items: [], count: 0 })
   const [configOpen, setConfigOpen] = useState(false)
   const [configProduct, setConfigProduct] = useState<ProductDTO | null>(null)
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false)
+  const [variantPickerProduct, setVariantPickerProduct] = useState<ProductDTO | null>(null)
   const [showStuckOrders, setShowStuckOrders] = useState(false)
 
   const deviceId = sessionToken ? sessionToken.slice(0, 16) : "unknown"
@@ -132,6 +136,8 @@ function PosInner() {
     const onLock = () => {
       setConfigOpen(false)
       setConfigProduct(null)
+      setVariantPickerOpen(false)
+      setVariantPickerProduct(null)
     }
     window.addEventListener("pos:lock", onLock)
     return () => window.removeEventListener("pos:lock", onLock)
@@ -175,7 +181,7 @@ function PosInner() {
   // Store latest stock snapshot from SSE to handle race condition with product loading
   const stockSnapshotRef = useRef<Map<string, number>>(new Map())
 
-  // Helper to apply stock to products (including menu slot options)
+  // Helper to apply stock to products (including menu slot options and variants)
   const applyStockToProducts = useCallback((items: ProductDTO[], stockMap: Map<string, number>): ProductDTO[] => {
     return items.map((p) => {
       // Update menu slot options with stock data
@@ -201,6 +207,31 @@ function PosInner() {
           },
         }
       }
+
+      // Update variant stock when the product has variants
+      if (p.variants && p.variants.length > 0) {
+        const updatedVariants = p.variants.map((v) => {
+          const vStock = stockMap.get(v.id)
+          if (vStock === undefined) return v
+          return {
+            ...v,
+            stock: vStock,
+            availableQuantity: vStock,
+            isAvailable: vStock > 0,
+            isLowStock: vStock > 0 && vStock <= 5,
+          }
+        })
+        const anyActive = updatedVariants.some((v) => v.isActive && v.isAvailable !== false)
+        const productStock = stockMap.get(p.id)
+        return {
+          ...p,
+          variants: updatedVariants,
+          isAvailable: anyActive,
+          isLowStock: !anyActive ? false : updatedVariants.some((v) => v.isActive && v.isLowStock === true),
+          availableQuantity: productStock !== undefined ? productStock : p.availableQuantity,
+        }
+      }
+
       // Update simple product stock
       const newStock = stockMap.get(p.id)
       if (newStock === undefined) return p
@@ -247,14 +278,40 @@ function PosInner() {
     const onDecrement = (e: Event) => {
       const ce = e as CustomEvent<Map<string, number>>
       // Apply deltas to cached snapshot
-      ce.detail.forEach((delta, productId) => {
-        const current = stockSnapshotRef.current.get(productId) ?? 0
-        stockSnapshotRef.current.set(productId, Math.max(0, current + delta))
+      ce.detail.forEach((delta, key) => {
+        const current = stockSnapshotRef.current.get(key) ?? 0
+        stockSnapshotRef.current.set(key, Math.max(0, current + delta))
       })
-      // Apply to products
+      // Apply to products (including variant-level stock)
       setProducts((prev) => ({
         ...prev,
         items: prev.items.map((p) => {
+          if (p.variants && p.variants.length > 0) {
+            const updatedVariants = p.variants.map((v) => {
+              const delta = ce.detail.get(v.id)
+              if (!delta) return v
+              const newQty = Math.max(0, (v.availableQuantity ?? 0) + delta)
+              return {
+                ...v,
+                stock: newQty,
+                availableQuantity: newQty,
+                isAvailable: newQty > 0,
+                isLowStock: newQty > 0 && newQty <= 5,
+              }
+            })
+            const anyActive = updatedVariants.some((v) => v.isActive && v.isAvailable !== false)
+            const productDelta = ce.detail.get(p.id)
+            const newProductQty = productDelta
+              ? Math.max(0, (p.availableQuantity ?? 0) + productDelta)
+              : p.availableQuantity
+            return {
+              ...p,
+              variants: updatedVariants,
+              isAvailable: anyActive,
+              isLowStock: !anyActive ? false : updatedVariants.some((v) => v.isActive && v.isLowStock === true),
+              availableQuantity: newProductQty,
+            }
+          }
           const delta = ce.detail.get(p.id)
           if (!delta) return p
           const newQty = Math.max(0, (p.availableQuantity ?? 0) + delta)
@@ -415,8 +472,13 @@ function PosInner() {
               <ProductGrid
                 products={products}
                 onConfigure={(p) => {
-                  setConfigProduct(p)
-                  setConfigOpen(true)
+                  if (hasVariants(p)) {
+                    setVariantPickerProduct(p)
+                    setVariantPickerOpen(true)
+                  } else {
+                    setConfigProduct(p)
+                    setConfigOpen(true)
+                  }
                 }}
               />
             </div>
@@ -436,6 +498,18 @@ function PosInner() {
                 onClose={() => {
                   setConfigOpen(false)
                   setConfigProduct(null)
+                }}
+                isPOS
+              />
+            )}
+
+            {variantPickerProduct && (
+              <VariantPickerModal
+                product={variantPickerProduct}
+                isOpen={variantPickerOpen}
+                onClose={() => {
+                  setVariantPickerOpen(false)
+                  setVariantPickerProduct(null)
                 }}
                 isPOS
               />

@@ -46,6 +46,8 @@ type OrderLine = {
   parentLineId?: string | null
   menuSlotId?: string | null
   menuSlotName?: string | null
+  variantId?: string | null
+  variantValue?: string | null
   childLines?: OrderLine[]
 }
 
