@@ -88,4 +88,25 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 		require.Len(t, all, 1)
 		require.Equal(t, prodB, all[0].ID)
 	})
+
+	t.Run("variants are tenant-isolated", func(t *testing.T) {
+		variantA := nanoid.New()
+		env.privExec(t, `INSERT INTO product_variant (id, product_id, value, tenant_id) VALUES ($1, $2, 'M', $3)`, variantA, prodA, tenantA)
+
+		ctxA, _, cleanupA := env.appRequestTx(t, tenantA)
+		defer cleanupA()
+		mine, err := repos.ProductVariant.GetByProductID(ctxA, prodA)
+		require.NoError(t, err)
+		require.Len(t, mine, 1)
+		require.Equal(t, variantA, mine[0].ID)
+
+		ctxB, _, cleanupB := env.appRequestTx(t, tenantB)
+		defer cleanupB()
+		leaked, err := repos.ProductVariant.GetByProductID(ctxB, prodA)
+		require.NoError(t, err)
+		require.Empty(t, leaked, "tenant B must not see tenant A's variants")
+
+		_, err = repos.ProductVariant.GetByID(ctxB, variantA)
+		require.Error(t, err, "direct variant lookup across tenants must fail")
+	})
 }
