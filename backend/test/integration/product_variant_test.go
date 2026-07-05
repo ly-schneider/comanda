@@ -11,7 +11,6 @@ import (
 	"backend/internal/generated/ent/refund"
 	"backend/internal/service"
 
-	nanoid "backend/internal/id"
 	"github.com/stretchr/testify/require"
 )
 
@@ -119,6 +118,38 @@ func TestProductVariants_CRUD(t *testing.T) {
 			nil, []service.VariantInput{{ID: &foreign, Value: "M", IsActive: true}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "does not belong")
+	})
+
+	t.Run("swapping a value in one update frees the unique slot", func(t *testing.T) {
+		created, err := svc.Create(ctx, category.ID, product.TypeSimple, "Shirt", 2000, 0, true, nil, nil, nil,
+			nil, []service.VariantInput{{Value: "M", IsActive: true}})
+		require.NoError(t, err)
+		oldID := created.Edges.Variants[0].ID
+
+		updated, err := svc.Update(ctx, created.ID, category.ID, product.TypeSimple, "Shirt", 2000, 0, true, nil, nil, nil,
+			nil, []service.VariantInput{{Value: "M", PriceAdjustmentCents: 100, IsActive: true}})
+		require.NoError(t, err, "removing old M and adding new M in one update must not collide")
+		require.Len(t, updated.Edges.Variants, 1)
+		require.NotEqual(t, oldID, updated.Edges.Variants[0].ID)
+		require.Equal(t, int64(100), updated.Edges.Variants[0].PriceAdjustmentCents)
+	})
+
+	t.Run("re-adding a referenced value revives the archived row", func(t *testing.T) {
+		created, err := svc.Create(ctx, category.ID, product.TypeSimple, "Longsleeve", 3000, 0, true, nil, nil, nil,
+			nil, []service.VariantInput{{Value: "M", IsActive: true}})
+		require.NoError(t, err)
+		vID := created.Edges.Variants[0].ID
+
+		fixtures := NewFixtures(repos)
+		fixtures.AddVariantInventory(created.ID, vID, 3, inventoryledger.ReasonOpeningBalance)
+
+		updated, err := svc.Update(ctx, created.ID, category.ID, product.TypeSimple, "Longsleeve", 3000, 0, true, nil, nil, nil,
+			nil, []service.VariantInput{{Value: "M", PriceAdjustmentCents: 50, IsActive: true}})
+		require.NoError(t, err, "referenced M cannot be deleted; the id-less input must reuse it")
+		require.Len(t, updated.Edges.Variants, 1)
+		require.Equal(t, vID, updated.Edges.Variants[0].ID)
+		require.True(t, updated.Edges.Variants[0].IsActive)
+		require.Equal(t, int64(50), updated.Edges.Variants[0].PriceAdjustmentCents)
 	})
 
 	t.Run("referenced variant is archived instead of deleted", func(t *testing.T) {
@@ -438,5 +469,3 @@ func TestRefundService_VariantRestock(t *testing.T) {
 	}
 	require.True(t, refundEntry, "refund ledger row present")
 }
-
-var _ = nanoid.New

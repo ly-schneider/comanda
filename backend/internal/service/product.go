@@ -243,12 +243,51 @@ func (s *productService) reconcileVariants(ctx context.Context, productID string
 
 	kept := make(map[string]struct{}, len(variants))
 	for _, in := range variants {
+		if in.ID == nil {
+			continue
+		}
+		if _, ok := existingByID[*in.ID]; !ok {
+			return fmt.Errorf("variant does not belong to product: %s", *in.ID)
+		}
+		kept[*in.ID] = struct{}{}
+	}
+
+	// Removals run before creates so a removed value frees its unique slot;
+	// referenced rows can't be deleted, so they're kept for reuse by value
+	// (re-adding "M" revives the old row) and archived otherwise.
+	reusableByValue := make(map[string]*ent.ProductVariant)
+	for _, cur := range existing {
+		if _, ok := kept[cur.ID]; ok {
+			continue
+		}
+		referenced, err := s.variantRepo.IsReferenced(ctx, cur.ID)
+		if err != nil {
+			return err
+		}
+		if referenced {
+			reusableByValue[cur.Value] = cur
+			continue
+		}
+		if err := s.variantRepo.Delete(ctx, cur.ID); err != nil {
+			return err
+		}
+	}
+
+	for _, in := range variants {
+		if in.ID == nil {
+			continue
+		}
+		if _, err := s.variantRepo.Update(ctx, *in.ID, in.Value, in.PriceAdjustmentCents, in.IsActive, in.Sequence); err != nil {
+			return err
+		}
+	}
+
+	for _, in := range variants {
 		if in.ID != nil {
-			cur, ok := existingByID[*in.ID]
-			if !ok {
-				return fmt.Errorf("variant does not belong to product: %s", *in.ID)
-			}
-			kept[cur.ID] = struct{}{}
+			continue
+		}
+		if cur, ok := reusableByValue[in.Value]; ok {
+			delete(reusableByValue, in.Value)
 			if _, err := s.variantRepo.Update(ctx, cur.ID, in.Value, in.PriceAdjustmentCents, in.IsActive, in.Sequence); err != nil {
 				return err
 			}
@@ -259,21 +298,8 @@ func (s *productService) reconcileVariants(ctx context.Context, productID string
 		}
 	}
 
-	for _, cur := range existing {
-		if _, ok := kept[cur.ID]; ok {
-			continue
-		}
-		referenced, err := s.variantRepo.IsReferenced(ctx, cur.ID)
-		if err != nil {
-			return err
-		}
-		if referenced {
-			if _, err := s.variantRepo.Update(ctx, cur.ID, cur.Value, cur.PriceAdjustmentCents, false, cur.Sequence); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := s.variantRepo.Delete(ctx, cur.ID); err != nil {
+	for _, cur := range reusableByValue {
+		if _, err := s.variantRepo.Update(ctx, cur.ID, cur.Value, cur.PriceAdjustmentCents, false, cur.Sequence); err != nil {
 			return err
 		}
 	}
@@ -359,6 +385,9 @@ func (s *productService) AdjustStock(ctx context.Context, id string, variantID *
 		return fmt.Errorf("variantId is not allowed for products without variants")
 	}
 	if variantID != nil {
+		if !nanoid.Valid(*variantID) {
+			return fmt.Errorf("invalid variantId: %s", *variantID)
+		}
 		variant, err := s.variantRepo.GetByID(ctx, *variantID)
 		if err != nil {
 			return err

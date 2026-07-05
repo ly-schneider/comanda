@@ -181,7 +181,6 @@ function PosInner() {
   // Store latest stock snapshot from SSE to handle race condition with product loading
   const stockSnapshotRef = useRef<Map<string, number>>(new Map())
 
-  // Helper to apply stock to products (including menu slot options and variants)
   const applyStockToProducts = useCallback((items: ProductDTO[], stockMap: Map<string, number>): ProductDTO[] => {
     return items.map((p) => {
       // Update menu slot options with stock data
