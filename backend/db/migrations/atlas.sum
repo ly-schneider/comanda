@@ -1,4 +1,4 @@
-h1:+o0C6RaIqqVdYdU0s1XGAK9YS6l1X7a+mtaKoeyiJxk=
+h1:ptKmYIG8/dU1N3WCpj9fi7q8X8xDDUimkr0MhbEWOiQ=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -32,3 +32,4 @@ h1:+o0C6RaIqqVdYdU0s1XGAK9YS6l1X7a+mtaKoeyiJxk=
 20260705000000_product_deposit.sql h1:uex1/lCSa8bYC/xF1HcvaduVGmuMfrxaR2Wxq8oF4uY=
 20260706000000_add_settings_sumup_merchant_code.sql h1:6g9+/Yo8gOHsnZ0QDIvG5clyDjCK1zEM4CinD/yDA7E=
 20260707000000_qa_test_checklist.sql h1:B9nTiuoAJCutW1FZyUmKSel55PgvvMaBLwKpfqaQuWI=
+20260708000000_product_variants.sql h1:csixMp9dMjEfYyN+hrf1+ai2RDAzdD43sojg2qqMFdw=

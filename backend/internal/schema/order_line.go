@@ -49,6 +49,13 @@ func (OrderLine) Fields() []ent.Field {
 			MaxLen(20).
 			Optional().
 			Nillable(),
+		field.String("variant_id").MaxLen(12).
+			Optional().
+			Nillable(),
+		field.String("variant_value").
+			MaxLen(20).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -73,6 +80,10 @@ func (OrderLine) Edges() []ent.Edge {
 		edge.From("menu_slot", MenuSlot.Type).
 			Ref("order_lines").
 			Field("menu_slot_id").
+			Unique(),
+		edge.From("variant", ProductVariant.Type).
+			Ref("order_lines").
+			Field("variant_id").
 			Unique(),
 		edge.To("redemption", OrderLineRedemption.Type).
 			Unique(),
