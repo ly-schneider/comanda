@@ -45,7 +45,7 @@ export default async function HomePage() {
   return (
     <div className="bg-background min-h-screen">
       <main className="container mx-auto p-4">
-        <h2 className="mb-2 text-2xl">Alle Produkte</h2>
+        <h2 className="mb-2 text-2xl font-semibold">Alle Produkte</h2>
         <MenuGridLive initialProducts={products} />
       </main>
 
