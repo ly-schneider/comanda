@@ -68,6 +68,10 @@ Dependency graph (parallel windows): after **P0**, **P1** and P5-scaffolding can
 - **Branch naming:** `ley-<ticket#>-<slug>` (e.g. `ley-324-backend-ed25519-qr-signing`). No `levynschneider/` (or any user) prefix. **No separate worktree dirs** — older phases used `../comanda-ley-*` worktrees; new tasks are branches checked out in place.
 - **Commit messages:** conventional-commit subject line, kept terse. No `Co-Authored-By` trailer.
 
+## Local environment
+
+- Docker Desktop gets restarted frequently. If the Docker daemon is unreachable, stop and say so instead of retrying — Levyn will tell you when it's back up.
+
 ## Dev / build commands (carried over; paths update after P0)
 
 ```bash
