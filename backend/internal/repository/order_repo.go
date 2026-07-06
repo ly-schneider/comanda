@@ -9,7 +9,6 @@ import (
 	"backend/internal/generated/ent/orderpayment"
 
 	"entgo.io/ent/dialect/sql"
-	"golang.org/x/sync/errgroup"
 )
 
 type OrderRepository interface {
@@ -295,27 +294,19 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 		return query
 	}
 
-	var (
-		total int
-		rows  []*ent.Order
-	)
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		var err error
-		total, err = applyFilters(r.ec(gctx).Order.Query()).Count(gctx)
-		return err
-	})
-	g.Go(func() error {
-		// Intentionally no WithLines() — admin list consumers (dashboard + orders table)
-		// only read scalars + payments, and N×lines join is the dominant cost on /v1/orders.
-		var err error
-		rows, err = applyFilters(r.ec(gctx).Order.Query().WithPayments()).
-			Order(order.ByCreatedAt(entDescOpt())).
-			Limit(adminListHardCap).
-			All(gctx)
-		return err
-	})
-	if err := g.Wait(); err != nil {
+	// Sequential on purpose: the ctx client is bound to the request's single
+	// pgx tx connection, which cannot serve concurrent queries.
+	total, err := applyFilters(r.ec(ctx).Order.Query()).Count(ctx)
+	if err != nil {
+		return nil, 0, translateError(err)
+	}
+	// Intentionally no WithLines() — admin list consumers (dashboard + orders table)
+	// only read scalars + payments, and N×lines join is the dominant cost on /v1/orders.
+	rows, err := applyFilters(r.ec(ctx).Order.Query().WithPayments()).
+		Order(order.ByCreatedAt(entDescOpt())).
+		Limit(adminListHardCap).
+		All(ctx)
+	if err != nil {
 		return nil, 0, translateError(err)
 	}
 
@@ -327,28 +318,18 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 const adminListHardCap = 1000
 
 func (r *orderRepo) ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error) {
-	var (
-		total int
-		rows  []*ent.Order
-	)
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		var err error
-		total, err = r.ec(gctx).Order.Query().
-			Where(order.CustomerIDEQ(customerID)).
-			Count(gctx)
-		return err
-	})
-	g.Go(func() error {
-		var err error
-		rows, err = r.ec(gctx).Order.Query().
-			Where(order.CustomerIDEQ(customerID)).
-			Order(order.ByCreatedAt(entDescOpt())).
-			Limit(customerListHardCap).
-			All(gctx)
-		return err
-	})
-	if err := g.Wait(); err != nil {
+	total, err := r.ec(ctx).Order.Query().
+		Where(order.CustomerIDEQ(customerID)).
+		Count(ctx)
+	if err != nil {
+		return nil, 0, translateError(err)
+	}
+	rows, err := r.ec(ctx).Order.Query().
+		Where(order.CustomerIDEQ(customerID)).
+		Order(order.ByCreatedAt(entDescOpt())).
+		Limit(customerListHardCap).
+		All(ctx)
+	if err != nil {
 		return nil, 0, translateError(err)
 	}
 

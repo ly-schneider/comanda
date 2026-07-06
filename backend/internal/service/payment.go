@@ -27,7 +27,6 @@ import (
 
 	nanoid "backend/internal/id"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 type PaymentService interface {
@@ -208,47 +207,24 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		ids = append(ids, id)
 	}
 
-	var (
-		products              []*ent.Product
-		slots                 []*ent.MenuSlot
-		preloadedStock        map[string]int
-		preloadedVariantStock map[string]int
-	)
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		var err error
-		products, err = s.products.GetByIDs(gctx, ids)
-		if err != nil {
-			return fmt.Errorf("load products: %w", err)
-		}
-		return nil
-	})
-	g.Go(func() error {
-		var err error
-		slots, err = s.menuSlotRepo.GetByMenuProductIDs(gctx, ids)
-		if err != nil {
-			return fmt.Errorf("load menu slots: %w", err)
-		}
-		return nil
-	})
-	g.Go(func() error {
-		var err error
-		preloadedStock, err = s.inventoryRepo.GetCurrentStockBatch(gctx, ids)
-		if err != nil {
-			return fmt.Errorf("check inventory: %w", err)
-		}
-		return nil
-	})
-	g.Go(func() error {
-		var err error
-		preloadedVariantStock, err = s.inventoryRepo.GetCurrentStockByVariantBatch(gctx, ids)
-		if err != nil {
-			return fmt.Errorf("check variant inventory: %w", err)
-		}
-		return nil
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
+	// Sequential on purpose: the ctx client is bound to the request's single
+	// pgx tx connection, which cannot serve concurrent queries (protocol
+	// corruption panics the process).
+	products, err := s.products.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("load products: %w", err)
+	}
+	slots, err := s.menuSlotRepo.GetByMenuProductIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("load menu slots: %w", err)
+	}
+	preloadedStock, err := s.inventoryRepo.GetCurrentStockBatch(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("check inventory: %w", err)
+	}
+	preloadedVariantStock, err := s.inventoryRepo.GetCurrentStockByVariantBatch(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("check variant inventory: %w", err)
 	}
 
 	productMap := make(map[string]*ent.Product, len(products))
