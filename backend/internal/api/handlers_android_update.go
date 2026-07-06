@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"backend/internal/response"
 
@@ -18,6 +19,14 @@ func androidChannel(r *http.Request) (string, bool) {
 	return channel, channel == "staging" || channel == "production"
 }
 
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
 func (h *Handlers) GetAndroidLatestVersion(w http.ResponseWriter, r *http.Request) {
 	channel, ok := androidChannel(r)
 	if !ok {
@@ -25,7 +34,7 @@ func (h *Handlers) GetAndroidLatestVersion(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	release, err := h.androidUpdate.GetLatestRelease(r.Context(), channel)
+	release, err := h.androidUpdate.GetLatestRelease(r.Context(), channel, requestBaseURL(r))
 	if err != nil {
 		h.logger.Error("failed to fetch latest android release", zap.Error(err))
 		response.WriteError(w, http.StatusBadGateway, "Failed to check for updates")

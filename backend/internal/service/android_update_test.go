@@ -15,14 +15,13 @@ import (
 
 func newTestAndroidUpdateService(apiBaseURL string) *androidUpdateService {
 	return &androidUpdateService{
-		repoOwner:     "ly-schneider",
-		repoName:      "comanda",
-		token:         "test-token",
-		apiBaseURL:    apiBaseURL,
-		publicBaseURL: "https://api.example.com",
-		logger:        zap.NewNop(),
-		cache:         make(map[string]cachedRelease),
-		cacheTTL:      5 * time.Minute,
+		repoOwner:  "ly-schneider",
+		repoName:   "comanda",
+		token:      "test-token",
+		apiBaseURL: apiBaseURL,
+		logger:     zap.NewNop(),
+		cache:      make(map[string]cachedRelease),
+		cacheTTL:   5 * time.Minute,
 	}
 }
 
@@ -68,7 +67,7 @@ func TestGetLatestReleaseUsesProxyDownloadURL(t *testing.T) {
 	srv := newGitHubStub(t)
 	s := newTestAndroidUpdateService(srv.URL)
 
-	release, err := s.GetLatestRelease(context.Background(), "production")
+	release, err := s.GetLatestRelease(context.Background(), "production", "https://api.example.com")
 	if err != nil {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
@@ -120,7 +119,7 @@ func TestGetLatestReleaseNoReleaseForChannel(t *testing.T) {
 	t.Cleanup(srv.Close)
 	s := newTestAndroidUpdateService(srv.URL)
 
-	release, err := s.GetLatestRelease(context.Background(), "staging")
+	release, err := s.GetLatestRelease(context.Background(), "staging", "https://api.example.com")
 	if err != nil {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
@@ -131,7 +130,7 @@ func TestGetLatestReleaseNoReleaseForChannel(t *testing.T) {
 
 func TestGetLatestReleaseInvalidChannel(t *testing.T) {
 	s := newTestAndroidUpdateService("http://unused")
-	if _, err := s.GetLatestRelease(context.Background(), "beta"); err == nil {
+	if _, err := s.GetLatestRelease(context.Background(), "beta", "https://api.example.com"); err == nil {
 		t.Fatal("expected error for invalid channel")
 	}
 }
@@ -151,7 +150,7 @@ func TestLatestReleaseInfoCaches(t *testing.T) {
 	s := newTestAndroidUpdateService(srv.URL)
 
 	for range 2 {
-		if _, err := s.GetLatestRelease(context.Background(), "production"); err != nil {
+		if _, err := s.GetLatestRelease(context.Background(), "production", "https://api.example.com"); err != nil {
 			t.Fatalf("GetLatestRelease: %v", err)
 		}
 	}

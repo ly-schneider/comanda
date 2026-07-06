@@ -24,7 +24,10 @@ type AndroidRelease struct {
 }
 
 type AndroidUpdateService interface {
-	GetLatestRelease(ctx context.Context, channel string) (*AndroidRelease, error)
+	// baseURL is the origin the requesting device reached us on; the download
+	// URL is built against it so the APK stays on a host the device can reach
+	// (PUBLIC_BASE_URL is the web apex, not the API host).
+	GetLatestRelease(ctx context.Context, channel, baseURL string) (*AndroidRelease, error)
 	// Returns a nil reader (no error) when no release is published.
 	OpenAPKDownload(ctx context.Context, channel string) (io.ReadCloser, int64, error)
 }
@@ -49,34 +52,32 @@ type cachedRelease struct {
 }
 
 type androidUpdateService struct {
-	repoOwner     string
-	repoName      string
-	token         string
-	apiBaseURL    string
-	publicBaseURL string
-	logger        *zap.Logger
+	repoOwner  string
+	repoName   string
+	token      string
+	apiBaseURL string
+	logger     *zap.Logger
 
 	mu       sync.Mutex
 	cache    map[string]cachedRelease
 	cacheTTL time.Duration
 }
 
-func NewAndroidUpdateService(cfg config.AndroidConfig, appCfg config.AppConfig, logger *zap.Logger) AndroidUpdateService {
+func NewAndroidUpdateService(cfg config.AndroidConfig, logger *zap.Logger) AndroidUpdateService {
 	parts := strings.SplitN(cfg.GitHubRepo, "/", 2)
 	owner, repo := parts[0], parts[1]
 	return &androidUpdateService{
-		repoOwner:     owner,
-		repoName:      repo,
-		token:         cfg.GitHubToken,
-		apiBaseURL:    "https://api.github.com",
-		publicBaseURL: strings.TrimRight(appCfg.PublicBaseURL, "/"),
-		logger:        logger,
-		cache:         make(map[string]cachedRelease),
-		cacheTTL:      5 * time.Minute,
+		repoOwner:  owner,
+		repoName:   repo,
+		token:      cfg.GitHubToken,
+		apiBaseURL: "https://api.github.com",
+		logger:     logger,
+		cache:      make(map[string]cachedRelease),
+		cacheTTL:   5 * time.Minute,
 	}
 }
 
-func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel string) (*AndroidRelease, error) {
+func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel, baseURL string) (*AndroidRelease, error) {
 	info, err := s.latestReleaseInfo(ctx, channel)
 	if err != nil || info == nil {
 		return nil, err
@@ -84,7 +85,7 @@ func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel str
 	return &AndroidRelease{
 		VersionName: info.versionName,
 		VersionCode: info.versionCode,
-		DownloadURL: fmt.Sprintf("%s/v1/android/download?channel=%s", s.publicBaseURL, channel),
+		DownloadURL: fmt.Sprintf("%s/v1/android/download?channel=%s", strings.TrimRight(baseURL, "/"), channel),
 		SHA256:      info.sha256,
 	}, nil
 }
