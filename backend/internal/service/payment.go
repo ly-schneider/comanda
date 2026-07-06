@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -891,8 +892,16 @@ func (s *paymentService) GetPayrexxStatus(ctx context.Context) (PayrexxStatus, e
 	return status, nil
 }
 
+// webhookURL builds the URL Payrexx must deliver webhooks to. PUBLIC_BASE_URL
+// is the web apex, which the ingress routes to the Next.js app, not the API —
+// the API is only reachable on the api.-prefixed host.
 func (s *paymentService) webhookURL(token string) string {
 	base := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
+	if u, err := url.Parse(base); err == nil && u.Hostname() != "" &&
+		u.Hostname() != "localhost" && !strings.HasPrefix(u.Host, "api.") {
+		u.Host = "api." + u.Host
+		base = strings.TrimRight(u.String(), "/")
+	}
 	return base + "/v1/payments/webhooks/payrexx/" + token
 }
 
