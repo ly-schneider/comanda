@@ -3,6 +3,7 @@ import { FloatingBottomNav } from "@/components/cart/floating-bottom-nav"
 import { MenuGridLive } from "@/components/menu/menu-grid-live"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
+import { getRequestHost } from "@/lib/server/host"
 import { ListResponse, ProductDTO } from "@/types"
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
-  const { enabled } = await getSystemStatus()
+  const host = await getRequestHost()
+  const hostHeaders: Record<string, string> = host ? { "X-Forwarded-Host": host } : {}
+  const { enabled } = await getSystemStatus({ headers: hostHeaders })
 
   if (!enabled) {
     return (
@@ -33,7 +36,7 @@ export default async function HomePage() {
 
   let products: ListResponse<ProductDTO>
   try {
-    products = await listProducts()
+    products = await listProducts({}, { headers: hostHeaders })
   } catch (error) {
     console.error("Failed to fetch products:", error)
     products = { items: [], count: 0 }

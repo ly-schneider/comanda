@@ -101,7 +101,10 @@ function normalizeProduct(raw: RawProduct): ProductDTO {
   return product
 }
 
-export async function listProducts(params: ListProductsParams = {}): Promise<ListResponse<ProductDTO>> {
+export async function listProducts(
+  params: ListProductsParams = {},
+  options: RequestInit = {}
+): Promise<ListResponse<ProductDTO>> {
   const searchParams = new URLSearchParams()
 
   if (params.categoryId) {
@@ -119,7 +122,7 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Lis
   const queryString = searchParams.toString()
   const endpoint = `/v1/products${queryString ? `?${queryString}` : ""}`
 
-  const raw = await apiRequest<ListResponse<RawProduct>>(endpoint)
+  const raw = await apiRequest<ListResponse<RawProduct>>(endpoint, options)
   const items = (raw.items || []).map(normalizeProduct)
 
   // Build stock map from simple products to apply to menu slot options
