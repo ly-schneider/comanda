@@ -278,6 +278,9 @@ paths:
   /android/latest:
     $ref: "paths/android.yaml#/latest"
 
+  /android/download:
+    $ref: "paths/android.yaml#/download"
+
   /internal/trusted-origins:
     $ref: "paths/internal.yaml#/trusted-origins"
 

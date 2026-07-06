@@ -32,3 +32,45 @@ latest:
           application/json:
             schema:
               $ref: "../schemas/common.yaml#/Error"
+
+download:
+  get:
+    tags: [Android]
+    summary: Download latest Android APK
+    description: |
+      Streams the latest release APK for the channel. Proxies the GitHub
+      release asset so devices can download updates from the private
+      repository without GitHub credentials.
+
+      The optional `channel` query parameter selects the release channel
+      (`production` or `staging`, default `production`); other values return
+      `400`. Returns `404` when no release is published for the channel.
+    operationId: downloadAndroidApk
+    security:
+      - {}
+    responses:
+      "200":
+        description: APK binary
+        content:
+          application/vnd.android.package-archive:
+            schema:
+              type: string
+              format: binary
+      "400":
+        description: Invalid channel
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: No release available for the channel
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "502":
+        description: Upstream release feed unavailable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

@@ -25,6 +25,8 @@ type AndroidRelease struct {
 
 type AndroidUpdateService interface {
 	GetLatestRelease(ctx context.Context, channel string) (*AndroidRelease, error)
+	// Returns a nil reader (no error) when no release is published.
+	OpenAPKDownload(ctx context.Context, channel string) (io.ReadCloser, int64, error)
 }
 
 var validChannels = map[string]struct{}{
@@ -32,56 +34,109 @@ var validChannels = map[string]struct{}{
 	"production": {},
 }
 
+// Private-repo assets are only reachable via the GitHub asset API with a
+// token, so devices download through the proxy endpoint instead.
+type releaseInfo struct {
+	versionName string
+	versionCode int
+	sha256      string
+	apkAssetURL string
+}
+
 type cachedRelease struct {
-	release *AndroidRelease
-	at      time.Time
+	info *releaseInfo
+	at   time.Time
 }
 
 type androidUpdateService struct {
-	repoOwner string
-	repoName  string
-	logger    *zap.Logger
+	repoOwner     string
+	repoName      string
+	token         string
+	apiBaseURL    string
+	publicBaseURL string
+	logger        *zap.Logger
 
 	mu       sync.Mutex
 	cache    map[string]cachedRelease
 	cacheTTL time.Duration
 }
 
-func NewAndroidUpdateService(cfg config.AndroidConfig, logger *zap.Logger) AndroidUpdateService {
+func NewAndroidUpdateService(cfg config.AndroidConfig, appCfg config.AppConfig, logger *zap.Logger) AndroidUpdateService {
 	parts := strings.SplitN(cfg.GitHubRepo, "/", 2)
 	owner, repo := parts[0], parts[1]
 	return &androidUpdateService{
-		repoOwner: owner,
-		repoName:  repo,
-		logger:    logger,
-		cache:     make(map[string]cachedRelease),
-		cacheTTL:  5 * time.Minute,
+		repoOwner:     owner,
+		repoName:      repo,
+		token:         cfg.GitHubToken,
+		apiBaseURL:    "https://api.github.com",
+		publicBaseURL: strings.TrimRight(appCfg.PublicBaseURL, "/"),
+		logger:        logger,
+		cache:         make(map[string]cachedRelease),
+		cacheTTL:      5 * time.Minute,
 	}
 }
 
 func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel string) (*AndroidRelease, error) {
+	info, err := s.latestReleaseInfo(ctx, channel)
+	if err != nil || info == nil {
+		return nil, err
+	}
+	return &AndroidRelease{
+		VersionName: info.versionName,
+		VersionCode: info.versionCode,
+		DownloadURL: fmt.Sprintf("%s/v1/android/download?channel=%s", s.publicBaseURL, channel),
+		SHA256:      info.sha256,
+	}, nil
+}
+
+func (s *androidUpdateService) OpenAPKDownload(ctx context.Context, channel string) (io.ReadCloser, int64, error) {
+	info, err := s.latestReleaseInfo(ctx, channel)
+	if err != nil {
+		return nil, 0, err
+	}
+	if info == nil {
+		return nil, 0, nil
+	}
+
+	req, err := s.newGitHubRequest(ctx, info.apkAssetURL, "application/octet-stream")
+	if err != nil {
+		return nil, 0, fmt.Errorf("android update: create download request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("android update: download apk: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, 0, fmt.Errorf("android update: apk download returned %d", resp.StatusCode)
+	}
+	return resp.Body, resp.ContentLength, nil
+}
+
+func (s *androidUpdateService) latestReleaseInfo(ctx context.Context, channel string) (*releaseInfo, error) {
 	if _, ok := validChannels[channel]; !ok {
 		return nil, fmt.Errorf("android update: invalid channel %q", channel)
 	}
 
 	s.mu.Lock()
 	if entry, ok := s.cache[channel]; ok && time.Since(entry.at) < s.cacheTTL {
-		result := entry.release
+		result := entry.info
 		s.mu.Unlock()
 		return result, nil
 	}
 	s.mu.Unlock()
 
-	release, err := s.fetchLatestRelease(ctx, channel)
+	info, err := s.fetchLatestRelease(ctx, channel)
 	if err != nil {
 		return nil, err
 	}
 
 	s.mu.Lock()
-	s.cache[channel] = cachedRelease{release: release, at: time.Now()}
+	s.cache[channel] = cachedRelease{info: info, at: time.Now()}
 	s.mu.Unlock()
 
-	return release, nil
+	return info, nil
 }
 
 type ghRelease struct {
@@ -90,19 +145,30 @@ type ghRelease struct {
 }
 
 type ghAsset struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
-func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel string) (*AndroidRelease, error) {
-	tagPrefix := "android-" + channel + "-v"
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases", s.repoOwner, s.repoName)
-
+func (s *androidUpdateService) newGitHubRequest(ctx context.Context, url, accept string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", accept)
+	if s.token != "" {
+		req.Header.Set("Authorization", "Bearer "+s.token)
+	}
+	return req, nil
+}
+
+func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel string) (*releaseInfo, error) {
+	tagPrefix := "android-" + channel + "-v"
+	url := fmt.Sprintf("%s/repos/%s/%s/releases", s.apiBaseURL, s.repoOwner, s.repoName)
+
+	req, err := s.newGitHubRequest(ctx, url, "application/vnd.github+json")
 	if err != nil {
 		return nil, fmt.Errorf("android update: create request: %w", err)
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -131,31 +197,31 @@ func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel s
 			continue
 		}
 
-		var downloadURL string
-		var sha256URL string
+		var apkAssetURL string
+		var sha256AssetURL string
 		for _, asset := range rel.Assets {
 			if strings.HasSuffix(asset.Name, ".apk") {
-				downloadURL = asset.BrowserDownloadURL
+				apkAssetURL = asset.URL
 			}
 			if strings.HasSuffix(asset.Name, ".sha256") {
-				sha256URL = asset.BrowserDownloadURL
+				sha256AssetURL = asset.URL
 			}
 		}
 
-		if downloadURL == "" {
+		if apkAssetURL == "" {
 			continue
 		}
 
 		sha256 := ""
-		if sha256URL != "" {
-			sha256 = s.fetchSHA256(ctx, sha256URL)
+		if sha256AssetURL != "" {
+			sha256 = s.fetchSHA256(ctx, sha256AssetURL)
 		}
 
-		return &AndroidRelease{
-			VersionName: versionStr,
-			VersionCode: versionCode,
-			DownloadURL: downloadURL,
-			SHA256:      sha256,
+		return &releaseInfo{
+			versionName: versionStr,
+			versionCode: versionCode,
+			sha256:      sha256,
+			apkAssetURL: apkAssetURL,
 		}, nil
 	}
 
@@ -163,7 +229,7 @@ func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel s
 }
 
 func (s *androidUpdateService) fetchSHA256(ctx context.Context, url string) string {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := s.newGitHubRequest(ctx, url, "application/octet-stream")
 	if err != nil {
 		return ""
 	}

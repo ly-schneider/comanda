@@ -97,7 +97,8 @@ type ElvantoConfig struct {
 }
 
 type AndroidConfig struct {
-	GitHubRepo string
+	GitHubRepo  string
+	GitHubToken string
 }
 
 type AppConfig struct {
@@ -241,7 +242,8 @@ func Load() Config {
 			Release:     getEnvOptional("APP_VERSION"),
 		},
 		Android: AndroidConfig{
-			GitHubRepo: getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
+			GitHubRepo:  getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
+			GitHubToken: getEnvOptional("ANDROID_GITHUB_TOKEN"),
 		},
 		CustomDomain: CustomDomainConfig{
 			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),

@@ -67,8 +67,9 @@ func NewRouter(
 	// ── Health check ──────────────────────────────────────────────────
 	r.Get("/health", apiHandlers.HealthCheck)
 
-	// ── Android update check (public, no auth) ──────────────────────
+	// ── Android update check + APK download (public, no auth) ───────
 	r.Get("/v1/android/latest", wrapper.GetAndroidLatestVersion)
+	r.Get("/v1/android/download", wrapper.DownloadAndroidApk)
 
 	// ── Payrexx webhook (per-tenant, no auth, no Host) ──────────────
 	// Wired outside the /v1 tenant-tx group: with no tenant-bearing Host it can't
