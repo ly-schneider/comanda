@@ -1,0 +1,63 @@
+PublicPlugin:
+  type: object
+  required: [key, name, config]
+  properties:
+    key:
+      type: string
+    name:
+      type: string
+    config:
+      type: object
+      additionalProperties: true
+      description: Non-secret, tenant-visible plugin configuration.
+
+PublicPluginList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/PublicPlugin"
+
+TenantPluginState:
+  type: object
+  required: [key, name, enabled, config]
+  properties:
+    key:
+      type: string
+    name:
+      type: string
+    enabled:
+      type: boolean
+    config:
+      type: object
+      additionalProperties: true
+    secretsConfiguredAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: When plugin secrets were last stored. Secret values are never returned.
+
+TenantPluginList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/TenantPluginState"
+
+TenantPluginUpdate:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+    config:
+      type: object
+      additionalProperties: true
+    secrets:
+      type: object
+      additionalProperties:
+        type: string
+      description: Write-only secret map (e.g. API keys). Encrypted at rest; never returned by any read.
