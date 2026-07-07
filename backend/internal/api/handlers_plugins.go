@@ -16,11 +16,7 @@ func (h *Handlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 		writeEntError(w, err)
 		return
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, p := range items {
-		out = append(out, map[string]any{"key": p.Key, "name": p.Name, "config": p.Config})
-	}
-	response.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
+	response.WriteJSON(w, http.StatusOK, generated.PublicPluginList{Items: toAPIPublicPlugins(items)})
 }
 
 func (h *Handlers) ListTenantPlugins(w http.ResponseWriter, r *http.Request, tenantId string) {
@@ -32,11 +28,7 @@ func (h *Handlers) ListTenantPlugins(w http.ResponseWriter, r *http.Request, ten
 		writeEntError(w, err)
 		return
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, p := range items {
-		out = append(out, tenantPluginStateResponse(p))
-	}
-	response.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
+	response.WriteJSON(w, http.StatusOK, generated.TenantPluginList{Items: toAPITenantPluginStates(items)})
 }
 
 func (h *Handlers) UpdateTenantPlugin(w http.ResponseWriter, r *http.Request, tenantId string, key string) {
@@ -71,15 +63,5 @@ func (h *Handlers) UpdateTenantPlugin(w http.ResponseWriter, r *http.Request, te
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, tenantPluginStateResponse(state))
-}
-
-func tenantPluginStateResponse(p plugin.TenantPluginState) map[string]any {
-	return map[string]any{
-		"key":                 p.Key,
-		"name":                p.Name,
-		"enabled":             p.Enabled,
-		"config":              p.Config,
-		"secretsConfiguredAt": p.SecretsConfiguredAt,
-	}
+	response.WriteJSON(w, http.StatusOK, toAPITenantPluginState(state))
 }
