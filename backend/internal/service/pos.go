@@ -18,13 +18,13 @@ type POSService interface {
 	GetDeviceByID(ctx context.Context, id string) (*ent.Device, error)
 	// Orders
 	CreateOrder(ctx context.Context, items []POSCheckoutItem, customerEmail *string) (string, error)
-	PayCash(ctx context.Context, orderID string, deviceID *string) error
-	PayCard(ctx context.Context, orderID string, deviceID *string, card *repository.CardMeta) error
-	PayTwint(ctx context.Context, orderID string, deviceID *string) error
+	PayCash(ctx context.Context, orderID string, deviceID *string, pluginKey *string) error
+	PayCard(ctx context.Context, orderID string, deviceID *string, card *repository.CardMeta, pluginKey *string) error
+	PayTwint(ctx context.Context, orderID string, deviceID *string, pluginKey *string) error
 	PayGratisGuest(ctx context.Context, orderID string, deviceID *string) error
 	PayGratisVIP(ctx context.Context, orderID string, deviceID *string) error
 	PayGratisStaff(ctx context.Context, orderID string, deviceID *string) error
-	PayGratis100Club(ctx context.Context, orderID string, deviceID *string, elvantoPersonID, elvantoPersonName string, freeQty int) error
+	PayGratisPlugin(ctx context.Context, orderID string, deviceID *string, pluginKey string) error
 }
 
 type POSCheckoutItem struct {
@@ -39,7 +39,6 @@ type posService struct {
 	devices  repository.DeviceRepository
 	orders   repository.OrderRepository
 	payments PaymentService
-	club100  Club100Service
 }
 
 func NewPOSService(
@@ -47,14 +46,12 @@ func NewPOSService(
 	devices repository.DeviceRepository,
 	orders repository.OrderRepository,
 	payments PaymentService,
-	club100 Club100Service,
 ) POSService {
 	return &posService{
 		cfg:      cfg,
 		devices:  devices,
 		orders:   orders,
 		payments: payments,
-		club100:  club100,
 	}
 }
 
@@ -105,7 +102,7 @@ func (s *posService) CreateOrder(ctx context.Context, items []POSCheckoutItem, c
 	return prep.OrderID, nil
 }
 
-func (s *posService) PayCash(ctx context.Context, orderID string, deviceID *string) error {
+func (s *posService) PayCash(ctx context.Context, orderID string, deviceID *string, pluginKey *string) error {
 	if orderID == "" {
 		return fmt.Errorf("invalid order id")
 	}
@@ -118,10 +115,10 @@ func (s *posService) PayCash(ctx context.Context, orderID string, deviceID *stri
 		return fmt.Errorf("not_pending")
 	}
 
-	return s.orders.SetPosPaymentCash(ctx, orderID, deviceID, ord.TotalCents)
+	return s.orders.SetPosPaymentCash(ctx, orderID, deviceID, ord.TotalCents, pluginKey)
 }
 
-func (s *posService) PayCard(ctx context.Context, orderID string, deviceID *string, card *repository.CardMeta) error {
+func (s *posService) PayCard(ctx context.Context, orderID string, deviceID *string, card *repository.CardMeta, pluginKey *string) error {
 	if orderID == "" {
 		return fmt.Errorf("invalid order id")
 	}
@@ -134,10 +131,10 @@ func (s *posService) PayCard(ctx context.Context, orderID string, deviceID *stri
 		return fmt.Errorf("not_pending")
 	}
 
-	return s.orders.SetPosPaymentCard(ctx, orderID, deviceID, ord.TotalCents, card)
+	return s.orders.SetPosPaymentCard(ctx, orderID, deviceID, ord.TotalCents, card, pluginKey)
 }
 
-func (s *posService) PayTwint(ctx context.Context, orderID string, deviceID *string) error {
+func (s *posService) PayTwint(ctx context.Context, orderID string, deviceID *string, pluginKey *string) error {
 	if orderID == "" {
 		return fmt.Errorf("invalid order id")
 	}
@@ -150,7 +147,7 @@ func (s *posService) PayTwint(ctx context.Context, orderID string, deviceID *str
 		return fmt.Errorf("not_pending")
 	}
 
-	return s.orders.SetPosPaymentTwint(ctx, orderID, deviceID, ord.TotalCents)
+	return s.orders.SetPosPaymentTwint(ctx, orderID, deviceID, ord.TotalCents, pluginKey)
 }
 
 func (s *posService) PayGratisGuest(ctx context.Context, orderID string, deviceID *string) error {
@@ -201,7 +198,7 @@ func (s *posService) PayGratisStaff(ctx context.Context, orderID string, deviceI
 	return s.orders.SetPosPaymentGratisStaff(ctx, orderID, deviceID, ord.TotalCents)
 }
 
-func (s *posService) PayGratis100Club(ctx context.Context, orderID string, deviceID *string, elvantoPersonID, elvantoPersonName string, freeQty int) error {
+func (s *posService) PayGratisPlugin(ctx context.Context, orderID string, deviceID *string, pluginKey string) error {
 	if orderID == "" {
 		return fmt.Errorf("invalid order id")
 	}
@@ -214,13 +211,5 @@ func (s *posService) PayGratis100Club(ctx context.Context, orderID string, devic
 		return fmt.Errorf("not_pending")
 	}
 
-	if err := s.club100.ValidateOrderForRedemption(ctx, orderID); err != nil {
-		return err
-	}
-
-	if err := s.club100.RecordRedemption(ctx, elvantoPersonID, elvantoPersonName, orderID, freeQty); err != nil {
-		return fmt.Errorf("record redemption: %w", err)
-	}
-
-	return s.orders.SetPosPaymentGratis100Club(ctx, orderID, deviceID, ord.TotalCents)
+	return s.orders.SetPosPaymentGratisPlugin(ctx, orderID, deviceID, ord.TotalCents, pluginKey)
 }

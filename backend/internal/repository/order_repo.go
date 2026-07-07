@@ -36,13 +36,13 @@ type OrderRepository interface {
 	ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error)
 
 	// POS payment methods - creates payment record and updates order status
-	SetPosPaymentCash(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
-	SetPosPaymentCard(ctx context.Context, orderID string, deviceID *string, amountCents int64, card *CardMeta) error
-	SetPosPaymentTwint(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
+	SetPosPaymentCash(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey *string) error
+	SetPosPaymentCard(ctx context.Context, orderID string, deviceID *string, amountCents int64, card *CardMeta, pluginKey *string) error
+	SetPosPaymentTwint(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey *string) error
 	SetPosPaymentGratisGuest(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
 	SetPosPaymentGratisVIP(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
 	SetPosPaymentGratisStaff(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
-	SetPosPaymentGratis100Club(ctx context.Context, orderID string, deviceID *string, amountCents int64) error
+	SetPosPaymentGratisPlugin(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey string) error
 
 	// Additional methods
 	DeleteIfPending(ctx context.Context, id string) (bool, error)
@@ -347,7 +347,7 @@ type CardMeta struct {
 	TransactionID *string
 }
 
-func (r *orderRepo) setPosPayment(ctx context.Context, orderID string, deviceID *string, method orderpayment.Method, amountCents int64, card *CardMeta) error {
+func (r *orderRepo) setPosPayment(ctx context.Context, orderID string, deviceID *string, method orderpayment.Method, amountCents int64, card *CardMeta, pluginKey *string) error {
 	// Runs on the request-scoped tenant tx client; the payment insert + order
 	// status update are atomic through that outer transaction. A nested Ent
 	// Tx() here would return ErrTxStarted and bypass the app.tenant_id GUC.
@@ -360,6 +360,9 @@ func (r *orderRepo) setPosPayment(ctx context.Context, orderID string, deviceID 
 		SetPaidAt(time.Now())
 	if deviceID != nil {
 		payBuilder.SetDeviceID(*deviceID)
+	}
+	if pluginKey != nil {
+		payBuilder.SetPluginKey(*pluginKey)
 	}
 	if card != nil {
 		if card.Brand != nil {
@@ -388,32 +391,32 @@ func (r *orderRepo) setPosPayment(ctx context.Context, orderID string, deviceID 
 	return nil
 }
 
-func (r *orderRepo) SetPosPaymentCash(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodCASH, amountCents, nil)
+func (r *orderRepo) SetPosPaymentCash(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey *string) error {
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodCASH, amountCents, nil, pluginKey)
 }
 
-func (r *orderRepo) SetPosPaymentCard(ctx context.Context, orderID string, deviceID *string, amountCents int64, card *CardMeta) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodCARD, amountCents, card)
+func (r *orderRepo) SetPosPaymentCard(ctx context.Context, orderID string, deviceID *string, amountCents int64, card *CardMeta, pluginKey *string) error {
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodCARD, amountCents, card, pluginKey)
 }
 
-func (r *orderRepo) SetPosPaymentTwint(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodTWINT, amountCents, nil)
+func (r *orderRepo) SetPosPaymentTwint(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey *string) error {
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodTWINT, amountCents, nil, pluginKey)
 }
 
 func (r *orderRepo) SetPosPaymentGratisGuest(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_GUEST, amountCents, nil)
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_GUEST, amountCents, nil, nil)
 }
 
 func (r *orderRepo) SetPosPaymentGratisVIP(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_VIP, amountCents, nil)
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_VIP, amountCents, nil, nil)
 }
 
 func (r *orderRepo) SetPosPaymentGratisStaff(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_STAFF, amountCents, nil)
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_STAFF, amountCents, nil, nil)
 }
 
-func (r *orderRepo) SetPosPaymentGratis100Club(ctx context.Context, orderID string, deviceID *string, amountCents int64) error {
-	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_100CLUB, amountCents, nil)
+func (r *orderRepo) SetPosPaymentGratisPlugin(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey string) error {
+	return r.setPosPayment(ctx, orderID, deviceID, orderpayment.MethodGRATIS_PLUGIN, amountCents, nil, &pluginKey)
 }
 
 func (r *orderRepo) DeleteIfPending(ctx context.Context, id string) (bool, error) {

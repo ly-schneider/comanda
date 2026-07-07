@@ -31,8 +31,11 @@ func (OrderPayment) Fields() []ent.Field {
 		nanoidPK(),
 		field.String("order_id").MaxLen(12),
 		field.Enum("method").
-			Values("CASH", "CARD", "TWINT", "GRATIS_GUEST", "GRATIS_VIP", "GRATIS_STAFF", "GRATIS_100CLUB").
+			Values("CASH", "CARD", "TWINT", "GRATIS_GUEST", "GRATIS_VIP", "GRATIS_STAFF", "GRATIS_PLUGIN").
 			StorageKey("method"),
+		field.String("plugin_key").
+			Optional().
+			Nillable(),
 		field.Int64("amount_cents"),
 		field.String("device_id").MaxLen(12).
 			Optional().

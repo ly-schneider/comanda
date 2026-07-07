@@ -3,14 +3,15 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
+	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/order"
+	"backend/internal/plugin"
 	"backend/internal/repository"
 	"backend/internal/response"
 	"backend/internal/service"
@@ -356,25 +357,86 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 		}
 	}
 
+	twintPOS := body.Channel != nil && *body.Channel == generated.PaymentChannelPos
+	supportsPlugin := body.Method == generated.Cash ||
+		body.Method == generated.Card ||
+		(body.Method == generated.Twint && twintPOS) ||
+		body.Method == generated.GratisPlugin
+
+	var (
+		pluginHook  plugin.PaymentHook
+		pluginData  json.RawMessage
+		pluginOrder *ent.Order
+		pluginKey   *string
+	)
+	if body.Plugin != nil {
+		if !supportsPlugin {
+			writeError(w, http.StatusBadRequest, "plugin_not_supported", "This payment method does not support a plugin redemption")
+			return
+		}
+		hook, err := h.plugins.PaymentHook(ctx, body.Plugin.Key)
+		if err != nil {
+			h.logger.Warn("plugin payment rejected", zap.String("plugin", body.Plugin.Key), zap.Error(err))
+			writeError(w, http.StatusBadRequest, "plugin_unavailable", "Plugin is not available for this tenant")
+			return
+		}
+		data, err := json.Marshal(body.Plugin.Data)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_plugin_data", "Invalid plugin data")
+			return
+		}
+		o, err := h.orders.GetByID(ctx, id)
+		if err != nil {
+			writeEntError(w, err)
+			return
+		}
+		if err := hook.ValidatePayment(ctx, o, data); err != nil {
+			writeError(w, http.StatusBadRequest, "plugin_validation_failed", err.Error())
+			return
+		}
+		pluginHook = hook
+		pluginData = data
+		pluginOrder = o
+		pluginKey = &body.Plugin.Key
+	} else if body.Method == generated.GratisPlugin {
+		writeError(w, http.StatusBadRequest, "plugin_required", "gratis_plugin requires a plugin field")
+		return
+	}
+
+	// A hook failure writes a >=400 status, so the request tx rolls back the payment.
+	runRecordedHook := func() bool {
+		if pluginHook == nil {
+			return true
+		}
+		if err := pluginHook.OnPaymentRecorded(ctx, pluginOrder, string(body.Method), pluginData); err != nil {
+			writeError(w, http.StatusBadRequest, "plugin_hook_failed", err.Error())
+			return false
+		}
+		return true
+	}
+
+	paymentResponse := func(method string) map[string]any {
+		resp := map[string]any{"orderId": id, "method": method}
+		if pluginKey != nil {
+			resp["pluginKey"] = *pluginKey
+		}
+		return resp
+	}
+
 	switch body.Method {
 	case generated.Cash:
 		var deviceID *string
 		if did, ok := auth.GetDeviceID(ctx); ok {
 			deviceID = &did
 		}
-		if body.Club100 != nil {
-			if err := h.club100.RecordRedemption(ctx, body.Club100.ElvantoPersonId, body.Club100.ElvantoPersonName, id, body.Club100.FreeQuantity); err != nil {
-				h.logger.Warn("failed to record club100 redemption for cash payment", zap.Error(err))
-			}
-		}
-		if err := h.pos.PayCash(ctx, id, deviceID); err != nil {
+		if err := h.pos.PayCash(ctx, id, deviceID, pluginKey); err != nil {
 			writeError(w, http.StatusBadRequest, "payment_failed", err.Error())
 			return
 		}
-		resp := map[string]any{"orderId": id, "method": "cash"}
-		if body.Club100 != nil {
-			resp["club100PersonId"] = body.Club100.ElvantoPersonId
+		if !runRecordedHook() {
+			return
 		}
+		resp := paymentResponse("cash")
 		cachePaymentResponse(resp)
 		response.WriteJSON(w, http.StatusCreated, resp)
 
@@ -382,11 +444,6 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 		var deviceID *string
 		if did, ok := auth.GetDeviceID(ctx); ok {
 			deviceID = &did
-		}
-		if body.Club100 != nil {
-			if err := h.club100.RecordRedemption(ctx, body.Club100.ElvantoPersonId, body.Club100.ElvantoPersonName, id, body.Club100.FreeQuantity); err != nil {
-				h.logger.Warn("failed to record club100 redemption for card payment", zap.Error(err))
-			}
 		}
 		var card *repository.CardMeta
 		if body.Card != nil {
@@ -397,36 +454,32 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 				TransactionID: body.Card.TransactionId,
 			}
 		}
-		if err := h.pos.PayCard(ctx, id, deviceID, card); err != nil {
+		if err := h.pos.PayCard(ctx, id, deviceID, card, pluginKey); err != nil {
 			writeError(w, http.StatusBadRequest, "payment_failed", err.Error())
 			return
 		}
-		resp := map[string]any{"orderId": id, "method": "card"}
-		if body.Club100 != nil {
-			resp["club100PersonId"] = body.Club100.ElvantoPersonId
+		if !runRecordedHook() {
+			return
 		}
+		resp := paymentResponse("card")
 		cachePaymentResponse(resp)
 		response.WriteJSON(w, http.StatusCreated, resp)
 
 	case generated.Twint:
-		if body.Channel != nil && *body.Channel == generated.PaymentChannelPos {
+		if twintPOS {
 			var deviceID *string
 			if did, ok := auth.GetDeviceID(ctx); ok {
 				deviceID = &did
 			}
-			if body.Club100 != nil {
-				if err := h.club100.RecordRedemption(ctx, body.Club100.ElvantoPersonId, body.Club100.ElvantoPersonName, id, body.Club100.FreeQuantity); err != nil {
-					h.logger.Warn("failed to record club100 redemption for twint payment", zap.Error(err))
-				}
-			}
-			if err := h.pos.PayTwint(ctx, id, deviceID); err != nil {
+			if err := h.pos.PayTwint(ctx, id, deviceID, pluginKey); err != nil {
 				writeError(w, http.StatusBadRequest, "payment_failed", err.Error())
 				return
 			}
-			resp := map[string]any{"orderId": id, "method": "twint", "channel": "pos"}
-			if body.Club100 != nil {
-				resp["club100PersonId"] = body.Club100.ElvantoPersonId
+			if !runRecordedHook() {
+				return
 			}
+			resp := paymentResponse("twint")
+			resp["channel"] = "pos"
 			cachePaymentResponse(resp)
 			response.WriteJSON(w, http.StatusCreated, resp)
 			return
@@ -523,24 +576,19 @@ func (h *Handlers) CreateOrderPayment(w http.ResponseWriter, r *http.Request, or
 		cachePaymentResponse(resp)
 		response.WriteJSON(w, http.StatusCreated, resp)
 
-	case generated.Gratis100club:
-		if body.Club100 == nil {
-			writeError(w, http.StatusBadRequest, "missing_club100_info", "Club100 info required for gratis_100club payment")
-			return
-		}
+	case generated.GratisPlugin:
 		var deviceID *string
 		if did, ok := auth.GetDeviceID(ctx); ok {
 			deviceID = &did
 		}
-		if err := h.pos.PayGratis100Club(ctx, id, deviceID, body.Club100.ElvantoPersonId, body.Club100.ElvantoPersonName, body.Club100.FreeQuantity); err != nil {
-			if errors.Is(err, service.ErrProductNotFreeForClub100) {
-				writeError(w, http.StatusBadRequest, "product_not_free", "Eines oder mehrere Produkte in dieser Bestellung sind nicht als Gratis-Produkt für 100 Club konfiguriert.")
-				return
-			}
+		if err := h.pos.PayGratisPlugin(ctx, id, deviceID, *pluginKey); err != nil {
 			writeError(w, http.StatusBadRequest, "payment_failed", err.Error())
 			return
 		}
-		resp := map[string]any{"orderId": id, "method": "gratis_100club", "elvantoPersonId": body.Club100.ElvantoPersonId}
+		if !runRecordedHook() {
+			return
+		}
+		resp := paymentResponse("gratis_plugin")
 		cachePaymentResponse(resp)
 		response.WriteJSON(w, http.StatusCreated, resp)
 

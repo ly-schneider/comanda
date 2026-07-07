@@ -17,7 +17,11 @@ import (
 	"go.uber.org/zap"
 )
 
-var ErrUnknownPlugin = errors.New("plugin: unknown plugin key")
+var (
+	ErrUnknownPlugin  = errors.New("plugin: unknown plugin key")
+	ErrPluginDisabled = errors.New("plugin: not enabled for tenant")
+	ErrNoPaymentHook  = errors.New("plugin: does not implement PaymentHook")
+)
 
 const enabledCacheTTL = 5 * time.Second
 
@@ -44,6 +48,7 @@ type UpdateInput struct {
 
 type Service interface {
 	Enabled(ctx context.Context, key string) (bool, error)
+	PaymentHook(ctx context.Context, key string) (PaymentHook, error)
 	RequirePlugin(key string) func(http.Handler) http.Handler
 	ListPublic(ctx context.Context) ([]PublicPlugin, error)
 	Secrets(ctx context.Context, key string) (map[string]string, error)
@@ -114,6 +119,25 @@ func (s *service) Enabled(ctx context.Context, key string) (bool, error) {
 	s.cache[ck] = cacheEntry{enabled: enabled, expiresAt: time.Now().Add(enabledCacheTTL)}
 	s.mu.Unlock()
 	return enabled, nil
+}
+
+func (s *service) PaymentHook(ctx context.Context, key string) (PaymentHook, error) {
+	p, ok := s.registry[key]
+	if !ok {
+		return nil, ErrUnknownPlugin
+	}
+	enabled, err := s.Enabled(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, ErrPluginDisabled
+	}
+	hook, ok := p.(PaymentHook)
+	if !ok {
+		return nil, ErrNoPaymentHook
+	}
+	return hook, nil
 }
 
 func (s *service) RequirePlugin(key string) func(http.Handler) http.Handler {

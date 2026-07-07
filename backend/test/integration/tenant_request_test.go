@@ -143,7 +143,7 @@ func TestTenantRequest_PosPayment(t *testing.T) {
 	defer cleanup()
 
 	orders := repository.NewOrderRepository(client)
-	require.NoError(t, orders.SetPosPaymentCash(ctx, orderID, nil, 250),
+	require.NoError(t, orders.SetPosPaymentCash(ctx, orderID, nil, 250, nil),
 		"SetPosPaymentCash (setPosPayment) must not error inside the request tx")
 
 	o, err := orders.GetByID(ctx, orderID)

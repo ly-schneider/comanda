@@ -112,6 +112,15 @@ func (p fixturePlugin) Routes(_ *generated.ServerInterfaceWrapper, _ Middlewares
 	}
 }
 
+type paymentPlugin struct {
+	fixturePlugin
+}
+
+func (paymentPlugin) ValidatePayment(context.Context, *ent.Order, json.RawMessage) error { return nil }
+func (paymentPlugin) OnPaymentRecorded(context.Context, *ent.Order, string, json.RawMessage) error {
+	return nil
+}
+
 func ctxTenant(id string) context.Context {
 	return repository.ContextWithTenantID(context.Background(), id)
 }
@@ -154,6 +163,35 @@ func TestEnabledUnregisteredSkipsRepo(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, enabled)
 	require.Zero(t, repo.getCalls)
+}
+
+func TestPaymentHookResolution(t *testing.T) {
+	repo := newFakeRepo()
+	repo.set("A", &ent.TenantPlugin{PluginKey: "pay", Enabled: true})
+	repo.set("A", &ent.TenantPlugin{PluginKey: "nohook", Enabled: true})
+	repo.set("A", &ent.TenantPlugin{PluginKey: "off", Enabled: false})
+	plugins := []Plugin{
+		paymentPlugin{fixturePlugin{"pay", "Pay"}},
+		fixturePlugin{"nohook", "NoHook"},
+		paymentPlugin{fixturePlugin{"off", "Off"}},
+	}
+	svc := NewService(plugins, repo, nil, zap.NewNop())
+
+	_, err := svc.PaymentHook(ctxTenant("A"), "ghost")
+	require.ErrorIs(t, err, ErrUnknownPlugin, "unregistered plugin must be rejected")
+
+	_, err = svc.PaymentHook(ctxTenant("A"), "off")
+	require.ErrorIs(t, err, ErrPluginDisabled, "disabled plugin must be rejected")
+
+	_, err = svc.PaymentHook(ctxTenant("A"), "nohook")
+	require.ErrorIs(t, err, ErrNoPaymentHook, "plugin without the interface must be rejected")
+
+	_, err = svc.PaymentHook(ctxTenant("B"), "pay")
+	require.ErrorIs(t, err, ErrPluginDisabled, "a plugin enabled for A must be disabled for B")
+
+	hook, err := svc.PaymentHook(ctxTenant("A"), "pay")
+	require.NoError(t, err)
+	require.NotNil(t, hook)
 }
 
 func TestRequirePluginMountGating(t *testing.T) {

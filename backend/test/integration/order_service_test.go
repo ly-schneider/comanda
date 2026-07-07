@@ -174,7 +174,7 @@ func TestOrderService_ListAdmin(t *testing.T) {
 
 		cardOrder := fixtures.CreateOrder(1200, entOrder.StatusPending, entOrder.OriginPos)
 		txCode := "SUMUP-TX-9F2K"
-		require.NoError(t, repos.Order.SetPosPaymentCard(ctx, cardOrder.ID, nil, 1200, &repository.CardMeta{TransactionID: &txCode}))
+		require.NoError(t, repos.Order.SetPosPaymentCard(ctx, cardOrder.ID, nil, 1200, &repository.CardMeta{TransactionID: &txCode}, nil))
 
 		search := func(q string) []string {
 			params := service.OrderListParams{Query: &q}
