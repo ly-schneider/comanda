@@ -191,7 +191,7 @@ export default function StationPage() {
   const systemDisabled = sessionState.phase === "system-disabled"
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
-  const [detailOrderId, setDetailOrderId] = useState<string | null>(null)
+  const [detailScan, setDetailScan] = useState<ScanResult | null>(null)
   const [cameraPermission, setCameraPermission] = useState<"idle" | "pending" | "granted" | "denied">("idle")
   const [scannerActive, setScannerActive] = useState(false)
   const [scannerKey, setScannerKey] = useState(0)
@@ -793,7 +793,7 @@ export default function StationPage() {
 
               <div className="flex w-full flex-col gap-8">
                 {latest ? (
-                  <ScanCard scan={latest} onOpenDetail={setDetailOrderId} />
+                  <ScanCard scan={latest} onOpenDetail={setDetailScan} />
                 ) : (
                   <div className="text-muted-foreground bg-card rounded-2xl p-8 text-center text-sm">
                     Bereit zum Scannen. Der nächste QR-Code wird automatisch eingelöst.
@@ -807,7 +807,7 @@ export default function StationPage() {
                     </div>
                     <ul className="flex flex-col gap-1.5">
                       {history.map((s) => (
-                        <ScanRow key={s.key} scan={s} onOpenDetail={setDetailOrderId} />
+                        <ScanRow key={s.key} scan={s} onOpenDetail={setDetailScan} />
                       ))}
                     </ul>
                   </div>
@@ -824,13 +824,18 @@ export default function StationPage() {
         </div>
       )}
 
-      <OrderDetailDialog orderId={detailOrderId} bearerToken={bearerToken} onClose={() => setDetailOrderId(null)} />
+      <OrderDetailDialog
+        scan={detailScan}
+        online={online}
+        bearerToken={bearerToken}
+        onClose={() => setDetailScan(null)}
+      />
       <InstallHintDrawer />
     </div>
   )
 }
 
-function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (orderId: string) => void }) {
+function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: ScanResult) => void }) {
   const meta = STATUS_STYLES[scan.status]
   const Icon = meta.icon
   const matched = scan.lines
@@ -852,7 +857,7 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (or
         {canOpenDetail && (
           <button
             type="button"
-            onClick={() => onOpenDetail?.(scan.orderId as string)}
+            onClick={() => onOpenDetail?.(scan)}
             aria-label="Bestelldetails anzeigen"
             className="text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:ring-ring/50 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
@@ -915,7 +920,7 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (or
   )
 }
 
-function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (orderId: string) => void }) {
+function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: ScanResult) => void }) {
   const meta = STATUS_STYLES[scan.status]
   const itemCount = scan.lines.reduce((acc, l) => acc + l.quantity, 0)
   const canOpenDetail = !!scan.orderId && !!onOpenDetail
@@ -937,7 +942,7 @@ function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (ord
         {canOpenDetail && (
           <button
             type="button"
-            onClick={() => onOpenDetail?.(scan.orderId as string)}
+            onClick={() => onOpenDetail?.(scan)}
             aria-label="Bestelldetails anzeigen"
             className="text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:ring-ring/50 ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
@@ -1044,28 +1049,33 @@ type DetailOrder = {
 }
 
 function OrderDetailDialog({
-  orderId,
+  scan,
+  online,
   bearerToken,
   onClose,
 }: {
-  orderId: string | null
+  scan: ScanResult | null
+  online: boolean
   bearerToken: string
   onClose: () => void
 }) {
+  const orderId = scan?.orderId ?? null
   const [order, setOrder] = useState<DetailOrder | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!orderId) {
-      setOrder(null)
-      setError(null)
+    setOrder(null)
+    setError(null)
+    // Offline the station has no server to reach — render the locally-redeemed
+    // lines carried on the scan instead of a failed fetch. Online we fetch the
+    // full order for the richer view.
+    if (!orderId || !online) {
+      setLoading(false)
       return
     }
     let cancelled = false
     setLoading(true)
-    setError(null)
-    setOrder(null)
     ;(async () => {
       try {
         const res = await fetch(`/api/v1/orders/${encodeURIComponent(orderId)}`, {
@@ -1086,9 +1096,11 @@ function OrderDetailDialog({
     return () => {
       cancelled = true
     }
-  }, [orderId, bearerToken])
+  }, [orderId, online, bearerToken])
 
-  const allLines = order?.lines ?? []
+  // Prefer the fetched order; fall back to the scan's local lines whenever the
+  // server view isn't available (offline, or the fetch failed).
+  const allLines = order?.lines ?? scan?.lines ?? []
   const dialogBundleParents: Record<string, OrderLine> = {}
   for (const l of allLines) {
     if (l.lineType === "bundle") dialogBundleParents[l.id] = l
@@ -1097,12 +1109,13 @@ function OrderDetailDialog({
     allLines.filter((l) => l.lineType !== "bundle"),
     dialogBundleParents
   )
+  const showError = !!error && !loading && allLines.length === 0
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-primary text-center text-xl tracking-wide uppercase">Bestelldetails</DialogTitle>
+          <DialogTitle className="text-center text-xl font-semibold">Bestelldetails</DialogTitle>
         </DialogHeader>
 
         {loading && (
@@ -1111,23 +1124,21 @@ function OrderDetailDialog({
           </div>
         )}
 
-        {error && !loading && <p className="text-destructive py-4 text-sm">{error}</p>}
+        {showError && <p className="text-destructive py-4 text-sm">{error}</p>}
 
-        {order && !loading && (
-          <>
-            {dialogGroups.length === 0 ? (
-              <p className="text-muted-foreground py-4 text-sm">Keine Artikel in dieser Bestellung.</p>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {dialogGroups.map((g) => (
-                  <li key={g.key}>
-                    <LineGroupCard group={g} redeemed={false} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
+        {!loading &&
+          !showError &&
+          (dialogGroups.length === 0 ? (
+            <p className="text-muted-foreground py-4 text-sm">Keine Artikel in dieser Bestellung.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {dialogGroups.map((g) => (
+                <li key={g.key}>
+                  <LineGroupCard group={g} redeemed={false} />
+                </li>
+              ))}
+            </ul>
+          ))}
       </DialogContent>
     </Dialog>
   )
