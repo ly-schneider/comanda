@@ -63,6 +63,7 @@ func main() {
 
 		app.NewRepositories(),
 		app.NewServices(),
+		app.NewPlugins(),
 		app.NewHandlers(),
 
 		fx.Invoke(

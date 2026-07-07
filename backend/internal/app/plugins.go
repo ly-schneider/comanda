@@ -1,0 +1,20 @@
+package app
+
+import (
+	"backend/internal/plugin"
+
+	"go.uber.org/fx"
+)
+
+// NewPlugins provides the compiled-in plugin registry, the enablement service,
+// and every plugin's own fx module.
+func NewPlugins() fx.Option {
+	opts := []fx.Option{
+		fx.Provide(func() []plugin.Plugin { return plugin.All }),
+		fx.Provide(plugin.NewService),
+	}
+	for _, p := range plugin.All {
+		opts = append(opts, p.Module())
+	}
+	return fx.Options(opts...)
+}
