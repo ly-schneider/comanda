@@ -34,3 +34,9 @@ Tailwind 4, Radix, Better Auth.
 - Run `pnpm typecheck && pnpm lint && pnpm test` (and `pnpm e2e:headless` for resolution flows) before done.
 - Verify two different hosts render the correct tenant and see only their data.
 - Update the assigned Linear ticket: In Progress → progress comment → In Review + summary.
+
+## Non-negotiables (repeated here because subagents don't inherit session corrections)
+
+- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD", "no lockout") — write it like normal software.
+- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
+- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.

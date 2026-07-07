@@ -15,7 +15,7 @@ export default function Footer({ version }: { version?: string }) {
   return (
     <footer
       id="app-footer"
-      className={`text-muted-foreground w-full border-t border-gray-200/70 py-4 text-sm ${
+      className={`text-muted-foreground w-full py-4 text-sm ${
         (pathname === "/" || pathname === "/food") && totalItems > 0
           ? "mb-20"
           : pathname === "/food/orders"

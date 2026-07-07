@@ -35,3 +35,9 @@ brand-neutral `comanda` repo. This is mechanical — **do not change runtime beh
 - **Acceptance:** no `bless`/`thun`/`bfs` strings except intentionally-configurable ones; tree builds under new names.
 - When done, set Linear **LEY-309** → In Review with a summary of renames/deletions and any leftovers needing a human call.
 - Report back to the lead; do **not** start P1.
+
+## Non-negotiables (repeated here because subagents don't inherit session corrections)
+
+- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD", "no lockout") — write it like normal software.
+- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
+- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.

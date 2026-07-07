@@ -25,3 +25,9 @@ You own the Comanda Android POS (`android/`).
 - Don't bake any BlessThun brand into resources; `strings.xml` app_name = neutral "Comanda POS".
 - Build with Gradle where feasible; note if the toolchain isn't available in this environment.
 - Update the assigned Linear ticket: In Progress → progress comment → In Review + summary.
+
+## Non-negotiables (repeated here because subagents don't inherit session corrections)
+
+- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD", "no lockout") — write it like normal software.
+- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
+- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.

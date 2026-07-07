@@ -38,3 +38,9 @@ not in `comanda`. Mirror how **iglesio** is deployed there.
 - P6 is spawned in **plan mode** (cluster-level changes) — plan + approval before applying.
 - Never `terraform/tofu apply` or `kubectl apply` to prod without explicit lead approval.
 - Coordinate with the `hetzner` repo's epic (LEY-294). Update the assigned Comanda ticket: In Progress → comment → In Review + summary.
+
+## Non-negotiables (repeated here because subagents don't inherit session corrections)
+
+- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD", "no lockout") — write it like normal software.
+- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
+- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.

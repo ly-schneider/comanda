@@ -63,3 +63,10 @@ plain-text 400). Mirror an existing path+schema file for style.
 - Run `just test` / `just test-integration` and `just lint` before declaring done.
 - Update the assigned Linear ticket: In Progress on start, progress comment, In Review + summary when done.
 - Defer to the lead on cross-cutting decisions (e.g. Go module name).
+
+## Non-negotiables (repeated here because subagents don't inherit session corrections)
+
+- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD", "no lockout") — write it like normal software.
+- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
+- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.
+- **OpenAPI-first.** New/changed endpoints go through the `oapi-codegen` wrapper (schema under `backend/openapi/`, `just generate-api`) — never hand-wire handlers in `router.go`.
