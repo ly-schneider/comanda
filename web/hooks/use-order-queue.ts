@@ -5,6 +5,7 @@ import { OrderQueueManager } from "@/lib/pos/order-queue"
 import type {
   CardMeta,
   GratisInfo,
+  PluginPayment,
   PosPaymentMethod,
   QueuedOrder,
   QueuedOrderItem,
@@ -60,10 +61,11 @@ export function useOrderQueue({ token, deviceId, onOrderSynced, onPaymentError }
       paymentMethod: PosPaymentMethod,
       receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
       gratisInfo?: GratisInfo,
-      cardMeta?: CardMeta
+      cardMeta?: CardMeta,
+      plugin?: PluginPayment
     ): QueuedOrder | null => {
       if (!managerRef.current) return null
-      return managerRef.current.enqueue(items, totalCents, paymentMethod, receiptData, gratisInfo, cardMeta)
+      return managerRef.current.enqueue(items, totalCents, paymentMethod, receiptData, gratisInfo, cardMeta, plugin)
     },
     []
   )

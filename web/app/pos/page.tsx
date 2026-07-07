@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { BasketPanel } from "@/components/pos/basket-panel"
 import { InventoryManagement } from "@/components/pos/inventory-management"
 import { OrderRefundPanel } from "@/components/pos/order-refund-panel"
@@ -435,6 +436,7 @@ function PosInner() {
       <>
         <POSHeader mode={status?.mode} syncStatus={syncStatus} />
         <PairingCodeDisplay deviceType="POS" />
+        <PluginSlot name="device.pairing.actions" ctx={{}} />
       </>
     )
   }
@@ -481,12 +483,7 @@ function PosInner() {
               />
             </div>
             <div className={cn("min-h-0 overflow-hidden", !showBothPanels && mobileView !== "cart" && "hidden")}>
-              <BasketPanel
-                token={sessionToken || ""}
-                mode={status?.mode}
-                submitOrder={submitOrder}
-                stockMap={stockSnapshotRef.current}
-              />
+              <BasketPanel mode={status?.mode} submitOrder={submitOrder} stockMap={stockSnapshotRef.current} />
             </div>
 
             {configProduct && (

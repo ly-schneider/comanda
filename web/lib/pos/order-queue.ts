@@ -2,6 +2,7 @@ import type {
   CardMeta,
   GratisInfo,
   OrderSyncStatus,
+  PluginPayment,
   PosPaymentMethod,
   QueuedOrder,
   QueuedOrderItem,
@@ -114,7 +115,8 @@ export class OrderQueueManager {
     paymentMethod: PosPaymentMethod,
     receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
     gratisInfo?: GratisInfo,
-    cardMeta?: CardMeta
+    cardMeta?: CardMeta,
+    plugin?: PluginPayment
   ): QueuedOrder {
     const now = Date.now()
     const localId = generateLocalId()
@@ -127,6 +129,7 @@ export class OrderQueueManager {
       paymentMethod,
       gratisInfo,
       cardMeta,
+      plugin,
       status: "pending",
       attemptCount: 0,
       createdAt: now,
@@ -224,12 +227,8 @@ export class OrderQueueManager {
 
       const paymentKey = `${order.idempotencyKey}:pay`
       const paymentBody: Record<string, unknown> = { method: order.paymentMethod, channel: "pos" }
-      if (order.gratisInfo && order.gratisInfo.type === "100club") {
-        paymentBody.club100 = {
-          elvantoPersonId: order.gratisInfo.elvantoPersonId,
-          elvantoPersonName: order.gratisInfo.elvantoPersonName,
-          freeQuantity: order.gratisInfo.freeQuantity || 1,
-        }
+      if (order.plugin) {
+        paymentBody.plugin = order.plugin
       }
       if (order.paymentMethod === "card" && order.cardMeta) {
         paymentBody.card = order.cardMeta

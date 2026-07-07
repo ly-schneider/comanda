@@ -6,7 +6,7 @@ import { CartItemDisplay } from "@/components/cart/cart-item-display"
 import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
-import { Club100PickerDialog } from "@/components/pos/club100-picker-dialog"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { GratisTypeDialog } from "@/components/pos/gratis-type-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label"
 import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import type { Club100Person } from "@/lib/api/club100"
 import {
   buildCardCheckoutSummary,
   type CardCheckoutPayload,
@@ -26,13 +25,14 @@ import {
 } from "@/lib/pos/receipt"
 import { cartDepositCents, formatChf } from "@/lib/utils"
 import { findVariant, hasVariants, variantPickerLabel } from "@/lib/variants"
+import type { PluginDiscount } from "@/plugins/slots"
 
 import type { CartItem } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type {
   CardMeta,
-  Club100Discount,
   GratisInfo,
+  PluginPayment,
   PosPaymentMethod,
   QueuedOrder,
   QueuedOrderItem,
@@ -69,7 +69,6 @@ function textColorForBg(hex: string) {
 }
 
 interface BasketPanelProps {
-  token: string
   mode?: PosFulfillmentMode
   submitOrder: (
     items: QueuedOrderItem[],
@@ -77,12 +76,13 @@ interface BasketPanelProps {
     paymentMethod: PosPaymentMethod,
     receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
     gratisInfo?: GratisInfo,
-    cardMeta?: CardMeta
+    cardMeta?: CardMeta,
+    plugin?: PluginPayment
   ) => QueuedOrder | null
   stockMap?: Map<string, number>
 }
 
-export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: BasketPanelProps) {
+export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketPanelProps) {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
   const { displayName, logoUrl, legal, currency } = useBranding()
   const receiptBranding: ReceiptBranding = {
@@ -131,13 +131,14 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     receiptPayload?: Receipt & { orderTimestamp?: number }
   } | null>(null)
   const [showGratisDialog, setShowGratisDialog] = useState(false)
-  const [showClub100Picker, setShowClub100Picker] = useState(false)
-  const [selectedGratisInfo, setSelectedGratisInfo] = useState<GratisInfo | null>(null)
-  const [club100Discount, setClub100Discount] = useState<Club100Discount | null>(null)
-  const [club100FreeProductIds, setClub100FreeProductIds] = useState<string[]>([])
+  const [pluginDiscount, setPluginDiscount] = useState<PluginDiscount | null>(null)
   const originalTotal = cart.totalCents
-  const discountAmount = club100Discount?.totalDiscountCents ?? 0
+  const discountAmount = pluginDiscount?.amountCents ?? 0
   const total = originalTotal - discountAmount
+  const pluginPayment: PluginPayment | undefined = useMemo(
+    () => (pluginDiscount ? { key: pluginDiscount.pluginKey, data: pluginDiscount.paymentData } : undefined),
+    [pluginDiscount]
+  )
   // Deposit is never discounted (refunded on return, not revenue). Real tenders
   // collect it; gratis comps stay product-only.
   const depositCents = cartDepositCents(cart.items)
@@ -283,30 +284,10 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       setShowReceipt(false)
       setTender(null)
       setEditingItem(null)
-      setClub100Discount(null)
+      setPluginDiscount(null)
     }
     window.addEventListener("pos:lock", onLock)
     return () => window.removeEventListener("pos:lock", onLock)
-  }, [])
-
-  useEffect(() => {
-    if (!token) return
-    ;(async () => {
-      try {
-        const res = await fetch("/api/v1/settings", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.ok) {
-          const data = (await res.json()) as { club100FreeProductIds?: string[] }
-          setClub100FreeProductIds(data.club100FreeProductIds ?? [])
-        }
-      } catch {}
-    })()
-  }, [token])
-
-  const clearClub100Discount = useCallback(() => {
-    setClub100Discount(null)
-    setSelectedGratisInfo(null)
   }, [])
 
   // Auto-scroll to bottom when new items are added
@@ -317,12 +298,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     prevItemCount.current = cart.items.length
   }, [cart.items.length])
 
-  // Clear Club100 discount when cart items change (quantities, items added/removed)
   const cartItemsKey = useMemo(() => cart.items.map((i) => `${i.id}:${i.quantity}`).join(","), [cart.items])
   useEffect(() => {
-    if (club100Discount) {
-      clearClub100Discount()
-    }
+    setPluginDiscount(null)
   }, [cartItemsKey])
 
   // Listen for native print results from the Android WebView bridge
@@ -402,8 +380,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
             originalTotal,
             "card",
             { items: printItems, pickupQr: null },
-            selectedGratisInfo ?? undefined,
-            hasCardMeta ? cardMeta : undefined
+            undefined,
+            hasCardMeta ? cardMeta : undefined,
+            pluginPayment
           )
           emitInventoryDecrement(cart.items)
 
@@ -431,7 +410,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           }
 
           clearCart()
-          clearClub100Discount()
+          setPluginDiscount(null)
         } else {
           setCardProcessing(false)
           setCardSuccess(false)
@@ -451,7 +430,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     showCard,
     cardRef,
     clearCart,
-    clearClub100Discount,
     jetonMode,
     shouldPrint,
     computeJetonTotals,
@@ -460,7 +438,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     submitOrder,
     canPrint,
     emitInventoryDecrement,
-    selectedGratisInfo,
+    pluginPayment,
     payableTotal,
     depositCents,
   ])
@@ -535,7 +513,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       originalTotal,
       "cash",
       { items: printItems, pickupQr: null },
-      selectedGratisInfo ?? undefined
+      undefined,
+      undefined,
+      pluginPayment
     )
     emitInventoryDecrement(cart.items)
 
@@ -556,7 +536,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     }
 
     clearCart()
-    clearClub100Discount()
+    setPluginDiscount(null)
     setShowCheckout(false)
     setTender(null)
     setBusy(false)
@@ -573,11 +553,10 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     hasMissingJeton,
     computeJetonTotals,
     clearCart,
-    clearClub100Discount,
     buildPrintItems,
     submitOrder,
     emitInventoryDecrement,
-    selectedGratisInfo,
+    pluginPayment,
   ])
 
   const startTwintPayment = useCallback(async () => {
@@ -598,7 +577,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       originalTotal,
       "twint",
       { items: printItems, pickupQr: null },
-      selectedGratisInfo ?? undefined
+      undefined,
+      undefined,
+      pluginPayment
     )
     emitInventoryDecrement(cart.items)
 
@@ -619,7 +600,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     }
 
     clearCart()
-    clearClub100Discount()
+    setPluginDiscount(null)
     setShowCheckout(false)
     setTender(null)
     setBusy(false)
@@ -637,10 +618,9 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
     depositCents,
     canPrint,
     clearCart,
-    clearClub100Discount,
     submitOrder,
     emitInventoryDecrement,
-    selectedGratisInfo,
+    pluginPayment,
   ])
 
   const startCardPayment = useCallback(() => {
@@ -720,15 +700,15 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
         return "Gratis (VIP)"
       case "gratis_staff":
         return "Gratis (Mitarbeiter)"
-      case "gratis_100club":
-        return "Gratis (100 Club)"
+      case "gratis_plugin":
+        return "Gratis (Plugin)"
       default:
         return method
     }
   }
 
   const completeGratisPayment = useCallback(
-    (paymentMethod: PosPaymentMethod, gratisInfo: GratisInfo) => {
+    (paymentMethod: PosPaymentMethod, gratisInfo?: GratisInfo, plugin?: PluginPayment) => {
       if (jetonMode && hasMissingJeton) {
         setError("Im Jeton-Modus benötigt jedes Produkt einen Jeton.")
         return
@@ -738,7 +718,15 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       const printItems = buildPrintItems()
       const jetons = computeJetonTotals()
 
-      const queued = submitOrder(items, total, paymentMethod, { items: printItems, pickupQr: null }, gratisInfo)
+      const queued = submitOrder(
+        items,
+        total,
+        paymentMethod,
+        { items: printItems, pickupQr: null },
+        gratisInfo,
+        undefined,
+        plugin
+      )
       emitInventoryDecrement(cart.items)
 
       if (shouldPrint && canPrint && queued) {
@@ -757,6 +745,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
       }
 
       clearCart()
+      setPluginDiscount(null)
       setShowCheckout(false)
       setTender(null)
     },
@@ -776,55 +765,16 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
   )
 
   const handleGratisTypeSelect = useCallback(
-    (type: "guest" | "vip" | "staff" | "100club") => {
+    (type: "guest" | "vip" | "staff") => {
       setShowGratisDialog(false)
-      if (type === "100club") {
-        setShowClub100Picker(true)
-      } else {
-        setSelectedGratisInfo({ type })
-        const paymentMethodMap: Record<"guest" | "vip" | "staff", PosPaymentMethod> = {
-          guest: "gratis_guest",
-          vip: "gratis_vip",
-          staff: "gratis_staff",
-        }
-        completeGratisPayment(paymentMethodMap[type], { type })
+      const paymentMethodMap: Record<"guest" | "vip" | "staff", PosPaymentMethod> = {
+        guest: "gratis_guest",
+        vip: "gratis_vip",
+        staff: "gratis_staff",
       }
+      completeGratisPayment(paymentMethodMap[type], { type })
     },
     [completeGratisPayment]
-  )
-
-  const handleClub100Select = useCallback((person: Club100Person, discount: Club100Discount | null) => {
-    setShowClub100Picker(false)
-
-    if (!discount || discount.discountedItems.length === 0) {
-      setClub100Discount(null)
-      setSelectedGratisInfo(null)
-      return
-    }
-
-    setClub100Discount(discount)
-
-    const totalDiscountedQty = discount.discountedItems.reduce((sum, d) => sum + d.discountedQuantity, 0)
-    const gratisInfo: GratisInfo = {
-      type: "100club",
-      elvantoPersonId: person.id,
-      elvantoPersonName: `${person.firstName} ${person.lastName}`,
-      freeQuantity: totalDiscountedQty,
-    }
-    setSelectedGratisInfo(gratisInfo)
-  }, [])
-
-  const getItemDiscountInfo = useCallback(
-    (itemId: string) => {
-      if (!club100Discount) return undefined
-      const discountItem = club100Discount.discountedItems.find((d) => d.cartItemId === itemId)
-      if (!discountItem) return undefined
-      return {
-        discountedQuantity: discountItem.discountedQuantity,
-        unitPriceCents: discountItem.unitPriceCents,
-      }
-    },
-    [club100Discount]
   )
 
   return (
@@ -855,7 +805,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
                         isPOS
-                        discountInfo={getItemDiscountInfo(item.id)}
                         maxQuantity={getMaxQuantity(item)}
                       />
                     </div>
@@ -883,7 +832,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
                         isPOS
-                        discountInfo={getItemDiscountInfo(item.id)}
                         maxQuantity={getMaxQuantity(item)}
                       />
                     </div>
@@ -899,7 +847,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
                         isPOS
-                        discountInfo={getItemDiscountInfo(item.id)}
                         maxQuantity={getMaxQuantity(item)}
                       />
                     </div>
@@ -911,20 +858,18 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
           )}
         </div>
         <div className="border-border flex flex-col gap-3 border-t p-4">
-          {club100Discount && (
+          {pluginDiscount && (
             <div className="flex items-center justify-between rounded-xl bg-green-100 px-3 py-2 dark:bg-green-950/30">
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                  100 Club: {club100Discount.person.firstName} {club100Discount.person.lastName}
-                </span>
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">{pluginDiscount.label}</span>
                 <span className="text-xs text-green-600 dark:text-green-500">
-                  {club100Discount.discountedItems.reduce((sum, d) => sum + d.discountedQuantity, 0)} Produkt(e) gratis
+                  −{formatChf(pluginDiscount.amountCents)}
                 </span>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clearClub100Discount}
+                onClick={() => setPluginDiscount(null)}
                 className="h-7 px-2 text-xs text-red-500 hover:text-green-900 dark:text-green-400"
               >
                 Entfernen
@@ -957,6 +902,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
               <p className="text-base font-semibold">{formatChf(payableTotal)}</p>
             </div>
           </div>
+          <PluginSlot name="pos.basket.actions" ctx={{ cartItems: cart.items, setPluginDiscount }} />
           <div className="flex flex-col gap-2">
             <Button
               className="h-12 w-full rounded-xl text-sm"
@@ -966,8 +912,8 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                   setError("Bitte weise allen Produkten einen Jeton zu.")
                   return
                 }
-                if (club100Discount && selectedGratisInfo && total <= 0) {
-                  completeGratisPayment("gratis_100club", selectedGratisInfo)
+                if (pluginDiscount && total <= 0) {
+                  completeGratisPayment("gratis_plugin", undefined, pluginPayment)
                   return
                 }
                 setTender(null)
@@ -975,7 +921,7 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
                 setShowCheckout(true)
               }}
             >
-              {club100Discount && total <= 0 ? "Gratis abschliessen" : "Jetzt bezahlen"}
+              {pluginDiscount && total <= 0 ? "Gratis abschliessen" : "Jetzt bezahlen"}
             </Button>
             <Button
               variant="outline"
@@ -1461,16 +1407,6 @@ export function BasketPanel({ token, mode = "QR_CODE", submitOrder, stockMap }: 
 
       {/* Gratis type selection dialog */}
       <GratisTypeDialog open={showGratisDialog} onOpenChange={setShowGratisDialog} onSelect={handleGratisTypeSelect} />
-
-      {/* 100 Club member picker dialog */}
-      <Club100PickerDialog
-        open={showClub100Picker}
-        onOpenChange={setShowClub100Picker}
-        onSelect={handleClub100Select}
-        token={token}
-        cartItems={cart.items}
-        freeProductIds={club100FreeProductIds}
-      />
     </>
   )
 }
