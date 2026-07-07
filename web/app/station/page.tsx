@@ -684,7 +684,7 @@ export default function StationPage() {
           <div className="flex w-full flex-1 items-center justify-center">
             <PairingCodeDisplay deviceType="STATION" />
           </div>
-          <PluginSlot name="device.pairing.actions" ctx={{}} />
+          <PluginSlot name="device.pairing.actions" ctx={{ deviceType: "STATION" }} />
         </div>
       )}
 

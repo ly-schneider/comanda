@@ -35,3 +35,10 @@ INSERT INTO tenant_plugin (id, tenant_id, plugin_key, enabled, config) VALUES (
 ON CONFLICT (tenant_id, plugin_key) DO UPDATE SET
   enabled = EXCLUDED.enabled,
   config = EXCLUDED.config;
+
+-- stationqr enabled for the dev tenant; no config or secrets required.
+INSERT INTO tenant_plugin (id, tenant_id, plugin_key, enabled) VALUES (
+  'tplg_seedsqr', 'tenant_seed1', 'stationqr', true
+)
+ON CONFLICT (tenant_id, plugin_key) DO UPDATE SET
+  enabled = EXCLUDED.enabled;

@@ -32,6 +32,7 @@ type DeviceService interface {
 	CreatePairing(ctx context.Context, deviceKey, name, deviceType string, model, os *string) (*PairingResult, error)
 	GetPairingStatus(ctx context.Context, code string) (*PairingStatusResult, error)
 	CompletePairing(ctx context.Context, code string, adminUserID string) (*ent.Device, error)
+	ApproveDirect(ctx context.Context, d *ent.Device, issuerUserID string) (*ent.Device, string, error)
 }
 
 type deviceService struct {
@@ -138,34 +139,9 @@ func (s *deviceService) CompletePairing(ctx context.Context, code string, adminU
 		return nil, fmt.Errorf("device is not pending approval")
 	}
 
-	// Create a Better Auth session for the admin user. The session token
-	// is what the device will send as a Bearer token. The device auth
-	// middleware validates it against both the device_binding (hash) and
-	// the session table.
-	sessionToken, err := s.sessionRepo.CreateSession(ctx, adminUserID, deviceSessionExpiry)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create device session: %w", err)
-	}
-
-	tokenHash := repository.HashToken(sessionToken)
-
-	// Approve the device.
-	now := time.Now().UTC()
-	updated, err := s.devices.Update(ctx, d.ID, d.Name, d.DeviceKey, d.Type, device.StatusApproved,
-		d.Model, d.Os, &adminUserID, &now, d.ExpiresAt,
-		nil, d.PairingCode, d.PairingCodeExpiresAt)
+	updated, sessionToken, err := s.ApproveDirect(ctx, d, adminUserID)
 	if err != nil {
 		return nil, err
-	}
-
-	// Create a device_binding row so the middleware can find it by token hash.
-	bindingType := devicebinding.DeviceTypePOS
-	if d.Type == device.TypeSTATION {
-		bindingType = devicebinding.DeviceTypeSTATION
-	}
-	deviceID := d.ID
-	if _, err := s.bindings.Create(ctx, bindingType, tokenHash, adminUserID, &d.Name, &deviceID, nil); err != nil {
-		return nil, fmt.Errorf("failed to create device binding: %w", err)
 	}
 
 	// Store the raw session token so the polling device can pick it up.
@@ -174,4 +150,32 @@ func (s *deviceService) CompletePairing(ctx context.Context, code string, adminU
 	}
 
 	return updated, nil
+}
+
+func (s *deviceService) ApproveDirect(ctx context.Context, d *ent.Device, issuerUserID string) (*ent.Device, string, error) {
+	sessionToken, err := s.sessionRepo.CreateSession(ctx, issuerUserID, deviceSessionExpiry)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create device session: %w", err)
+	}
+
+	tokenHash := repository.HashToken(sessionToken)
+
+	now := time.Now().UTC()
+	updated, err := s.devices.Update(ctx, d.ID, d.Name, d.DeviceKey, d.Type, device.StatusApproved,
+		d.Model, d.Os, &issuerUserID, &now, d.ExpiresAt,
+		nil, d.PairingCode, d.PairingCodeExpiresAt)
+	if err != nil {
+		return nil, "", err
+	}
+
+	bindingType := devicebinding.DeviceTypePOS
+	if d.Type == device.TypeSTATION {
+		bindingType = devicebinding.DeviceTypeSTATION
+	}
+	deviceID := d.ID
+	if _, err := s.bindings.Create(ctx, bindingType, tokenHash, issuerUserID, &d.Name, &deviceID, nil); err != nil {
+		return nil, "", fmt.Errorf("failed to create device binding: %w", err)
+	}
+
+	return updated, sessionToken, nil
 }

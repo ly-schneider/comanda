@@ -3,6 +3,7 @@ package app
 import (
 	"backend/internal/plugin"
 	"backend/internal/plugin/club100"
+	"backend/internal/plugin/stationqr"
 
 	"go.uber.org/fx"
 )
@@ -11,6 +12,7 @@ import (
 func registeredPlugins() []plugin.Plugin {
 	return []plugin.Plugin{
 		club100.New(),
+		stationqr.New(),
 	}
 }
 

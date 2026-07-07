@@ -1,0 +1,137 @@
+code:
+  get:
+    tags: [Plugins]
+    summary: Get the station enrollment code
+    description: >
+      Returns whether a durable station enrollment code is configured and, for
+      ops-tier admins, the raw token so the printable QR can be rendered.
+    operationId: stationqrGetCode
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Enrollment code state
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  post:
+    tags: [Plugins]
+    summary: Create or rotate the station enrollment code
+    description: >
+      Generates a fresh durable code, invalidating any previously printed QR.
+      Also used to create the code the first time.
+    operationId: stationqrRotateCode
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Enrollment code (with the new raw token)
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  patch:
+    tags: [Plugins]
+    summary: Enable or disable the station enrollment code
+    operationId: stationqrSetCodeState
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCodeStateUpdate"
+    responses:
+      "200":
+        description: Updated enrollment code state
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
+      "400":
+        description: No code configured
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+enroll:
+  post:
+    tags: [Plugins]
+    summary: Enroll a station with the enrollment token
+    description: >
+      Public within the plugin group — the enrollment token is the credential.
+      Verifies the token against the tenant's durable code, then approves and
+      binds a new station, returning its session token immediately. Multi-use.
+      Rate-limited.
+    operationId: stationqrEnroll
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/stationqr.yaml#/StationqrEnrollRequest"
+    responses:
+      "200":
+        description: Station enrolled and approved
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrEnrollResponse"
+      "400":
+        description: Invalid token or no code configured
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Enrollment disabled
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "429":
+        description: Too many attempts
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
