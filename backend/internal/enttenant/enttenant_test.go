@@ -27,6 +27,7 @@ import (
 	"backend/internal/generated/ent/refundline"
 	"backend/internal/generated/ent/settings"
 	"backend/internal/generated/ent/tenantdomain"
+	"backend/internal/generated/ent/tenantplugin"
 	"backend/internal/generated/ent/volunteercampaign"
 	"backend/internal/generated/ent/volunteercampaignproduct"
 	"backend/internal/generated/ent/volunteerredemption"
@@ -62,6 +63,7 @@ var typeToTable = map[string]string{
 	"TenantDomain":             tenantdomain.Table,
 	"Refund":                   refund.Table,
 	"RefundLine":               refundline.Table,
+	"TenantPlugin":             tenantplugin.Table,
 }
 
 // TestScopedTypesMatchSchema asserts the Go-layer guard set (scopedTypes)

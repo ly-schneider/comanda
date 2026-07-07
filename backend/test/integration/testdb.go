@@ -180,6 +180,7 @@ func (tdb *TestDB) Cleanup(t *testing.T) {
 
 	// Tables ordered to respect foreign key constraints
 	tables := []string{
+		"tenant_plugin",
 		"idempotency",
 		"order_line_redemption",
 		"inventory_ledger",
