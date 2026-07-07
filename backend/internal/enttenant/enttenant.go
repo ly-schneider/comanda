@@ -66,6 +66,7 @@ var scopedTypes = map[string]struct{}{
 	ent.TypeTenantDomain:             {},
 	ent.TypeRefund:                   {},
 	ent.TypeRefundLine:               {},
+	ent.TypeTenantPlugin:             {},
 }
 
 // IsScoped reports whether the named Ent type carries tenant_id.

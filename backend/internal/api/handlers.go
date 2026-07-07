@@ -8,6 +8,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/inventory"
 	"backend/internal/payment"
+	"backend/internal/plugin"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -40,6 +41,7 @@ type Handlers struct {
 	tenants       service.TenantService
 	account       service.AccountService
 	qa            service.QaService
+	plugins       plugin.Service
 	verification  repository.VerificationRepository
 	idempotency   repository.IdempotencyRepository
 	blobStore     *blobstore.Client
@@ -84,6 +86,7 @@ type HandlersDeps struct {
 	Tenants       service.TenantService
 	Account       service.AccountService
 	Qa            service.QaService
+	Plugins       plugin.Service
 	Verification  repository.VerificationRepository
 	Idempotency   repository.IdempotencyRepository
 	BlobStore     *blobstore.Client `optional:"true"`
@@ -118,6 +121,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		tenants:       deps.Tenants,
 		account:       deps.Account,
 		qa:            deps.Qa,
+		plugins:       deps.Plugins,
 		verification:  deps.Verification,
 		idempotency:   deps.Idempotency,
 		blobStore:     deps.BlobStore,

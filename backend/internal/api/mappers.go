@@ -1,10 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
+	"backend/internal/plugin"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -540,6 +542,52 @@ func toAPIInventoryLedgerEntry(e *ent.InventoryLedger) generated.InventoryLedger
 		entry.VariantId = (*string)(e.VariantID)
 	}
 	return entry
+}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+func toAPIPublicPlugin(p plugin.PublicPlugin) generated.PublicPlugin {
+	return generated.PublicPlugin{
+		Key:    p.Key,
+		Name:   p.Name,
+		Config: pluginConfigMap(p.Config),
+	}
+}
+
+func toAPIPublicPlugins(items []plugin.PublicPlugin) []generated.PublicPlugin {
+	out := make([]generated.PublicPlugin, 0, len(items))
+	for _, p := range items {
+		out = append(out, toAPIPublicPlugin(p))
+	}
+	return out
+}
+
+func toAPITenantPluginState(p plugin.TenantPluginState) generated.TenantPluginState {
+	return generated.TenantPluginState{
+		Key:                 p.Key,
+		Name:                p.Name,
+		Enabled:             p.Enabled,
+		Config:              pluginConfigMap(p.Config),
+		SecretsConfiguredAt: p.SecretsConfiguredAt,
+	}
+}
+
+func toAPITenantPluginStates(items []plugin.TenantPluginState) []generated.TenantPluginState {
+	out := make([]generated.TenantPluginState, 0, len(items))
+	for _, p := range items {
+		out = append(out, toAPITenantPluginState(p))
+	}
+	return out
+}
+
+func pluginConfigMap(raw json.RawMessage) map[string]interface{} {
+	out := map[string]interface{}{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &out)
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------

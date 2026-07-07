@@ -8,6 +8,7 @@ import (
 	"backend/internal/config"
 	httpRouter "backend/internal/http"
 	"backend/internal/middleware"
+	"backend/internal/plugin"
 
 	"go.uber.org/zap"
 )
@@ -19,6 +20,8 @@ func NewRouter(
 	securityMw *middleware.SecurityMiddleware,
 	systemMw *middleware.SystemDisableMiddleware,
 	tenantMw *middleware.TenantMiddleware,
+	plugins []plugin.Plugin,
+	pluginSvc plugin.Service,
 	logger *zap.Logger,
 	cfg config.Config,
 ) http.Handler {
@@ -28,6 +31,7 @@ func NewRouter(
 		cfg,
 		apiHandlers,
 		betterAuthMw, deviceAuthMw, securityMw, systemMw, tenantMw,
+		plugins, pluginSvc,
 		logger, isDev,
 	)
 }

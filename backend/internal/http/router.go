@@ -8,6 +8,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/generated/api/generated"
 	"backend/internal/middleware"
+	"backend/internal/plugin"
 
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi/v5"
@@ -23,6 +24,8 @@ func NewRouter(
 	securityMw *middleware.SecurityMiddleware,
 	systemMw *middleware.SystemDisableMiddleware,
 	tenantMw *middleware.TenantMiddleware,
+	plugins []plugin.Plugin,
+	pluginSvc plugin.Service,
 	logger *zap.Logger,
 	isDev bool,
 ) http.Handler {
@@ -115,6 +118,8 @@ func NewRouter(
 		// Public branding (no auth). Exempt from RequireEnabled so the
 		// storefront can render branding even when the tenant is disabled.
 		v1.Get("/branding", wrapper.GetBranding)
+
+		v1.Get("/plugins", wrapper.ListPlugins)
 
 		// Public QR signing config (no auth). Exempt from RequireEnabled so a
 		// station/PWA can fetch the verification key at setup time.
@@ -312,6 +317,9 @@ func NewRouter(
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
 			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
 
+			pa.Get("/platform/tenants/{tenantId}/plugins", wrapper.ListTenantPlugins)
+			pa.Put("/platform/tenants/{tenantId}/plugins/{key}", wrapper.UpdateTenantPlugin)
+
 			pa.Get("/platform/qa/runs", wrapper.ListQaRuns)
 			pa.Post("/platform/qa/runs", wrapper.CreateQaRun)
 			pa.Get("/platform/qa/runs/{runId}", wrapper.GetQaRun)
@@ -377,6 +385,17 @@ func NewRouter(
 
 			onb.Post("/owner-invites/accept", wrapper.AcceptOwnerInvite)
 		})
+
+		// ── Plugins (per-tenant, 404 when dormant) ───────────────────────
+		pluginMw := plugin.Middlewares{
+			RequireEnabled:    systemMw.RequireEnabled,
+			RequireDevice:     deviceAuthMw.RequireDevice,
+			RequireAuth:       betterAuthMw.RequireAuth,
+			OptionalAuth:      betterAuthMw.OptionalAuth,
+			RequireTenantRole: betterAuthMw.RequireTenantRole,
+			CSRF:              middleware.NewCSRFMiddleware().Require,
+		}
+		plugin.Mount(v1, plugins, &wrapper, pluginMw, pluginSvc)
 	})
 
 	// Compose: SSE bypasses main middleware, everything else uses full stack

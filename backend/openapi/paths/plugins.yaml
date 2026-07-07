@@ -1,0 +1,105 @@
+collection:
+  get:
+    tags: [Plugins]
+    summary: List enabled plugins for the current tenant
+    description: >
+      Public (same trust level as branding). Returns the plugins enabled for the
+      host-resolved tenant with their non-secret config. No authentication;
+      secrets are never returned.
+    operationId: listPlugins
+    responses:
+      "200":
+        description: Enabled plugins
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/plugins.yaml#/PublicPluginList"
+
+tenant-collection:
+  parameters:
+    - name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Plugins]
+    summary: List every plugin's state for a tenant
+    description: >
+      Platform-admin only. Lists all registered plugins with the tenant's
+      enablement and non-secret config.
+    operationId: listTenantPlugins
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Plugin states
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/plugins.yaml#/TenantPluginList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+tenant-item:
+  parameters:
+    - name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+  put:
+    tags: [Plugins]
+    summary: Enable and configure a plugin for a tenant
+    description: >
+      Platform-admin only. Enables or disables the plugin, sets its non-secret
+      config, and stores write-only secrets. Secret values are never returned.
+    operationId: updateTenantPlugin
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/plugins.yaml#/TenantPluginUpdate"
+    responses:
+      "200":
+        description: Updated plugin state
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/plugins.yaml#/TenantPluginState"
+      "400":
+        description: Invalid body or unknown plugin key
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

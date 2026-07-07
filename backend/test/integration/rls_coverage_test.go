@@ -173,6 +173,7 @@ var scopedRLSTables = []string{
 	"device", "device_binding", "device_product", "admin_invite",
 	"volunteer_campaign", "volunteer_campaign_product", "volunteer_redemption",
 	"tenant", "tenant_domain", "refund", "refund_line", "product_variant",
+	"tenant_plugin",
 }
 
 // TestRLSPlatformAdminBypass asserts every tenant-scoped isolation policy grants

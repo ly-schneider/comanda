@@ -68,6 +68,8 @@ tags:
     description: Android app release feed for update checks
   - name: Internal
     description: Cross-tenant internal feeds (web tier integration)
+  - name: Plugins
+    description: Per-tenant plugin enablement and configuration
 
 paths:
   /auth/otp-email:
@@ -205,6 +207,11 @@ paths:
   /platform/tenants/{tenantId}/owner-invite:
     $ref: "paths/platform.yaml#/owner-invite"
 
+  /platform/tenants/{tenantId}/plugins:
+    $ref: "paths/plugins.yaml#/tenant-collection"
+  /platform/tenants/{tenantId}/plugins/{key}:
+    $ref: "paths/plugins.yaml#/tenant-item"
+
   /platform/qa/runs:
     $ref: "paths/platform-qa.yaml#/collection"
   /platform/qa/runs/{runId}:
@@ -227,6 +234,9 @@ paths:
     $ref: "paths/owner-invites.yaml#/verify"
   /owner-invites/accept:
     $ref: "paths/owner-invites.yaml#/accept"
+
+  /plugins:
+    $ref: "paths/plugins.yaml#/collection"
 
   /branding:
     $ref: "paths/branding.yaml#/collection"
