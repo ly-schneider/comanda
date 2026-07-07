@@ -84,6 +84,8 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
     pathName === "/v1/invites/verify" ||
     pathName === "/v1/invites/accept" ||
     pathName === "/v1/owner-invites/verify" ||
+    // Public station self-enrollment (token is the credential); exact-match keeps the authed /code mutations CSRF-guarded.
+    pathName === "/v1/plugins/stationqr/enroll" ||
     pathName.startsWith("/v1/payments/webhooks/") ||
     pathName.startsWith("/v1/claim/")
 
