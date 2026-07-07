@@ -135,9 +135,10 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   const originalTotal = cart.totalCents
   const discountAmount = pluginDiscount?.amountCents ?? 0
   const total = originalTotal - discountAmount
-  const pluginPayment: PluginPayment | undefined = pluginDiscount
-    ? { key: pluginDiscount.pluginKey, data: pluginDiscount.paymentData }
-    : undefined
+  const pluginPayment: PluginPayment | undefined = useMemo(
+    () => (pluginDiscount ? { key: pluginDiscount.pluginKey, data: pluginDiscount.paymentData } : undefined),
+    [pluginDiscount]
+  )
   // Deposit is never discounted (refunded on return, not revenue). Real tenders
   // collect it; gratis comps stay product-only.
   const depositCents = cartDepositCents(cart.items)
