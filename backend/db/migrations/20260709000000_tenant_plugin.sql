@@ -1,7 +1,3 @@
--- Per-tenant plugin enablement + config. Plugins are compiled into the shared
--- binary and dormant until a row here enables them for a tenant. secrets_enc is
--- AES-256-GCM ciphertext (never plaintext); config is tenant-visible, non-secret.
-
 CREATE TABLE tenant_plugin (
     id VARCHAR(12) PRIMARY KEY,
     tenant_id VARCHAR(12) NOT NULL REFERENCES tenant (id),

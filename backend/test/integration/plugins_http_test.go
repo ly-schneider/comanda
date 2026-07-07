@@ -24,9 +24,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// fixturePlugin is a minimal in-test plugin proving registration → route
-// mounting → gating end to end, without shipping anything in the production
-// registry.
 type fixturePlugin struct{}
 
 func (fixturePlugin) Key() string       { return "fixture" }
@@ -75,9 +72,7 @@ func newPluginHTTPHarness(t *testing.T, env *rlsEnv) *pluginHTTPHarness {
 	return h
 }
 
-// tx binds either a tenant tx (X-Test-Tenant) or a platform-admin tx
-// (X-Test-Platform-Admin: true), mirroring tenantMw.Tx, and commits so writes
-// persist across the separate read requests.
+// Mirrors tenantMw.Tx; commits so writes persist across separate requests.
 func (h *pluginHTTPHarness) tx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

@@ -10,9 +10,6 @@ import (
 	"backend/internal/response"
 )
 
-// ListPlugins returns the plugins enabled for the host-resolved tenant with
-// their non-secret config. Public, same trust level as branding.
-// (GET /plugins)
 func (h *Handlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 	items, err := h.plugins.ListPublic(r.Context())
 	if err != nil {
@@ -26,9 +23,6 @@ func (h *Handlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
-// ListTenantPlugins returns every registered plugin's enablement state for one
-// tenant. Platform-admin only.
-// (GET /platform/tenants/{tenantId}/plugins)
 func (h *Handlers) ListTenantPlugins(w http.ResponseWriter, r *http.Request, tenantId string) {
 	if !h.requirePlatformContext(w, r) {
 		return
@@ -45,9 +39,6 @@ func (h *Handlers) ListTenantPlugins(w http.ResponseWriter, r *http.Request, ten
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
-// UpdateTenantPlugin enables/disables a plugin for a tenant and sets its config
-// and write-only secrets. Platform-admin only; secret values are never returned.
-// (PUT /platform/tenants/{tenantId}/plugins/{key})
 func (h *Handlers) UpdateTenantPlugin(w http.ResponseWriter, r *http.Request, tenantId string, key string) {
 	if !h.requirePlatformContext(w, r) {
 		return

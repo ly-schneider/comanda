@@ -12,9 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// TestTenantPluginRLS_CrossTenantEnablement proves a plugin enabled for tenant A
-// is invisible to tenant B: through the enablement service (RLS-bound repo) and
-// directly at the DB layer via the app role.
 func TestTenantPluginRLS_CrossTenantEnablement(t *testing.T) {
 	env := newRLSEnv(t)
 	tenantA := env.seedTenant(t, "tp-rls-a-"+randSuffix())

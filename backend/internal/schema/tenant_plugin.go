@@ -37,8 +37,6 @@ func (TenantPlugin) Fields() []ent.Field {
 			Default(false),
 		field.JSON("config", json.RawMessage{}).
 			Optional(),
-		// AES-256-GCM ciphertext (base64) of the plugin's secret JSON map; the
-		// plaintext is never stored and never leaves the service.
 		field.Bytes("secrets_enc").
 			Optional().
 			Nillable(),

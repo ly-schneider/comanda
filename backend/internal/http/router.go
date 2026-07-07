@@ -119,7 +119,6 @@ func NewRouter(
 		// storefront can render branding even when the tenant is disabled.
 		v1.Get("/branding", wrapper.GetBranding)
 
-		// Enabled plugins for the tenant (no auth, same trust as branding).
 		v1.Get("/plugins", wrapper.ListPlugins)
 
 		// Public QR signing config (no auth). Exempt from RequireEnabled so a
@@ -387,9 +386,7 @@ func NewRouter(
 			onb.Post("/owner-invites/accept", wrapper.AcceptOwnerInvite)
 		})
 
-		// ── Plugins (per-tenant, gated by RequirePlugin → 404 when dormant) ──
-		// Each registered plugin owns a subtree under /plugins/<key> and composes
-		// the core gates it needs from pluginMw. Empty until a plugin registers.
+		// ── Plugins (per-tenant, 404 when dormant) ───────────────────────
 		pluginMw := plugin.Middlewares{
 			RequireEnabled:    systemMw.RequireEnabled,
 			RequireDevice:     deviceAuthMw.RequireDevice,

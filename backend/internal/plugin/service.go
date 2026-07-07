@@ -17,22 +17,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// ErrUnknownPlugin signals a config write against a key with no registered
-// plugin — a 400 to the caller.
 var ErrUnknownPlugin = errors.New("plugin: unknown plugin key")
 
 const enabledCacheTTL = 5 * time.Second
 
-// PublicPlugin is the tenant-facing view: an enabled plugin's identity plus its
-// non-secret config. Secrets are never included.
 type PublicPlugin struct {
 	Key    string
 	Name   string
 	Config json.RawMessage
 }
 
-// TenantPluginState is the platform-admin view of one plugin for one tenant.
-// SecretsConfiguredAt indicates secrets are stored without ever revealing them.
 type TenantPluginState struct {
 	Key                 string
 	Name                string
@@ -41,8 +35,7 @@ type TenantPluginState struct {
 	SecretsConfiguredAt *time.Time
 }
 
-// UpdateInput is a platform-admin enablement change. A nil field is left
-// unchanged; a non-nil Secrets map replaces the stored secrets wholesale.
+// Nil fields are left unchanged; a non-nil Secrets map replaces stored secrets wholesale.
 type UpdateInput struct {
 	Enabled *bool
 	Config  json.RawMessage
@@ -50,19 +43,11 @@ type UpdateInput struct {
 }
 
 type Service interface {
-	// Enabled reports whether the plugin is enabled for the request's tenant.
 	Enabled(ctx context.Context, key string) (bool, error)
-	// RequirePlugin gates a route group, returning 404 when the plugin is
-	// disabled or unregistered — dormant means invisible, not forbidden.
 	RequirePlugin(key string) func(http.Handler) http.Handler
-	// ListPublic returns the enabled plugins for the request's tenant.
 	ListPublic(ctx context.Context) ([]PublicPlugin, error)
-	// Secrets decrypts the stored secret map for the request's tenant.
 	Secrets(ctx context.Context, key string) (map[string]string, error)
-	// ListForTenant returns every registered plugin's state for one tenant
-	// (platform-admin path; explicit tenant id).
 	ListForTenant(ctx context.Context, tenantID string) ([]TenantPluginState, error)
-	// SetForTenant enables/disables and configures one plugin for one tenant.
 	SetForTenant(ctx context.Context, tenantID, key string, in UpdateInput) (TenantPluginState, error)
 }
 

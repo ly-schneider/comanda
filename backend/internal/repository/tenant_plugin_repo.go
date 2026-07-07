@@ -9,9 +9,6 @@ import (
 	"backend/internal/generated/ent/tenantplugin"
 )
 
-// TenantPluginUpsert is the fully-resolved enablement state written for one
-// (tenant, plugin) pair. SecretsEnc is left untouched when nil, so a caller that
-// only toggles enablement never disturbs stored secrets.
 type TenantPluginUpsert struct {
 	PluginKey           string
 	Enabled             bool
@@ -20,10 +17,6 @@ type TenantPluginUpsert struct {
 	SecretsConfiguredAt *time.Time
 }
 
-// TenantPluginRepository reads and writes per-tenant plugin enablement. The
-// tenant-scoped reads run RLS-bound (resolved tenant); ListByTenant and Upsert
-// take an explicit tenant id for the platform-admin path, where the request runs
-// with no tenant bound and the RLS platform bypass is active.
 type TenantPluginRepository interface {
 	GetByKey(ctx context.Context, pluginKey string) (*ent.TenantPlugin, error)
 	ListEnabled(ctx context.Context) ([]*ent.TenantPlugin, error)
