@@ -1,11 +1,13 @@
 import "styles/tailwind.css"
 import type { Metadata } from "next"
 import AnalyticsWrapper from "@/components/analytics-wrapper"
+import { PluginProvider } from "@/components/plugins/plugin-provider"
 import { AuthProvider } from "@/contexts/auth-context"
 import { TenantBrandingProvider } from "@/contexts/branding-context"
 import { buildThemeCss } from "@/lib/branding-theme"
 import { FONT_VARS } from "@/lib/fonts"
 import { getBranding, isTenantSuspended } from "@/lib/server/branding"
+import { getPlugins } from "@/lib/server/plugins"
 
 export const dynamic = "force-dynamic"
 
@@ -53,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Per-tenant accents, font, and corner radii injected over the fixed white
   // base. Values are backend-validated hex / allow-listed keys (see buildThemeCss).
   const themeStyle = buildThemeCss(branding)
+  const plugins = await getPlugins()
 
   return (
     <html lang="de" className={FONT_VARS}>
@@ -61,7 +64,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <TenantBrandingProvider branding={branding}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <PluginProvider enabledPlugins={plugins}>{children}</PluginProvider>
+          </AuthProvider>
         </TenantBrandingProvider>
         <AnalyticsWrapper />
       </body>

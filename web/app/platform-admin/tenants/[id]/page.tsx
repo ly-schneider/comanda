@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { TenantPluginsCard } from "@/components/platform-admin/tenant-plugins-card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -274,6 +275,8 @@ export default function ManageTenantPage() {
           </a>
         </CardContent>
       </Card>
+
+      <TenantPluginsCard tenantId={tenant.id} fetchAuth={fetchAuth} />
     </div>
   )
 }
