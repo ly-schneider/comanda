@@ -1,0 +1,290 @@
+---
+title: Plugin entwickeln
+description: Checkliste zum Bauen eines Plugins: Backend, Web und Tests
+---
+
+# Konzept
+
+Tenant-optionale Funktionen (z. B. die Club100/Elvanto-Integration, die nur ein Tenant braucht)
+leben nicht im Core, sondern als **Plugin**: in-tree, mitkompiliert, per-Tenant zur Laufzeit
+aktivierbar. Der Core stellt benannte Extension Points bereit; ein Plugin bringt eigene Schemas,
+Services, Endpoints und UI mit. Deaktiviert = unsichtbar: Routen liefern **404**, keine UI, keine
+Config.
+
+Grundregeln:
+
+- **Nur First-Party.** Kein Third-Party- oder Out-of-Process-API. Plugin-Code liegt unter
+  `backend/internal/plugin/<key>/` + `web/plugins/<key>/`; die Registry ist die einzige Quelle der Wahrheit.
+- **Ein Image, ein Bundle.** Plugin-Code wird für alle Tenants ausgeliefert und bleibt dormant,
+  bis ihn ein Platform-Admin aktiviert. Gitops und Deployment bleiben unverändert.
+- **Aktivierung nur durch Platform-Admin** über den Plugins-Tab auf `/platform-admin/tenants/[id]`.
+  Kein Self-Serve, kein Billing.
+- **Kein eigener Payment-Typ.** Ein Plugin trägt keine neue Zahlungsmethode bei; es hängt sich über
+  die generische `gratis_plugin`-Methode und den `PaymentHook` ein (siehe unten).
+
+Referenz-Plugins: `internal/plugin/club100/` (Extraktion) und `internal/plugin/stationqr/` (Neubau).
+Detail-Conventions stehen in `backend/openapi/README.md` und `web/plugins/README.md`.
+
+---
+
+# Backend-Checkliste
+
+## 1. Plugin-Interface + fx-Modul
+
+Ein Plugin implementiert `plugin.Plugin` (`internal/plugin/plugin.go`):
+
+```go
+type Plugin interface {
+    Key() string   // "club100" — stabiler Identifier für URL, DB, Analytics
+    Name() string  // Anzeigename für die Platform-Admin-UI
+    Module() fx.Option
+    Routes(wrapper *generated.ServerInterfaceWrapper, mw Middlewares) func(chi.Router)
+}
+```
+
+Deps kommen über fx, dürfen aber erst zur **Request-Zeit** gelesen werden, nicht beim Mount. Muster
+(aus `club100/plugin.go`): das `Plugin`-Struct hält einen `*runtime`-Holder, den `Module()` per
+`fx.Invoke` beim Start füllt; Handler und `PaymentHook` lesen `p.rt` pro Request.
+
+```go
+func New() *Plugin { return &Plugin{rt: &runtime{}} }
+
+func (p *Plugin) Module() fx.Option {
+    return fx.Options(
+        fx.Provide(NewRedemptionRepository, NewService /* … */),
+        fx.Invoke(func(s Service, logger *zap.Logger) { p.rt.svc = s; p.rt.logger = logger }),
+    )
+}
+```
+
+## 2. Registry-Eintrag
+
+Die Liste lebt in `internal/app/plugins.go` (**nicht** in Package `plugin`; jedes Plugin importiert
+`plugin`, eine Liste dort würde zyklisch importieren):
+
+```go
+func registeredPlugins() []plugin.Plugin {
+    return []plugin.Plugin{
+        club100.New(),
+        stationqr.New(),
+        // neues Plugin hier
+    }
+}
+```
+
+`NewPlugins()` komponiert jedes `p.Module()` in den fx-Graphen; `plugin.Mount` hängt jedes Plugin
+unter `/v1/plugins/<key>` ein. Mehr ist für die Registrierung nicht nötig.
+
+## 3. Routen + Middleware-Gating
+
+`Routes()` bekommt eine Kopie des generierten Wrappers und den `Middlewares`-Satz. Handler kopieren
+den Wrapper lokal, damit der Core-`api`-Pkg frei von Plugin-Referenzen bleibt:
+
+```go
+func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Middlewares) func(chi.Router) {
+    w := *wrapper
+    w.Handler = &handlers{rt: p.rt}
+    return func(r chi.Router) {
+        r.Group(func(gr chi.Router) {
+            gr.Use(mw.RequireDevice(auth.DeviceTypePOS))
+            gr.Get("/people", w.Club100ListPeople)
+        })
+        r.Group(func(gr chi.Router) {
+            gr.Use(mw.RequireAuth())
+            gr.Use(mw.RequireTenantRole(auth.TierAppAdmin))
+            gr.Use(mw.CSRF)
+            gr.Put("/settings", w.Club100UpdateSettings)
+        })
+    }
+}
+```
+
+Verfügbare Middleware (`Middlewares`-Struct): `RequireEnabled`, `RequireDevice(type)`,
+`RequireAuth()`, `OptionalAuth()`, `RequireTenantRole(tier)`, `CSRF`.
+
+`RequirePlugin`-Gating musst du **nicht** selbst setzen: `plugin.Mount` legt vor jede Plugin-Gruppe
+`svc.RequirePlugin(key)`. Ist das Plugin für den Tenant deaktiviert, antwortet die ganze Gruppe mit
+**404** (dormant heisst unsichtbar, nicht 403). Öffentliche Endpoints (z. B. ein Enroll-Endpoint)
+bleiben trotzdem hinter diesem 404-Gate; nur die Auth-Middleware darin wird gelockert.
+
+## 4. OpenAPI-first (kein Escape Hatch)
+
+Auch Plugin-Endpoints laufen durch die oapi-codegen-Pipeline:
+
+1. Pfade in `openapi/paths/plugins/<key>.yaml`, Schemas in `openapi/schemas/plugins/<key>.yaml`.
+2. In der Root-`openapi.yaml` explizite `/plugins/<key>/…`-Einträge, die diese Dateien `$ref`-en
+   (in-tree Plugins ⇒ committete Refs, kein Merge-Tooling).
+3. Jede `operationId` mit dem Plugin-Key prefixen (`club100ListPeople`); kollidiert so nie mit Core
+   oder einem anderen Plugin. Dann `just generate-api`, danach `wrapper.Club100ListPeople` in der
+   Plugin-Route-Gruppe verdrahten.
+
+Core-Plugin-Management (`/plugins`, `/platform/tenants/{tenantId}/plugins`) liegt in den normalen
+Core-Dateien `paths/plugins.yaml` / `schemas/plugins.yaml`. `bundled.yaml` und der generierte Go-Code
+sind gitignored.
+
+## 5. Ent-Schema + RLS-Coverage
+
+Ent generiert aus einem einzigen Schema-Package. Plugin-Entities leben deshalb in
+`internal/schema/`, **key-prefixed** (`club100_redemption.go`, `station_enroll_token.go`), nicht im
+Plugin-Verzeichnis. Alles andere (Service, Repo, Handler, Client) bleibt unter
+`internal/plugin/<key>/`.
+
+Jede tenant-eigene Tabelle bekommt `TenantMixin{}` (stempelt `tenant_id`) und muss an **vier** Stellen
+konsistent auftauchen; sonst schlägt CI fehl oder RLS greift nicht:
+
+1. **Migration** mit RLS-Policy + Grants (`db/migrations/…`). Muster einer Plugin-Tabelle:
+
+   ```sql
+   ALTER TABLE station_enroll_token ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY station_enroll_token_isolation ON station_enroll_token FOR ALL
+     USING (tenant_id = app_current_tenant_id() OR app_is_platform_admin())
+     WITH CHECK (tenant_id = app_current_tenant_id() OR app_is_platform_admin());
+   -- + GRANT SELECT,INSERT,UPDATE,DELETE an comanda_app / GRANT ALL an comanda_privileged
+   ```
+
+2. **`internal/enttenant/enttenant.go`** — Typname in `scopedTypes` eintragen (aktiviert den
+   Tenant-Hook, der `tenant_id` setzt).
+3. **`internal/enttenant/enttenant_test.go`** — denselben Typ in `typeToTable` mappen.
+   `TestScopedTypesMatchSchema` vergleicht die generierten Tabellen-Spalten gegen `scopedTypes`: jede
+   Tabelle mit `tenant_id`, die nicht geführt ist (oder umgekehrt), lässt den Test failen. Der Guard
+   kann so nie stillschweigend vom Schema abdriften.
+4. **RLS-Coverage-/Cross-Tenant-Tests** (`test/integration/…`) — den Tabellennamen in
+   `scopedRLSTables` (`rls_coverage_test.go`) aufnehmen; `TestRLSCoverage` prüft dann per
+   `pg_policies`-Abfrage, dass die Tabelle RLS aktiviert und eine Isolations-Policy hat. Dazu
+   Cross-Tenant-Tests, dass Tenant A Tenant Bs Zeilen nicht sieht.
+
+Ent-Edges zu Core-Entities sind **unidirektional** (`edge.To`): das Core-Schema trägt keinen
+Back-Ref auf ein Plugin (siehe `club100_redemption` → `Order`).
+
+## 6. Enablement, Config, Secrets
+
+Aktivierung und Konfiguration liegen in `tenant_plugin` (`TenantMixin`/RLS, unique
+`(tenant_id, plugin_key)`):
+
+- `enabled` bool
+- `config` jsonb — **nicht-geheime**, tenant-sichtbare Config (z. B. `maxRedemptions`, `freeProductIds`)
+- `secrets_enc` bytea — AES-256-GCM-verschlüsselte JSON-Map (z. B. Elvanto API-Key), Master-Key aus
+  Doppler (`PAYMENTS_MASTER_KEY`, gleicher `crypto.Encryptor` wie Payrexx)
+- `secrets_configured_at` — Write-only-Indikator
+
+`plugin.Service` kapselt den Zugriff:
+
+- `Enabled(ctx, key)` — RLS-scoped Read mit 5-Sekunden-Cache, **pro Tenant gekeyt**
+  (`tenantID + "\x00" + key`), Evict bei Änderung.
+- `Config(ctx, key)` / `SetConfig(ctx, key, cfg)` — tenant-sichtbare Config lesen/schreiben.
+- `Secrets(ctx, key)` — entschlüsselt, nur server-intern.
+
+Regeln für Secrets:
+
+- **`secrets_enc` wird von keinem Read-Path je zurückgegeben.** Schreiben ist write-only; die UI zeigt
+  nur `secretsConfiguredAt` (wie bei Payrexx). Keine Serialisierung von `secrets_enc` in irgendeine
+  Response.
+- Services greifen **immer** über `repository.ClientFromContext(ctx, s.client)` auf die DB zu, nie
+  über `s.client` direkt; sonst fehlt das `app.tenant_id`-GUC und RLS blockt lautlos alle Zeilen.
+
+Public-Config-Fluss: `GET /v1/plugins` (gleiches Trust-Level wie `/v1/branding`) liefert die
+aktivierten Plugin-Keys + den tenant-sichtbaren `config`-Anteil. Der Web-Layer holt es serverseitig.
+
+## 7. Optionale Capabilities
+
+Per Type-Assertion vom Core erkannt:
+
+- **`PaymentHook`** — Einhängen in den Zahlungsfluss ohne eigene Methode:
+
+  ```go
+  ValidatePayment(ctx, order *ent.Order, data json.RawMessage) error
+  OnPaymentRecorded(ctx, order *ent.Order, method string, data json.RawMessage) error
+  ```
+
+  Dispatch: `PaymentCreate.plugin = { key, data }` löst den Hook auf. Der Core prüft **vor** dem
+  Dispatch `Enabled(ctx, key)`; ein deaktivierter oder unregistrierter Key wird abgelehnt, nie
+  einer Zahlung zugeschrieben. Der Hook feuert bei voller Comp (`gratis_plugin`) **und** bei
+  gemischten Körben (cash/card/twint mit `plugin`-Feld). Der Core persistiert `plugin_key` neben
+  `method`, damit «bezahlt via Club100» abfragbar bleibt.
+- **`Starter`** — `Start(ctx) error` für einen langlaufenden Loop (Muster wie der DomainVerifier).
+
+---
+
+# Web-Checkliste
+
+Details in `web/plugins/README.md`. Kurz:
+
+## 1. Manifest + Registry
+
+Jedes Plugin exportiert ein Manifest nach `web/plugins/registry.ts`. Slot-Komponenten werden mit
+`next/dynamic` geladen; ein Tenant ohne das Plugin lädt dessen JS-Chunk nie.
+
+```ts
+const manifest: PluginManifest = {
+  key: "club100",
+  name: "100 Club",
+  slots: {
+    "pos.basket.actions": dynamic(() => import("./club100/basket-action")),
+    "admin.settings.section": dynamic(() => import("./club100/admin-settings")),
+    "platform.plugin.config": dynamic(() => import("./club100/platform-config")),
+  },
+}
+```
+
+## 2. Slots + Contracts
+
+`<PluginSlot name="…" ctx={…} />` rendert die Slot-Komponente jedes aktivierten Plugins mit typisiertem
+`ctx` plus dessen public `config`. Nichts rendert, wenn kein aktiviertes Plugin den Slot bedient.
+
+| Slot | Ort | `ctx` |
+| --- | --- | --- |
+| `pos.basket.actions` | POS-Basket-Aktionsleiste | `{ cartItems; setPluginDiscount(d \| null) }` |
+| `admin.settings.section` | Tenant-Admin-Settings | `{ token: string }` |
+| `device.pairing.actions` | Pairing-Screens `/station` + `/pos` | `{ deviceType }` |
+| `platform.plugin.config` | Platform-Admin-Plugin-Manager | Props (kein `PluginSlot`), s. u. |
+
+Payment-Slot-Contract: `pos.basket.actions` ruft
+`setPluginDiscount({ pluginKey, label, amountCents, paymentData })`. Der Basket rendert generisch eine
+Rabattzeile und hängt beim Submit `PaymentCreate.plugin = { key: pluginKey, data: paymentData }` an.
+
+## 3. Platform-Config-Formular
+
+`platform.plugin.config` ist **nicht** an die Plugins des aktuellen Hosts gebunden (der Admin verwaltet
+fremde Tenants); es wird direkt aus der Registry via `getPlatformConfigComponent(key)` geholt. Props:
+
+```ts
+{
+  tenantId: string
+  pluginKey: string
+  config: Record<string, unknown>
+  secretsConfiguredAt: string | null
+  onSave: (patch: { enabled?; config?; secrets? }) => Promise<void>
+  saving: boolean
+}
+```
+
+Secret-Felder immer als write-only rendern (leer + «konfiguriert am …»-Hinweis), nie den Wert zurücklesen.
+
+## 4. Provider
+
+`PluginProvider` (in `app/layout.tsx`) bekommt die serverseitig geholte Liste aus `getPlugins()`.
+`usePlugins()` liefert `enabledPlugins` + `getPluginConfig(key)`.
+
+Reicht ein Public-Endpoint über den Web-`/api`-Proxy (z. B. ein Enroll-Endpoint ohne Session), braucht
+er einen **exact-match**-Eintrag in `csrfExempt` in `web/app/api/[...path]/route.ts`; exakt halten,
+damit authentifizierte Geschwister-Routen CSRF-geschützt bleiben.
+
+---
+
+# Testerwartungen
+
+Ein Plugin ist erst fertig, wenn:
+
+- **RLS-Coverage.** `tenant_plugin` und jede plugin-eigene Tabelle haben eine RLS-Policy in der
+  Migration, App-/Privileged-Grants und stehen in `scopedTypes` + `typeToTable` + `scopedRLSTables`.
+  `TestRLSCoverage` (DB-Policy) und `TestScopedTypesMatchSchema` (ORM-Guard) decken sie ab.
+- **Kein Cross-Tenant-Leak.** Integrationstests: Tenant A aktiviert ≠ Tenant B; Plugin-Zeilen
+  (Redemptions, Enroll-Codes) bleiben isoliert; der Enablement-Cache leckt nicht über Requests.
+- **Gating.** Deaktiviertes Plugin ⇒ Routen 404, `GET /v1/plugins` lässt es weg, Web rendert keinen
+  Slot-Inhalt, eine Zahlung mit dem `plugin.key` eines deaktivierten Plugins wird abgelehnt.
+- **Secrets.** `secrets_enc` kommt aus keinem Read-Endpoint zurück (write-only, `configuredAt`-Indikator).
+- **DB-Zugriff** in Services läuft über `repository.ClientFromContext`; sonst maskiert ein
+  Privileged-Client im Test einen echten RLS-Ausfall in Prod.
+
+Integrationstests brauchen eine `comanda_test`-DB mit `comanda_privileged`/`comanda_app`-Rollen und den
+beiden DSN-Env-Vars (`POSTGRES_TEST_DSN` / `_APP`); laufen daher nur in CI, nicht lokal.

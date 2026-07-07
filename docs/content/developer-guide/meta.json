@@ -5,6 +5,7 @@
     "backend",
     "web-app",
     "android-pos",
+    "plugins",
     "cloud-infra",
     "ci-cd",
     "debugging"
