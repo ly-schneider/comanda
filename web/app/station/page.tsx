@@ -6,6 +6,7 @@ import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
 import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
@@ -683,6 +684,7 @@ export default function StationPage() {
           <div className="flex w-full flex-1 items-center justify-center">
             <PairingCodeDisplay deviceType="STATION" />
           </div>
+          <PluginSlot name="device.pairing.actions" ctx={{}} />
         </div>
       )}
 

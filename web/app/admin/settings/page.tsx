@@ -2,12 +2,14 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { useAuth } from "@/contexts/auth-context"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 import type { Product } from "@/types"
@@ -24,6 +26,8 @@ type SettingsResponse = {
 
 export default function AdminSettingsPage() {
   const fetchAuth = useAuthorizedFetch()
+  const { getToken } = useAuth()
+  const token = getToken() ?? ""
 
   const [systemEnabled, setSystemEnabled] = useState(true)
   const [posMode, setPosMode] = useState<PosFulfillmentMode>("QR_CODE")
@@ -223,6 +227,8 @@ export default function AdminSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PluginSlot name="admin.settings.section" ctx={{ token }} />
     </div>
   )
 }
