@@ -298,7 +298,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     prevItemCount.current = cart.items.length
   }, [cart.items.length])
 
-  // Clear the plugin discount when cart items change (quantities, items added/removed)
   const cartItemsKey = useMemo(() => cart.items.map((i) => `${i.id}:${i.quantity}`).join(","), [cart.items])
   useEffect(() => {
     setPluginDiscount(null)
