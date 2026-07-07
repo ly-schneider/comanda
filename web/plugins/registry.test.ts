@@ -12,6 +12,12 @@ describe("plugin registry", () => {
     ])
   })
 
+  it("registers the stationqr plugin with its slots", () => {
+    const stationqr = getPluginManifest("stationqr")
+    expect(stationqr?.name).toBe("Station QR")
+    expect(Object.keys(stationqr?.slots ?? {}).sort()).toEqual(["admin.stations.actions", "device.pairing.actions"])
+  })
+
   it("returns undefined for an unknown manifest", () => {
     expect(getPluginManifest("nope")).toBeUndefined()
   })

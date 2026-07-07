@@ -5,6 +5,7 @@ import type { TenantPluginUpdate } from "@/types/plugin"
 export type PluginSlotName =
   | "pos.basket.actions"
   | "admin.settings.section"
+  | "admin.stations.actions"
   | "device.pairing.actions"
   | "platform.plugin.config"
 
@@ -24,7 +25,13 @@ export type AdminSettingsSectionCtx = {
   token: string
 }
 
-export type DevicePairingActionsCtx = Record<string, never>
+export type AdminStationsActionsCtx = {
+  token: string
+}
+
+export type DevicePairingActionsCtx = {
+  deviceType: "POS" | "STATION"
+}
 
 export type PlatformPluginConfigProps = {
   tenantId: string
@@ -38,6 +45,7 @@ export type PlatformPluginConfigProps = {
 export type PluginSlotCtx = {
   "pos.basket.actions": PosBasketActionsCtx
   "admin.settings.section": AdminSettingsSectionCtx
+  "admin.stations.actions": AdminStationsActionsCtx
   "device.pairing.actions": DevicePairingActionsCtx
 }
 

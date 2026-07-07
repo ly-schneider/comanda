@@ -3,11 +3,13 @@
 import { Check, ChevronDown, ChevronRight, Pencil, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { PairDeviceCard } from "@/components/admin/pair-device-card"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/contexts/auth-context"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 
@@ -37,6 +39,8 @@ function csrfHeaders(method: string, json = true): Record<string, string> {
 
 export default function AdminStationRequestsPage() {
   const fetchAuth = useAuthorizedFetch()
+  const { getToken } = useAuth()
+  const token = getToken() ?? ""
   const [stations, setStations] = useState<Station[]>([])
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
@@ -164,6 +168,8 @@ export default function AdminStationRequestsPage() {
       <div className="mb-6">
         <PairDeviceCard onPaired={load} />
       </div>
+
+      <PluginSlot name="admin.stations.actions" ctx={{ token }} />
 
       {error && (
         <div role="alert" className="text-destructive bg-destructive/10 mb-3 rounded px-3 py-2">

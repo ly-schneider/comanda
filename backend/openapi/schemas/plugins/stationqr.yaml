@@ -1,0 +1,51 @@
+StationqrCode:
+  type: object
+  required: [configured, disabled]
+  properties:
+    configured:
+      type: boolean
+      description: Whether a durable enrollment code exists for this tenant
+    disabled:
+      type: boolean
+      description: When true, the code exists but enrollment is suspended
+    token:
+      type: string
+      nullable: true
+      description: Raw enrollment token to encode into the printable QR; null when not configured
+
+StationqrCodeStateUpdate:
+  type: object
+  required: [disabled]
+  properties:
+    disabled:
+      type: boolean
+
+StationqrEnrollRequest:
+  type: object
+  required: [token, deviceKey]
+  properties:
+    token:
+      type: string
+      description: Enrollment token scanned from the printed QR
+    deviceKey:
+      type: string
+      maxLength: 100
+    name:
+      type: string
+      maxLength: 20
+    model:
+      type: string
+      maxLength: 50
+    os:
+      type: string
+      maxLength: 20
+
+StationqrEnrollResponse:
+  type: object
+  required: [token, device]
+  properties:
+    token:
+      type: string
+      description: Device session token (Bearer credential for subsequent requests)
+    device:
+      $ref: "../devices.yaml#/Device"

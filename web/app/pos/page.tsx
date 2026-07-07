@@ -436,7 +436,7 @@ function PosInner() {
       <>
         <POSHeader mode={status?.mode} syncStatus={syncStatus} />
         <PairingCodeDisplay deviceType="POS" />
-        <PluginSlot name="device.pairing.actions" ctx={{}} />
+        <PluginSlot name="device.pairing.actions" ctx={{ deviceType: "POS" }} />
       </>
     )
   }

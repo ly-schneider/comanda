@@ -243,6 +243,11 @@ paths:
   /plugins/club100/settings:
     $ref: "paths/plugins/club100.yaml#/settings"
 
+  /plugins/stationqr/code:
+    $ref: "paths/plugins/stationqr.yaml#/code"
+  /plugins/stationqr/enroll:
+    $ref: "paths/plugins/stationqr.yaml#/enroll"
+
   /branding:
     $ref: "paths/branding.yaml#/collection"
 
