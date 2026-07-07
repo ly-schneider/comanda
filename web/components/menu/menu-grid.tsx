@@ -125,7 +125,7 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
         <CardContent className="px-2 pt-0 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-col">
-              <h3 className="font-family-secondary text-lg">{product.name}</h3>
+              <h3 className="font-family-secondary text-lg font-semibold">{product.name}</h3>
               {product.description && (
                 <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs whitespace-pre-line">
                   {product.description}

@@ -88,7 +88,7 @@ export function SumUpSettingsForm({ basePath }: { basePath: string }) {
   return (
     <div className="space-y-6 pt-4">
       <div className="flex items-center gap-3">
-        <h1 className="font-primary text-2xl">SumUp</h1>
+        <h1 className="font-primary text-2xl font-semibold">SumUp</h1>
         {saved && <Badge variant="default">Aktiv</Badge>}
       </div>
 

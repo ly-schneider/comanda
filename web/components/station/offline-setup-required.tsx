@@ -7,7 +7,7 @@ export function OfflineSetupRequired() {
       <div className="bg-destructive/10 text-destructive mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
         <WifiOff className="h-5 w-5" aria-hidden />
       </div>
-      <h2 className="font-primary text-center text-xl tracking-wide uppercase">Offline – Einrichtung nötig</h2>
+      <h2 className="text-center text-xl font-semibold">Offline – Einrichtung nötig</h2>
       <p className="text-muted-foreground mt-1 text-center text-sm">
         Dieses Gerät ist noch nicht für den Offline-Betrieb eingerichtet. Verbinde dich mit dem Internet, um die
         Einrichtung abzuschliessen.

@@ -68,7 +68,7 @@ export default function AdminPOSPage() {
 
   return (
     <div className="pt-4">
-      <h1 className="font-primary mb-4 text-2xl">POS-Geräte</h1>
+      <h1 className="font-primary mb-4 text-2xl font-semibold">POS-Geräte</h1>
 
       <div className="mb-6">
         <PairDeviceCard onPaired={load} />

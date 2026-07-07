@@ -218,7 +218,7 @@ export default function AdminJetonsPage() {
   return (
     <div className="space-y-4 pt-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-primary text-2xl">Jetons</h1>
+        <h1 className="font-primary text-2xl font-semibold">Jetons</h1>
         <Button onClick={openCreate}>Jeton hinzufügen</Button>
       </div>
       {error && <div className="text-destructive bg-destructive/10 rounded px-3 py-2 text-sm">{error}</div>}

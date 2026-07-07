@@ -172,7 +172,7 @@ export default function QaRunPage() {
           ← Alle Testläufe
         </Link>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
-          <h1 className="font-primary text-2xl">{run.name}</h1>
+          <h1 className="font-primary text-2xl font-semibold">{run.name}</h1>
           <div className="flex items-center gap-3">
             <p className="text-muted-foreground text-sm">
               {totals.done}/{QA_TEST_COUNT} erfasst · {totals.success} ✓

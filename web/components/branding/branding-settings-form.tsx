@@ -200,7 +200,7 @@ export function BrandingSettingsForm({ basePath, heading = "Branding" }: { baseP
 
   return (
     <div className="space-y-6 pt-4">
-      <h1 className="font-primary text-2xl">{heading}</h1>
+      <h1 className="font-primary text-2xl font-semibold">{heading}</h1>
 
       {error && (
         <div role="alert" className="text-destructive bg-destructive/10 rounded px-3 py-2">

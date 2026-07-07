@@ -90,7 +90,7 @@ export default function QaRunsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-primary text-2xl">QA-Checkliste</h1>
+        <h1 className="font-primary text-2xl font-semibold">QA-Checkliste</h1>
       </div>
 
       {error && (

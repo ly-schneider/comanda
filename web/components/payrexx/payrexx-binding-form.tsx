@@ -185,7 +185,7 @@ export function PayrexxBindingForm({ basePath, heading = "Zahlungen" }: { basePa
   return (
     <div className="space-y-6 pt-4">
       <div className="flex items-center gap-3">
-        <h1 className="font-primary text-2xl">{heading}</h1>
+        <h1 className="font-primary text-2xl font-semibold">{heading}</h1>
         {configured && <Badge variant="default">Verbunden</Badge>}
       </div>
 

@@ -142,7 +142,7 @@ export default function AdminStaffMealsPage() {
     <div className="space-y-4 pt-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-primary text-2xl">Mitarbeiter-Essen</h1>
+          <h1 className="font-primary text-2xl font-semibold">Mitarbeiter-Essen</h1>
           <p className="text-muted-foreground text-sm">
             Gratis-Mahlzeiten, die Mitarbeiter per QR-Code an der Station einlösen.
           </p>

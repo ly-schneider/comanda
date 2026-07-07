@@ -220,7 +220,7 @@ export default function AdminStaffMealDetailPage() {
             Mitarbeiter-Essen
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-primary truncate text-2xl">{detail.name}</h1>
+            <h1 className="font-primary truncate text-2xl font-semibold">{detail.name}</h1>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[detail.status]}`}>
               {STATUS_LABEL[detail.status]}
             </span>

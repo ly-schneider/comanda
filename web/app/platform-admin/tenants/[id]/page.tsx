@@ -141,7 +141,7 @@ export default function ManageTenantPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-primary text-2xl">{tenant.name}</h1>
+        <h1 className="font-primary text-2xl font-semibold">{tenant.name}</h1>
         <Button asChild variant="outline" size="sm">
           <Link href="/platform-admin">Zurück</Link>
         </Button>

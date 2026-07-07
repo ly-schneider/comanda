@@ -1,144 +1,168 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, CloudDownload, Loader2, WifiOff } from "lucide-react"
+import { AlertTriangle, CheckCircle2, CloudDownload, Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react"
+import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
-import { useOfflineReadiness } from "@/lib/station/use-offline-readiness"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { type ReadinessState, useOfflineReadiness } from "@/lib/station/use-offline-readiness"
 
 export function OfflineReadiness() {
   const { state, online, prepare } = useOfflineReadiness()
 
   if (state === "unsupported" || state === "checking") return null
 
+  // The operator doesn't need a permanent banner for the healthy states — only a
+  // subtle nudge when the offline shell still needs setting up or re-running.
+  const attention = state === "unprepared" || state === "stale" || state === "error"
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm" aria-label="Offline-Status" className="relative px-2">
+          <StatusIcon state={state} online={online} />
+          {attention && (
+            <span
+              aria-hidden
+              className={`absolute -top-0.5 -right-0.5 size-2 rounded-full ${
+                state === "error" ? "bg-destructive" : "bg-primary"
+              }`}
+            />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72">
+        <Detail state={state} online={online} prepare={prepare} />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function StatusIcon({ state, online }: { state: ReadinessState; online: boolean }) {
+  if (state === "preparing") return <Loader2 className="size-4 animate-spin" aria-hidden />
+  if (state === "error") return <AlertTriangle className="text-destructive size-4" aria-hidden />
+  if (state === "unprepared" || state === "stale") return <CloudDownload className="size-4" aria-hidden />
+  return online ? (
+    <Wifi className="text-success size-4" aria-hidden />
+  ) : (
+    <WifiOff className="text-muted-foreground size-4" aria-hidden />
+  )
+}
+
+function Detail({ state, online, prepare }: { state: ReadinessState; online: boolean; prepare: () => void }) {
   if (state === "preparing") {
     return (
-      <Row tone="muted">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-        <span>Wird für Offline-Betrieb vorbereitet…</span>
-      </Row>
+      <Line
+        icon={<Loader2 className="size-5 animate-spin" aria-hidden />}
+        title="Wird für Offline-Betrieb vorbereitet…"
+      />
     )
   }
 
   if (state === "ready") {
     return (
-      <Row tone="success" live>
-        {online ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-        ) : (
-          <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
-        )}
-        <span className="flex-1">{online ? "Bereit für Offline-Betrieb" : "Offline – bereit zum Scannen"}</span>
+      <div className="grid gap-3">
+        <Line
+          icon={
+            online ? (
+              <CheckCircle2 className="text-success size-5" aria-hidden />
+            ) : (
+              <WifiOff className="size-5" aria-hidden />
+            )
+          }
+          title={online ? "Bereit für Offline-Betrieb" : "Offline – bereit zum Scannen"}
+          body={
+            online
+              ? "Alle Inhalte sind gespeichert. Das Scannen funktioniert auch ohne Internet."
+              : "Keine Internetverbindung. Gespeicherte Inhalte werden verwendet."
+          }
+        />
         {online && (
-          <button
-            type="button"
-            onClick={prepare}
-            className="text-success/80 hover:text-success shrink-0 text-xs underline underline-offset-2"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={prepare} className="w-full">
+            <RefreshCw className="size-4" aria-hidden />
             Erneut vorbereiten
-          </button>
+          </Button>
         )}
-      </Row>
+      </div>
     )
   }
 
   if (state === "stale") {
     return (
-      <Card
-        icon={<AlertTriangle className="h-5 w-5" aria-hidden />}
-        tone="warning"
+      <Prepare
+        icon={<AlertTriangle className="size-5" aria-hidden />}
         title="App wurde aktualisiert"
         body="Bereite den Offline-Betrieb erneut vor, solange du online bist."
-      >
-        <PrepareButton online={online} onClick={prepare} label="Erneut vorbereiten" />
-      </Card>
+        online={online}
+        onClick={prepare}
+        label="Erneut vorbereiten"
+      />
     )
   }
 
   if (state === "error") {
     return (
-      <Card
-        icon={<AlertTriangle className="h-5 w-5" aria-hidden />}
-        tone="warning"
+      <Prepare
+        icon={<AlertTriangle className="text-destructive size-5" aria-hidden />}
         title="Vorbereitung fehlgeschlagen"
         body="Nicht alle Inhalte konnten zwischengespeichert werden. Bitte erneut versuchen, solange du online bist."
-      >
-        <PrepareButton online={online} onClick={prepare} label="Erneut versuchen" />
-      </Card>
+        online={online}
+        onClick={prepare}
+        label="Erneut versuchen"
+      />
     )
   }
 
-  // unprepared
   return (
-    <Card
-      icon={<CloudDownload className="h-5 w-5" aria-hidden />}
-      tone="muted"
+    <Prepare
+      icon={<CloudDownload className="size-5" aria-hidden />}
       title="Offline-Betrieb einrichten"
       body="Lade alle Inhalte einmalig herunter, damit das Scannen auch ohne Internet funktioniert."
-    >
-      <PrepareButton online={online} onClick={prepare} label="Für Offline-Betrieb vorbereiten" />
-    </Card>
+      online={online}
+      onClick={prepare}
+      label="Für Offline-Betrieb vorbereiten"
+    />
   )
 }
 
-function PrepareButton({ online, onClick, label }: { online: boolean; onClick: () => void; label: string }) {
+function Line({ icon, title, body }: { icon: ReactNode; title: string; body?: string }) {
   return (
-    <div className="mt-4 grid gap-2">
-      <Button type="button" onClick={onClick} disabled={!online} className="w-full">
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <span className="shrink-0">{icon}</span>
+        <span>{title}</span>
+      </div>
+      {body && <p className="text-muted-foreground text-sm">{body}</p>}
+    </div>
+  )
+}
+
+function Prepare({
+  icon,
+  title,
+  body,
+  online,
+  onClick,
+  label,
+}: {
+  icon: ReactNode
+  title: string
+  body: string
+  online: boolean
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <div className="grid gap-3">
+      <Line icon={icon} title={title} body={body} />
+      <Button type="button" onClick={onClick} disabled={!online} size="sm" className="w-full">
         {label}
       </Button>
       {!online && (
         <p className="text-muted-foreground inline-flex items-center justify-center gap-1.5 text-xs">
-          <WifiOff className="h-3.5 w-3.5" aria-hidden />
+          <WifiOff className="size-3.5" aria-hidden />
           Mit dem Internet verbinden, um die Vorbereitung abzuschliessen.
         </p>
       )}
-    </div>
-  )
-}
-
-const TONE_ROW: Record<"muted" | "success", string> = {
-  muted: "bg-card text-muted-foreground",
-  success: "bg-success/10 text-success",
-}
-
-function Row({ tone, live, children }: { tone: "muted" | "success"; live?: boolean; children: React.ReactNode }) {
-  return (
-    <div
-      role="status"
-      aria-live={live ? "polite" : undefined}
-      className={`${TONE_ROW[tone]} flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium`}
-    >
-      {children}
-    </div>
-  )
-}
-
-const TONE_CARD: Record<"muted" | "warning", { wrap: string; icon: string }> = {
-  muted: { wrap: "bg-card", icon: "bg-primary/10 text-primary" },
-  warning: { wrap: "bg-destructive/5", icon: "bg-destructive/10 text-destructive" },
-}
-
-function Card({
-  icon,
-  tone,
-  title,
-  body,
-  children,
-}: {
-  icon: React.ReactNode
-  tone: "muted" | "warning"
-  title: string
-  body: string
-  children?: React.ReactNode
-}) {
-  const styles = TONE_CARD[tone]
-  return (
-    <div role="status" className={`${styles.wrap} w-full rounded-2xl p-6`}>
-      <div className={`${styles.icon} mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full`}>
-        {icon}
-      </div>
-      <h2 className="font-primary text-center text-xl tracking-wide uppercase">{title}</h2>
-      <p className="text-muted-foreground mt-1 text-center text-sm">{body}</p>
-      {children}
     </div>
   )
 }

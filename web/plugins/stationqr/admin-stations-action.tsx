@@ -1,14 +1,39 @@
 "use client"
 
-import { Loader2, Printer, QrCode, RefreshCw } from "lucide-react"
+import { Download, Loader2, Printer, QrCode, RefreshCw } from "lucide-react"
 import QRCode from "qrcode"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { useBranding } from "@/contexts/branding-context"
 import type { SlotComponentProps } from "@/plugins/slots"
 import { getCode, rotateCode, setCodeDisabled, type StationqrCode } from "./api"
+
+// Best-effort: pull the tenant logo (R2, cross-origin) into a data URL for the
+// PDF. Returns null if the image can't be loaded or the canvas taints (no CORS).
+function loadImageDataUrl(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas")
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return resolve(null)
+        ctx.drawImage(img, 0, 0)
+        resolve({ dataUrl: canvas.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight })
+      } catch {
+        resolve(null)
+      }
+    }
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
 
 function printQr(dataUrl: string, onBlocked: () => void) {
   const win = window.open("", "_blank", "width=420,height=560")
@@ -40,10 +65,12 @@ function printQr(dataUrl: string, onBlocked: () => void) {
 
 export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps<"admin.stations.actions">) {
   const { token } = ctx
+  const { displayName, logoUrl } = useBranding()
   const [code, setCode] = useState<StationqrCode | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -97,6 +124,58 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
     [token]
   )
 
+  const downloadPdf = useCallback(async () => {
+    if (!code?.token) return
+    setPdfBusy(true)
+    setError(null)
+    try {
+      const [{ jsPDF }, qrPng, logo] = await Promise.all([
+        import("jspdf"),
+        QRCode.toDataURL(code.token, { width: 1200, margin: 1 }),
+        logoUrl ? loadImageDataUrl(logoUrl) : Promise.resolve(null),
+      ])
+      const doc = new jsPDF({ unit: "mm", format: "a4" })
+      const pageW = doc.internal.pageSize.getWidth()
+      const cx = pageW / 2
+      let y = 36
+
+      if (logo) {
+        const ratio = logo.w / logo.h
+        let lw = 22 * ratio
+        let lh = 22
+        if (lw > 60) {
+          lw = 60
+          lh = 60 / ratio
+        }
+        doc.addImage(logo.dataUrl, "PNG", cx - lw / 2, y, lw, lh)
+        y += lh + 10
+      }
+
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(22)
+      doc.text(displayName, cx, y, { align: "center", maxWidth: pageW - 30 })
+      y += 11
+      doc.setFontSize(15)
+      doc.text("Station anmelden", cx, y, { align: "center" })
+      y += 14
+
+      const qrSize = 100
+      doc.addImage(qrPng, "PNG", cx - qrSize / 2, y, qrSize, qrSize)
+      y += qrSize + 12
+
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(12)
+      doc.setTextColor(90)
+      doc.text("Auf einem neuen Stationsgerät scannen.", cx, y, { align: "center", maxWidth: pageW - 40 })
+
+      doc.save("station-registrierung.pdf")
+    } catch {
+      setError("PDF konnte nicht erstellt werden.")
+    } finally {
+      setPdfBusy(false)
+    }
+  }, [code?.token, displayName, logoUrl])
+
   return (
     <Card className="mb-6 rounded-2xl">
       <CardHeader>
@@ -141,6 +220,10 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
                 >
                   <Printer className="mr-2 size-4" />
                   Drucken
+                </Button>
+                <Button variant="outline" onClick={downloadPdf} disabled={pdfBusy || !code.token}>
+                  {pdfBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
+                  PDF herunterladen
                 </Button>
                 <Button variant="outline" onClick={rotate} disabled={busy}>
                   <RefreshCw className="mr-2 size-4" />

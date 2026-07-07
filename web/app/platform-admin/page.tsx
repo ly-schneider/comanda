@@ -33,7 +33,7 @@ export default function PlatformAdminHome() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-primary text-2xl">Tenants</h1>
+        <h1 className="font-primary text-2xl font-semibold">Tenants</h1>
         <Button asChild>
           <Link href="/platform-admin/tenants/new">Tenant erstellen</Link>
         </Button>

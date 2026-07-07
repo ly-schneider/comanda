@@ -21,7 +21,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
           </div>
         </div>
 
-        <h1 className="font-primary mb-4 text-2xl sm:text-3xl">Etwas ist schiefgelaufen</h1>
+        <h1 className="font-primary mb-4 text-2xl font-semibold sm:text-3xl">Etwas ist schiefgelaufen</h1>
 
         <p className="text-muted-foreground mb-8">Ein unerwarteter Fehler ist aufgetreten.</p>
 

@@ -163,7 +163,7 @@ export default function AdminStationRequestsPage() {
 
   return (
     <div className="pt-4">
-      <h1 className="font-primary mb-4 text-2xl">Stationen</h1>
+      <h1 className="font-primary mb-4 text-2xl font-semibold">Stationen</h1>
 
       <div className="mb-6">
         <PairDeviceCard onPaired={load} />

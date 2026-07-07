@@ -13,7 +13,7 @@ export default function NotFound() {
           <h1 className="font-primary text-[120px] leading-none sm:text-[160px]">404</h1>
         </div>
 
-        <h2 className="font-primary mb-4 text-2xl sm:text-3xl">Seite nicht gefunden</h2>
+        <h2 className="font-primary mb-4 text-2xl font-semibold sm:text-3xl">Seite nicht gefunden</h2>
 
         <p className="text-muted-foreground mb-8">Die Seite, die du suchst, existiert nicht oder wurde verschoben.</p>
 

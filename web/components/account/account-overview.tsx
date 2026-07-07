@@ -121,7 +121,9 @@ export function AccountOverview() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="font-primary text-2xl">Willkommen, {activeTenant.displayName || activeTenant.name}</h1>
+        <h1 className="font-primary text-2xl font-semibold">
+          Willkommen, {activeTenant.displayName || activeTenant.name}
+        </h1>
         <p className="text-muted-foreground text-sm">Verwalte hier deinen Auftritt, deine Domains und dein Konto.</p>
       </div>
 

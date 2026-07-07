@@ -21,7 +21,7 @@ export default function PaymentPage() {
   return (
     <div className="flex flex-1 flex-col">
       <main className="container mx-auto flex-1 overflow-y-auto px-4 pt-4 pb-28">
-        <h2 className="mb-4 text-2xl">Mit TWINT bezahlen</h2>
+        <h2 className="mb-4 text-2xl font-semibold">Mit TWINT bezahlen</h2>
         <AuthNudgeBanner />
         <CheckoutClient />
         {!isAuthenticated && (

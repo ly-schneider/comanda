@@ -72,7 +72,7 @@ export default function NewTenantPage() {
 
   return (
     <div className="max-w-lg space-y-6">
-      <h1 className="font-primary text-2xl">Tenant erstellen</h1>
+      <h1 className="font-primary text-2xl font-semibold">Tenant erstellen</h1>
       {error && (
         <div
           role="alert"

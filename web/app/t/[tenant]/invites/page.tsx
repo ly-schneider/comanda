@@ -106,7 +106,7 @@ export default function AccountInvitesPage() {
   return (
     <div className="min-w-0 space-y-4">
       <div>
-        <h1 className="font-primary text-xl">Administrator-Einladungen</h1>
+        <h1 className="font-primary text-xl font-semibold">Administrator-Einladungen</h1>
         <p className="text-muted-foreground text-sm">
           Eingeladene Administratoren können Marke, Domains und Zahlungen verwalten.
         </p>

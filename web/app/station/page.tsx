@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useBranding } from "@/contexts/branding-context"
 import { useDeviceFetch } from "@/hooks/use-device-fetch"
 
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
@@ -176,6 +177,7 @@ export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
   const { state: sessionState, online, token } = useStationSession()
+  const { displayName, logoUrl } = useBranding()
   const status = sessionState.phase === "active" ? sessionState.status : null
   const approved = status?.status === "approved"
   // Keyed on the stable id list so a resolve that returns a new `status` object
@@ -658,8 +660,20 @@ export default function StationPage() {
   return (
     <div className="bg-background text-foreground flex flex-1 flex-col gap-6 px-3 pt-6 pb-10 sm:px-6 sm:pt-8">
       <header className="mx-auto flex w-full max-w-xl items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name ?? ""}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {logoUrl && (
+            <Image
+              src={logoUrl}
+              alt={`${displayName} Logo`}
+              width={36}
+              height={36}
+              className="size-9 shrink-0 rounded-lg"
+            />
+          )}
+          <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name || displayName}</p>
+        </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {approved && <OfflineReadiness />}
           <InstallPrompt />
           <HardRefreshButton />
           <FullscreenButton />
@@ -690,21 +704,23 @@ export default function StationPage() {
 
       {approved && (
         <div className="mx-auto flex w-full flex-col items-center gap-8 sm:max-w-xl">
-          <OfflineReadiness />
-
           {!scannerActive && (
             <div className="bg-card w-full rounded-2xl p-6">
               <div className="bg-primary/10 text-primary mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full">
                 <ScanLine className="h-6 w-6" aria-hidden />
               </div>
-              <h2 className="font-primary text-center text-xl tracking-wide uppercase">Scanner starten</h2>
+              <h2 className="text-center text-xl font-semibold">Scanner starten</h2>
               <p className="text-muted-foreground mt-1 text-center text-sm">
                 Erlaube den Kamerazugriff, um QR-Codes einzulösen.
               </p>
 
               <div className="mt-5 grid gap-3">
                 {cameraPermission !== "granted" && (
-                  <Button onClick={requestCameraAccess} disabled={cameraPermission === "pending"} className="w-full">
+                  <Button
+                    onClick={requestCameraAccess}
+                    disabled={cameraPermission === "pending"}
+                    className="rounded-pill h-12 w-full text-base font-medium"
+                  >
                     {cameraPermission === "pending" ? "Kamerazugriff wird angefragt…" : "Kamerazugriff erlauben"}
                   </Button>
                 )}
@@ -731,7 +747,7 @@ export default function StationPage() {
                         <Button
                           onClick={startScanner}
                           disabled={cameraPermission !== "granted" || !deviceId}
-                          className="mt-1 w-full"
+                          className="rounded-pill mt-1 h-12 w-full text-base font-medium"
                         >
                           Scanner starten
                         </Button>

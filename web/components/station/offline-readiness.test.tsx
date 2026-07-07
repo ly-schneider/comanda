@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OfflineReadiness } from "@/components/station/offline-readiness"
 import type { OfflineReadiness as Readiness } from "@/lib/station/use-offline-readiness"
@@ -10,6 +10,10 @@ vi.mock("@/lib/station/use-offline-readiness", () => ({
 
 function mock(state: Readiness["state"], online = true) {
   useOfflineReadiness.mockReturnValue({ state, online, prepare: vi.fn() })
+}
+
+function openStatus() {
+  fireEvent.click(screen.getByRole("button", { name: "Offline-Status" }))
 }
 
 afterEach(cleanup)
@@ -27,43 +31,50 @@ describe("OfflineReadiness", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("only shows the offline confirmation in the ready state", () => {
+  it("keeps the healthy status collapsed behind the control until opened", async () => {
     mock("ready")
     render(<OfflineReadiness />)
-    expect(screen.getByText("Bereit für Offline-Betrieb")).toBeInTheDocument()
+    expect(screen.queryByText("Bereit für Offline-Betrieb")).not.toBeInTheDocument()
+    openStatus()
+    expect(await screen.findByText("Bereit für Offline-Betrieb")).toBeInTheDocument()
   })
 
-  it("does not claim readiness before setup completes — it offers the explicit ritual", () => {
+  it("does not claim readiness before setup completes — it offers the explicit ritual", async () => {
     mock("unprepared")
     render(<OfflineReadiness />)
+    openStatus()
+    expect(await screen.findByRole("button", { name: "Für Offline-Betrieb vorbereiten" })).toBeEnabled()
     expect(screen.queryByText(/Bereit für Offline-Betrieb/)).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Für Offline-Betrieb vorbereiten" })).toBeEnabled()
   })
 
-  it("disables the ritual while offline and explains why", () => {
+  it("disables the ritual while offline and explains why", async () => {
     mock("unprepared", false)
     render(<OfflineReadiness />)
-    expect(screen.getByRole("button", { name: "Für Offline-Betrieb vorbereiten" })).toBeDisabled()
+    openStatus()
+    expect(await screen.findByRole("button", { name: "Für Offline-Betrieb vorbereiten" })).toBeDisabled()
     expect(screen.getByText(/Mit dem Internet verbinden/)).toBeInTheDocument()
   })
 
-  it("shows progress while preparing", () => {
+  it("shows progress while preparing", async () => {
     mock("preparing")
     render(<OfflineReadiness />)
-    expect(screen.getByText(/Wird für Offline-Betrieb vorbereitet/)).toBeInTheDocument()
+    openStatus()
+    expect(await screen.findByText(/Wird für Offline-Betrieb vorbereitet/)).toBeInTheDocument()
   })
 
-  it("prompts a re-run after a service worker upgrade (stale)", () => {
+  it("prompts a re-run after a service worker upgrade (stale)", async () => {
     mock("stale")
     render(<OfflineReadiness />)
-    expect(screen.getByText("App wurde aktualisiert")).toBeInTheDocument()
+    openStatus()
+    expect(await screen.findByText("App wurde aktualisiert")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Erneut vorbereiten" })).toBeInTheDocument()
   })
 
-  it("surfaces a retry on error", () => {
+  it("surfaces a retry on error", async () => {
     mock("error")
     render(<OfflineReadiness />)
-    expect(screen.getByText("Vorbereitung fehlgeschlagen")).toBeInTheDocument()
+    openStatus()
+    expect(await screen.findByText("Vorbereitung fehlgeschlagen")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Erneut versuchen" })).toBeInTheDocument()
   })
 })
