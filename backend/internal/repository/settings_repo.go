@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"backend/internal/generated/ent"
-	"backend/internal/generated/ent/club100freeproduct"
 	"backend/internal/generated/ent/settings"
 	"backend/internal/generated/ent/tenant"
 
@@ -18,7 +17,6 @@ type SettingsRepository interface {
 	Get(ctx context.Context) (*ent.Settings, error)
 	GetWithProducts(ctx context.Context) (*ent.Settings, error)
 	Upsert(ctx context.Context, mode settings.PosMode) error
-	UpdateClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
 	// SetOnboardingCompleted stamps (completed=true) or clears the onboarding
@@ -143,7 +141,6 @@ func defaultSettings(id string) *ent.Settings {
 		ID:                     id,
 		PosMode:                settings.PosModeQR_CODE,
 		SystemEnabled:          true,
-		Club100MaxRedemptions:  2,
 		ColorPrimary:           "#0a0a0a",
 		ColorPrimaryForeground: "#ffffff",
 		ColorSecondary:         "#f5f5f5",
@@ -172,7 +169,6 @@ func (r *settingsRepo) GetWithProducts(ctx context.Context) (*ent.Settings, erro
 	id := r.settingsID(ctx)
 	e, err := r.ec(ctx).Settings.Query().
 		Where(settings.IDEQ(id)).
-		WithClub100FreeProducts().
 		Only(ctx)
 	if err != nil {
 		if translateError(err) == ErrNotFound {
@@ -196,47 +192,6 @@ func (r *settingsRepo) Upsert(ctx context.Context, mode settings.PosMode) error 
 		SetPosMode(mode).
 		Exec(ctx)
 	return translateError(err)
-}
-
-func (r *settingsRepo) UpdateClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions int) error {
-	client := r.ec(ctx)
-	id := r.settingsID(ctx)
-	tenantID, hasTenant := TenantIDFromContext(ctx)
-
-	create := client.Settings.Create().
-		SetID(id).
-		SetClub100MaxRedemptions(maxRedemptions)
-	if hasTenant {
-		create = create.SetTenantID(tenantID)
-	}
-	err := create.
-		OnConflictColumns(settings.FieldID).
-		SetClub100MaxRedemptions(maxRedemptions).
-		Exec(ctx)
-	if err != nil {
-		return translateError(err)
-	}
-
-	_, err = client.Club100FreeProduct.Delete().
-		Where(club100freeproduct.SettingsIDEQ(id)).
-		Exec(ctx)
-	if err != nil {
-		return translateError(err)
-	}
-
-	for _, productID := range freeProductIDs {
-		fpCreate := client.Club100FreeProduct.Create().
-			SetSettingsID(id).
-			SetProductID(productID)
-		if hasTenant {
-			fpCreate = fpCreate.SetTenantID(tenantID)
-		}
-		if err := fpCreate.Exec(ctx); err != nil {
-			return translateError(err)
-		}
-	}
-
-	return nil
 }
 
 func (r *settingsRepo) IsSystemEnabled(ctx context.Context) (bool, error) {

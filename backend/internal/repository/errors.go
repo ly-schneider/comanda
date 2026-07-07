@@ -12,6 +12,10 @@ var (
 	ErrConflict = errors.New("conflict: record already exists")
 )
 
+func TranslateError(err error) error {
+	return translateError(err)
+}
+
 func translateError(err error) error {
 	if err == nil {
 		return nil

@@ -5,14 +5,10 @@ import { useEffect, useState } from "react"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useAuth } from "@/contexts/auth-context"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
-import type { Product } from "@/types"
 
 type PosFulfillmentMode = "QR_CODE" | "JETON" | "HYBRID"
 
@@ -20,8 +16,6 @@ type SettingsResponse = {
   systemEnabled?: boolean
   posMode?: PosFulfillmentMode
   missingJetons?: number
-  club100FreeProductIds?: string[]
-  club100MaxRedemptions?: number
 }
 
 export default function AdminSettingsPage() {
@@ -32,32 +26,18 @@ export default function AdminSettingsPage() {
   const [systemEnabled, setSystemEnabled] = useState(true)
   const [posMode, setPosMode] = useState<PosFulfillmentMode>("QR_CODE")
   const [missingJetons, setMissingJetons] = useState(0)
-  const [club100FreeProductIds, setClub100FreeProductIds] = useState<string[]>([])
-  const [club100MaxRedemptions, setClub100MaxRedemptions] = useState<number | "">(2)
 
-  const [products, setProducts] = useState<Product[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
-      const [settingsRes, productsRes] = await Promise.all([
-        fetchAuth(`/api/v1/settings`),
-        fetchAuth(`/api/v1/products?type=simple&active=true`),
-      ])
-
+      const settingsRes = await fetchAuth(`/api/v1/settings`)
       if (settingsRes.ok) {
         const s = (await settingsRes.json()) as SettingsResponse
         setSystemEnabled(s.systemEnabled ?? true)
         setPosMode(s.posMode ?? "QR_CODE")
         setMissingJetons(s.missingJetons ?? 0)
-        setClub100FreeProductIds(s.club100FreeProductIds ?? [])
-        setClub100MaxRedemptions(s.club100MaxRedemptions ?? 2)
-      }
-
-      if (productsRes.ok) {
-        const p = (await productsRes.json()) as { items: Product[] }
-        setProducts(p.items ?? [])
       }
     })()
   }, [fetchAuth])
@@ -89,8 +69,6 @@ export default function AdminSettingsPage() {
       setSystemEnabled(updated.systemEnabled ?? systemEnabled)
       setPosMode(updated.posMode ?? posMode)
       setMissingJetons(updated.missingJetons ?? 0)
-      setClub100FreeProductIds(updated.club100FreeProductIds ?? club100FreeProductIds)
-      setClub100MaxRedemptions(updated.club100MaxRedemptions ?? club100MaxRedemptions)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen")
     } finally {
@@ -171,60 +149,6 @@ export default function AdminSettingsPage() {
               </Link>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>100 Club Einstellungen</CardTitle>
-          <p className="text-muted-foreground text-sm">Wähle die Produkte, die 100 Club Mitglieder gratis erhalten.</p>
-        </CardHeader>
-        <CardContent className="max-w-lg space-y-4">
-          <div className="space-y-2">
-            <Label>Gratis-Produkte</Label>
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border p-2">
-              {products.map((p) => (
-                <label key={p.id} className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded-lg p-2">
-                  <Checkbox
-                    checked={club100FreeProductIds.includes(p.id)}
-                    onCheckedChange={(checked) => {
-                      const newIds = checked
-                        ? [...club100FreeProductIds, p.id]
-                        : club100FreeProductIds.filter((id) => id !== p.id)
-                      setClub100FreeProductIds(newIds)
-                      updateSettings({ club100FreeProductIds: newIds })
-                    }}
-                    disabled={saving}
-                  />
-                  <span>{p.name}</span>
-                </label>
-              ))}
-            </div>
-            {club100FreeProductIds.length === 0 && (
-              <p className="text-muted-foreground text-sm">Keine Produkte ausgewählt</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="club100-max">Max. Einlösungen pro Person</Label>
-            <Input
-              id="club100-max"
-              type="number"
-              min={1}
-              value={club100MaxRedemptions}
-              onChange={(e) => {
-                const raw = e.target.value
-                setClub100MaxRedemptions(raw === "" ? "" : parseInt(raw, 10))
-              }}
-              onBlur={() => {
-                const value = club100MaxRedemptions === "" || !club100MaxRedemptions ? 1 : club100MaxRedemptions
-                if (value !== club100MaxRedemptions) setClub100MaxRedemptions(value)
-                updateSettings({ club100MaxRedemptions: value })
-              }}
-              disabled={saving}
-              className="max-w-24 rounded-xl"
-            />
-          </div>
         </CardContent>
       </Card>
 

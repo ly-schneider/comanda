@@ -40,7 +40,6 @@ func NewRepositories() fx.Option {
 			repository.NewVerificationRepository,
 			newCachedSessionRepository,
 			newCachedDeviceBindingRepository,
-			repository.NewClub100RedemptionRepository,
 			repository.NewVolunteerCampaignRepository,
 			repository.NewVolunteerRedemptionRepository,
 			repository.NewTenantDomainRepository,

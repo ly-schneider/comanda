@@ -11,10 +11,10 @@ Club100Person:
       type: string
     remaining:
       type: integer
-      description: Remaining free redemptions
+      description: Remaining free redemptions today
     max:
       type: integer
-      description: Maximum free redemptions allowed
+      description: Maximum free redemptions per day
 
 Club100PersonList:
   type: object
@@ -36,16 +36,26 @@ Club100Remaining:
     max:
       type: integer
 
-Club100PaymentInfo:
+Club100Settings:
   type: object
-  required: [elvantoPersonId, elvantoPersonName, freeQuantity]
+  required: [freeProductIds, maxRedemptions]
   properties:
-    elvantoPersonId:
-      type: string
-      description: Elvanto person ID for the 100 Club member
-    elvantoPersonName:
-      type: string
-      description: Name of the 100 Club member
-    freeQuantity:
+    freeProductIds:
+      type: array
+      items:
+        type: string
+      description: Product IDs redeemable for free by 100 Club members
+    maxRedemptions:
       type: integer
-      description: Number of free products being redeemed
+      description: Maximum free redemptions per member per day
+
+Club100SettingsUpdate:
+  type: object
+  properties:
+    freeProductIds:
+      type: array
+      items:
+        type: string
+    maxRedemptions:
+      type: integer
+      minimum: 0

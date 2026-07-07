@@ -1,4 +1,4 @@
-h1:cE1OMTQroyOT636vi/idU0Lgjx5HBM2unehKnk9yeBw=
+h1:G/586kMBXVGu1FFZ0XPl3JN/Rh8TKQqNdqFMWadAko8=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -35,3 +35,4 @@ h1:cE1OMTQroyOT636vi/idU0Lgjx5HBM2unehKnk9yeBw=
 20260708000000_product_variants.sql h1:k5sSaVVjv6pB3mVEjL35Kvn/bNlprCP5OpZAcN87y/w=
 20260709000000_tenant_plugin.sql h1:a04+WgOVlR5OIjvytkaAaU0uGBSG8bEhYvbs7n5MQ1s=
 20260710000000_payment_plugin_extension.sql h1:h+Buvh5fB4MtV/hIL/g2mtAWaEc9ZBkJRAhSb3mXH3E=
+20260711000000_club100_plugin_config.sql h1:btGp8mNqH44KMNpS8G9SQX/GZgZQaru5KCtLbyDN/MA=

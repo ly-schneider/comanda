@@ -127,7 +127,6 @@ type SettingsService interface {
 	GetSettings(ctx context.Context) (*ent.Settings, error)
 	GetSettingsWithProducts(ctx context.Context) (*ent.Settings, error)
 	SetPosMode(ctx context.Context, mode settings.PosMode) error
-	SetClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions *int) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
 	SetOnboardingCompleted(ctx context.Context, completed bool) error
@@ -138,7 +137,6 @@ type SettingsService interface {
 	UpdateJeton(ctx context.Context, id string, name, color string) (*ent.Jeton, error)
 	DeleteJeton(ctx context.Context, id string) error
 	SetProductJeton(ctx context.Context, productID string, jetonID *string) error
-	GetFreeProductIDs(ctx context.Context) ([]string, error)
 }
 
 type settingsService struct {
@@ -321,53 +319,6 @@ func (s *settingsService) GetBranding(ctx context.Context) (*BrandingView, error
 	}, nil
 }
 
-func (s *settingsService) SetClub100Settings(ctx context.Context, freeProductIDs []string, maxRedemptions *int) error {
-	current, err := s.settings.Get(ctx)
-	if err != nil {
-		return err
-	}
-
-	max := current.Club100MaxRedemptions
-	if maxRedemptions != nil {
-		if *maxRedemptions < 0 {
-			return fmt.Errorf("max redemptions must be non-negative")
-		}
-		max = *maxRedemptions
-	}
-
-	productIDs := freeProductIDs
-	if productIDs == nil {
-		settingsWithProducts, err := s.settings.GetWithProducts(ctx)
-		if err != nil {
-			return err
-		}
-		if settingsWithProducts.Edges.Club100FreeProducts != nil {
-			productIDs = make([]string, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
-			for _, p := range settingsWithProducts.Edges.Club100FreeProducts {
-				productIDs = append(productIDs, p.ID)
-			}
-		}
-	}
-
-	for _, productID := range productIDs {
-		if productID == "" {
-			continue
-		}
-		if _, err := s.products.GetByID(ctx, productID); err != nil {
-			return fmt.Errorf("product %s not found", productID)
-		}
-	}
-
-	validProductIDs := make([]string, 0, len(productIDs))
-	for _, id := range productIDs {
-		if id != "" {
-			validProductIDs = append(validProductIDs, id)
-		}
-	}
-
-	return s.settings.UpdateClub100Settings(ctx, validProductIDs, max)
-}
-
 func (s *settingsService) ListJetons(ctx context.Context) ([]*ent.Jeton, error) {
 	return s.jetons.GetAll(ctx)
 }
@@ -429,19 +380,4 @@ func (s *settingsService) SetProductJeton(ctx context.Context, productID string,
 		}
 	}
 	return s.products.UpdateJeton(ctx, productID, jetonID)
-}
-
-func (s *settingsService) GetFreeProductIDs(ctx context.Context) ([]string, error) {
-	settingsWithProducts, err := s.settings.GetWithProducts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get settings: %w", err)
-	}
-	if settingsWithProducts.Edges.Club100FreeProducts == nil {
-		return []string{}, nil
-	}
-	ids := make([]string, 0, len(settingsWithProducts.Edges.Club100FreeProducts))
-	for _, p := range settingsWithProducts.Edges.Club100FreeProducts {
-		ids = append(ids, p.ID)
-	}
-	return ids, nil
 }

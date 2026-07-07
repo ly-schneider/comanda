@@ -153,8 +153,6 @@ func NewRouter(
 			pos.Use(systemMw.RequireEnabled)
 			pos.Use(deviceAuthMw.RequireDevice(auth.DeviceTypePOS))
 			pos.Get("/pos/me", wrapper.GetCurrentPos)
-			pos.Get("/club100/people", wrapper.ListClub100People)
-			pos.Get("/club100/remaining/{elvantoPersonId}", wrapper.GetClub100Remaining)
 			pos.Patch("/pos/products/{productId}/inventory", wrapper.AdjustProductInventory)
 			pos.Patch("/pos/products/{productId}/active", wrapper.SetProductActive)
 

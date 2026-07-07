@@ -6,7 +6,6 @@ import (
 
 	"backend/internal/generated/ent/admininvite"
 	"backend/internal/generated/ent/category"
-	"backend/internal/generated/ent/club100freeproduct"
 	"backend/internal/generated/ent/club100redemption"
 	"backend/internal/generated/ent/device"
 	"backend/internal/generated/ent/devicebinding"
@@ -50,7 +49,6 @@ var typeToTable = map[string]string{
 	"OrderLineRedemption":      orderlineredemption.Table,
 	"InventoryLedger":          inventoryledger.Table,
 	"Club100Redemption":        club100redemption.Table,
-	"Club100FreeProduct":       club100freeproduct.Table,
 	"Settings":                 settings.Table,
 	"Idempotency":              idempotency.Table,
 	"Device":                   device.Table,

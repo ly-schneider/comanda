@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
 
@@ -37,8 +36,6 @@ func (Settings) Fields() []ent.Field {
 			StorageKey("pos_mode"),
 		field.Bool("system_enabled").
 			Default(true),
-		field.Int("club100_max_redemptions").
-			Default(2),
 		field.String("display_name").
 			MaxLen(100).
 			Optional().
@@ -161,12 +158,5 @@ func (Settings) Fields() []ent.Field {
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),
-	}
-}
-
-func (Settings) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("club100_free_products", Product.Type).
-			Through("club100_free_product_links", Club100FreeProduct.Type),
 	}
 }

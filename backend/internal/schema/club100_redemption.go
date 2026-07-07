@@ -45,9 +45,9 @@ func (Club100Redemption) Fields() []ent.Field {
 }
 
 func (Club100Redemption) Edges() []ent.Edge {
+	// unidirectional: FK lives here, Order keeps no back-ref so core stays club100-free
 	return []ent.Edge{
-		edge.From("order", Order.Type).
-			Ref("club100_redemptions").
+		edge.To("order", Order.Type).
 			Field("order_id").
 			Unique().
 			Required(),

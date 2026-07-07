@@ -2,7 +2,7 @@ collection:
   get:
     tags: [Settings]
     summary: Get application settings
-    description: Returns all application settings including POS mode and Club100 configuration.
+    description: Returns all application settings including POS mode.
     operationId: getSettings
     security:
       - sessionAuth: []
@@ -17,8 +17,6 @@ collection:
             example:
               id: "default"
               posMode: QR_CODE
-              club100FreeProductIds: []
-              club100MaxRedemptions: 2
               updatedAt: "2025-02-07T10:00:00Z"
       "401":
         description: Authentication required
@@ -56,11 +54,6 @@ collection:
               summary: Switch to jeton mode
               value:
                 posMode: JETON
-            club100:
-              summary: Update Club100 settings
-              value:
-                club100FreeProductIds: ["spec______21"]
-                club100MaxRedemptions: 3
     responses:
       "200":
         description: Settings updated

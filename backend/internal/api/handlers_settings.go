@@ -103,20 +103,6 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if body.Club100FreeProductIds != nil || body.Club100MaxRedemptions != nil {
-		var productIDs []string
-		if body.Club100FreeProductIds != nil {
-			productIDs = make([]string, 0, len(*body.Club100FreeProductIds))
-			for _, id := range *body.Club100FreeProductIds {
-				productIDs = append(productIDs, string(id))
-			}
-		}
-		if err := h.settings.SetClub100Settings(ctx, productIDs, body.Club100MaxRedemptions); err != nil {
-			writeError(w, http.StatusBadRequest, "update_failed", err.Error())
-			return
-		}
-	}
-
 	settingsData, err := h.settings.GetSettingsWithProducts(ctx)
 	if err != nil {
 		writeEntError(w, err)
@@ -132,7 +118,6 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 		Id:                     e.ID,
 		SystemEnabled:          e.SystemEnabled,
 		PosMode:                generated.PosFulfillmentMode(e.PosMode),
-		Club100MaxRedemptions:  e.Club100MaxRedemptions,
 		DisplayName:            e.DisplayName,
 		LogoUrl:                e.LogoURL,
 		FaviconUrl:             e.FaviconURL,
@@ -155,14 +140,6 @@ func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 
 	if missingJetons > 0 {
 		s.MissingJetons = ptr(missingJetons)
-	}
-
-	if e.Edges.Club100FreeProducts != nil {
-		ids := make([]string, 0, len(e.Edges.Club100FreeProducts))
-		for _, p := range e.Edges.Club100FreeProducts {
-			ids = append(ids, p.ID)
-		}
-		s.Club100FreeProductIds = &ids
 	}
 
 	return s

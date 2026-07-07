@@ -35,8 +35,6 @@ func NewServices() fx.Option {
 			service.NewUserService,
 			service.NewDeviceService,
 			inventory.NewHub,
-			service.NewElvantoService,
-			service.NewClub100Service,
 			service.NewVolunteerService,
 			service.NewAndroidUpdateService,
 			service.NewDomainService,

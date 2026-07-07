@@ -15,7 +15,7 @@ const MAX_RETRY_ATTEMPTS = 5
 const RETRY_DELAYS = [2000, 4000, 8000, 16000, 32000]
 const SYNC_INTERVAL = 30000
 
-const PERMANENT_ERROR_CODES = ["product_not_free", "insufficient_remaining_redemptions"]
+const PERMANENT_ERROR_CODES = ["plugin_validation_failed"]
 
 type SyncListener = (order: QueuedOrder) => void
 type StateListener = (state: { orders: QueuedOrder[]; isOnline: boolean }) => void
