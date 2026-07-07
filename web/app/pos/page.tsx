@@ -548,8 +548,8 @@ function PosInner() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm">
-              {paymentErrorOrder?.errorCode === "product_not_free"
-                ? "Die Produkte in dieser Bestellung sind nicht für 100 Club Gratis-Einlösung konfiguriert. Bitte wähle eine andere Zahlungsmethode."
+              {paymentErrorOrder?.errorCode === "plugin_validation_failed"
+                ? "Diese Bestellung erfüllt die Bedingungen für die Gratis-Einlösung nicht. Bitte wähle eine andere Zahlungsmethode."
                 : paymentErrorOrder?.errorMessage || "Zahlung konnte nicht abgeschlossen werden."}
             </p>
             {paymentErrorOrder && (

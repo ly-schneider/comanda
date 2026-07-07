@@ -20,11 +20,11 @@ describe("getPlugins", () => {
   })
 
   it("returns the enabled plugins and forwards the resolved host", async () => {
-    apiRequest.mockResolvedValue({ items: [{ key: "club100", name: "100 Club", config: { max: 3 } }] })
+    apiRequest.mockResolvedValue({ items: [{ key: "demo", name: "Demo Plugin", config: { max: 3 } }] })
     const { getPlugins } = await loadModule()
 
     const plugins = await getPlugins()
-    expect(plugins).toEqual([{ key: "club100", name: "100 Club", config: { max: 3 } }])
+    expect(plugins).toEqual([{ key: "demo", name: "Demo Plugin", config: { max: 3 } }])
     expect(apiRequest).toHaveBeenCalledWith("/v1/plugins", { headers: { "X-Forwarded-Host": "shop.comanda.test" } })
   })
 

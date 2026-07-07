@@ -194,7 +194,6 @@ func (tdb *TestDB) Cleanup(t *testing.T) {
 		"device_product",
 		"device_binding",
 		"device",
-		"club100_free_product",
 		"product",
 		"jeton",
 		"category",
@@ -236,7 +235,6 @@ type Repositories struct {
 	OrderPayment      pgRepo.OrderPaymentRepository
 	OrderRedemption   pgRepo.OrderLineRedemptionRepository
 	Refund            pgRepo.RefundRepository
-	Club100Redemption pgRepo.Club100RedemptionRepository
 	Inventory         pgRepo.InventoryLedgerRepository
 	Device            pgRepo.DeviceRepository
 	DeviceProduct     pgRepo.DeviceProductRepository
@@ -261,7 +259,6 @@ func NewRepositories(client *ent.Client) *Repositories {
 		OrderPayment:      pgRepo.NewOrderPaymentRepository(client),
 		OrderRedemption:   pgRepo.NewOrderLineRedemptionRepository(client),
 		Refund:            pgRepo.NewRefundRepository(client),
-		Club100Redemption: pgRepo.NewClub100RedemptionRepository(client),
 		Inventory:         pgRepo.NewInventoryLedgerRepository(client),
 		Device:            pgRepo.NewDeviceRepository(client),
 		DeviceProduct:     pgRepo.NewDeviceProductRepository(client),
@@ -505,19 +502,4 @@ func TimeWithin(a, b time.Time, d time.Duration) bool {
 		diff = -diff
 	}
 	return diff <= d
-}
-
-// MockElvantoService is an ElvantoService stub for testing.
-// Defaults to unconfigured (returns no people); set Configured=true and People to simulate API responses.
-type MockElvantoService struct {
-	Configured bool
-	People     []service.ElvantoPerson
-}
-
-func (m *MockElvantoService) SearchPeople(_ context.Context) ([]service.ElvantoPerson, error) {
-	return m.People, nil
-}
-
-func (m *MockElvantoService) IsConfigured() bool {
-	return m.Configured
 }

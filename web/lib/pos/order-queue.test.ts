@@ -23,10 +23,10 @@ describe("OrderQueueManager plugin payment", () => {
       undefined,
       undefined,
       undefined,
-      { key: "club100", data: { personId: "x" } }
+      { key: "demo", data: { personId: "x" } }
     )
     expect(order.paymentMethod).toBe("gratis_plugin")
-    expect(order.plugin).toEqual({ key: "club100", data: { personId: "x" } })
+    expect(order.plugin).toEqual({ key: "demo", data: { personId: "x" } })
     manager.destroy()
   })
 

@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { getPlatformConfigComponent, getPluginManifest, registry } from "./registry"
+import { getPlatformConfigComponent, getPluginManifest } from "./registry"
 
 describe("plugin registry", () => {
-  it("has no plugins registered by default", () => {
-    expect(registry).toEqual([])
+  it("registers the club100 plugin with its slots", () => {
+    const club100 = getPluginManifest("club100")
+    expect(club100?.name).toBe("100 Club")
+    expect(Object.keys(club100?.slots ?? {}).sort()).toEqual([
+      "admin.settings.section",
+      "platform.plugin.config",
+      "pos.basket.actions",
+    ])
   })
 
   it("returns undefined for an unknown manifest", () => {

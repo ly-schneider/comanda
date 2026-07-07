@@ -46,12 +46,10 @@ tags:
     description: Jeton (color tag) management for POS fulfillment
   - name: Events
     description: Event/month aggregation for admin dashboard
-  - name: Club100
-    description: 100 Club member management and redemption tracking
   - name: System
     description: System status (enabled/disabled)
   - name: Settings
-    description: Application settings (POS mode, Club100 configuration)
+    description: Application settings (POS mode)
   - name: Domains
     description: Per-tenant custom domains (ownership verification, TLS status)
   - name: Platform
@@ -238,6 +236,13 @@ paths:
   /plugins:
     $ref: "paths/plugins.yaml#/collection"
 
+  /plugins/club100/people:
+    $ref: "paths/plugins/club100.yaml#/people"
+  /plugins/club100/remaining/{elvantoPersonId}:
+    $ref: "paths/plugins/club100.yaml#/remaining"
+  /plugins/club100/settings:
+    $ref: "paths/plugins/club100.yaml#/settings"
+
   /branding:
     $ref: "paths/branding.yaml#/collection"
 
@@ -260,11 +265,6 @@ paths:
 
   /events:
     $ref: "paths/events.yaml#/collection"
-
-  /club100/people:
-    $ref: "paths/club100.yaml#/collection"
-  /club100/remaining/{elvantoPersonId}:
-    $ref: "paths/club100.yaml#/remaining"
 
   /staff-meals:
     $ref: "paths/staff-meals.yaml#/collection"

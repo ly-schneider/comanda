@@ -1,4 +1,4 @@
-package service
+package club100
 
 import (
 	"bytes"
@@ -9,14 +9,16 @@ import (
 	"net/http"
 	"time"
 
-	"backend/internal/config"
-
 	"go.uber.org/zap"
 )
 
-type ElvantoService interface {
-	SearchPeople(ctx context.Context) ([]ElvantoPerson, error)
-	IsConfigured() bool
+type ElvantoSearcher interface {
+	SearchPeople(ctx context.Context, apiKey, groupID string) ([]ElvantoPerson, error)
+}
+
+type ElvantoClient struct {
+	http   *http.Client
+	logger *zap.Logger
 }
 
 type ElvantoPerson struct {
@@ -25,39 +27,23 @@ type ElvantoPerson struct {
 	LastName  string `json:"lastname"`
 }
 
-type elvantoService struct {
-	cfg    config.ElvantoConfig
-	client *http.Client
-	logger *zap.Logger
-}
-
-func NewElvantoService(cfg config.Config, logger *zap.Logger) ElvantoService {
-	return &elvantoService{
-		cfg: cfg.Elvanto,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+func NewElvantoClient(logger *zap.Logger) *ElvantoClient {
+	return &ElvantoClient{
+		http:   &http.Client{Timeout: 30 * time.Second},
 		logger: logger,
 	}
 }
 
-func (s *elvantoService) IsConfigured() bool {
-	return s.cfg.APIKey != ""
-}
-
-func (s *elvantoService) SearchPeople(ctx context.Context) ([]ElvantoPerson, error) {
-	if !s.IsConfigured() {
-		s.logger.Warn("elvanto not configured")
+func (c *ElvantoClient) SearchPeople(ctx context.Context, apiKey, groupID string) ([]ElvantoPerson, error) {
+	if apiKey == "" {
 		return nil, fmt.Errorf("elvanto not configured")
 	}
-
-	s.logger.Info("searching elvanto people", zap.String("groupId", s.cfg.GroupID))
 
 	reqBody := map[string]any{
 		"page":      1,
 		"page_size": 100,
 		"search": map[string]any{
-			"groups": s.cfg.GroupID,
+			"groups": groupID,
 		},
 	}
 	bodyBytes, err := json.Marshal(reqBody)
@@ -69,35 +55,32 @@ func (s *elvantoService) SearchPeople(ctx context.Context) ([]ElvantoPerson, err
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-
-	req.SetBasicAuth(s.cfg.APIKey, "")
+	req.SetBasicAuth(apiKey, "")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.client.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
-		s.logger.Error("elvanto request failed", zap.Error(err))
+		c.logger.Error("elvanto request failed", zap.Error(err))
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		s.logger.Error("elvanto API error", zap.Int("status", resp.StatusCode), zap.String("body", string(body)))
+		c.logger.Error("elvanto API error", zap.Int("status", resp.StatusCode), zap.String("body", string(body)))
 		return nil, fmt.Errorf("elvanto API returned %d", resp.StatusCode)
 	}
 
 	var result elvantoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		s.logger.Error("elvanto decode error", zap.Error(err))
+		c.logger.Error("elvanto decode error", zap.Error(err))
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
-
 	if result.Status != "ok" {
-		s.logger.Error("elvanto status not ok", zap.String("status", result.Status))
+		c.logger.Error("elvanto status not ok", zap.String("status", result.Status))
 		return nil, fmt.Errorf("elvanto error: %s", result.Status)
 	}
 
-	s.logger.Info("elvanto returned people", zap.Int("count", len(result.People.Person)))
 	return result.People.Person, nil
 }
 

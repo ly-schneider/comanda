@@ -72,7 +72,6 @@ func (Order) Edges() []ent.Edge {
 		edge.To("payments", OrderPayment.Type),
 		edge.To("lines", OrderLine.Type),
 		edge.To("inventory_ledger_entries", InventoryLedger.Type),
-		edge.To("club100_redemptions", Club100Redemption.Type),
 		edge.To("refunds", Refund.Type),
 	}
 }

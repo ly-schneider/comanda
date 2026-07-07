@@ -58,7 +58,6 @@ function mapBetterAuthUserToUser(betterAuthUser: Record<string, unknown> | null 
     firstName,
     lastName,
     isVerified,
-    isClub100: betterAuthUser.isClub100 === true,
     isPlatformAdmin: betterAuthUser.isPlatformAdmin === true,
     createdAt,
     updatedAt,

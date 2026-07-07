@@ -63,7 +63,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   GRATIS_GUEST: "Gratis (Gast)",
   GRATIS_VIP: "Gratis (VIP)",
   GRATIS_STAFF: "Gratis (Personal)",
-  GRATIS_100CLUB: "Gratis (100 Club)",
+  GRATIS_PLUGIN: "Gratis (Plugin)",
 }
 
 const ORIGIN_LABELS: Record<string, string> = {

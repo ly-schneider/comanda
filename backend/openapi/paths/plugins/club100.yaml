@@ -1,0 +1,115 @@
+people:
+  get:
+    tags: [Plugins]
+    summary: List 100 Club members
+    description: Returns all 100 Club members from Elvanto with their redemption status.
+    operationId: club100ListPeople
+    security:
+      - deviceAuth: []
+    responses:
+      "200":
+        description: List of 100 Club members
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/club100.yaml#/Club100PersonList"
+      "500":
+        description: Server error
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+remaining:
+  parameters:
+    - name: elvantoPersonId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Plugins]
+    summary: Get remaining redemptions
+    description: Returns the remaining free redemptions for a specific 100 Club member.
+    operationId: club100GetRemaining
+    security:
+      - deviceAuth: []
+    responses:
+      "200":
+        description: Remaining redemptions
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/club100.yaml#/Club100Remaining"
+      "500":
+        description: Server error
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+settings:
+  get:
+    tags: [Plugins]
+    summary: Get 100 Club settings
+    description: Returns the tenant's free products and daily redemption cap.
+    operationId: club100GetSettings
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: 100 Club settings
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/club100.yaml#/Club100Settings"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  put:
+    tags: [Plugins]
+    summary: Update 100 Club settings
+    description: Sets the free products and/or daily redemption cap.
+    operationId: club100UpdateSettings
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/club100.yaml#/Club100SettingsUpdate"
+    responses:
+      "200":
+        description: Updated settings
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/club100.yaml#/Club100Settings"
+      "400":
+        description: Invalid body
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"

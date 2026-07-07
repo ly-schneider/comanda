@@ -20,7 +20,6 @@ type Config struct {
 	Payrexx      PayrexxConfig
 	Plunk        PlunkConfig
 	BlobStorage  BlobStorageConfig
-	Elvanto      ElvantoConfig
 	Sentry       SentryConfig
 	Android      AndroidConfig
 	CustomDomain CustomDomainConfig
@@ -89,11 +88,6 @@ type SentryConfig struct {
 	DSN         string
 	Environment string
 	Release     string
-}
-
-type ElvantoConfig struct {
-	APIKey  string
-	GroupID string
 }
 
 type AndroidConfig struct {
@@ -231,10 +225,6 @@ func Load() Config {
 			SecretAccessKey: getEnvOptional("STORAGE_SECRET_ACCESS_KEY"),
 			Bucket:          getEnvWithDefault("STORAGE_BUCKET", "comanda-assets"),
 			PublicBaseURL:   getEnvOptional("STORAGE_PUBLIC_URL"),
-		},
-		Elvanto: ElvantoConfig{
-			APIKey:  getEnvOptional("ELVANTO_API_KEY"),
-			GroupID: getEnvWithDefault("ELVANTO_GROUP_ID", "fc939b75-cda0-4e37-b728-a61e943d66ad"),
 		},
 		Sentry: SentryConfig{
 			DSN:         getEnvOptional("SENTRY_DSN"),

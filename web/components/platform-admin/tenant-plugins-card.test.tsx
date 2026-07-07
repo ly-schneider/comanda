@@ -8,7 +8,7 @@ function jsonResponse(body: unknown, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => body } as Response
 }
 
-const plugin = { key: "club100", name: "100 Club", enabled: false, config: {}, secretsConfiguredAt: null }
+const plugin = { key: "demo", name: "Demo Plugin", enabled: false, config: {}, secretsConfiguredAt: null }
 
 afterEach(cleanup)
 
@@ -17,7 +17,7 @@ describe("TenantPluginsCard", () => {
     const fetchAuth = vi.fn().mockResolvedValue(jsonResponse({ items: [plugin] }))
     render(<TenantPluginsCard tenantId="t1" fetchAuth={fetchAuth} />)
 
-    expect(await screen.findByText("100 Club")).toBeInTheDocument()
+    expect(await screen.findByText("Demo Plugin")).toBeInTheDocument()
     expect(screen.getByText("Nicht konfiguriert")).toBeInTheDocument()
     expect(fetchAuth).toHaveBeenCalledWith("/api/v1/platform/tenants/t1/plugins")
   })
@@ -39,7 +39,7 @@ describe("TenantPluginsCard", () => {
     fireEvent.click(await screen.findByRole("switch"))
 
     await waitFor(() => expect(fetchAuth).toHaveBeenCalledTimes(2))
-    expect(fetchAuth).toHaveBeenLastCalledWith("/api/v1/platform/tenants/t1/plugins/club100", {
+    expect(fetchAuth).toHaveBeenLastCalledWith("/api/v1/platform/tenants/t1/plugins/demo", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-CSRF": "csrf-token" },
       body: JSON.stringify({ enabled: true }),

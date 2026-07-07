@@ -2,16 +2,25 @@ package app
 
 import (
 	"backend/internal/plugin"
+	"backend/internal/plugin/club100"
 
 	"go.uber.org/fx"
 )
 
+// lives here, not in package plugin: each plugin imports plugin, so the list there would cycle
+func registeredPlugins() []plugin.Plugin {
+	return []plugin.Plugin{
+		club100.New(),
+	}
+}
+
 func NewPlugins() fx.Option {
+	all := registeredPlugins()
 	opts := []fx.Option{
-		fx.Provide(func() []plugin.Plugin { return plugin.All }),
+		fx.Provide(func() []plugin.Plugin { return all }),
 		fx.Provide(plugin.NewService),
 	}
-	for _, p := range plugin.All {
+	for _, p := range all {
 		opts = append(opts, p.Module())
 	}
 	return fx.Options(opts...)

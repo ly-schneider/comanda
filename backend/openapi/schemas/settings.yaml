@@ -1,6 +1,6 @@
 Settings:
   type: object
-  required: [id, systemEnabled, posMode, club100MaxRedemptions]
+  required: [id, systemEnabled, posMode]
   properties:
     id:
       type: string
@@ -14,15 +14,6 @@ Settings:
     missingJetons:
       type: integer
       description: Count of active products without jeton (when mode is JETON)
-    club100FreeProductIds:
-      type: array
-      items:
-        type: string
-      description: Product IDs that 100 Club members can redeem for free
-    club100MaxRedemptions:
-      type: integer
-      default: 2
-      description: Maximum free redemptions per 100 Club member
     displayName:
       type: string
       nullable: true
@@ -83,13 +74,6 @@ SettingsUpdate:
       type: boolean
     posMode:
       $ref: "pos.yaml#/PosFulfillmentMode"
-    club100FreeProductIds:
-      type: array
-      items:
-        type: string
-    club100MaxRedemptions:
-      type: integer
-      minimum: 0
     displayName:
       type: string
       nullable: true

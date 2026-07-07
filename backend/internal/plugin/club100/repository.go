@@ -1,4 +1,4 @@
-package repository
+package club100
 
 import (
 	"context"
@@ -6,30 +6,31 @@ import (
 
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/club100redemption"
+	"backend/internal/repository"
 
 	"entgo.io/ent/dialect/sql"
 )
 
-type Club100RedemptionRepository interface {
+type RedemptionRepository interface {
 	Create(ctx context.Context, elvantoPersonID, elvantoPersonName string, orderID string, quantity int) (*ent.Club100Redemption, error)
 	GetTotalRedemptions(ctx context.Context, elvantoPersonID string) (int, error)
 	GetTotalRedemptionsBatch(ctx context.Context, elvantoPersonIDs []string) (map[string]int, error)
 	GetByOrderID(ctx context.Context, orderID string) ([]*ent.Club100Redemption, error)
 }
 
-type club100RedemptionRepo struct {
+type redemptionRepo struct {
 	client *ent.Client
 }
 
-func NewClub100RedemptionRepository(client *ent.Client) Club100RedemptionRepository {
-	return &club100RedemptionRepo{client: client}
+func NewRedemptionRepository(client *ent.Client) RedemptionRepository {
+	return &redemptionRepo{client: client}
 }
 
-func (r *club100RedemptionRepo) ec(ctx context.Context) *ent.Client {
-	return ClientFromContext(ctx, r.client)
+func (r *redemptionRepo) ec(ctx context.Context) *ent.Client {
+	return repository.ClientFromContext(ctx, r.client)
 }
 
-func (r *club100RedemptionRepo) Create(ctx context.Context, elvantoPersonID, elvantoPersonName string, orderID string, quantity int) (*ent.Club100Redemption, error) {
+func (r *redemptionRepo) Create(ctx context.Context, elvantoPersonID, elvantoPersonName string, orderID string, quantity int) (*ent.Club100Redemption, error) {
 	e, err := r.ec(ctx).Club100Redemption.Create().
 		SetElvantoPersonID(elvantoPersonID).
 		SetElvantoPersonName(elvantoPersonName).
@@ -37,16 +38,13 @@ func (r *club100RedemptionRepo) Create(ctx context.Context, elvantoPersonID, elv
 		SetFreeProductQuantity(quantity).
 		Save(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return e, nil
 }
 
-func (r *club100RedemptionRepo) GetTotalRedemptions(ctx context.Context, elvantoPersonID string) (int, error) {
-	loc, _ := time.LoadLocation("Europe/Zurich")
-	now := time.Now().In(loc)
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	dayEnd := dayStart.AddDate(0, 0, 1)
+func (r *redemptionRepo) GetTotalRedemptions(ctx context.Context, elvantoPersonID string) (int, error) {
+	dayStart, dayEnd := zurichDayBounds()
 
 	rows, err := r.ec(ctx).Club100Redemption.Query().
 		Where(
@@ -56,7 +54,7 @@ func (r *club100RedemptionRepo) GetTotalRedemptions(ctx context.Context, elvanto
 		).
 		All(ctx)
 	if err != nil {
-		return 0, translateError(err)
+		return 0, repository.TranslateError(err)
 	}
 	total := 0
 	for _, row := range rows {
@@ -65,16 +63,13 @@ func (r *club100RedemptionRepo) GetTotalRedemptions(ctx context.Context, elvanto
 	return total, nil
 }
 
-func (r *club100RedemptionRepo) GetTotalRedemptionsBatch(ctx context.Context, elvantoPersonIDs []string) (map[string]int, error) {
+func (r *redemptionRepo) GetTotalRedemptionsBatch(ctx context.Context, elvantoPersonIDs []string) (map[string]int, error) {
 	result := make(map[string]int, len(elvantoPersonIDs))
 	if len(elvantoPersonIDs) == 0 {
 		return result, nil
 	}
 
-	loc, _ := time.LoadLocation("Europe/Zurich")
-	now := time.Now().In(loc)
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	dayEnd := dayStart.AddDate(0, 0, 1)
+	dayStart, dayEnd := zurichDayBounds()
 
 	var rows []struct {
 		ElvantoPersonID string `json:"elvanto_person_id"`
@@ -94,7 +89,7 @@ func (r *club100RedemptionRepo) GetTotalRedemptionsBatch(ctx context.Context, el
 		}).
 		Scan(ctx, &rows)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 
 	for _, row := range rows {
@@ -103,12 +98,19 @@ func (r *club100RedemptionRepo) GetTotalRedemptionsBatch(ctx context.Context, el
 	return result, nil
 }
 
-func (r *club100RedemptionRepo) GetByOrderID(ctx context.Context, orderID string) ([]*ent.Club100Redemption, error) {
+func (r *redemptionRepo) GetByOrderID(ctx context.Context, orderID string) ([]*ent.Club100Redemption, error) {
 	rows, err := r.ec(ctx).Club100Redemption.Query().
 		Where(club100redemption.OrderIDEQ(orderID)).
 		All(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return rows, nil
+}
+
+func zurichDayBounds() (time.Time, time.Time) {
+	loc, _ := time.LoadLocation("Europe/Zurich")
+	now := time.Now().In(loc)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	return dayStart, dayStart.AddDate(0, 0, 1)
 }

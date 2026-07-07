@@ -87,9 +87,6 @@ func (Product) Edges() []ent.Edge {
 			Through("device_products", DeviceProduct.Type),
 		edge.To("order_lines", OrderLine.Type),
 		edge.To("inventory_ledger_entries", InventoryLedger.Type),
-		edge.From("club100_settings", Settings.Type).
-			Ref("club100_free_products").
-			Through("club100_free_product_links", Club100FreeProduct.Type),
 		edge.From("volunteer_campaigns", VolunteerCampaign.Type).
 			Ref("products").
 			Through("campaign_products", VolunteerCampaignProduct.Type),

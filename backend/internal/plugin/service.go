@@ -51,6 +51,8 @@ type Service interface {
 	PaymentHook(ctx context.Context, key string) (PaymentHook, error)
 	RequirePlugin(key string) func(http.Handler) http.Handler
 	ListPublic(ctx context.Context) ([]PublicPlugin, error)
+	Config(ctx context.Context, key string) (json.RawMessage, error)
+	SetConfig(ctx context.Context, key string, config json.RawMessage) (json.RawMessage, error)
 	Secrets(ctx context.Context, key string) (map[string]string, error)
 	ListForTenant(ctx context.Context, tenantID string) ([]TenantPluginState, error)
 	SetForTenant(ctx context.Context, tenantID, key string, in UpdateInput) (TenantPluginState, error)
@@ -174,6 +176,30 @@ func (s *service) ListPublic(ctx context.Context) ([]PublicPlugin, error) {
 		out = append(out, PublicPlugin{Key: p.Key(), Name: p.Name(), Config: normConfig(row.Config)})
 	}
 	return out, nil
+}
+
+func (s *service) Config(ctx context.Context, key string) (json.RawMessage, error) {
+	row, err := s.repo.GetByKey(ctx, key)
+	switch {
+	case err == nil:
+		return normConfig(row.Config), nil
+	case errors.Is(err, repository.ErrNotFound):
+		return json.RawMessage("{}"), nil
+	default:
+		return nil, err
+	}
+}
+
+func (s *service) SetConfig(ctx context.Context, key string, config json.RawMessage) (json.RawMessage, error) {
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok || tenantID == "" {
+		return nil, errors.New("plugin: no tenant in context")
+	}
+	state, err := s.SetForTenant(ctx, tenantID, key, UpdateInput{Config: config})
+	if err != nil {
+		return nil, err
+	}
+	return state.Config, nil
 }
 
 func (s *service) Secrets(ctx context.Context, key string) (map[string]string, error) {

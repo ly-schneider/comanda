@@ -302,3 +302,34 @@ func TestSetForTenantPreservesSecretsOnConfigOnlyUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "keep-me", secrets["apiKey"], "a config/enable-only update must not wipe secrets")
 }
+
+func TestConfigDefaultsToEmpty(t *testing.T) {
+	svc := NewService([]Plugin{fixturePlugin{"fx", "Fixture"}}, newFakeRepo(), nil, zap.NewNop())
+	cfg, err := svc.Config(ctxTenant("A"), "fx")
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, string(cfg), "a tenant with no row reads empty config")
+}
+
+func TestSetConfigPreservesEnablement(t *testing.T) {
+	repo := newFakeRepo()
+	repo.set("A", &ent.TenantPlugin{PluginKey: "fx", Enabled: true})
+	svc := NewService([]Plugin{fixturePlugin{"fx", "Fixture"}}, repo, nil, zap.NewNop())
+
+	cfg, err := svc.SetConfig(ctxTenant("A"), "fx", json.RawMessage(`{"maxRedemptions":5}`))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"maxRedemptions":5}`, string(cfg))
+
+	enabled, err := svc.Enabled(ctxTenant("A"), "fx")
+	require.NoError(t, err)
+	require.True(t, enabled, "a config write from a tenant endpoint must not disable the plugin")
+
+	got, err := svc.Config(ctxTenant("A"), "fx")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"maxRedemptions":5}`, string(got))
+}
+
+func TestSetConfigRequiresTenant(t *testing.T) {
+	svc := NewService([]Plugin{fixturePlugin{"fx", "Fixture"}}, newFakeRepo(), nil, zap.NewNop())
+	_, err := svc.SetConfig(context.Background(), "fx", json.RawMessage(`{}`))
+	require.Error(t, err, "no tenant in context must be rejected")
+}
