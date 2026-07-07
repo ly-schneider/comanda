@@ -25,9 +25,7 @@ func TestPOSService_GetDeviceByToken(t *testing.T) {
 
 	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
-	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
-
-	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
+	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc)
 	ctx := context.Background()
 
 	t.Run("GetDeviceByToken returns POS device", func(t *testing.T) {
@@ -64,9 +62,7 @@ func TestPOSService_CreateOrder(t *testing.T) {
 
 	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
-	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
-
-	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
+	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc)
 	ctx := tenantCtx()
 
 	// Setup test products
@@ -138,9 +134,7 @@ func TestPOSService_PayCash(t *testing.T) {
 
 	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
-	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
-
-	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
+	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc)
 	ctx := context.Background()
 
 	// Create a POS device
@@ -149,7 +143,7 @@ func TestPOSService_PayCash(t *testing.T) {
 	t.Run("PayCash processes payment", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPending, entOrder.OriginPos)
 
-		err := svc.PayCash(ctx, order.ID, &device.ID)
+		err := svc.PayCash(ctx, order.ID, &device.ID, nil)
 		require.NoError(t, err)
 
 		// Verify order status
@@ -161,13 +155,13 @@ func TestPOSService_PayCash(t *testing.T) {
 	t.Run("PayCash fails for non-pending order", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPaid, entOrder.OriginPos)
 
-		err := svc.PayCash(ctx, order.ID, &device.ID)
+		err := svc.PayCash(ctx, order.ID, &device.ID, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not_pending")
 	})
 
 	t.Run("PayCash fails with invalid order ID", func(t *testing.T) {
-		err := svc.PayCash(ctx, "", &device.ID)
+		err := svc.PayCash(ctx, "", &device.ID, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid order id")
 	})
@@ -184,9 +178,7 @@ func TestPOSService_PayCard(t *testing.T) {
 
 	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
-	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
-
-	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
+	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc)
 	ctx := context.Background()
 
 	device := fixtures.CreateDevice("POS 1", "pos-token", entDevice.TypePOS, entDevice.StatusApproved)
@@ -194,7 +186,7 @@ func TestPOSService_PayCard(t *testing.T) {
 	t.Run("PayCard processes payment", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPending, entOrder.OriginPos)
 
-		err := svc.PayCard(ctx, order.ID, &device.ID, nil)
+		err := svc.PayCard(ctx, order.ID, &device.ID, nil, nil)
 		require.NoError(t, err)
 
 		// Verify order status
@@ -206,7 +198,7 @@ func TestPOSService_PayCard(t *testing.T) {
 	t.Run("PayCard fails for non-pending order", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPaid, entOrder.OriginPos)
 
-		err := svc.PayCard(ctx, order.ID, &device.ID, nil)
+		err := svc.PayCard(ctx, order.ID, &device.ID, nil, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not_pending")
 	})
@@ -223,9 +215,7 @@ func TestPOSService_PayTwint(t *testing.T) {
 
 	paymentSvc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 
-	club100Svc := service.NewClub100Service(&MockElvantoService{}, repos.Club100Redemption, repos.Settings, repos.OrderLine)
-
-	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc, club100Svc)
+	svc := service.NewPOSService(cfg, repos.Device, repos.Order, paymentSvc)
 	ctx := context.Background()
 
 	device := fixtures.CreateDevice("POS 1", "pos-token", entDevice.TypePOS, entDevice.StatusApproved)
@@ -233,7 +223,7 @@ func TestPOSService_PayTwint(t *testing.T) {
 	t.Run("PayTwint processes payment", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPending, entOrder.OriginPos)
 
-		err := svc.PayTwint(ctx, order.ID, &device.ID)
+		err := svc.PayTwint(ctx, order.ID, &device.ID, nil)
 		require.NoError(t, err)
 
 		// Verify order status
@@ -245,7 +235,7 @@ func TestPOSService_PayTwint(t *testing.T) {
 	t.Run("PayTwint fails for non-pending order", func(t *testing.T) {
 		order := fixtures.CreateOrder(1000, entOrder.StatusPaid, entOrder.OriginPos)
 
-		err := svc.PayTwint(ctx, order.ID, &device.ID)
+		err := svc.PayTwint(ctx, order.ID, &device.ID, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not_pending")
 	})

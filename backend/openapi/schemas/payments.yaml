@@ -1,7 +1,7 @@
 PaymentMethod:
   type: string
   enum:
-    [cash, card, twint, gratis_guest, gratis_vip, gratis_staff, gratis_100club]
+    [cash, card, twint, gratis_guest, gratis_vip, gratis_staff, gratis_plugin]
   description: |
     Payment methods (lowercase in API, stored uppercase in DB):
     - `cash`: Cash payment (POS only)
@@ -10,7 +10,7 @@ PaymentMethod:
     - `gratis_guest`: Free order for guests (POS only)
     - `gratis_vip`: Free order for VIP (POS only)
     - `gratis_staff`: Free order for staff/volunteers (POS only)
-    - `gratis_100club`: Free order for 100 Club member (POS only)
+    - `gratis_plugin`: Free order redeemed through an enabled plugin (POS only)
 
 PaymentChannel:
   type: string
@@ -60,9 +60,23 @@ PaymentCreate:
     card:
       $ref: "#/CardPaymentMeta"
       description: Optional card details captured by the terminal. POS card payments only.
-    club100:
-      $ref: "../schemas/club100.yaml#/Club100PaymentInfo"
-      description: Required for gratis_100club payments. Contains Elvanto person info and quantity.
+    plugin:
+      $ref: "#/PluginPaymentInfo"
+      description: |
+        Required for gratis_plugin; optional on cash/card/twint for mixed carts
+        (partial plugin redemption + paid remainder). Validated by the plugin's PaymentHook.
+
+PluginPaymentInfo:
+  type: object
+  required: [key, data]
+  properties:
+    key:
+      type: string
+      description: Registered plugin key. Must be enabled for the tenant.
+    data:
+      type: object
+      additionalProperties: true
+      description: Opaque payload validated by the plugin's PaymentHook.
 
 CardPaymentMeta:
   type: object
