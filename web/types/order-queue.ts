@@ -9,35 +9,15 @@ export type PosPaymentMethod =
   | "gratis_guest"
   | "gratis_vip"
   | "gratis_staff"
-  | "gratis_100club"
+  | "gratis_plugin"
 
 export interface GratisInfo {
-  type: "guest" | "vip" | "staff" | "100club"
-  elvantoPersonId?: string
-  elvantoPersonName?: string
-  freeQuantity?: number
+  type: "guest" | "vip" | "staff"
 }
 
-export interface Club100DiscountItem {
-  cartItemId: string
-  productId: string
-  productName: string
-  quantity: number
-  discountedQuantity: number
-  unitPriceCents: number
-}
-
-export interface Club100Discount {
-  person: {
-    id: string
-    firstName: string
-    lastName: string
-    remaining: number
-    max: number
-  }
-  discountedItems: Club100DiscountItem[]
-  totalDiscountCents: number
-  freeProductIds: string[]
+export interface PluginPayment {
+  key: string
+  data: unknown
 }
 
 export interface QueuedOrderItem {
@@ -69,6 +49,7 @@ export interface QueuedOrder {
   paymentMethod: PosPaymentMethod
   gratisInfo?: GratisInfo
   cardMeta?: CardMeta
+  plugin?: PluginPayment
   status: OrderSyncStatus
   serverId?: string
   // Signed Ed25519 pickup token from order create; printed as the QR when present.

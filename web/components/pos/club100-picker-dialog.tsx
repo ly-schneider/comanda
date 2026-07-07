@@ -8,7 +8,28 @@ import { Input } from "@/components/ui/input"
 import { type Club100Person, listClub100People } from "@/lib/api/club100"
 import { formatChf } from "@/lib/utils"
 import type { CartItem } from "@/types/cart"
-import type { Club100Discount, Club100DiscountItem } from "@/types/order-queue"
+
+interface Club100DiscountItem {
+  cartItemId: string
+  productId: string
+  productName: string
+  quantity: number
+  discountedQuantity: number
+  unitPriceCents: number
+}
+
+interface Club100Discount {
+  person: {
+    id: string
+    firstName: string
+    lastName: string
+    remaining: number
+    max: number
+  }
+  discountedItems: Club100DiscountItem[]
+  totalDiscountCents: number
+  freeProductIds: string[]
+}
 
 interface Club100PickerDialogProps {
   open: boolean

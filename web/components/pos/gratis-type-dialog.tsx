@@ -1,10 +1,10 @@
 "use client"
 
-import { Crown, Handshake, Star, Users } from "lucide-react"
+import { Handshake, Star, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-type GratisType = "guest" | "vip" | "staff" | "100club"
+type GratisType = "guest" | "vip" | "staff"
 
 interface GratisTypeDialogProps {
   open: boolean
@@ -46,15 +46,6 @@ export function GratisTypeDialog({ open, onOpenChange, onSelect }: GratisTypeDia
           >
             <Handshake className="size-10" />
             <span className="text-base font-medium">Mitarbeiter</span>
-          </Button>
-          <Button
-            className="flex h-28 flex-col items-center justify-center gap-2 rounded-xl"
-            variant="outline"
-            onClick={() => onSelect("100club")}
-            aria-label="100 Club"
-          >
-            <Crown className="size-10" />
-            <span className="text-base font-medium">100 Club</span>
           </Button>
         </div>
       </DialogContent>
