@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"backend/internal/generated/ent"
 	"backend/internal/plugin"
 	"backend/internal/repository"
 )
@@ -27,6 +28,10 @@ type Person struct {
 type Settings struct {
 	FreeProductIDs []string `json:"freeProductIds"`
 	MaxRedemptions int      `json:"maxRedemptions"`
+}
+
+type ProductLookup interface {
+	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
 }
 
 type Service interface {
@@ -56,7 +61,7 @@ type service struct {
 	redemptions RedemptionRepository
 	elvanto     ElvantoSearcher
 	orderLines  repository.OrderLineRepository
-	products    *repository.ProductRepository
+	products    ProductLookup
 }
 
 func NewService(
@@ -64,7 +69,7 @@ func NewService(
 	redemptions RedemptionRepository,
 	elvanto ElvantoSearcher,
 	orderLines repository.OrderLineRepository,
-	products *repository.ProductRepository,
+	products ProductLookup,
 ) Service {
 	return &service{
 		plugins:     plugins,

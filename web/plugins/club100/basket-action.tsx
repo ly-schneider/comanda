@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { getDeviceToken } from "@/lib/device-auth"
 import type { SlotComponentProps } from "@/plugins/slots"
 import type { Club100Person } from "./api"
-import { type Club100Discount, Club100PickerDialog } from "./picker-dialog"
+import type { Club100Discount } from "./discount"
+import { Club100PickerDialog } from "./picker-dialog"
 
 export default function Club100BasketAction({ ctx, config }: SlotComponentProps<"pos.basket.actions">) {
   const [open, setOpen] = useState(false)

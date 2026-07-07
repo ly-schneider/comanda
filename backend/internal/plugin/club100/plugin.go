@@ -9,6 +9,7 @@ import (
 	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/plugin"
+	"backend/internal/repository"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/fx"
@@ -21,7 +22,6 @@ type Plugin struct {
 
 // runtime is filled by Module's fx.Invoke at startup and read at request time,
 // so the same registry instance can implement PaymentHook without its deps.
-
 type runtime struct {
 	svc    Service
 	logger *zap.Logger
@@ -38,6 +38,7 @@ func (p *Plugin) Module() fx.Option {
 	return fx.Options(
 		fx.Provide(
 			func(logger *zap.Logger) ElvantoSearcher { return NewElvantoClient(logger) },
+			func(p *repository.ProductRepository) ProductLookup { return p },
 			NewRedemptionRepository,
 			NewService,
 		),

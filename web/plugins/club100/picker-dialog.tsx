@@ -8,28 +8,7 @@ import { Input } from "@/components/ui/input"
 import { formatChf } from "@/lib/utils"
 import type { CartItem } from "@/types/cart"
 import { type Club100Person, listClub100People } from "./api"
-
-interface Club100DiscountItem {
-  cartItemId: string
-  productId: string
-  productName: string
-  quantity: number
-  discountedQuantity: number
-  unitPriceCents: number
-}
-
-export interface Club100Discount {
-  person: {
-    id: string
-    firstName: string
-    lastName: string
-    remaining: number
-    max: number
-  }
-  discountedItems: Club100DiscountItem[]
-  totalDiscountCents: number
-  freeProductIds: string[]
-}
+import { type Club100Discount, computeClub100Discount } from "./discount"
 
 interface Club100PickerDialogProps {
   open: boolean
@@ -81,52 +60,7 @@ export function Club100PickerDialog({
   }, [people, search])
 
   const calculateDiscount = useCallback(
-    (person: Club100Person): Club100Discount | null => {
-      if (freeProductIds.length === 0 || person.remaining <= 0) {
-        return null
-      }
-
-      const discountedItems: Club100DiscountItem[] = []
-      let remainingRedemptions = person.remaining
-      let totalDiscountCents = 0
-
-      for (const item of cartItems) {
-        if (remainingRedemptions <= 0) break
-
-        const isEligible = freeProductIds.includes(item.product.id)
-        if (!isEligible) continue
-
-        const discountedQuantity = Math.min(item.quantity, remainingRedemptions)
-        remainingRedemptions -= discountedQuantity
-        totalDiscountCents += discountedQuantity * item.totalPriceCents
-
-        discountedItems.push({
-          cartItemId: item.id,
-          productId: item.product.id,
-          productName: item.product.name,
-          quantity: item.quantity,
-          discountedQuantity,
-          unitPriceCents: item.totalPriceCents,
-        })
-      }
-
-      if (discountedItems.length === 0) {
-        return null
-      }
-
-      return {
-        person: {
-          id: person.id,
-          firstName: person.firstName,
-          lastName: person.lastName,
-          remaining: person.remaining,
-          max: person.max,
-        },
-        discountedItems,
-        totalDiscountCents,
-        freeProductIds,
-      }
-    },
+    (person: Club100Person): Club100Discount | null => computeClub100Discount(person, cartItems, freeProductIds),
     [cartItems, freeProductIds]
   )
 
