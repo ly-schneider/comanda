@@ -38,7 +38,7 @@ function PluginRow({
         <Switch
           checked={plugin.enabled}
           disabled={saving}
-          onCheckedChange={(checked) => void onSave({ enabled: checked })}
+          onCheckedChange={(checked) => onSave({ enabled: checked }).catch(() => {})}
         />
       </div>
       {ConfigForm && (
