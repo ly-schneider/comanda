@@ -9,40 +9,49 @@ package qrsign
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"math"
 )
 
-// Version is the current payload schema version. Bump only with a coordinated
-// rollout across every verifier (web, Android).
-const Version = 1
+// Bump only with a coordinated rollout across the web + Android verifiers.
+const Version = 2
+
+const (
+	verV2 = 0x02
+
+	idLen     = 12                        // tenant/order/product nanoids are 12 ASCII bytes
+	headerLen = 1 + idLen + idLen + 4 + 1 // ver + 2 ids + issuedAt(u32) + count(u8) = 30
+	lineLen   = idLen + 1                 // product id + qty(u8) = 13
+	maxLines  = math.MaxUint8
+	maxQty    = math.MaxUint8
+)
 
 var (
 	ErrMalformed          = errors.New("qrsign: malformed token")
 	ErrBadSignature       = errors.New("qrsign: signature verification failed")
-	ErrBadPayload         = errors.New("qrsign: invalid payload json")
+	ErrBadPayload         = errors.New("qrsign: invalid payload")
 	ErrUnsupportedVersion = errors.New("qrsign: unsupported payload version")
 )
 
 type Line struct {
-	ProductID string `json:"p"`
-	Quantity  int    `json:"q"`
+	ProductID string
+	Quantity  int
 }
 
-// Field order must never be reordered: the verifier checks the literal signed
-// bytes and cross-language readers rely on the canonical key order v,t,o,i,l.
 type Payload struct {
-	Version  int    `json:"v"`
-	TenantID string `json:"t"`
-	OrderID  string `json:"o"`
-	IssuedAt int64  `json:"i"`
-	Lines    []Line `json:"l"`
+	Version  int
+	TenantID string
+	OrderID  string
+	IssuedAt int64
+	Lines    []Line
 }
 
-// Sign returns base64url(no-pad) of the canonical payload JSON followed by its
-// trailing 64-byte Ed25519 signature.
+// The token stays base64url *text* on the wire (API responses, Android bridge);
+// only the QR writer decodes it to the raw bytes that go into the QR.
 func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
-	body, err := json.Marshal(p)
+	body, err := encodeV2(p)
 	if err != nil {
 		return "", err
 	}
@@ -53,9 +62,42 @@ func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(token), nil
 }
 
-// Verify checks the signature over the literal decoded body bytes before
-// unmarshaling — never re-serializing, which would risk JSON canonicalization
-// drift between signer and verifier.
+// Ids must be exactly 12 bytes so the record stays fixed-width and delimiter-free.
+func encodeV2(p Payload) ([]byte, error) {
+	if len(p.TenantID) != idLen {
+		return nil, fmt.Errorf("%w: tenant id must be %d bytes, got %d", ErrBadPayload, idLen, len(p.TenantID))
+	}
+	if len(p.OrderID) != idLen {
+		return nil, fmt.Errorf("%w: order id must be %d bytes, got %d", ErrBadPayload, idLen, len(p.OrderID))
+	}
+	if len(p.Lines) > maxLines {
+		return nil, fmt.Errorf("%w: %d lines exceeds max %d", ErrBadPayload, len(p.Lines), maxLines)
+	}
+	if p.IssuedAt < 0 || p.IssuedAt > math.MaxUint32 {
+		return nil, fmt.Errorf("%w: issued-at %d out of uint32 range", ErrBadPayload, p.IssuedAt)
+	}
+
+	body := make([]byte, 0, headerLen+len(p.Lines)*lineLen)
+	body = append(body, verV2)
+	body = append(body, p.TenantID...)
+	body = append(body, p.OrderID...)
+	body = binary.BigEndian.AppendUint32(body, uint32(p.IssuedAt))
+	body = append(body, byte(len(p.Lines)))
+	for _, l := range p.Lines {
+		if len(l.ProductID) != idLen {
+			return nil, fmt.Errorf("%w: product id must be %d bytes, got %d", ErrBadPayload, idLen, len(l.ProductID))
+		}
+		if l.Quantity < 1 || l.Quantity > maxQty {
+			return nil, fmt.Errorf("%w: quantity %d out of range [1,%d]", ErrBadPayload, l.Quantity, maxQty)
+		}
+		body = append(body, l.ProductID...)
+		body = append(body, byte(l.Quantity))
+	}
+	return body, nil
+}
+
+// Verify checks the signature over the literal decoded bytes — never
+// re-serializing, which would risk canonicalization drift between signer and reader.
 func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
@@ -75,16 +117,36 @@ func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 		return Payload{}, ErrBadSignature
 	}
 
-	var p Payload
-	if err := json.Unmarshal(body, &p); err != nil {
+	if body[0] != verV2 {
+		return Payload{}, ErrUnsupportedVersion
+	}
+	return decodeV2(body)
+}
+
+// A length/structure mismatch here is a bad payload, not tampering — the
+// signature already authenticated these bytes.
+func decodeV2(body []byte) (Payload, error) {
+	if len(body) < headerLen {
 		return Payload{}, ErrBadPayload
 	}
-	// Reject unknown schema versions even on a valid signature: a v2 token must
-	// not be silently accepted by a v1 reader (the cross-language verifiers do
-	// the same). Freshness (the `i` field) is verifier policy and is enforced by
-	// the caller, not here.
-	if p.Version != Version {
-		return Payload{}, ErrUnsupportedVersion
+	count := int(body[29])
+	if len(body) != headerLen+count*lineLen {
+		return Payload{}, ErrBadPayload
+	}
+	p := Payload{
+		Version:  Version,
+		TenantID: string(body[1:13]),
+		OrderID:  string(body[13:25]),
+		IssuedAt: int64(binary.BigEndian.Uint32(body[25:29])),
+		Lines:    make([]Line, count),
+	}
+	off := headerLen
+	for i := 0; i < count; i++ {
+		p.Lines[i] = Line{
+			ProductID: string(body[off : off+idLen]),
+			Quantity:  int(body[off+idLen]),
+		}
+		off += lineLen
 	}
 	return p, nil
 }

@@ -1,12 +1,11 @@
 "use client"
 
-import type { Html5Qrcode } from "html5-qrcode"
 import { AlertCircle, CheckCircle2, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
-import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
+import QrScanner, { type QrScannerControls, type QrScanResult } from "@/components/qr-scanner"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
 import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
@@ -195,7 +194,7 @@ export default function StationPage() {
   const [cameraPermission, setCameraPermission] = useState<"idle" | "pending" | "granted" | "denied">("idle")
   const [scannerActive, setScannerActive] = useState(false)
   const [scannerKey, setScannerKey] = useState(0)
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const scannerRef = useRef<QrScannerControls | null>(null)
   const scanLockedRef = useRef(false)
   const recentScanIdsRef = useRef<Map<string, number>>(new Map())
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -346,8 +345,8 @@ export default function StationPage() {
     setScannerActive(false)
   }, [])
 
-  const handleScannerReady = useCallback((scanner: Html5Qrcode) => {
-    scannerRef.current = scanner
+  const handleScannerReady = useCallback((controls: QrScannerControls) => {
+    scannerRef.current = controls
   }, [])
 
   const handleScannerStop = useCallback(() => {
@@ -428,8 +427,8 @@ export default function StationPage() {
   }, [approved, triggerFlush])
 
   const handleScanned = useCallback(
-    async (code: string) => {
-      const parsed = parseScan(code)
+    async (scan: QrScanResult) => {
+      const parsed = parseScan(scan.text, scan.bytes)
       if (!parsed) {
         playScanSound("error")
         setError("Ungültiger QR-Code")
@@ -607,15 +606,14 @@ export default function StationPage() {
     [assignedProductIds, bearerToken, handleEnqueue, pushScan, scheduleResume, updateScan]
   )
 
-  const handleDecoded = useCallback(
-    async (decodedText: string) => {
-      if (!decodedText) return
+  const handleResult = useCallback(
+    async (scan: QrScanResult) => {
       if (scanLockedRef.current) return
       scanLockedRef.current = true
       try {
-        scannerRef.current?.pause(true)
+        scannerRef.current?.pause()
       } catch {}
-      await handleScanned(decodedText)
+      await handleScanned(scan)
     },
     [handleScanned]
   )
@@ -772,14 +770,12 @@ export default function StationPage() {
             <>
               <div className="flex w-full flex-col items-center">
                 <div className="w-full max-w-[16rem] overflow-hidden rounded-2xl">
-                  <Html5QrcodeScannerPlugin
+                  <QrScanner
                     key={`${deviceId}-${scannerKey}`}
                     cameraId={deviceId || undefined}
                     fps={10}
-                    qrbox={200}
-                    disableFlip={false}
                     maxWidthRem={16}
-                    qrCodeSuccessCallback={handleDecoded}
+                    onResult={handleResult}
                     onReady={handleScannerReady}
                     onStartError={handleScannerStartError}
                     onStop={handleScannerStop}

@@ -124,9 +124,9 @@ export function OrderRefundPanel() {
   }, [query, selectedId])
 
   const handleScan = useCallback(
-    async (raw: string) => {
+    async (result: { text: string; bytes: Uint8Array }) => {
       setScannerOpen(false)
-      const parsed = parseScan(raw)
+      const parsed = parseScan(result.text, result.bytes)
       if (!parsed || parsed.kind !== "order") {
         setSearchError("Kein gültiger Bestell-Code.")
         return

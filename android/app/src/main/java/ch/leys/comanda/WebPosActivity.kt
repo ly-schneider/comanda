@@ -44,6 +44,7 @@ import java.math.BigDecimal
 import org.json.JSONObject
 import android.widget.Toast
 import android.util.Log
+import java.util.Base64
 import java.util.UUID
 import org.json.JSONArray
 import android.bluetooth.BluetoothAdapter
@@ -76,6 +77,15 @@ private data class ReceiptLine(
 )
 
 /** Receipt kind sent by the web POS; absent or unknown ⇒ "sale". */
+// A v2 pickup token is base64url of raw binary whose first byte is 0x02; decode
+// it so the QR can be rendered byte-mode. Non-v2 (e.g. the pickup URL) stays text.
+internal fun decodePickupTokenBytes(token: String): ByteArray? = try {
+    val bytes = Base64.getUrlDecoder().decode(token.trim())
+    if (bytes.size > 64 && bytes[0] == 0x02.toByte()) bytes else null
+} catch (_: IllegalArgumentException) {
+    null
+}
+
 private fun receiptKind(obj: JSONObject): String =
     when (obj.optString("kind", "sale").lowercase()) {
         "refund" -> "refund"
@@ -356,7 +366,7 @@ class WebPosActivity : ComponentActivity() {
             }
         }
         wv.webChromeClient = object : WebChromeClient() {
-            // The web station scanner (html5-qrcode) calls getUserMedia; grant the camera so it runs in-app.
+            // The web station scanner (zxing-wasm) calls getUserMedia; grant the camera so it runs in-app.
             override fun onPermissionRequest(request: PermissionRequest) {
                 val wantsCamera = request.resources.any { it == PermissionRequest.RESOURCE_VIDEO_CAPTURE }
                 if (!wantsCamera) {
@@ -1034,8 +1044,18 @@ class WebPosActivity : ComponentActivity() {
 
         fun qrRow(data: String) {
             val qrBmp = try {
-                val hints = mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2)
-                val matrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, qrSize, qrSize, hints)
+                val hints = mutableMapOf<EncodeHintType, Any>(
+                    EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+                    EncodeHintType.MARGIN to 2,
+                )
+                // Byte-mode QR of the raw bytes: ISO-8859-1 maps each byte 1:1 and, being
+                // the default QR charset, adds no ECI header, so the station reader gets
+                // them back exactly. Everything else stays a text QR.
+                val content = decodePickupTokenBytes(data)?.let {
+                    hints[EncodeHintType.CHARACTER_SET] = "ISO-8859-1"
+                    String(it, Charsets.ISO_8859_1)
+                } ?: data
+                val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, qrSize, qrSize, hints)
                 Bitmap.createBitmap(qrSize, qrSize, Bitmap.Config.RGB_565).also { bm ->
                     for (x in 0 until qrSize) for (yy in 0 until qrSize) bm.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
                 }

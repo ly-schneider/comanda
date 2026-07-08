@@ -19,36 +19,54 @@
 import "fake-indexeddb/auto"
 import * as ed from "@noble/ed25519"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { bytesToBase64Url } from "@/lib/base64url"
 import { idbLedger } from "./ledger"
 import { type QrPayload, verifyQrToken } from "./qr-verify"
 import { type RedeemDeps, redeemScan } from "./redeem"
 import { flushOutbox } from "./sync"
 import { idbOutbox } from "./sync-queue"
 
-function b64url(bytes: Uint8Array): string {
-  let bin = ""
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!)
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+// Encode a v2 binary body (mirrors backend encodeV2). Ids are the fixed 12 ASCII
+// bytes the format requires, so the real production verifier accepts the token.
+function encodeV2(p: QrPayload): Uint8Array {
+  const enc = new TextEncoder()
+  const out = new Uint8Array(30 + p.l.length * 13)
+  out[0] = 0x02
+  out.set(enc.encode(p.t), 1)
+  out.set(enc.encode(p.o), 13)
+  out[25] = (p.i >>> 24) & 0xff
+  out[26] = (p.i >>> 16) & 0xff
+  out[27] = (p.i >>> 8) & 0xff
+  out[28] = p.i & 0xff
+  out[29] = p.l.length
+  let off = 30
+  for (const l of p.l) {
+    out.set(enc.encode(l.p), off)
+    out[off + 12] = l.q
+    off += 13
+  }
+  return out
 }
 
 function mintToken(payload: QrPayload, sk: Uint8Array): string {
-  const body = new TextEncoder().encode(JSON.stringify(payload))
+  const body = encodeV2(payload)
   const sig = ed.sign(body, sk)
   const out = new Uint8Array(body.length + sig.length)
   out.set(body, 0)
   out.set(sig, body.length)
-  return b64url(out)
+  return bytesToBase64Url(out)
 }
 
 // Real keypair — verify is never mocked in this suite.
 const kp = ed.keygen()
-const pubKeyB64 = b64url(kp.publicKey)
+const pubKeyB64 = bytesToBase64Url(kp.publicKey)
 
 const TENANT = "tenant_seed1"
 const ORDER = "order_flow_1"
+const PROD = "prod_pommes1"
 
 function basePayload(over: Partial<QrPayload> = {}): QrPayload {
-  return { v: 1, t: TENANT, o: ORDER, i: 1_700_000_000, l: [{ p: "prod_p1", q: 2 }], ...over }
+  return { v: 2, t: TENANT, o: ORDER, i: 1_700_000_000, l: [{ p: PROD, q: 2 }], ...over }
 }
 
 describe("offline redemption flow (integration)", () => {
@@ -66,8 +84,8 @@ describe("offline redemption flow (integration)", () => {
     return {
       verify: (t) => verifyQrToken(t, pubKeyB64),
       stationTenantId: TENANT,
-      assignedProductIds: new Set(["prod_p1"]),
-      catalog: new Map([["prod_p1", { name: "Pommes Frites", image: "https://r2.example/p1.png" }]]),
+      assignedProductIds: new Set([PROD]),
+      catalog: new Map([[PROD, { name: "Pommes Frites", image: "https://r2.example/p1.png" }]]),
       ledger,
       enqueue: async (orderId, productIds, tenantId) => {
         await outbox.enqueue({ orderId, productIds, tenantId }, 9000)
@@ -85,15 +103,15 @@ describe("offline redemption flow (integration)", () => {
     if (result.kind !== "redeemed") return
     expect(result.orderId).toBe(ORDER)
     expect(result.lines).toEqual([
-      expect.objectContaining({ productId: "prod_p1", title: "Pommes Frites", quantity: 2, redeemedAt: 9000 }),
+      expect.objectContaining({ productId: PROD, title: "Pommes Frites", quantity: 2, redeemedAt: 9000 }),
     ])
 
-    expect(await ledger.has(ORDER, "prod_p1")).toBe(true)
-    expect(await ledger.get(ORDER, "prod_p1")).toMatchObject({ quantity: 2, tenantId: TENANT, redeemedAt: 9000 })
+    expect(await ledger.has(ORDER, PROD)).toBe(true)
+    expect(await ledger.get(ORDER, PROD)).toMatchObject({ quantity: 2, tenantId: TENANT, redeemedAt: 9000 })
 
     const items = await outbox.list()
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ orderId: ORDER, productIds: ["prod_p1"], tenantId: TENANT })
+    expect(items[0]).toMatchObject({ orderId: ORDER, productIds: [PROD], tenantId: TENANT })
   })
 
   it("rescan same token → already-redeemed, outbox not re-queued", async () => {
@@ -106,12 +124,12 @@ describe("offline redemption flow (integration)", () => {
 
     expect(second.kind).toBe("already-redeemed")
     if (second.kind !== "already-redeemed") return
-    expect(second.lines[0]).toMatchObject({ productId: "prod_p1", redeemedAt: 9000 })
+    expect(second.lines[0]).toMatchObject({ productId: PROD, redeemedAt: 9000 })
     expect(await outbox.list()).toHaveLength(0)
   })
 
   it("wrong-tenant token → wrong-event, nothing written to ledger or outbox", async () => {
-    const token = mintToken(basePayload({ t: "tenant_other1" }), kp.secretKey)
+    const token = mintToken(basePayload({ t: "tenant_othr1" }), kp.secretKey)
     const result = await redeemScan(token, deps())
 
     expect(result.kind).toBe("wrong-event")
@@ -166,7 +184,7 @@ describe("offline redemption flow (integration)", () => {
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("ledger", "readonly")
-        const get = tx.objectStore("ledger").get([ORDER, "prod_p1"])
+        const get = tx.objectStore("ledger").get([ORDER, PROD])
         get.onsuccess = () => {
           resolve(get.result)
           db.close()
@@ -176,6 +194,6 @@ describe("offline redemption flow (integration)", () => {
       req.onerror = () => reject(req.error)
     })
 
-    expect(fromDisk).toMatchObject({ orderId: ORDER, productId: "prod_p1", quantity: 2, redeemedAt: 9000 })
+    expect(fromDisk).toMatchObject({ orderId: ORDER, productId: PROD, quantity: 2, redeemedAt: 9000 })
   })
 })

@@ -178,10 +178,19 @@ export default function OrderPageClient() {
           </div>
         )
       }
-      // The signed, self-contained token is the canonical pickup QR — stands
-      // verify it offline. Fall back to the pickup URL only if it's absent.
-      const qrValue = serverOrder?.qrPayload || `${window.location.origin}/o/${orderId}`
-      return <QRCode value={qrValue} size={260} className="mx-auto rounded-[11px] border-2 p-1" />
+      // Signed token → binary v2 QR (byte-mode); the plain pickup URL is the text fallback.
+      if (serverOrder?.qrPayload) {
+        return (
+          <QRCode value={serverOrder.qrPayload} binary size={260} className="mx-auto rounded-[11px] border-2 p-1" />
+        )
+      }
+      return (
+        <QRCode
+          value={`${window.location.origin}/o/${orderId}`}
+          size={260}
+          className="mx-auto rounded-[11px] border-2 p-1"
+        />
+      )
     }
     return <div className="mx-auto h-[260px] w-[260px] animate-pulse rounded-[11px] border-2 bg-gray-100" />
   })()

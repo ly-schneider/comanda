@@ -1,9 +1,8 @@
 "use client"
 
-import type { Html5Qrcode } from "html5-qrcode"
 import { Loader2, ScanLine } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
-import Html5QrcodeScannerPlugin from "@/components/html5-qrcode-scanner-plugin"
+import QrScanner, { type QrScannerControls, type QrScanResult } from "@/components/qr-scanner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -34,22 +33,22 @@ function ScanAction() {
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const scannerRef = useRef<QrScannerControls | null>(null)
   const lockedRef = useRef(false)
 
-  const handleDecoded = useCallback(
-    async (decodedText: string) => {
-      if (!decodedText || lockedRef.current) return
+  const handleResult = useCallback(
+    async ({ text }: QrScanResult) => {
+      if (!text || lockedRef.current) return
       lockedRef.current = true
       try {
-        scannerRef.current?.pause(true)
+        scannerRef.current?.pause()
       } catch {}
       setBusy(true)
       setError(null)
       try {
         const info = await getClientInfo()
         const result = await enrollDevice({
-          token: decodedText.trim(),
+          token: text.trim(),
           deviceKey: getDeviceKey(),
           name: name.trim() || undefined,
           model: info.model,
@@ -108,14 +107,12 @@ function ScanAction() {
           </div>
 
           <div className="relative w-full overflow-hidden rounded-2xl">
-            <Html5QrcodeScannerPlugin
+            <QrScanner
               fps={10}
-              qrbox={200}
-              disableFlip={false}
               maxWidthRem={22}
-              qrCodeSuccessCallback={handleDecoded}
-              onReady={(s) => {
-                scannerRef.current = s
+              onResult={handleResult}
+              onReady={(c) => {
+                scannerRef.current = c
               }}
               onStartError={() => setError("Kamera konnte nicht gestartet werden.")}
               onStop={() => {
