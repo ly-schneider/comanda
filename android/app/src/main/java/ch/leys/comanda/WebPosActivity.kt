@@ -83,7 +83,6 @@ private fun receiptKind(obj: JSONObject): String =
     when (obj.optString("kind", "sale").lowercase()) {
         "refund" -> "refund"
         "pickup" -> "pickup"
-        "void" -> "void"
         else -> "sale"
     }
 
@@ -928,14 +927,6 @@ class WebPosActivity : ComponentActivity() {
                     lines.append("Bestellung: ${orderId}\n")
                     lines.append("\n")
                     if (pickupQr.isNotEmpty()) appendQr(pickupQr)
-                    lines.append("[C]Alte Quittung ungültig\n")
-                }
-                "void" -> {
-                    lines.append("[C]<b>Storniert</b>\n")
-                    val amt = if (refundCents >= 0) refundCents else totalCents
-                    if (amt >= 0) lines.append("[L]Rückerstattung[R]-${moneyStr(currency, amt)}\n")
-                    if (method.isNotBlank()) lines.append("Methode: ${prettyRefundMethod(method)}\n")
-                    lines.append("Bestellung: ${orderId}\n")
                 }
                 else -> {
                     if (totalCents >= 0) lines.append("Total: ${moneyStr(currency, totalCents)}\n")
@@ -1313,7 +1304,7 @@ class WebPosActivity : ComponentActivity() {
         return bmp
     }
 
-    // Raster renderer for non-sale slips (refund / pickup re-issue / void) on Phomemo-class printers.
+    // Raster renderer for non-sale slips (refund / pickup re-issue) on Phomemo-class printers.
     private fun renderSlipBitmap(obj: JSONObject, branding: ReceiptBranding): Bitmap {
         val width = 384
         val padding = 10
@@ -1394,7 +1385,7 @@ class WebPosActivity : ComponentActivity() {
             .forEach { textRow(it, small, center = true) }
         if (dateStr.isNotEmpty()) textRow(dateStr, small, center = true)
 
-        val titleText = when (kind) { "refund" -> "Rückerstattung"; "pickup" -> "Abhol-Quittung"; else -> "Storniert" }
+        val titleText = when (kind) { "pickup" -> "Abhol-Quittung"; else -> "Rückerstattung" }
         textRow(titleText, titlePaint, center = true)
         gap(lineSpacing)
 
@@ -1407,7 +1398,7 @@ class WebPosActivity : ComponentActivity() {
             }
         }
 
-        if (kind == "refund" || kind == "void") {
+        if (kind == "refund") {
             if (refundAmount >= 0) twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", paint)
             if (method.isNotBlank()) textRow("Methode: ${prettyRefundMethod(method)}", small, center = false)
         }
@@ -1417,7 +1408,6 @@ class WebPosActivity : ComponentActivity() {
         if (kind == "pickup" && pickupQr.isNotEmpty()) {
             gap(lineSpacing)
             qrRow(pickupQr)
-            textRow("Alte Quittung ungültig", small, center = true)
         }
         gap(bottomPad)
 
