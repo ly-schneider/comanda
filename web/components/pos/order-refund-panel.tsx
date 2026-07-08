@@ -739,7 +739,7 @@ function ResultDialog({
 
           {plan.collectOldReceipt && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Alten Beleg der Kundschaft einziehen.
+              Alten Beleg von der Kundschaft einziehen.
             </div>
           )}
 
