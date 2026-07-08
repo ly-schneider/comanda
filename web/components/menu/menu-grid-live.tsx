@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react"
 import { useInventoryStream } from "@/hooks/use-inventory-stream"
-import type { ListResponse, ProductDTO } from "@/types"
+import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 import MenuGrid from "./menu-grid"
 
 function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): ProductDTO {
@@ -46,7 +46,13 @@ function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): Prod
   return updated
 }
 
-export function MenuGridLive({ initialProducts }: { initialProducts: ListResponse<ProductDTO> }) {
+export function MenuGridLive({
+  initialProducts,
+  categories = [],
+}: {
+  initialProducts: ListResponse<ProductDTO>
+  categories?: CategoryDTO[]
+}) {
   const [products, setProducts] = useState(initialProducts)
 
   const handleStockUpdate = useCallback((stockMap: Map<string, number>) => {
@@ -58,5 +64,5 @@ export function MenuGridLive({ initialProducts }: { initialProducts: ListRespons
 
   useInventoryStream({ onUpdate: handleStockUpdate, enabled: true })
 
-  return <MenuGrid products={products} />
+  return <MenuGrid products={products} categories={categories} />
 }
