@@ -34,7 +34,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
-import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.sumup.merchant.reader.api.SumUpAPI
@@ -55,8 +54,7 @@ private data class ReceiptBranding(
     val displayName: String?,
     val logoUrl: String?,
     val address: String?,
-    val currency: String?,
-    val thankYou: String?
+    val currency: String?
 )
 
 private fun parseBranding(obj: JSONObject): ReceiptBranding {
@@ -65,9 +63,8 @@ private fun parseBranding(obj: JSONObject): ReceiptBranding {
         displayName = b.optString("displayName").ifBlank { null },
         logoUrl     = b.optString("logoUrl").ifBlank { null },
         address     = b.optString("address").ifBlank { null },
-        currency    = b.optString("currency").ifBlank { null },
-        thankYou    = b.optString("thankYou").ifBlank { null }
-    ) else ReceiptBranding(null, null, null, null, null)
+        currency    = b.optString("currency").ifBlank { null }
+    ) else ReceiptBranding(null, null, null, null)
 }
 
 /** One refunded/redeemable line on a slip. */
@@ -93,6 +90,24 @@ private fun prettyRefundMethod(method: String): String = when (method.lowercase(
     "card" -> "Karte"
     else -> method
 }
+
+internal fun prettyPayMethod(method: String, cardLast4: String?): String {
+    val base = when (method.lowercase()) {
+        "twint" -> "TWINT"
+        "cash" -> "Bar"
+        "card" -> "Karte"
+        else -> if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
+    }
+    return if (method.equals("card", ignoreCase = true) && !cardLast4.isNullOrBlank()) "$base •••• $cardLast4" else base
+}
+
+internal fun formatReceiptDateTime(orderTs: Long, nowMs: Long): String = try {
+    val whenMs = if (orderTs > 0) orderTs else nowMs
+    java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date(whenMs))
+} catch (_: Throwable) { "" }
+
+private fun receiptDateTime(obj: JSONObject): String =
+    formatReceiptDateTime(obj.optLong("orderTimestamp", -1L), System.currentTimeMillis())
 
 private fun moneyStr(currency: String, cents: Long): String =
     String.format("%s %.2f", currency, cents.toDouble() / 100.0)
@@ -853,103 +868,12 @@ class WebPosActivity : ComponentActivity() {
                 throw Exception(t.message ?: "bt_connect_failed")
             }
             val printer = com.dantsu.escposprinter.EscPosPrinter(connection, 203, 48f, 32)
-            // Render a simple receipt from JSON content
+            // Print the receipt as a raster image; the printer's internal font inks unevenly.
             val obj = try { JSONObject(content) } catch (_: Exception) { JSONObject() }
             val branding = parseBranding(obj)
-            val totalCents = obj.optLong("totalCents", -1)
-            val orderId = obj.optString("orderId", "-")
-            val method = obj.optString("method", "card")
-            val cardTxId = obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }
-            val pickupQr = obj.optString("pickupQr", "")
-            val currency = branding.currency ?: obj.optString("currency", "CHF")
-            val orderTs = obj.optLong("orderTimestamp", -1L)
-            val dateStr = try {
-                val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
-                val fmt = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY)
-                fmt.format(java.util.Date(whenMs))
-            } catch (_: Throwable) { "" }
-            val kind = receiptKind(obj)
-            val depositCents = obj.optLong("depositCents", -1L)
-            val refundCents = obj.optLong("refundCents", -1L)
-            val lines = StringBuilder()
-            val headerName = branding.displayName ?: "Comanda"
-            lines.append("[C]<b>$headerName</b>\n")
-            // Omit address entirely when not provided — no fallback to a hardcoded address
-            if (!branding.address.isNullOrBlank()) {
-                branding.address.split("\n").forEach { line ->
-                    if (line.isNotBlank()) lines.append("[C]${line.trim()}\n")
-                }
-            }
-            if (dateStr.isNotEmpty()) lines.append("[C]$dateStr\n")
-
-            val appendQr: (String) -> Unit = { data ->
-                try {
-                    val hints = mapOf(
-                        EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
-                        EncodeHintType.MARGIN to 2
-                    )
-                    val qrBitmapSize = 320
-                    val matrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, qrBitmapSize, qrBitmapSize, hints)
-                    val qrBmp = Bitmap.createBitmap(qrBitmapSize, qrBitmapSize, Bitmap.Config.RGB_565)
-                    for (x in 0 until qrBitmapSize) {
-                        for (yy in 0 until qrBitmapSize) {
-                            qrBmp.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
-                        }
-                    }
-                    val imgHex = com.dantsu.escposprinter.textparser.PrinterTextParserImg.bitmapToHexadecimalString(printer, qrBmp)
-                    lines.append("[C]<img>$imgHex</img>\n")
-                } catch (_: Throwable) {}
-            }
-            val appendItems: () -> Unit = {
-                for (it in parseReceiptLines(obj)) {
-                    val qtyTitle = "${it.quantity}x ${it.title}"
-                    if (it.unitPriceCents >= 0) {
-                        lines.append("[L]$qtyTitle[R]${moneyStr(currency, it.unitPriceCents * it.quantity)}\n")
-                    } else {
-                        lines.append("[L]$qtyTitle\n")
-                    }
-                    for ((slot, choice) in it.configuration) lines.append("[L]  - $slot: $choice\n")
-                }
-            }
-
-            when (kind) {
-                "refund" -> {
-                    lines.append("[C]<b>Rückerstattung</b>\n")
-                    appendItems()
-                    val amt = if (refundCents >= 0) refundCents else totalCents
-                    if (amt >= 0) lines.append("[L]Rückerstattung[R]-${moneyStr(currency, amt)}\n")
-                    lines.append("Methode: ${prettyRefundMethod(method)}\n")
-                    lines.append("Bestellung: ${orderId}\n")
-                }
-                "pickup" -> {
-                    lines.append("[C]<b>Abhol-Quittung</b>\n")
-                    appendItems()
-                    lines.append("Bestellung: ${orderId}\n")
-                    lines.append("\n")
-                    if (pickupQr.isNotEmpty()) appendQr(pickupQr)
-                }
-                else -> {
-                    if (totalCents >= 0) lines.append("Total: ${moneyStr(currency, totalCents)}\n")
-                    if (depositCents > 0) lines.append("davon Depot: ${moneyStr(currency, depositCents)}\n")
-                    val methodPretty = if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
-                    lines.append("Zahlart: ${methodPretty}\n")
-                    if (method.equals("card", ignoreCase = true) && cardTxId.isNotBlank()) {
-                        lines.append("Trans.-Nr.: ${cardTxId}\n")
-                    }
-                    if (method.equals("cash", ignoreCase = true)) {
-                        val rec = obj.optLong("amountReceivedCents", -1L)
-                        val chg = obj.optLong("changeCents", -1L)
-                        if (rec >= 0) lines.append("Erhalten: ${moneyStr(currency, rec)}\n")
-                        if (chg >= 0) lines.append("Rückgeld: ${moneyStr(currency, chg)}\n")
-                    }
-                    lines.append("Bestellung: ${orderId}\n")
-                    lines.append("\n")
-                    if (pickupQr.isNotEmpty()) appendQr(pickupQr)
-                }
-            }
-            val thankYou = branding.thankYou ?: "Danke!"
-            lines.append("[C]$thankYou\n\n")
-            printer.printFormattedText(lines.toString())
+            val bmp = renderReceiptBitmap(obj, branding)
+            val imgHex = com.dantsu.escposprinter.textparser.PrinterTextParserImg.bitmapToHexadecimalString(printer, bmp)
+            printer.printFormattedText("[C]<img>$imgHex</img>\n")
             try { connection.disconnect() } catch (_: Throwable) {}
             true
         } catch (e: Exception) {
@@ -1069,298 +993,45 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null, null)): Bitmap {
-        if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
-        val width = 384
-        val padding = 10
-        val headerSize = 24f
-        val fontSize = 20f
-        val smallSize = 18f
-        val lineSpacing = 8
-        val headerTopPad = 12
-        val headerBottomPad = 6
-        val bottomPad = 56
-        val qrSize = 320
-        val logoMaxHeight = 160
-
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = fontSize }
-        val bold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = headerSize; isFakeBoldText = true }
-        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = smallSize }
-
-        // Attempt logo fetch (blocking; printing already runs off the main thread via Bluetooth I/O).
-        // Falls back to null silently — the text header path below handles that.
-        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank()) {
-            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight)
-        } else null
-
-        val addressLines: List<String> = branding.address
-            ?.split("\n")
-            ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-
-        fun measureHeight(): Int {
-            var h = 0
-            val fmHeader = Paint.FontMetrics(); bold.getFontMetrics(fmHeader)
-            val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            val lineH = (fmSmall.bottom - fmSmall.top).toInt()
-            // Header: logo or text
-            h += headerTopPad
-            if (logoBitmap != null) {
-                h += logoBitmap.height + headerBottomPad
-            } else {
-                h += (fmHeader.bottom - fmHeader.top).toInt() + headerBottomPad
-            }
-            // Address lines (omitted when absent)
-            h += addressLines.size * (lineH + lineSpacing)
-            // Date/time
-            h += lineH + lineSpacing
-            // QR (optional)
-            val hasQr = obj.optString("pickupQr", "").isNotEmpty()
-            if (hasQr) h += qrSize + lineSpacing
-            // Total
-            h += (fm.bottom - fm.top).toInt() + lineSpacing
-            // Deposit line (optional, small)
-            if (obj.optLong("depositCents", -1L) > 0) h += lineH + lineSpacing
-            // Payment line
-            h += (fm.bottom - fm.top).toInt() + lineSpacing
-            val methodForHeight = obj.optString("method", "card")
-            if (methodForHeight.equals("card", ignoreCase = true) &&
-                obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }.isNotBlank()
-            ) {
-                h += lineH + lineSpacing
-            }
-            // Cash: received + change (up to two small lines)
-            if (methodForHeight.equals("cash", ignoreCase = true)) {
-                val rec = obj.optLong("amountReceivedCents", -1L)
-                val chg = obj.optLong("changeCents", -1L)
-                if (rec >= 0) h += lineH + lineSpacing
-                if (chg >= 0) h += lineH + lineSpacing
-            }
-            // Order ID (small)
-            h += lineH + lineSpacing
-            // Whitespace divider
-            h += (fm.bottom - fm.top).toInt() / 2 + lineSpacing
-            // Thank-you line + bottom pad
-            h += (fm.bottom - fm.top).toInt() + bottomPad
-            return h.coerceAtLeast(200)
-        }
-
-        val bmp = Bitmap.createBitmap(width, measureHeight(), Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        canvas.drawColor(Color.WHITE)
-
-        var y: Float = headerTopPad.toFloat()
-
-        // Header: logo (if fetched successfully) or displayName/fallback text
-        if (logoBitmap != null) {
-            val left = ((width - logoBitmap.width) / 2f).coerceAtLeast(0f)
-            canvas.drawBitmap(logoBitmap, left, y, null)
-            y += logoBitmap.height + headerBottomPad
-        } else {
-            val fm = Paint.FontMetrics(); bold.getFontMetrics(fm)
-            y -= fm.top
-            val title = branding.displayName ?: "Comanda"
-            val tw = bold.measureText(title)
-            canvas.drawText(title, (width - tw) / 2f, y, bold)
-            y += fm.bottom + headerBottomPad
-        }
-
-        // Address lines (centered, small). Omitted entirely when not provided.
-        if (addressLines.isNotEmpty()) {
-            val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            for (line in addressLines) {
-                val aw = small.measureText(line)
-                canvas.drawText(line, (width - aw) / 2f, y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-        }
-
-        // Date/time of order (centered, small). Prefer orderTimestamp if provided.
-        run {
-            val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            val orderTs = obj.optLong("orderTimestamp", -1L)
-            val dateStr = try {
-                val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
-                val fmt = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY)
-                fmt.format(java.util.Date(whenMs))
-            } catch (_: Throwable) { "" }
-            if (dateStr.isNotEmpty()) {
-                val dw = small.measureText(dateStr)
-                canvas.drawText(dateStr, (width - dw) / 2f, y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-        }
-
-        // QR code if provided
-        val pickupQr = obj.optString("pickupQr", "")
-        if (pickupQr.isNotEmpty()) {
-            val size = qrSize
-            try {
-                val hints = mapOf(
-                    EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
-                    EncodeHintType.MARGIN to 2
-                )
-                val matrix: BitMatrix = QRCodeWriter().encode(pickupQr, BarcodeFormat.QR_CODE, size, size, hints)
-                val qrBmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
-                for (x in 0 until size) {
-                    for (yy in 0 until size) {
-                        qrBmp.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
-                    }
-                }
-                val left = (width - size) / 2f
-                canvas.drawBitmap(qrBmp, left, y, null)
-                y += size + lineSpacing
-            } catch (t: Throwable) {
-                // ignore QR failures, continue text
-            }
-        }
-
-        y += lineSpacing
-
-        val totalCents = obj.optLong("totalCents", -1)
-        val currency = branding.currency ?: obj.optString("currency", "CHF")
-        val method = obj.optString("method", "card")
-        val orderId = obj.optString("orderId", "-")
-
-        // Total
-        if (totalCents >= 0) {
-            val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            val t = String.format("Total: %s %.2f", currency, totalCents / 100.0)
-            canvas.drawText(t, padding.toFloat(), y - fm.top, paint)
-            y += (fm.bottom - fm.top) + lineSpacing
-        }
-
-        // Deposit line (optional)
-        run {
-            val depositCents = obj.optLong("depositCents", -1L)
-            if (depositCents > 0) {
-                val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-                val d = "davon Depot: ${moneyStr(currency, depositCents)}"
-                canvas.drawText(ellipsize(d, small, (width - padding * 2).toFloat()), padding.toFloat(), y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-        }
-
-        // Payment line with capitalized method
-        run {
-            val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            val methodPretty = if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
-            val payLine = "Zahlart: $methodPretty"
-            val payText = ellipsize(payLine, paint, (width - padding * 2).toFloat())
-            canvas.drawText(payText, padding.toFloat(), y - fm.top, paint)
-            y += (fm.bottom - fm.top) + lineSpacing
-        }
-
-        run {
-            val cardTxId = obj.optString("cardTransactionId", "").ifBlank { obj.optString("txId", "") }
-            if (method.equals("card", ignoreCase = true) && cardTxId.isNotBlank()) {
-                val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-                val txLine = ellipsize("Trans.-Nr.: $cardTxId", small, (width - padding * 2).toFloat())
-                canvas.drawText(txLine, padding.toFloat(), y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-        }
-
-        // Cash details
-        if (method.equals("cash", ignoreCase = true)) {
-            val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            val rec = obj.optLong("amountReceivedCents", -1L)
-            val chg = obj.optLong("changeCents", -1L)
-            if (rec >= 0) {
-                val recStr = String.format("Erhalten: %s %.2f", currency, rec / 100.0)
-                canvas.drawText(ellipsize(recStr, small, (width - padding * 2).toFloat()), padding.toFloat(), y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-            if (chg >= 0) {
-                val chgStr = String.format("Rückgeld: %s %.2f", currency, chg / 100.0)
-                canvas.drawText(ellipsize(chgStr, small, (width - padding * 2).toFloat()), padding.toFloat(), y - fmSmall.top, small)
-                y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-            }
-        }
-
-        // Order ID under method
-        run {
-            val fmSmall = Paint.FontMetrics(); small.getFontMetrics(fmSmall)
-            val ordLine = ellipsize("Bestellung: $orderId", small, (width - padding * 2).toFloat())
-            canvas.drawText(ordLine, padding.toFloat(), y - fmSmall.top, small)
-            y += (fmSmall.bottom - fmSmall.top) + lineSpacing
-        }
-        // Whitespace divider before thank you
-        run {
-            val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            y += (fm.bottom - fm.top) / 2 + lineSpacing
-        }
-
-        // Thank-you line (with extra bottom padding to avoid clipping)
-        run {
-            val fm = Paint.FontMetrics(); paint.getFontMetrics(fm)
-            val thankYou = branding.thankYou ?: "Danke!"
-            canvas.drawText(thankYou, padding.toFloat(), y - fm.top, paint)
-            y += bottomPad
-        }
-
-        return bmp
-    }
-
-    // Raster renderer for non-sale slips (refund / pickup re-issue) on Phomemo-class printers.
-    private fun renderSlipBitmap(obj: JSONObject, branding: ReceiptBranding): Bitmap {
-        val width = 384
-        val padding = 10
-        val headerSize = 24f
-        val titleSize = 22f
-        val fontSize = 20f
-        val smallSize = 18f
-        val lineSpacing = 8
-        val headerTopPad = 12
-        val headerBottomPad = 6
-        val bottomPad = 56
-        val qrSize = 320
-        val logoMaxHeight = 160
-
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = fontSize }
-        val bold = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = headerSize; isFakeBoldText = true }
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = titleSize; isFakeBoldText = true }
-        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = smallSize }
-
-        val kind = receiptKind(obj)
-        val currency = branding.currency ?: obj.optString("currency", "CHF")
-        val orderId = obj.optString("orderId", "-")
-        val method = obj.optString("method", "")
-        val totalCents = obj.optLong("totalCents", -1L)
-        val refundCents = obj.optLong("refundCents", -1L)
-        val refundAmount = if (refundCents >= 0) refundCents else totalCents
-        val pickupQr = obj.optString("pickupQr", "")
-        val orderTs = obj.optLong("orderTimestamp", -1L)
-        val dateStr = try {
-            val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
-            java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date(whenMs))
-        } catch (_: Throwable) { "" }
-
-        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
-            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
-
+    private class ReceiptCanvasBuilder(
+        val width: Int,
+        val padding: Int,
+        val lineSpacing: Int,
+        val qrSize: Int,
+    ) {
         class Row(val height: Int, val draw: (Canvas, Float) -> Unit)
+
         val rows = ArrayList<Row>()
+
         fun gap(h: Int) { rows.add(Row(h) { _, _ -> }) }
-        fun textRow(text: String, p: Paint, center: Boolean) {
+
+        fun textRow(text: String, p: Paint, center: Boolean, indent: Float = 0f, ellipsizeFn: (String, Paint, Float) -> String) {
             val fm = Paint.FontMetrics(); p.getFontMetrics(fm)
-            val display = ellipsize(text, p, (width - padding * 2).toFloat())
+            val maxW = (width - padding * 2).toFloat() - indent
+            val display = ellipsizeFn(text, p, maxW)
             rows.add(Row((fm.bottom - fm.top).toInt() + lineSpacing) { c, y ->
-                val x = if (center) ((width - p.measureText(display)) / 2f).coerceAtLeast(padding.toFloat()) else padding.toFloat()
+                val x = if (center) ((width - p.measureText(display)) / 2f).coerceAtLeast(padding.toFloat())
+                else padding.toFloat() + indent
                 c.drawText(display, x, y - fm.top, p)
             })
         }
-        fun twoColRow(left: String, right: String, p: Paint) {
+
+        fun twoColRow(left: String, right: String, p: Paint, ellipsizeFn: (String, Paint, Float) -> String) {
             val fm = Paint.FontMetrics(); p.getFontMetrics(fm)
             rows.add(Row((fm.bottom - fm.top).toInt() + lineSpacing) { c, y ->
                 val rw = p.measureText(right)
-                val l = ellipsize(left, p, ((width - padding * 2).toFloat() - rw - 8f).coerceAtLeast(0f))
+                val l = ellipsizeFn(left, p, ((width - padding * 2).toFloat() - rw - 8f).coerceAtLeast(0f))
                 c.drawText(l, padding.toFloat(), y - fm.top, p)
                 c.drawText(right, width - padding - rw, y - fm.top, p)
             })
         }
+
+        fun imageRow(bm: Bitmap) {
+            rows.add(Row(bm.height + lineSpacing) { c, y ->
+                c.drawBitmap(bm, ((width - bm.width) / 2f).coerceAtLeast(0f), y, null)
+            })
+        }
+
         fun qrRow(data: String) {
             val qrBmp = try {
                 val hints = mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2)
@@ -1369,55 +1040,159 @@ class WebPosActivity : ComponentActivity() {
                     for (x in 0 until qrSize) for (yy in 0 until qrSize) bm.setPixel(x, yy, if (matrix.get(x, yy)) Color.BLACK else Color.WHITE)
                 }
             } catch (_: Throwable) { null }
-            if (qrBmp != null) rows.add(Row(qrSize + lineSpacing) { c, y -> c.drawBitmap(qrBmp, (width - qrSize) / 2f, y, null) })
+            if (qrBmp != null) imageRow(qrBmp)
         }
 
-        gap(headerTopPad)
-        if (logoBitmap != null) {
-            rows.add(Row(logoBitmap.height + headerBottomPad) { c, y ->
-                c.drawBitmap(logoBitmap, ((width - logoBitmap.width) / 2f).coerceAtLeast(0f), y, null)
-            })
-        } else {
-            textRow(branding.displayName ?: "Comanda", bold, center = true)
-            gap(headerBottomPad)
+        fun build(): Bitmap {
+            val totalH = rows.sumOf { it.height }.coerceAtLeast(200)
+            val bmp = Bitmap.createBitmap(width, totalH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bmp)
+            canvas.drawColor(Color.WHITE)
+            var y = 0f
+            for (r in rows) { r.draw(canvas, y); y += r.height }
+            return bmp
         }
+    }
+
+    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null)): Bitmap {
+        if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
+
+        val width = 384
+        val padding = 10
+        val lineSpacing = 8
+        val topPad = 12
+        val bottomPad = 56
+        val qrSize = 360
+        val logoMaxHeight = 120
+
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
+        val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 22f }
+        val totalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
+        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 18f }
+
+        val currency = branding.currency ?: obj.optString("currency", "CHF")
+        val totalCents = obj.optLong("totalCents", -1L)
+        val depositCents = obj.optLong("depositCents", -1L)
+        val method = obj.optString("method", "card")
+        val cardLast4 = obj.optString("cardLast4", "").ifBlank { null }
+        val orderId = obj.optString("orderId", "-")
+        val dateStr = receiptDateTime(obj)
+        val pickupQr = obj.optString("pickupQr", "")
+
+        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
+            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
+
+        val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
+        val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
+
+        b.gap(topPad)
+        b.textRow("Abhol-Quittung", titlePaint, center = true, ellipsizeFn = ell)
+        b.gap(lineSpacing)
+
+        for (it in parseReceiptLines(obj)) {
+            val qtyTitle = "${it.quantity}x ${it.title}"
+            if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
+            else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+        }
+        b.gap(lineSpacing)
+
+        if (totalCents >= 0) b.twoColRow("Total", moneyStr(currency, totalCents), totalPaint, ell)
+        if (depositCents > 0) b.textRow("davon Depot: ${moneyStr(currency, depositCents)}", small, center = false, ellipsizeFn = ell)
+        if (method.equals("cash", ignoreCase = true)) {
+            val rec = obj.optLong("amountReceivedCents", -1L)
+            val chg = obj.optLong("changeCents", -1L)
+            if (rec >= 0) b.textRow("Erhalten: ${moneyStr(currency, rec)}", small, center = false, ellipsizeFn = ell)
+            if (chg >= 0) b.textRow("Rückgeld: ${moneyStr(currency, chg)}", small, center = false, ellipsizeFn = ell)
+        }
+
+        if (pickupQr.isNotEmpty()) {
+            b.gap(lineSpacing * 2)
+            b.qrRow(pickupQr)
+            b.gap(lineSpacing)
+        }
+
+        b.gap(lineSpacing)
+        b.textRow("Bestellung: $orderId", small, center = false, ellipsizeFn = ell)
+        b.textRow("Zahlart: ${prettyPayMethod(method, cardLast4)}", small, center = false, ellipsizeFn = ell)
+        if (dateStr.isNotEmpty()) b.textRow(dateStr, small, center = false, ellipsizeFn = ell)
+        branding.displayName?.let { b.textRow(it, small, center = false, ellipsizeFn = ell) }
         (branding.address?.split("\n")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList())
-            .forEach { textRow(it, small, center = true) }
-        if (dateStr.isNotEmpty()) textRow(dateStr, small, center = true)
+            .forEach { b.textRow(it, small, center = false, ellipsizeFn = ell) }
+        logoBitmap?.let { b.gap(lineSpacing); b.imageRow(it) }
+        b.gap(bottomPad)
 
+        return b.build()
+    }
+
+    private fun renderSlipBitmap(obj: JSONObject, branding: ReceiptBranding): Bitmap {
+        val width = 384
+        val padding = 10
+        val lineSpacing = 8
+        val topPad = 12
+        val bottomPad = 56
+        val qrSize = 360
+        val logoMaxHeight = 120
+
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
+        val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 22f }
+        val totalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
+        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 18f }
+
+        val kind = receiptKind(obj)
+        val currency = branding.currency ?: obj.optString("currency", "CHF")
+        val orderId = obj.optString("orderId", "-")
+        val method = obj.optString("method", "")
+        val cardLast4 = obj.optString("cardLast4", "").ifBlank { null }
+        val totalCents = obj.optLong("totalCents", -1L)
+        val refundCents = obj.optLong("refundCents", -1L)
+        val refundAmount = if (refundCents >= 0) refundCents else totalCents
+        val pickupQr = obj.optString("pickupQr", "")
+        val dateStr = receiptDateTime(obj)
+
+        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
+            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
+
+        val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
+        val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
+
+        b.gap(topPad)
         val titleText = when (kind) { "pickup" -> "Abhol-Quittung"; else -> "Rückerstattung" }
-        textRow(titleText, titlePaint, center = true)
-        gap(lineSpacing)
+        b.textRow(titleText, titlePaint, center = true, ellipsizeFn = ell)
+        b.gap(lineSpacing)
 
-        if (kind == "refund" || kind == "pickup") {
-            for (it in parseReceiptLines(obj)) {
-                val qtyTitle = "${it.quantity}x ${it.title}"
-                if (it.unitPriceCents >= 0) twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), paint)
-                else textRow(qtyTitle, paint, center = false)
-                for ((slot, choice) in it.configuration) textRow("  - $slot: $choice", small, center = false)
-            }
+        for (it in parseReceiptLines(obj)) {
+            val qtyTitle = "${it.quantity}x ${it.title}"
+            if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
+            else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
         }
+        b.gap(lineSpacing)
 
-        if (kind == "refund") {
-            if (refundAmount >= 0) twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", paint)
-            if (method.isNotBlank()) textRow("Methode: ${prettyRefundMethod(method)}", small, center = false)
+        if (kind == "refund" && refundAmount >= 0) {
+            b.twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", totalPaint, ell)
         }
-
-        textRow("Bestellung: $orderId", small, center = false)
 
         if (kind == "pickup" && pickupQr.isNotEmpty()) {
-            gap(lineSpacing)
-            qrRow(pickupQr)
+            b.gap(lineSpacing * 2)
+            b.qrRow(pickupQr)
+            b.gap(lineSpacing)
         }
-        gap(bottomPad)
 
-        val totalH = rows.sumOf { it.height }.coerceAtLeast(200)
-        val bmp = Bitmap.createBitmap(width, totalH, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        canvas.drawColor(Color.WHITE)
-        var y = 0f
-        for (r in rows) { r.draw(canvas, y); y += r.height }
-        return bmp
+        b.gap(lineSpacing)
+        b.textRow("Bestellung: $orderId", small, center = false, ellipsizeFn = ell)
+        if (method.isNotBlank()) {
+            val methodLine = if (kind == "refund") "Methode: ${prettyRefundMethod(method)}" else "Zahlart: ${prettyPayMethod(method, cardLast4)}"
+            b.textRow(methodLine, small, center = false, ellipsizeFn = ell)
+        }
+        if (dateStr.isNotEmpty()) b.textRow(dateStr, small, center = false, ellipsizeFn = ell)
+        branding.displayName?.let { b.textRow(it, small, center = false, ellipsizeFn = ell) }
+        (branding.address?.split("\n")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList())
+            .forEach { b.textRow(it, small, center = false, ellipsizeFn = ell) }
+        logoBitmap?.let { b.gap(lineSpacing); b.imageRow(it) }
+        b.gap(bottomPad)
+
+        return b.build()
     }
 
     private fun ellipsize(text: String, paint: Paint, maxWidth: Float): String {
