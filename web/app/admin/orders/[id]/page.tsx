@@ -185,6 +185,14 @@ export default function AdminOrderDetailPage() {
                 <span className="uppercase">{posMethod || "–"}</span>
               </div>
               <div>
+                <span className="text-muted-foreground">Karte:</span>{" "}
+                <span>
+                  {[primaryPayment?.cardBrand, primaryPayment?.cardLast4 ? `•••• ${primaryPayment.cardLast4}` : null]
+                    .filter(Boolean)
+                    .join(" ") || "–"}
+                </span>
+              </div>
+              <div>
                 <span className="text-muted-foreground">Trans.-Nr.:</span>{" "}
                 <span className="font-mono text-xs">{primaryPayment?.cardTransactionId || "–"}</span>
               </div>
