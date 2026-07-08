@@ -1,6 +1,8 @@
 package ch.leys.comanda
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,5 +47,27 @@ class ReceiptFormattingTest {
         val expected = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(now))
         assertEquals(expected, formatReceiptDateTime(-1L, now))
         assertEquals(expected, formatReceiptDateTime(0L, now))
+    }
+
+    // Byte-exact golden vector — identical to backend/internal/qrsign
+    // (TestGoldenVector) and the web qr-verify test. Seed = 0x00..0x1f.
+    private val goldenToken =
+        "AnRlbmFudF9zZWVkMUhTNzlVMXlIN1pkM2VT8QACcHJvZF9wb21tZXMxAnByb2RfY29sYTAwMQHaMq10Re5WTXw5EhrtgeLUbwYKDAj0e4J3qslI-xRrgyJcC60lyKkgDqs911g5tvZRWQnA2B2SGyhK1G_xckUE"
+
+    @Test fun decodesV2PickupTokenToRawBytes() {
+        val bytes = decodePickupTokenBytes(goldenToken)
+        assertNotNull(bytes)
+        // 30-byte header + 2 lines × 13 + 64-byte signature = 120.
+        assertEquals(120, bytes!!.size)
+        assertEquals(0x02.toByte(), bytes[0])
+        assertEquals("tenant_seed1", String(bytes, 1, 12, Charsets.ISO_8859_1))
+        assertEquals("HS79U1yH7Zd3", String(bytes, 13, 12, Charsets.ISO_8859_1))
+    }
+
+    @Test fun nonV2TokensAreNotByteMode() {
+        // Pickup-URL fallback: invalid base64url → text QR.
+        assertNull(decodePickupTokenBytes("https://acme.comanda.leys.ch/o/HS79U1yH7Zd3"))
+        // Legacy v1 JSON token starts with '{' (0x7B), not 0x02.
+        assertNull(decodePickupTokenBytes("eyJ2IjoxfQ"))
     }
 }

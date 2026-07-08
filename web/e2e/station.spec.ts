@@ -1,7 +1,7 @@
 /**
  * Station e2e coverage note
  *
- * A camera-driven scan e2e is intentionally absent. The html5-qrcode scanner
+ * A camera-driven scan e2e is intentionally absent. The zxing-wasm scanner
  * requires a live MediaStream from a physical (or emulated) camera; Playwright's
  * fake video source cannot feed real QR frames, so any test that drives
  * scanner → decode → redeemScan would need a custom camera mock injected at the

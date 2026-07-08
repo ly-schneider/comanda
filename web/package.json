@@ -4,9 +4,10 @@
   "private": true,
   "description": "Production-ready food ordering system with public ordering, admin dashboard, and POS terminal",
   "scripts": {
-    "dev": "cross-env FORCE_COLOR=1 next dev -H 127.0.0.1 -p 3000",
-    "dev:https": "cross-env FORCE_COLOR=1 next dev -H 127.0.0.1 -p 3000 --experimental-https",
-    "build": "next build",
+    "dev": "node scripts/copy-zxing-wasm.mjs && cross-env FORCE_COLOR=1 next dev -H 127.0.0.1 -p 3000",
+    "dev:https": "node scripts/copy-zxing-wasm.mjs && cross-env FORCE_COLOR=1 next dev -H 127.0.0.1 -p 3000 --experimental-https",
+    "build": "node scripts/copy-zxing-wasm.mjs && next build",
+    "copy-wasm": "node scripts/copy-zxing-wasm.mjs",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
@@ -64,8 +65,6 @@
     "@semantic-release/npm": "^13.1.5",
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@sentry/nextjs": "^10.57.0",
-    "@zxing/browser": "^0.2.0",
-    "@zxing/library": "^0.23.0",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.6.16",
     "class-variance-authority": "^0.7.1",
@@ -73,7 +72,6 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "embla-carousel-react": "^8.6.0",
-    "html5-qrcode": "^2.3.8",
     "input-otp": "^1.4.2",
     "jose": "^6.2.3",
     "jspdf": "^4.2.1",
@@ -95,7 +93,8 @@
     "undici": "^8.4.1",
     "vaul": "^1.1.2",
     "ws": "^8.20.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zxing-wasm": "^3.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

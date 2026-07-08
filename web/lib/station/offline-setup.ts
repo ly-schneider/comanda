@@ -34,6 +34,8 @@ const STATIC_SHELL = [
   "/icons/station-512.png",
   "/apple-touch-icon.png",
   "/assets/fonts/Lovelo-Black.otf",
+  // The QR scanner's wasm — the station decodes pickup codes fully offline.
+  "/assets/zxing_reader.wasm",
 ]
 
 export interface QRConfig {

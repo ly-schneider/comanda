@@ -33,3 +33,5 @@ storybook-static/
 
 /.npm-only-allow
 certificates
+# zxing-wasm reader binary — vendored at build from node_modules (see scripts/copy-zxing-wasm.mjs)
+/public/assets/zxing_reader.wasm
