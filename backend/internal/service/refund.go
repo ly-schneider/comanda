@@ -476,15 +476,25 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 	if err != nil {
 		return err
 	}
-	// A refund we initiated recorded its row before calling the provider, so the
-	// provider's confirming webhook must not double-count it. Only reconcile when
-	// our ledger shows nothing — a refund issued entirely outside this system.
-	if succeededSum > 0 {
-		return nil
+
+	// Reconcile against the cumulative refunded amount, not the (unchanged) charge
+	// amount, so a partial refund isn't escalated to a full one — recording only
+	// the portion our ledger doesn't already hold.
+	providerRefunded := int64(result.RefundedAmountCents)
+	if providerRefunded <= 0 {
+		// Older payloads omit refundedAmount: only a full-refund status can be sized
+		// (== total); a partial one can't, so skip it.
+		if !result.IsFullRefund {
+			s.logger.Warn("payrexx webhook: partial refund without refundedAmount; skipping reconcile",
+				zap.String("orderId", ord.ID))
+			return nil
+		}
+		providerRefunded = ord.TotalCents
 	}
-	amount := int64(result.AmountCents)
-	if amount <= 0 || amount > ord.TotalCents {
-		amount = ord.TotalCents
+
+	amount := reconcilableRefundDelta(ord.TotalCents, providerRefunded, succeededSum)
+	if amount <= 0 {
+		return nil
 	}
 	reason := "reconciled from payrexx webhook"
 	txnID := result.TransactionID
@@ -501,7 +511,21 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 	}); err != nil {
 		return err
 	}
-	return s.setOrderStatus(ctx, ord, orderStatusAfterRefund(ord.TotalCents, amount))
+	return s.setOrderStatus(ctx, ord, orderStatusAfterRefund(ord.TotalCents, succeededSum+amount))
+}
+
+// reconcilableRefundDelta is the not-yet-recorded portion of a provider's
+// cumulative refund: min(providerRefunded, orderTotal) - alreadyRecorded, floored
+// at zero — so it can't escalate a partial into a full refund or double-count.
+func reconcilableRefundDelta(orderTotal, providerRefunded, alreadyRecorded int64) int64 {
+	if providerRefunded > orderTotal {
+		providerRefunded = orderTotal
+	}
+	delta := providerRefunded - alreadyRecorded
+	if delta <= 0 {
+		return 0
+	}
+	return delta
 }
 
 // commitRefund performs the write side shared by line, arbitrary and cancel

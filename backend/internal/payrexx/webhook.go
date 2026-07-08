@@ -27,15 +27,19 @@ type WebhookEvent struct {
 }
 
 type WebhookTransaction struct {
-	ID            int            `json:"id"`
-	UUID          string         `json:"uuid,omitempty"`
-	Status        string         `json:"status"`
-	Amount        int            `json:"amount"`
-	Currency      string         `json:"currency"`
-	ReferenceID   string         `json:"referenceId"`
-	PaymentMethod string         `json:"psp"`
-	Invoice       WebhookInvoice `json:"invoice,omitempty"`
-	Contact       WebhookContact `json:"contact,omitempty"`
+	ID     int    `json:"id"`
+	UUID   string `json:"uuid,omitempty"`
+	Status string `json:"status"`
+	// Amount is the original charge, unchanged by refunds; RefundedAmount is the
+	// cumulative amount refunded so far.
+	Amount         int            `json:"amount"`
+	OriginalAmount int            `json:"originalAmount,omitempty"`
+	RefundedAmount int            `json:"refundedAmount,omitempty"`
+	Currency       string         `json:"currency"`
+	ReferenceID    string         `json:"referenceId"`
+	PaymentMethod  string         `json:"psp"`
+	Invoice        WebhookInvoice `json:"invoice,omitempty"`
+	Contact        WebhookContact `json:"contact,omitempty"`
 }
 
 type WebhookInvoice struct {
@@ -78,9 +82,16 @@ func (t *WebhookTransaction) IsFailedStatus() bool {
 		t.Status == TransactionStatusCancelled
 }
 
-// IsRefundStatus returns true if the transaction was refunded.
+// IsRefundStatus returns true if the transaction was refunded, fully or partially.
 func (t *WebhookTransaction) IsRefundStatus() bool {
 	return t.Status == TransactionStatusRefunded ||
 		t.Status == TransactionStatusPartRefund ||
+		t.Status == TransactionStatusChargeback
+}
+
+// IsFullRefundStatus reports a fully-refunded (or charged-back) transaction, not
+// a partial one.
+func (t *WebhookTransaction) IsFullRefundStatus() bool {
+	return t.Status == TransactionStatusRefunded ||
 		t.Status == TransactionStatusChargeback
 }

@@ -49,6 +49,27 @@ func TestOrderStatusAfterRefund(t *testing.T) {
 	}
 }
 
+func TestReconcilableRefundDelta(t *testing.T) {
+	cases := []struct {
+		name                                   string
+		total, providerRefunded, alreadyRecord int64
+		want                                   int64
+	}{
+		{"partial refund, nothing recorded", 1000, 300, 0, 300},
+		{"partial refund already recorded", 1000, 300, 300, 0},
+		{"external top-up beyond ledger", 1000, 500, 300, 200},
+		{"full refund, nothing recorded", 1000, 1000, 0, 1000},
+		{"over-total clamps to total", 1000, 1500, 0, 1000},
+		{"ledger exceeds provider", 1000, 300, 400, 0},
+	}
+	for _, c := range cases {
+		if got := reconcilableRefundDelta(c.total, c.providerRefunded, c.alreadyRecord); got != c.want {
+			t.Fatalf("%s: reconcilableRefundDelta(%d,%d,%d)=%d want %d",
+				c.name, c.total, c.providerRefunded, c.alreadyRecord, got, c.want)
+		}
+	}
+}
+
 func TestCappedArbitraryAmount(t *testing.T) {
 	if got := cappedArbitraryAmount(900, 500); got != 500 {
 		t.Fatalf("over-cap request must be capped at the balance, got %d", got)
