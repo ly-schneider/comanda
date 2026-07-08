@@ -30,12 +30,9 @@ type WebhookTransaction struct {
 	ID     int    `json:"id"`
 	UUID   string `json:"uuid,omitempty"`
 	Status string `json:"status"`
-	// Amount is the original charge amount, unchanged by refunds. For the amount
-	// actually refunded so far use RefundedAmount, not this field.
-	Amount int `json:"amount"`
-	// OriginalAmount / RefundedAmount are Payrexx's refund-accounting fields:
-	// OriginalAmount mirrors the payment amount and RefundedAmount is the
-	// cumulative amount refunded on the transaction at the time of the webhook.
+	// Amount is the original charge, unchanged by refunds; RefundedAmount is the
+	// cumulative amount refunded so far.
+	Amount         int            `json:"amount"`
 	OriginalAmount int            `json:"originalAmount,omitempty"`
 	RefundedAmount int            `json:"refundedAmount,omitempty"`
 	Currency       string         `json:"currency"`
@@ -85,17 +82,15 @@ func (t *WebhookTransaction) IsFailedStatus() bool {
 		t.Status == TransactionStatusCancelled
 }
 
-// IsRefundStatus returns true if the transaction was refunded (fully or partially).
+// IsRefundStatus returns true if the transaction was refunded, fully or partially.
 func (t *WebhookTransaction) IsRefundStatus() bool {
 	return t.Status == TransactionStatusRefunded ||
 		t.Status == TransactionStatusPartRefund ||
 		t.Status == TransactionStatusChargeback
 }
 
-// IsFullRefundStatus reports a fully-refunded (or charged-back) transaction, as
-// opposed to a partial refund that leaves a remaining balance. It lets a
-// reconciler fall back to the order total only when the whole charge was
-// reversed — never for a partial one.
+// IsFullRefundStatus reports a fully-refunded (or charged-back) transaction, not
+// a partial one.
 func (t *WebhookTransaction) IsFullRefundStatus() bool {
 	return t.Status == TransactionStatusRefunded ||
 		t.Status == TransactionStatusChargeback

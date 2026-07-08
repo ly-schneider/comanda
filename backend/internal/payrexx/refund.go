@@ -15,10 +15,12 @@ func (c *Client) RefundTransaction(ctx context.Context, transactionID int, amoun
 	if err != nil {
 		return err
 	}
-	// A 2xx alone is not proof of success: Payrexx signals a rejected refund with
-	// an "error" status in the body. Surface it so the caller rolls the refund
-	// back instead of recording money that never moved. An absent status (unusual
-	// payload shape) is left as success to avoid failing a refund that did apply.
+	// A 2xx can still carry a Payrexx "error" status; surface it so a rejected
+	// refund isn't recorded as money moved. An empty or status-less body is a
+	// success — don't fail a refund that applied.
+	if len(body) == 0 {
+		return nil
+	}
 	var resp struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`

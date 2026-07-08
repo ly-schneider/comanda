@@ -3,9 +3,6 @@ package payrexx
 import "testing"
 
 func TestParseWebhookRefundAmounts(t *testing.T) {
-	// A partial refund carries the original charge in `amount` and the cumulative
-	// refunded portion in `refundedAmount`; reconciling off `amount` is the
-	// LEY-387 escalation bug, so callers must read RefundedAmount instead.
 	body := []byte(`{"transaction":{"id":42,"status":"partially-refunded","amount":1000,"originalAmount":1000,"refundedAmount":300,"referenceId":"ord_1"}}`)
 	event, err := ParseWebhookEvent(body)
 	if err != nil {

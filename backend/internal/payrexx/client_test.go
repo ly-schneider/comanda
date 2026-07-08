@@ -63,12 +63,11 @@ func TestRefundTransaction(t *testing.T) {
 		wantErr bool
 	}{
 		{"success", `{"status":"success","data":[{"id":1}]}`, http.StatusOK, false},
-		// Payrexx signals a rejected refund with an error status inside a 200 body;
-		// it must surface as an error so the caller rolls the refund back.
+		// A Payrexx error status inside a 200 body must surface as an error.
 		{"error body on 200", `{"status":"error","message":"amount too high"}`, http.StatusOK, true},
 		{"http error", `{"status":"error"}`, http.StatusBadRequest, true},
-		// An unusual payload without a status is treated as success rather than
-		// failing a refund that may have applied.
+		// An empty or status-less 2xx body is a success — don't fail an applied refund.
+		{"empty body", ``, http.StatusOK, false},
 		{"no status field", `{"data":[{"id":1}]}`, http.StatusOK, false},
 	}
 	for _, c := range cases {

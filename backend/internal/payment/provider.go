@@ -41,17 +41,14 @@ type WebhookResult struct {
 	GatewayID     int
 	Status        string
 	ContactEmail  string
-	// AmountCents is the original charge amount (unchanged by refunds).
-	AmountCents int
-	// RefundedAmountCents is the cumulative amount refunded on the transaction so
-	// far, reported on refund webhooks. Reconcile against this, not AmountCents.
+	// AmountCents is the original charge; RefundedAmountCents is the cumulative
+	// refunded amount. Reconcile against the latter.
+	AmountCents         int
 	RefundedAmountCents int
 	IsSuccess           bool
 	IsFailure           bool
 	IsRefund            bool
-	// IsFullRefund is true only when the entire charge was reversed, false for a
-	// partial refund.
-	IsFullRefund bool
+	IsFullRefund        bool
 }
 
 // Provider is built from a single tenant's decrypted credentials, so an
