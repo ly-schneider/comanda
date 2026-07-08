@@ -5,13 +5,22 @@ import { useState } from "react"
 import { CartButtons } from "@/components/cart/cart-buttons"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
+import { CategoryFilter } from "@/components/menu/category-filter"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useCart } from "@/contexts/cart-context"
 import { formatChf } from "@/lib/utils"
 import { hasVariants } from "@/lib/variants"
-import { ListResponse, ProductDTO } from "@/types"
+import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
-export function MenuGrid({ products }: { products: ListResponse<ProductDTO> }) {
+export function MenuGrid({
+  products,
+  categories = [],
+}: {
+  products: ListResponse<ProductDTO>
+  categories?: CategoryDTO[]
+}) {
+  const [activeCat, setActiveCat] = useState<string>("all")
+
   const getCatPos = (p?: { position?: number | null } | null) => {
     const v = p?.position
     return typeof v === "number" && isFinite(v) ? v : 1_000_000
@@ -26,11 +35,21 @@ export function MenuGrid({ products }: { products: ListResponse<ProductDTO> }) {
     return a.name.localeCompare(b.name)
   })
 
+  const filtered = activeCat === "all" ? sortedProducts : sortedProducts.filter((it) => it.category?.id === activeCat)
+
   return (
-    <div className="xs:grid-cols-2 grid grid-cols-1 gap-3 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-      {sortedProducts.map((product) => (
-        <MenuProductCard key={product.id} product={product} />
-      ))}
+    <div className="space-y-4">
+      {categories.length > 0 && <CategoryFilter categories={categories} active={activeCat} onChange={setActiveCat} />}
+
+      {filtered.length === 0 ? (
+        <p className="text-muted-foreground py-10 text-center text-sm">Keine Produkte in dieser Kategorie.</p>
+      ) : (
+        <div className="xs:grid-cols-2 grid grid-cols-1 gap-3 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((product) => (
+            <MenuProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

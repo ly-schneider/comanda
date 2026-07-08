@@ -1,10 +1,11 @@
 import { Metadata } from "next"
 import { FloatingBottomNav } from "@/components/cart/floating-bottom-nav"
 import { MenuGridLive } from "@/components/menu/menu-grid-live"
+import { listCategories } from "@/lib/api/categories"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
 import { getRequestHost } from "@/lib/server/host"
-import { ListResponse, ProductDTO } from "@/types"
+import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
 export const metadata: Metadata = {
   title: "Menu",
@@ -42,11 +43,18 @@ export default async function HomePage() {
     products = { items: [], count: 0 }
   }
 
+  let categories: CategoryDTO[] = []
+  try {
+    categories = (await listCategories({ headers: hostHeaders })).filter((c) => c.isActive)
+  } catch (error) {
+    console.error("Failed to fetch categories:", error)
+  }
+
   return (
     <div className="bg-background min-h-screen">
       <main className="container mx-auto p-4">
         <h2 className="mb-2 text-2xl font-semibold">Alle Produkte</h2>
-        <MenuGridLive initialProducts={products} />
+        <MenuGridLive initialProducts={products} categories={categories} />
       </main>
 
       <FloatingBottomNav />
