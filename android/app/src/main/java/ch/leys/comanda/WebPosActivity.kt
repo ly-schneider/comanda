@@ -77,10 +77,8 @@ private data class ReceiptLine(
 )
 
 /** Receipt kind sent by the web POS; absent or unknown ⇒ "sale". */
-// A v2 pickup token is base64url of a raw binary payload whose first byte is
-// 0x02. Decode it so the receipt QR can be rendered byte-mode, matching the
-// exact bytes the offline station scans. Anything else — e.g. the pickup-URL
-// fallback — is not a v2 token and stays a text QR.
+// A v2 pickup token is base64url of raw binary whose first byte is 0x02; decode
+// it so the QR can be rendered byte-mode. Non-v2 (e.g. the pickup URL) stays text.
 internal fun decodePickupTokenBytes(token: String): ByteArray? = try {
     val bytes = Base64.getUrlDecoder().decode(token.trim())
     if (bytes.size > 64 && bytes[0] == 0x02.toByte()) bytes else null
@@ -1050,10 +1048,9 @@ class WebPosActivity : ComponentActivity() {
                     EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
                     EncodeHintType.MARGIN to 2,
                 )
-                // v2 pickup token → byte-mode QR of the raw bytes. Mapping bytes
-                // through ISO-8859-1 keeps them 1:1 (each byte ↔ one char) and,
-                // as the default QR charset, adds no ECI header — so the station
-                // reader gets the exact bytes back. Everything else is text.
+                // Byte-mode QR of the raw bytes: ISO-8859-1 maps each byte 1:1 and, being
+                // the default QR charset, adds no ECI header, so the station reader gets
+                // them back exactly. Everything else stays a text QR.
                 val content = decodePickupTokenBytes(data)?.let {
                     hints[EncodeHintType.CHARACTER_SET] = "ISO-8859-1"
                     String(it, Charsets.ISO_8859_1)

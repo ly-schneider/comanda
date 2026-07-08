@@ -4,16 +4,9 @@ export const ENTITY_ID_RE = /^[1-9A-HKMNP-Za-hkmnp-z_-]{12}$/
 
 const CAMPAIGN_PREFIX = "CAMP:"
 
-// `campaign` claims still redeem online (they need the server's redemption
-// counter). `order` carries the self-contained signed pickup token verbatim —
-// offline Ed25519 verification decides whether it is genuine, so anything that
-// isn't a campaign claim is routed here as an order-token candidate.
-//
-// The token is always base64url text: a v2 pickup QR is raw binary bytes (first
-// byte 0x02), which we re-encode to base64url here so the rest of the pipeline
-// (offline verifier, backend lookup, dedup) stays string-based and symmetric
-// with the Go verifier. The pickup-URL fallback QR is already text and is
-// carried verbatim (offline verification then rejects it as not a token).
+// A campaign claim redeems online (needs the server counter); anything else is an
+// order pickup-token candidate, verified offline. A v2 QR is raw binary bytes
+// (first byte 0x02) which we re-encode to base64url so the pipeline stays text.
 export type ParsedScan = { kind: "campaign"; token: string } | { kind: "order"; token: string }
 
 export function parseScan(text: string, bytes?: Uint8Array): ParsedScan | null {

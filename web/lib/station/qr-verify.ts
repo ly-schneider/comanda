@@ -1,22 +1,7 @@
 /**
- * Offline verification of the signed pickup-QR token.
- *
- * The wire format is a cross-language contract fixed by the backend signer
- * (`internal/qrsign`, see doc.go). A token is `base64url_nopad(body || sig)`
- * where `sig` is the trailing 64-byte Ed25519 signature over the literal `body`
- * bytes. After a successful signature check the body's leading byte must be
- * `0x02` (v2 fixed binary); any other value is an unsupported version. The
- * signature MUST be checked over the decoded bytes — never a re-serialized
- * payload, which would drift from the signer's byte order.
- *
- * This verifier is symmetric with the Go verifier: both take the base64url
- * token text, decode once, then discriminate on the first body byte. The
- * station scanner reads a v2 QR as raw bytes and re-encodes them to base64url at
- * the scan boundary, so the token reaching here is always text.
- *
- * Verification is intentionally pure-JS (@noble/ed25519 + @noble/hashes), not
- * WebCrypto: Safari has no Ed25519 in SubtleCrypto, and the station verifies
- * fully offline with no server backstop, so this is the sole forgery barrier.
+ * Offline verification of the signed pickup-QR token — the sole forgery barrier
+ * on the station's offline path. Wire format: `internal/qrsign` doc.go. Pure-JS
+ * (@noble/ed25519), not WebCrypto — Safari has no Ed25519 in SubtleCrypto.
  */
 
 import * as ed from "@noble/ed25519"
@@ -38,29 +23,19 @@ const HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 1 // 30
 const LINE_LEN = ID_LEN + 1 // 13
 
 export interface QrLine {
-  /** product id */
-  p: string
-  /** quantity (>= 1) */
-  q: number
+  p: string // product id
+  q: number // quantity (>= 1)
 }
 
 export interface QrPayload {
-  /** payload schema version */
   v: number
-  /** tenant id */
-  t: string
-  /** order id */
-  o: string
-  /**
-   * issued-at, Unix seconds.
-   *
-   * Expiry is intentionally not enforced: the append-only per-station ledger
-   * is the sole replay barrier. One scanner per stand means a token can only
-   * ever be redeemed once for a given (orderId, productId) pair — time-based
-   * expiry would add clock-skew fragility with no security benefit here.
-   */
+  t: string // tenant id
+  o: string // order id
+  // Issued-at (Unix seconds). Expiry is deliberately NOT enforced: the
+  // append-only per-station ledger is the sole replay barrier (one scanner per
+  // stand → a token redeems at most once per order+product), so a time window
+  // would only add clock-skew fragility.
   i: number
-  /** redeemable line items */
   l: QrLine[]
 }
 
@@ -91,12 +66,8 @@ function parseV2(body: Uint8Array): QrPayload | null {
   return { v: 2, t, o, i, l }
 }
 
-/**
- * Verifies a scanned token (base64url text) against the tenant's public key
- * (base64url, 32 raw bytes — as published at `GET /v1/qr-config`). Returns the
- * parsed payload only when the signature is valid AND the body is v2. A valid
- * signature alone is never enough: the caller must still enforce tenant scoping.
- */
+// A valid signature alone is never enough — the caller must still enforce tenant
+// scoping (a valid sig only proves *some* tenant signed it).
 export function verifyQrToken(token: string, publicKeyB64Url: string | null | undefined): VerifyResult {
   if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
   const pub = base64UrlToBytes(publicKeyB64Url)

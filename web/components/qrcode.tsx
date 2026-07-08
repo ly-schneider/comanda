@@ -9,11 +9,8 @@ type Props = {
   value: string
   size?: number
   className?: string
-  /**
-   * When set, `value` is a base64url token whose raw bytes are rendered as a
-   * byte-mode segment — the signed pickup QR is a binary v2 payload, not text,
-   * so it must match byte-for-byte what the offline station scans.
-   */
+  // `value` is a base64url token rendered byte-mode: the pickup QR is a binary
+  // v2 payload, so the QR must carry the raw bytes the station scans, not text.
   binary?: boolean
 }
 

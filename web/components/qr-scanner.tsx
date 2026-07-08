@@ -3,10 +3,8 @@
 import { useEffect, useRef } from "react"
 import { prepareZXingModule, readBarcodes } from "zxing-wasm/reader"
 
-// Serve the reader wasm same-origin so the fully-offline pickup station never
-// reaches a CDN. The file is vendored into /assets at build (copy-zxing-wasm.mjs)
-// and precached by the service worker (offline-setup). Guarded so the side
-// effect never runs during SSR of this client module.
+// Serve the reader wasm same-origin (vendored to /assets at build, SW-precached)
+// so the offline station never hits a CDN. `window` guard keeps it out of SSR.
 if (typeof window !== "undefined") {
   prepareZXingModule({
     overrides: {
@@ -20,9 +18,7 @@ export type QrScanResult = { text: string; bytes: Uint8Array }
 export type QrScannerControls = { pause: () => void; resume: () => void }
 
 type Props = {
-  /** Preferred camera; falls back to the environment-facing camera. */
   cameraId?: string
-  /** Decode attempts per second. */
   fps?: number
   maxWidthRem?: number
   onResult: (result: QrScanResult) => void
@@ -31,9 +27,6 @@ type Props = {
   onStop?: () => void
 }
 
-// zxing-wasm exposes the decoded byte-mode content as `bytes`, which html5-qrcode
-// could not — a v2 pickup QR is raw binary, so the caller reads `bytes` directly
-// and `text` only for text QRs (campaign claims / legacy tokens).
 export default function QrScanner({
   cameraId,
   fps = 10,

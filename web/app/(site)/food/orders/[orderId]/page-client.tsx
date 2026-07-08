@@ -178,9 +178,7 @@ export default function OrderPageClient() {
           </div>
         )
       }
-      // The signed, self-contained token is the canonical pickup QR — stands
-      // verify it offline. It is a binary v2 payload rendered byte-mode. Fall
-      // back to a plain-text pickup URL only if the token is absent.
+      // Signed token → binary v2 QR (byte-mode); the plain pickup URL is the text fallback.
       if (serverOrder?.qrPayload) {
         return (
           <QRCode value={serverOrder.qrPayload} binary size={260} className="mx-auto rounded-[11px] border-2 p-1" />

@@ -15,21 +15,17 @@ import (
 	"math"
 )
 
-// Version is the payload schema version emitted by Sign (fixed binary, v2).
-// Bump only with a coordinated rollout across every verifier (web, Android).
+// Bump only with a coordinated rollout across the web + Android verifiers.
 const Version = 2
 
-// Wire discriminator and fixed field widths for the v2 binary layout. The first
-// body byte is the version/format discriminator (0x02); any other value is
-// rejected as an unsupported version.
 const (
 	verV2 = 0x02
 
 	idLen     = 12                        // tenant/order/product nanoids are 12 ASCII bytes
-	headerLen = 1 + idLen + idLen + 4 + 1 // ver + tenant + order + issuedAt(u32) + count(u8) = 30
+	headerLen = 1 + idLen + idLen + 4 + 1 // ver + 2 ids + issuedAt(u32) + count(u8) = 30
 	lineLen   = idLen + 1                 // product id + qty(u8) = 13
-	maxLines  = math.MaxUint8             // count is a uint8
-	maxQty    = math.MaxUint8             // qty is a uint8
+	maxLines  = math.MaxUint8
+	maxQty    = math.MaxUint8
 )
 
 var (
@@ -44,8 +40,6 @@ type Line struct {
 	Quantity  int
 }
 
-// Payload is the decoded, verified pickup token, encoded/decoded positionally by
-// encodeV2/decodeV2 (see doc.go).
 type Payload struct {
 	Version  int
 	TenantID string
@@ -54,9 +48,8 @@ type Payload struct {
 	Lines    []Line
 }
 
-// Sign returns base64url(no-pad) of the v2 binary body followed by its trailing
-// 64-byte Ed25519 signature. The token stays base64url *text* on the wire (API
-// responses, the Android bridge); only the QR writer decodes it to raw bytes.
+// The token stays base64url *text* on the wire (API responses, Android bridge);
+// only the QR writer decodes it to the raw bytes that go into the QR.
 func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
 	body, err := encodeV2(p)
 	if err != nil {
@@ -69,8 +62,7 @@ func Sign(priv ed25519.PrivateKey, p Payload) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(token), nil
 }
 
-// encodeV2 lays out the fixed binary body. Every id must be exactly 12 bytes so
-// the format stays fixed-width; counts and quantities must fit a uint8.
+// Ids must be exactly 12 bytes so the record stays fixed-width and delimiter-free.
 func encodeV2(p Payload) ([]byte, error) {
 	if len(p.TenantID) != idLen {
 		return nil, fmt.Errorf("%w: tenant id must be %d bytes, got %d", ErrBadPayload, idLen, len(p.TenantID))
@@ -104,10 +96,8 @@ func encodeV2(p Payload) ([]byte, error) {
 	return body, nil
 }
 
-// Verify checks the signature over the literal decoded body bytes before
-// parsing — never re-serializing, which would risk canonicalization drift
-// between signer and verifier. Only the v2 binary format is accepted; any other
-// leading byte is an unsupported version.
+// Verify checks the signature over the literal decoded bytes — never
+// re-serializing, which would risk canonicalization drift between signer and reader.
 func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
@@ -133,8 +123,8 @@ func Verify(pub ed25519.PublicKey, token string) (Payload, error) {
 	return decodeV2(body)
 }
 
-// decodeV2 parses a signature-verified v2 body. Any length/structure mismatch is
-// a bad payload, not tampering (the signature already authenticated the bytes).
+// A length/structure mismatch here is a bad payload, not tampering — the
+// signature already authenticated these bytes.
 func decodeV2(body []byte) (Payload, error) {
 	if len(body) < headerLen {
 		return Payload{}, ErrBadPayload
