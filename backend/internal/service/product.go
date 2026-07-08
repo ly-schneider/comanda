@@ -427,7 +427,9 @@ func (s *productService) AdjustStock(ctx context.Context, id string, variantID *
 			newStock, stockErr = s.inventoryRepo.GetCurrentStock(ctx, id)
 		}
 		if stockErr == nil {
+			tenantID, _ := repository.TenantIDFromContext(ctx)
 			s.inventoryHub.Publish(inventory.Update{
+				TenantID:  tenantID,
 				ProductID: id,
 				VariantID: variantID,
 				NewStock:  newStock,

@@ -729,9 +729,11 @@ func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []r
 	if err != nil {
 		return
 	}
+	tenantID, _ := repository.TenantIDFromContext(ctx)
 	now := time.Now()
 	for _, key := range keys {
 		update := inventory.Update{
+			TenantID:  tenantID,
 			ProductID: key.productID,
 			NewStock:  stocks[key.productID],
 			Delta:     deltaByKey[key],

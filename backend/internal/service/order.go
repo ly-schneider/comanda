@@ -187,9 +187,11 @@ func (s *orderService) publishInventoryUpdates(ctx context.Context, entries []re
 	if err != nil {
 		return
 	}
+	tenantID, _ := repository.TenantIDFromContext(ctx)
 	now := time.Now()
 	for _, productID := range productIDs {
 		s.inventoryHub.Publish(inventory.Update{
+			TenantID:  tenantID,
 			ProductID: productID,
 			NewStock:  stocks[productID],
 			Delta:     deltaByProduct[productID],

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	nanoid "backend/internal/id"
+	"backend/internal/repository"
 )
 
 func (h *Handlers) StreamInventory(w http.ResponseWriter, r *http.Request) {
@@ -57,8 +58,9 @@ func (h *Handlers) StreamInventory(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(append(append([]byte("event: inventory-snapshot\ndata: "), data...), '\n', '\n'))
 	_ = rc.Flush()
 
+	tenantID, _ := repository.TenantIDFromContext(ctx)
 	subID := nanoid.New()
-	ch := h.inventoryHub.Subscribe(subID)
+	ch := h.inventoryHub.Subscribe(subID, tenantID)
 	defer h.inventoryHub.Unsubscribe(subID)
 
 	for {

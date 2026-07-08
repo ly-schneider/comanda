@@ -1095,9 +1095,11 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 		}
 	}
 
+	tenantID, _ := repository.TenantIDFromContext(ctx)
 	now := time.Now()
 	for _, key := range keys {
 		update := inventory.Update{
+			TenantID:  tenantID,
 			ProductID: key.productID,
 			NewStock:  stocks[stockID(key)],
 			Delta:     deltaByKey[key],
