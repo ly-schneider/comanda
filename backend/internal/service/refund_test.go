@@ -49,6 +49,34 @@ func TestOrderStatusAfterRefund(t *testing.T) {
 	}
 }
 
+func TestReconcilableRefundDelta(t *testing.T) {
+	cases := []struct {
+		name                                   string
+		total, providerRefunded, alreadyRecord int64
+		want                                   int64
+	}{
+		// LEY-387: a partial provider refund reconciles to the partial amount, not
+		// the whole order — the escalation bug this guards against.
+		{"partial refund, nothing recorded", 1000, 300, 0, 300},
+		// Our own refund already wrote its row; the confirming webhook adds nothing.
+		{"partial refund already recorded", 1000, 300, 300, 0},
+		// A dashboard-issued refund beyond our ledger shows up as the delta only.
+		{"external top-up beyond ledger", 1000, 500, 300, 200},
+		// Full external refund with an empty ledger records the whole order.
+		{"full refund, nothing recorded", 1000, 1000, 0, 1000},
+		// Provider reporting more than the order total is clamped.
+		{"over-total clamps to total", 1000, 1500, 0, 1000},
+		// Ledger already at/over the reported amount never goes negative.
+		{"ledger exceeds provider", 1000, 300, 400, 0},
+	}
+	for _, c := range cases {
+		if got := reconcilableRefundDelta(c.total, c.providerRefunded, c.alreadyRecord); got != c.want {
+			t.Fatalf("%s: reconcilableRefundDelta(%d,%d,%d)=%d want %d",
+				c.name, c.total, c.providerRefunded, c.alreadyRecord, got, c.want)
+		}
+	}
+}
+
 func TestCappedArbitraryAmount(t *testing.T) {
 	if got := cappedArbitraryAmount(900, 500); got != 500 {
 		t.Fatalf("over-cap request must be capped at the balance, got %d", got)

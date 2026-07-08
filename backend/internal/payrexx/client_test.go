@@ -55,6 +55,44 @@ func TestValidateCredentialsSendsAPIKey(t *testing.T) {
 	}
 }
 
+func TestRefundTransaction(t *testing.T) {
+	cases := []struct {
+		name    string
+		reply   string
+		status  int
+		wantErr bool
+	}{
+		{"success", `{"status":"success","data":[{"id":1}]}`, http.StatusOK, false},
+		// Payrexx signals a rejected refund with an error status inside a 200 body;
+		// it must surface as an error so the caller rolls the refund back.
+		{"error body on 200", `{"status":"error","message":"amount too high"}`, http.StatusOK, true},
+		{"http error", `{"status":"error"}`, http.StatusBadRequest, true},
+		// An unusual payload without a status is treated as success rather than
+		// failing a refund that may have applied.
+		{"no status field", `{"data":[{"id":1}]}`, http.StatusOK, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(c.status)
+				_, _ = w.Write([]byte(c.reply))
+			}))
+			defer srv.Close()
+
+			c2 := NewClient("inst", "secret")
+			c2.baseURL = srv.URL + "/"
+
+			err := c2.RefundTransaction(context.Background(), 42, 300)
+			if c.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestDoRequestPostSendsJSON(t *testing.T) {
 	var ct, gotAPIKey string
 	var body map[string]any
