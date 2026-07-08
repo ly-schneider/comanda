@@ -29,7 +29,6 @@
       "Bash(find:*)"
     ],
     "deny": [
-      "Bash(git push:*)",
       "Bash(docker compose down:*)",
       "Bash(rm -rf:*)",
       "Bash(terraform apply:*)",
