@@ -187,10 +187,7 @@ export default function AdminOrderDetailPage() {
               <div>
                 <span className="text-muted-foreground">Karte:</span>{" "}
                 <span>
-                  {[
-                    primaryPayment?.cardBrand,
-                    primaryPayment?.cardLast4 ? `•••• ${primaryPayment.cardLast4}` : null,
-                  ]
+                  {[primaryPayment?.cardBrand, primaryPayment?.cardLast4 ? `•••• ${primaryPayment.cardLast4}` : null]
                     .filter(Boolean)
                     .join(" ") || "–"}
                 </span>
