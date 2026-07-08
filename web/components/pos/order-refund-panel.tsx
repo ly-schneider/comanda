@@ -74,7 +74,7 @@ export function OrderRefundPanel() {
   const [loadingView, setLoadingView] = useState(false)
   const [viewError, setViewError] = useState<string | null>(null)
 
-  const [result, setResult] = useState<{ plan: RefundReceiptPlan; refund: Refund } | null>(null)
+  const [result, setResult] = useState<{ plan: RefundReceiptPlan; refund: Refund; action: RefundAction } | null>(null)
 
   const openOrder = useCallback(async (orderId: string) => {
     setSelectedId(orderId)
@@ -175,7 +175,7 @@ export function OrderRefundPanel() {
         ? planRefundReceipts({ action, refund, view: v, previousQr, refundedItems, branding })
         : { slips: [], collectOldReceipt: action !== "deposit" }
       if (canPrintReceipt()) plan.slips.forEach(printReceipt)
-      setResult({ plan, refund })
+      setResult({ plan, refund, action })
     },
     [selectedId, view, branding]
   )
@@ -711,12 +711,12 @@ function ResultDialog({
   result,
   onClose,
 }: {
-  result: { plan: RefundReceiptPlan; refund: Refund } | null
+  result: { plan: RefundReceiptPlan; refund: Refund; action: RefundAction } | null
   onClose: () => void
 }) {
   if (!result) return null
-  const { plan, refund } = result
-  const isCancel = plan.slips.some((s) => s.kind === "void")
+  const { plan, refund, action } = result
+  const isCancel = action === "cancel"
   const isTwint = refund.method === "twint"
   const printable = canPrintReceipt()
 

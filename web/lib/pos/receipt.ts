@@ -9,7 +9,7 @@ export type ReceiptBranding = {
 }
 
 // Absent ⇒ "sale".
-export type ReceiptKind = "sale" | "refund" | "pickup" | "void"
+export type ReceiptKind = "sale" | "refund" | "pickup"
 
 export type ReceiptRefundMethod = "cash-out" | "twint"
 
@@ -19,7 +19,7 @@ export type Receipt = {
   totalCents: number
   // Included in totalCents (sale slips).
   depositCents?: number
-  // Rendered negative on refund/void slips.
+  // Rendered negative on refund slips.
   refundCents?: number
   orderId?: string
   cardTransactionId?: string

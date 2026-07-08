@@ -32,17 +32,6 @@ export function buildRefundSlip(args: {
   }
 }
 
-export function buildVoidSlip(args: { refund: Refund; branding?: ReceiptBranding | null }): Receipt {
-  return {
-    kind: "void",
-    method: mapRefundMethod(args.refund.method),
-    totalCents: args.refund.amountCents,
-    refundCents: args.refund.amountCents,
-    orderId: args.refund.orderId,
-    branding: args.branding ?? undefined,
-  }
-}
-
 export function buildPickupSlip(args: {
   orderId: string
   pickupQr: string
@@ -80,7 +69,9 @@ export function planRefundReceipts(args: {
   const { action, refund, view, previousQr, refundedItems, branding } = args
 
   if (action === "cancel") {
-    return { slips: [buildVoidSlip({ refund, branding })], collectOldReceipt: true }
+    // Full cancellation: the order is terminal and no products remain for pickup,
+    // so we print only the refund record and collect the now-void old receipt.
+    return { slips: [buildRefundSlip({ refund, branding })], collectOldReceipt: true }
   }
 
   if (action === "deposit") {

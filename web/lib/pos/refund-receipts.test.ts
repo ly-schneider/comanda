@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Refund, RefundView } from "@/types/refund"
-import { buildPickupSlip, buildRefundSlip, buildVoidSlip, mapRefundMethod, planRefundReceipts } from "./refund-receipts"
+import { buildPickupSlip, buildRefundSlip, mapRefundMethod, planRefundReceipts } from "./refund-receipts"
 
 function refund(overrides: Partial<Refund> = {}): Refund {
   return {
@@ -61,13 +61,6 @@ describe("slip builders", () => {
     expect(slip.orderId).toBe("order00000001")
   })
 
-  it("builds a void slip for cancellations", () => {
-    const slip = buildVoidSlip({ refund: refund({ amountCents: 800 }) })
-    expect(slip.kind).toBe("void")
-    expect(slip.method).toBe("cash-out")
-    expect(slip.refundCents).toBe(800)
-  })
-
   it("builds a pickup slip carrying the new QR", () => {
     const slip = buildPickupSlip({ orderId: "o1", pickupQr: "tok", method: "cash-out", items: [] })
     expect(slip.kind).toBe("pickup")
@@ -122,9 +115,9 @@ describe("planRefundReceipts", () => {
     expect(plan.collectOldReceipt).toBe(false)
   })
 
-  it("prints a void slip on cancel", () => {
+  it("prints a refund slip (no void) on cancel and collects the old receipt", () => {
     const plan = planRefundReceipts({ action: "cancel", refund: refund({ amountCents: 800 }), view: view() })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["void"])
+    expect(plan.slips.map((s) => s.kind)).toEqual(["refund"])
     expect(plan.collectOldReceipt).toBe(true)
   })
 })
