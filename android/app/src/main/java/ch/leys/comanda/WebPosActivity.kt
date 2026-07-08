@@ -870,9 +870,7 @@ class WebPosActivity : ComponentActivity() {
                 throw Exception(t.message ?: "bt_connect_failed")
             }
             val printer = com.dantsu.escposprinter.EscPosPrinter(connection, 203, 48f, 32)
-            // Render the whole receipt (text included) as a single raster bitmap and
-            // print it the same crisp way as the QR code — the printer's internal font
-            // inks unevenly, a raster image does not.
+            // Print the receipt as a raster image; the printer's internal font inks unevenly.
             val obj = try { JSONObject(content) } catch (_: Exception) { JSONObject() }
             val branding = parseBranding(obj)
             val bmp = renderReceiptBitmap(obj, branding)
@@ -997,8 +995,6 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    // Shared raster row builder for receipts/slips: everything is drawn onto one
-    // bitmap so text prints as crisply as the QR (the internal font inks unevenly).
     private class ReceiptCanvasBuilder(
         val width: Int,
         val padding: Int,
@@ -1060,7 +1056,6 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    // Layout (LEY-388): title → items → total → large QR → legal/footer info.
     private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null, null)): Bitmap {
         if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
 
@@ -1086,19 +1081,16 @@ class WebPosActivity : ComponentActivity() {
         val dateStr = receiptDateTime(obj)
         val pickupQr = obj.optString("pickupQr", "")
 
-        // Blocking logo fetch (printing already runs off the main thread); null falls through silently.
         val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
             fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
 
         val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
         val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
 
-        // 1. Title at the very top
         b.gap(topPad)
         b.textRow("Abhol-Quittung", titlePaint, center = true, ellipsizeFn = ell)
         b.gap(lineSpacing)
 
-        // 2. Items listed individually, including configuration
         for (it in parseReceiptLines(obj)) {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
@@ -1107,7 +1099,6 @@ class WebPosActivity : ComponentActivity() {
         }
         b.gap(lineSpacing)
 
-        // 3. Total amount
         if (totalCents >= 0) b.twoColRow("Total", moneyStr(currency, totalCents), totalPaint, ell)
         if (depositCents > 0) b.textRow("davon Depot: ${moneyStr(currency, depositCents)}", small, center = false, ellipsizeFn = ell)
         if (method.equals("cash", ignoreCase = true)) {
@@ -1117,14 +1108,12 @@ class WebPosActivity : ComponentActivity() {
             if (chg >= 0) b.textRow("Rückgeld: ${moneyStr(currency, chg)}", small, center = false, ellipsizeFn = ell)
         }
 
-        // 4. QR code, printed large
         if (pickupQr.isNotEmpty()) {
             b.gap(lineSpacing * 2)
             b.qrRow(pickupQr)
             b.gap(lineSpacing)
         }
 
-        // 5. Legal / footer information
         b.gap(lineSpacing)
         b.textRow("Bestellung: $orderId", small, center = false, ellipsizeFn = ell)
         b.textRow("Zahlart: ${prettyPayMethod(method, cardLast4)}", small, center = false, ellipsizeFn = ell)
@@ -1138,8 +1127,6 @@ class WebPosActivity : ComponentActivity() {
         return b.build()
     }
 
-    // Raster renderer for non-sale slips (refund / pickup re-issue). Same title-first
-    // layout as the sale receipt for consistency.
     private fun renderSlipBitmap(obj: JSONObject, branding: ReceiptBranding): Bitmap {
         val width = 384
         val padding = 10
@@ -1171,13 +1158,11 @@ class WebPosActivity : ComponentActivity() {
         val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
         val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
 
-        // Title at the very top
         b.gap(topPad)
         val titleText = when (kind) { "pickup" -> "Abhol-Quittung"; else -> "Rückerstattung" }
         b.textRow(titleText, titlePaint, center = true, ellipsizeFn = ell)
         b.gap(lineSpacing)
 
-        // Items with configuration
         for (it in parseReceiptLines(obj)) {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
@@ -1186,19 +1171,16 @@ class WebPosActivity : ComponentActivity() {
         }
         b.gap(lineSpacing)
 
-        // Amount
-        if (kind == "refund") {
-            if (refundAmount >= 0) b.twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", totalPaint, ell)
+        if (kind == "refund" && refundAmount >= 0) {
+            b.twoColRow("Rückerstattung", "-${moneyStr(currency, refundAmount)}", totalPaint, ell)
         }
 
-        // Large QR (pickup re-issue)
         if (kind == "pickup" && pickupQr.isNotEmpty()) {
             b.gap(lineSpacing * 2)
             b.qrRow(pickupQr)
             b.gap(lineSpacing)
         }
 
-        // Legal / footer information
         b.gap(lineSpacing)
         b.textRow("Bestellung: $orderId", small, center = false, ellipsizeFn = ell)
         if (method.isNotBlank()) {
