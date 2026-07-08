@@ -25,8 +25,7 @@
 //
 // Lines are the redeemable physical items to hand over — simple products and
 // the chosen menu components. A configured menu's bundle parent is not listed;
-// its components carry the items. Variants are not encoded. Semantics are
-// identical to v1.
+// its components carry the items. Variants are not encoded.
 //
 // This is not encryption: the ids are readable ASCII inside the blob, exactly
 // as they were inside the old decodable base64url body.
@@ -43,16 +42,12 @@
 // byte-mode QR segment (no base64url inside the QR); the QR reader hands those
 // raw bytes straight to the verifier.
 //
-// # Format discrimination (v2 binary vs legacy v1 JSON)
+// # Format discrimination
 //
-// The first body byte selects the format after a successful signature check:
-//
-//	0x02  → v2 fixed binary (this document)
-//	'{'   → v1 canonical JSON: {"v":1,"t":..,"o":..,"i":..,"l":[{"p":..,"q":..}]}
-//	        (0x7B; the legacy body was the exact JSON bytes, signed as-is)
-//
-// Sign only ever emits v2. Verify still accepts v1 so a token minted just before
-// the cut still redeems during rollout.
+// The first body byte is the version/format discriminator: after a successful
+// signature check it MUST be 0x02 (v2 fixed binary, this document); any other
+// value is rejected as an unsupported version. (The retired v1 format was
+// canonical JSON, whose body started with '{' = 0x7B.)
 //
 // # Verification
 //
@@ -62,10 +57,10 @@
 //  3. ed25519.Verify(publicKey, body, sig) over the LITERAL body bytes. Never
 //     re-serialize the decoded payload before verifying — re-serialization can
 //     change byte order/spacing and break the signature.
-//  4. Only after a successful verify, parse the body by its leading byte
-//     (v2 binary or v1 JSON).
-//  5. REQUIRED version check: reject any body whose leading byte is not a format
-//     this reader understands. A valid signature does not imply a known schema.
+//  4. Only after a successful verify, require the leading byte to be 0x02 and
+//     parse the body as v2 binary.
+//  5. REQUIRED version check: reject any body whose leading byte is not 0x02. A
+//     valid signature does not imply a known schema.
 //  6. RECOMMENDED freshness check: reject tokens whose issued-at is older than
 //     the station's accepted window. On the fully-offline path there is no
 //     server backstop against replay, so a freshness window bounds reuse.

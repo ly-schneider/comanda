@@ -31,11 +31,11 @@ describe("parseScan", () => {
     expect(parsed).toEqual({ kind: "order", token: bytesToBase64Url(body) })
   })
 
-  it("carries a legacy v1 / text order token verbatim", () => {
-    const token = "eyJ2IjoxfQ.signature-bytes_base64url"
+  it("carries a text order candidate (e.g. the pickup-URL fallback) verbatim", () => {
+    const token = "some-non-binary-text_candidate"
     expect(parseScan(`  ${token} `, ascii(token))).toEqual({ kind: "order", token })
     // Validity (signature, version, tenant) is decided by offline verification,
-    // not here — even an old-style URL becomes an order candidate.
+    // not here — even the plain pickup-URL fallback becomes an order candidate.
     const url = "https://acme.comanda.leys.ch/o/HS79U1yH7Zd3"
     expect(parseScan(url, ascii(url))).toEqual({ kind: "order", token: url })
   })

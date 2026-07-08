@@ -79,8 +79,8 @@ private data class ReceiptLine(
 /** Receipt kind sent by the web POS; absent or unknown ⇒ "sale". */
 // A v2 pickup token is base64url of a raw binary payload whose first byte is
 // 0x02. Decode it so the receipt QR can be rendered byte-mode, matching the
-// exact bytes the offline station scans. Anything else — the pickup-URL
-// fallback, a legacy v1 JSON token ('{') — is not v2 and stays a text QR.
+// exact bytes the offline station scans. Anything else — e.g. the pickup-URL
+// fallback — is not a v2 token and stays a text QR.
 internal fun decodePickupTokenBytes(token: String): ByteArray? = try {
     val bytes = Base64.getUrlDecoder().decode(token.trim())
     if (bytes.size > 64 && bytes[0] == 0x02.toByte()) bytes else null

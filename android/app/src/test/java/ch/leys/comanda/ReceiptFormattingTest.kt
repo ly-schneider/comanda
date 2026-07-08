@@ -67,7 +67,7 @@ class ReceiptFormattingTest {
     @Test fun nonV2TokensAreNotByteMode() {
         // Pickup-URL fallback: invalid base64url → text QR.
         assertNull(decodePickupTokenBytes("https://acme.comanda.leys.ch/o/HS79U1yH7Zd3"))
-        // Legacy v1 JSON token starts with '{' (0x7B), not 0x02.
+        // A non-v2 payload whose first byte isn't 0x02 (here base64url of "{...}").
         assertNull(decodePickupTokenBytes("eyJ2IjoxfQ"))
     }
 }

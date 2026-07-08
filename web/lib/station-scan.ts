@@ -12,8 +12,8 @@ const CAMPAIGN_PREFIX = "CAMP:"
 // The token is always base64url text: a v2 pickup QR is raw binary bytes (first
 // byte 0x02), which we re-encode to base64url here so the rest of the pipeline
 // (offline verifier, backend lookup, dedup) stays string-based and symmetric
-// with the Go verifier. A legacy v1 base64url QR or the pickup-URL fallback is
-// already text and is carried verbatim.
+// with the Go verifier. The pickup-URL fallback QR is already text and is
+// carried verbatim (offline verification then rejects it as not a token).
 export type ParsedScan = { kind: "campaign"; token: string } | { kind: "order"; token: string }
 
 export function parseScan(text: string, bytes?: Uint8Array): ParsedScan | null {

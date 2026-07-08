@@ -61,13 +61,6 @@ function signV2(p: QrPayload, sk: Uint8Array = seed): string {
   return bytesToBase64Url(concat(body, sig))
 }
 
-function signV1(p: QrPayload, sk: Uint8Array = seed): string {
-  // v1 canonical JSON, fixed key order v,t,o,i,l.
-  const body = new TextEncoder().encode(JSON.stringify(p))
-  const sig = ed.sign(body, sk)
-  return bytesToBase64Url(concat(body, sig))
-}
-
 const validPayload: QrPayload = {
   v: 2,
   t: "tenant_seed1",
@@ -98,16 +91,14 @@ describe("verifyQrToken", () => {
     expect(res).toEqual({ ok: true, payload: validPayload })
   })
 
-  it("still accepts a legacy v1 JSON token during rollout", () => {
-    const v1: QrPayload = {
-      v: 1,
-      t: "tenant_seed1",
-      o: "HS79U1yH7Zd3",
-      i: 1_700_000_000,
-      l: [{ p: "prod_pommes1", q: 2 }],
-    }
-    const res = verifyQrToken(signV1(v1), publicKey)
-    expect(res).toEqual({ ok: true, payload: v1 })
+  it("rejects a retired v1 JSON token as unsupported-version", () => {
+    // A validly-signed v1 JSON body starts with '{' (0x7B), not 0x02.
+    const body = new TextEncoder().encode(
+      JSON.stringify({ v: 1, t: "tenant_seed1", o: "HS79U1yH7Zd3", i: 1_700_000_000, l: [{ p: "prod_pommes1", q: 2 }] })
+    )
+    const sig = ed.sign(body, seed)
+    const res = verifyQrToken(bytesToBase64Url(concat(body, sig)), publicKey)
+    expect(res).toEqual({ ok: false, reason: "unsupported-version" })
   })
 
   it("rejects a tampered v2 body with bad-signature", () => {

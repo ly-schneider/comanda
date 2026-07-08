@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"testing"
 )
 
@@ -232,34 +231,11 @@ func TestVerifyRejectsUnknownVersion(t *testing.T) {
 	}
 }
 
-func TestVerifyAcceptsLegacyV1JSON(t *testing.T) {
+func TestVerifyRejectsRetiredV1JSON(t *testing.T) {
 	pub, priv := mustKey(t)
-	// A canonical v1 JSON body (key order v,t,o,i,l), signed the v1 way.
-	v1Body, err := json.Marshal(Payload{
-		Version:  1,
-		TenantID: "tenant_abc12",
-		OrderID:  "order_xyz789",
-		IssuedAt: 1_700_000_000,
-		Lines:    []Line{{ProductID: "prod_aaa1111", Quantity: 3}},
-	})
-	if err != nil {
-		t.Fatalf("marshal v1: %v", err)
-	}
-	if v1Body[0] != verV1 {
-		t.Fatalf("v1 body must start with '{', got %#x", v1Body[0])
-	}
-	got, err := Verify(pub, signRaw(priv, v1Body))
-	if err != nil {
-		t.Fatalf("verify v1: %v", err)
-	}
-	if got.Version != 1 || got.OrderID != "order_xyz789" || len(got.Lines) != 1 || got.Lines[0].Quantity != 3 {
-		t.Fatalf("v1 payload mismatch: %+v", got)
-	}
-}
-
-func TestVerifyRejectsV1WithUnknownInnerVersion(t *testing.T) {
-	pub, priv := mustKey(t)
-	v1Body := []byte(`{"v":9,"t":"tenant_abc12","o":"order_xyz789","i":1700000000,"l":[]}`)
+	// A validly-signed legacy v1 JSON body starts with '{' (0x7B), not 0x02, so
+	// the v2-only verifier must reject it as an unsupported version.
+	v1Body := []byte(`{"v":1,"t":"tenant_abc12","o":"order_xyz789","i":1700000000,"l":[{"p":"prod_aaa1111","q":3}]}`)
 	if _, err := Verify(pub, signRaw(priv, v1Body)); err != ErrUnsupportedVersion {
 		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
 	}
