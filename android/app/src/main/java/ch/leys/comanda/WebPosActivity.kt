@@ -54,8 +54,7 @@ private data class ReceiptBranding(
     val displayName: String?,
     val logoUrl: String?,
     val address: String?,
-    val currency: String?,
-    val thankYou: String?
+    val currency: String?
 )
 
 private fun parseBranding(obj: JSONObject): ReceiptBranding {
@@ -64,9 +63,8 @@ private fun parseBranding(obj: JSONObject): ReceiptBranding {
         displayName = b.optString("displayName").ifBlank { null },
         logoUrl     = b.optString("logoUrl").ifBlank { null },
         address     = b.optString("address").ifBlank { null },
-        currency    = b.optString("currency").ifBlank { null },
-        thankYou    = b.optString("thankYou").ifBlank { null }
-    ) else ReceiptBranding(null, null, null, null, null)
+        currency    = b.optString("currency").ifBlank { null }
+    ) else ReceiptBranding(null, null, null, null)
 }
 
 /** One refunded/redeemable line on a slip. */
@@ -93,7 +91,7 @@ private fun prettyRefundMethod(method: String): String = when (method.lowercase(
     else -> method
 }
 
-private fun prettyPayMethod(method: String, cardLast4: String?): String {
+internal fun prettyPayMethod(method: String, cardLast4: String?): String {
     val base = when (method.lowercase()) {
         "twint" -> "TWINT"
         "cash" -> "Bar"
@@ -103,13 +101,13 @@ private fun prettyPayMethod(method: String, cardLast4: String?): String {
     return if (method.equals("card", ignoreCase = true) && !cardLast4.isNullOrBlank()) "$base •••• $cardLast4" else base
 }
 
-private fun receiptDateTime(obj: JSONObject): String {
-    val orderTs = obj.optLong("orderTimestamp", -1L)
-    return try {
-        val whenMs = if (orderTs > 0) orderTs else System.currentTimeMillis()
-        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date(whenMs))
-    } catch (_: Throwable) { "" }
-}
+internal fun formatReceiptDateTime(orderTs: Long, nowMs: Long): String = try {
+    val whenMs = if (orderTs > 0) orderTs else nowMs
+    java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date(whenMs))
+} catch (_: Throwable) { "" }
+
+private fun receiptDateTime(obj: JSONObject): String =
+    formatReceiptDateTime(obj.optLong("orderTimestamp", -1L), System.currentTimeMillis())
 
 private fun moneyStr(currency: String, cents: Long): String =
     String.format("%s %.2f", currency, cents.toDouble() / 100.0)
@@ -1056,7 +1054,7 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null, null)): Bitmap {
+    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null)): Bitmap {
         if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
 
         val width = 384
