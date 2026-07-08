@@ -41,10 +41,17 @@ type WebhookResult struct {
 	GatewayID     int
 	Status        string
 	ContactEmail  string
-	AmountCents   int
-	IsSuccess     bool
-	IsFailure     bool
-	IsRefund      bool
+	// AmountCents is the original charge amount (unchanged by refunds).
+	AmountCents int
+	// RefundedAmountCents is the cumulative amount refunded on the transaction so
+	// far, reported on refund webhooks. Reconcile against this, not AmountCents.
+	RefundedAmountCents int
+	IsSuccess           bool
+	IsFailure           bool
+	IsRefund            bool
+	// IsFullRefund is true only when the entire charge was reversed, false for a
+	// partial refund.
+	IsFullRefund bool
 }
 
 // Provider is built from a single tenant's decrypted credentials, so an
@@ -116,14 +123,16 @@ func (p *payrexxProvider) ParseWebhook(body []byte) (*WebhookResult, error) {
 	}
 	txn := &event.Transaction
 	out := &WebhookResult{
-		ReferenceID:   txn.ReferenceID,
-		TransactionID: txn.ID,
-		Status:        txn.Status,
-		ContactEmail:  txn.Contact.Email,
-		AmountCents:   txn.Amount,
-		IsSuccess:     txn.IsSuccessStatus(),
-		IsFailure:     txn.IsFailedStatus(),
-		IsRefund:      txn.IsRefundStatus(),
+		ReferenceID:         txn.ReferenceID,
+		TransactionID:       txn.ID,
+		Status:              txn.Status,
+		ContactEmail:        txn.Contact.Email,
+		AmountCents:         txn.Amount,
+		RefundedAmountCents: txn.RefundedAmount,
+		IsSuccess:           txn.IsSuccessStatus(),
+		IsFailure:           txn.IsFailedStatus(),
+		IsRefund:            txn.IsRefundStatus(),
+		IsFullRefund:        txn.IsFullRefundStatus(),
 	}
 	if txn.Invoice.PaymentRequestID != nil {
 		out.GatewayID = *txn.Invoice.PaymentRequestID
