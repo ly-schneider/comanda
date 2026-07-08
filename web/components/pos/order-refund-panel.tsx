@@ -329,7 +329,11 @@ function StatusBadge({ status }: { status: AdminOrderStatus }) {
 }
 
 function OrderHeader({ order, refundableBalanceCents }: { order: AdminOrder; refundableBalanceCents: number }) {
-  const method = order.payments?.[0]?.method
+  const payment = order.payments?.[0]
+  const method = payment?.method
+  const cardLabel = [payment?.cardBrand, payment?.cardLast4 ? `•••• ${payment.cardLast4}` : null]
+    .filter(Boolean)
+    .join(" ")
   return (
     <div className="rounded-xl border p-4">
       <div className="flex items-center justify-between gap-3">
@@ -345,6 +349,12 @@ function OrderHeader({ order, refundableBalanceCents }: { order: AdminOrder; ref
           <>
             <span>Zahlart</span>
             <span className="text-foreground text-right uppercase">{method}</span>
+          </>
+        )}
+        {cardLabel && (
+          <>
+            <span>Karte</span>
+            <span className="text-foreground text-right">{cardLabel}</span>
           </>
         )}
         <span>Erstellt</span>
