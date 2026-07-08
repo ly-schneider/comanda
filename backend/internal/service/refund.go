@@ -477,20 +477,13 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 		return err
 	}
 
-	// Payrexx reports the cumulative amount refunded on the transaction so far in
-	// RefundedAmountCents; the top-level charge amount (AmountCents) is unchanged
-	// by refunds. Reconcile against the cumulative refund — using the charge
-	// amount would turn a partial refund into a full-order one — and record only
-	// the portion our ledger does not already reflect. A refund we issued wrote
-	// its row before calling the provider, so its confirming webhook adds nothing;
-	// a refund issued outside this system (e.g. the Payrexx dashboard) shows up as
-	// the delta.
+	// Reconcile against the cumulative refunded amount, not the (unchanged) charge
+	// amount, so a partial refund isn't escalated to a full one — recording only
+	// the portion our ledger doesn't already hold.
 	providerRefunded := int64(result.RefundedAmountCents)
 	if providerRefunded <= 0 {
-		// Older webhook payloads omit refundedAmount. Only a fully-refunded status
-		// can be sized safely (== order total); a partial one cannot be sized from
-		// the webhook, so leave it for the initiating refund / manual reconciliation
-		// rather than guessing the whole order.
+		// Older payloads omit refundedAmount: only a full-refund status can be sized
+		// (== total); a partial one can't, so skip it.
 		if !result.IsFullRefund {
 			s.logger.Warn("payrexx webhook: partial refund without refundedAmount; skipping reconcile",
 				zap.String("orderId", ord.ID))
@@ -521,11 +514,9 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 	return s.setOrderStatus(ctx, ord, orderStatusAfterRefund(ord.TotalCents, succeededSum+amount))
 }
 
-// reconcilableRefundDelta is the portion of a provider-reported cumulative refund
-// not yet recorded in our ledger: the provider's total refunded (capped at the
-// order total) minus what we already recorded. It is never negative and never
-// exceeds the order total, so a partial provider refund can never be escalated
-// into a full one, nor a confirmed refund double-counted.
+// reconcilableRefundDelta is the not-yet-recorded portion of a provider's
+// cumulative refund: min(providerRefunded, orderTotal) - alreadyRecorded, floored
+// at zero — so it can't escalate a partial into a full refund or double-count.
 func reconcilableRefundDelta(orderTotal, providerRefunded, alreadyRecorded int64) int64 {
 	if providerRefunded > orderTotal {
 		providerRefunded = orderTotal
