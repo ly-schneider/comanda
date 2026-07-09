@@ -26,8 +26,8 @@ export default async function NutzungsbedingungenPage() {
           <h2 className="mb-3 text-lg font-semibold">1. Geltungsbereich</h2>
           <p>
             Diese Nutzungsbedingungen regeln die Verwendung der {branding.displayName} System (nachfolgend «Plattform»)
-            sowie die darüber getätigten Bestellungen von Speisen und Getränken. Mit der Nutzung der Plattform oder dem
-            Aufgeben einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
+            sowie die darüber getätigten Bestellungen von Produkten. Mit der Nutzung der Plattform oder dem Aufgeben
+            einer Bestellung akzeptieren Sie diese Nutzungsbedingungen.
           </p>
         </section>
 
@@ -51,18 +51,17 @@ export default async function NutzungsbedingungenPage() {
           <OperatorBlock />
 
           <p className="mt-4">
-            Der Vertrag über bestellte Speisen und Getränke kommt ausschliesslich zwischen Ihnen und dem Anbieter
-            zustande. Leys Services stellt nur die technische Plattform bereit und wird nicht Vertragspartei der
-            Bestellung.
+            Der Vertrag über bestellte Produkte kommt ausschliesslich zwischen Ihnen und dem Anbieter zustande. Leys
+            Services stellt nur die technische Plattform bereit und wird nicht Vertragspartei der Bestellung.
           </p>
         </section>
 
         <section>
           <h2 className="mb-3 text-lg font-semibold">3. Angebot und Verfügbarkeit</h2>
           <p>
-            Über die Plattform können Speisen und Getränke an ausgewählten Standorten online bestellt werden. Das
-            Angebot richtet sich nach den jeweiligen Betriebszeiten und dem aktuellen Sortiment. Wir behalten uns vor,
-            das Angebot jederzeit anzupassen oder die Plattform vorübergehend ausser Betrieb zu nehmen.
+            Über die Plattform können Produkte an ausgewählten Standorten online bestellt werden. Das Angebot richtet
+            sich nach den jeweiligen Betriebszeiten und dem aktuellen Sortiment. Wir behalten uns vor, das Angebot
+            jederzeit anzupassen oder die Plattform vorübergehend ausser Betrieb zu nehmen.
           </p>
         </section>
 
@@ -113,19 +112,19 @@ export default async function NutzungsbedingungenPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">8. Stornierung</h2>
           <p>
-            Eine Stornierung ist nur möglich, solange die Zubereitung noch nicht begonnen hat. Ein gesetzliches
-            Widerrufsrecht für Online-Bestellungen besteht nach Schweizer Recht nicht. Bei berechtigter Stornierung wird
-            der bezahlte Betrag auf den gleichen Zahlungsweg zurückerstattet.
+            Eine Stornierung ist nur möglich, solange die Bearbeitung der Bestellung noch nicht begonnen hat. Ein
+            gesetzliches Widerrufsrecht für Online-Bestellungen besteht nach Schweizer Recht nicht. Bei berechtigter
+            Stornierung wird der bezahlte Betrag auf den gleichen Zahlungsweg zurückerstattet.
           </p>
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-semibold">9. Allergene und Produktinformationen</h2>
+          <h2 className="mb-3 text-lg font-semibold">9. Produktinformationen</h2>
           <p>
             Abbildungen und Beschreibungen auf der Plattform dienen der allgemeinen Orientierung und können vom
-            tatsächlichen Produkt abweichen. Bei Fragen zu Inhaltsstoffen oder Allergenen wenden Sie sich bitte direkt
-            an das Personal vor Ort. Die Verantwortung für die Beachtung individueller Unverträglichkeiten liegt bei
-            Ihnen.
+            tatsächlichen Produkt abweichen. Bei Fragen zu einem Produkt wenden Sie sich bitte direkt an das Personal
+            vor Ort. Handelt es sich um Lebensmittel, erhalten Sie dort Auskunft zu Inhaltsstoffen und Allergenen; die
+            Beachtung individueller Unverträglichkeiten liegt in Ihrer Verantwortung.
           </p>
         </section>
 
@@ -137,8 +136,9 @@ export default async function NutzungsbedingungenPage() {
           </p>
           <p className="mt-2">
             Für die ununterbrochene Verfügbarkeit der Plattform übernehmen weder der Anbieter noch Leys Services als
-            Plattformbetreiber eine Gewähr. Für die Qualität und Sicherheit der Speisen gelten die Bestimmungen des
-            Schweizer Lebensmittelgesetzes (LMG).
+            Plattformbetreiber eine Gewähr. Für die Qualität und Sicherheit der angebotenen Produkte ist der jeweilige
+            Anbieter verantwortlich; es gelten die anwendbaren gesetzlichen Bestimmungen (bei Lebensmitteln das
+            Schweizer Lebensmittelgesetz, LMG).
           </p>
         </section>
 
