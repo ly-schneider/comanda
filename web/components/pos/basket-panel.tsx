@@ -780,7 +780,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
 
   return (
     <>
-      <aside className="bg-card border-border mx-3 flex h-full min-h-0 flex-col rounded-2xl border shadow-md md:sticky md:top-3 md:my-3 md:mr-3 md:ml-0 md:h-[calc(100%-1.5rem)]">
+      <aside className="bg-card border-border mx-3 flex h-full min-h-0 flex-col rounded-2xl border shadow-md md:sticky md:top-0 md:mr-3 md:mb-3 md:ml-0 md:h-[calc(100%-0.75rem)]">
         <div className="px-4 py-4">
           <h3 className="text-lg font-semibold">Warenkorb</h3>
         </div>
