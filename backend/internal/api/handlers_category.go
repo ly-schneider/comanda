@@ -2,10 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"backend/internal/generated/api/generated"
 	"backend/internal/response"
+	"backend/internal/service"
 )
 
 // ListCategories returns all categories.
@@ -35,12 +38,20 @@ func (h *Handlers) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		position = *body.Position
 	}
 
-	cat, err := h.categories.Create(r.Context(), body.Name, position)
+	cat, err := h.categories.Create(r.Context(), body.Name, position, body.ParentId)
 	if err != nil {
-		writeEntError(w, err)
+		writeCategoryError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusCreated, toAPICategory(cat))
+}
+
+func writeCategoryError(w http.ResponseWriter, err error) {
+	if errors.Is(err, service.ErrInvalidParent) {
+		writeError(w, http.StatusBadRequest, "invalid_parent", "The selected parent category is invalid.")
+		return
+	}
+	writeEntError(w, err)
 }
 
 // GetCategory returns a single category by ID.
@@ -64,8 +75,13 @@ func (h *Handlers) UpdateCategory(w http.ResponseWriter, r *http.Request, catego
 		return
 	}
 
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
 	var body generated.CategoryUpdate
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.Unmarshal(raw, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
@@ -83,9 +99,15 @@ func (h *Handlers) UpdateCategory(w http.ResponseWriter, r *http.Request, catego
 		isActive = *body.IsActive
 	}
 
-	cat, err := h.categories.Update(r.Context(), categoryId, name, position, isActive)
+	// parentId is tri-state; a *string can't distinguish absent from explicit
+	// null, so probe the raw body for the key.
+	var probe map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &probe)
+	_, setParent := probe["parentId"]
+
+	cat, err := h.categories.Update(r.Context(), categoryId, name, position, isActive, body.ParentId, setParent)
 	if err != nil {
-		writeEntError(w, err)
+		writeCategoryError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, toAPICategory(cat))

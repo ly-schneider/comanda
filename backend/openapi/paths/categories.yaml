@@ -136,8 +136,9 @@ item:
     tags: [Categories]
     summary: Delete category
     description: |
-      Deletes a category. Fails if products are still assigned to it
-      (foreign key constraint: `ON DELETE RESTRICT`).
+      Deletes a category. Fails with 409 if products are still assigned to it
+      or if it still has subcategories (foreign key constraint:
+      `ON DELETE RESTRICT`).
     operationId: deleteCategory
     security:
       - sessionAuth: []
@@ -164,7 +165,7 @@ item:
             schema:
               $ref: "../schemas/common.yaml#/Error"
       "409":
-        description: Category has assigned products
+        description: Category has assigned products or subcategories
         content:
           application/json:
             schema:

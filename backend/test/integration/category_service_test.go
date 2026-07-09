@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"backend/internal/repository"
 	"backend/internal/service"
 
 	nanoid "backend/internal/id"
@@ -16,11 +17,11 @@ func TestCategoryService_CRUD(t *testing.T) {
 	tdb.Cleanup(t)
 
 	repos := NewRepositories(tdb.Client)
-	svc := service.NewCategoryService(repos.Category)
+	svc := service.NewCategoryService(repos.Category, service.NewCatalogCache())
 	ctx := context.Background()
 
 	t.Run("Create category", func(t *testing.T) {
-		cat, err := svc.Create(ctx, "Drinks", 1)
+		cat, err := svc.Create(ctx, "Drinks", 1, nil)
 		require.NoError(t, err)
 		require.NotEqual(t, "", cat.ID)
 		require.Equal(t, "Drinks", cat.Name)
@@ -30,7 +31,7 @@ func TestCategoryService_CRUD(t *testing.T) {
 
 	t.Run("GetAll returns created categories", func(t *testing.T) {
 		// Create additional category
-		_, err := svc.Create(ctx, "Food", 2)
+		_, err := svc.Create(ctx, "Food", 2, nil)
 		require.NoError(t, err)
 
 		cats, err := svc.GetAll(ctx)
@@ -43,11 +44,11 @@ func TestCategoryService_CRUD(t *testing.T) {
 
 	t.Run("GetActive returns only active categories", func(t *testing.T) {
 		// Create an inactive category
-		cat, err := svc.Create(ctx, "Desserts", 3)
+		cat, err := svc.Create(ctx, "Desserts", 3, nil)
 		require.NoError(t, err)
 
 		// Deactivate it
-		_, err = svc.Update(ctx, cat.ID, "Desserts", 3, false)
+		_, err = svc.Update(ctx, cat.ID, "Desserts", 3, false, nil, false)
 		require.NoError(t, err)
 
 		active, err := svc.GetActive(ctx)
@@ -70,7 +71,7 @@ func TestCategoryService_CRUD(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, len(cats) > 0)
 
-		updated, err := svc.Update(ctx, cats[0].ID, "Beverages", 10, true)
+		updated, err := svc.Update(ctx, cats[0].ID, "Beverages", 10, true, nil, false)
 		require.NoError(t, err)
 		require.Equal(t, "Beverages", updated.Name)
 		require.Equal(t, 10, updated.Position)
@@ -94,7 +95,7 @@ func TestCategoryService_CRUD(t *testing.T) {
 
 		// Create 5 categories
 		for i := 0; i < 5; i++ {
-			_, err := svc.Create(ctx, "Category"+string(rune('A'+i)), i)
+			_, err := svc.Create(ctx, "Category"+string(rune('A'+i)), i, nil)
 			require.NoError(t, err)
 		}
 
@@ -124,7 +125,7 @@ func TestCategoryService_NotFound(t *testing.T) {
 	tdb.Cleanup(t)
 
 	repos := NewRepositories(tdb.Client)
-	svc := service.NewCategoryService(repos.Category)
+	svc := service.NewCategoryService(repos.Category, service.NewCatalogCache())
 	ctx := context.Background()
 
 	t.Run("GetByID returns error for non-existent ID", func(t *testing.T) {
@@ -133,7 +134,60 @@ func TestCategoryService_NotFound(t *testing.T) {
 	})
 
 	t.Run("Update returns error for non-existent ID", func(t *testing.T) {
-		_, err := svc.Update(ctx, nanoid.New(), "Test", 1, true)
+		_, err := svc.Update(ctx, nanoid.New(), "Test", 1, true, nil, false)
 		require.Error(t, err)
 	})
 }
+
+func TestCategoryService_Subcategories(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	svc := service.NewCategoryService(repos.Category, service.NewCatalogCache())
+	ctx := context.Background()
+
+	parent, err := svc.Create(ctx, "Drinks", 0, nil)
+	require.NoError(t, err)
+
+	t.Run("create child under a top-level parent", func(t *testing.T) {
+		child, err := svc.Create(ctx, "Soft", 0, &parent.ID)
+		require.NoError(t, err)
+		require.NotNil(t, child.ParentID)
+		require.Equal(t, parent.ID, *child.ParentID)
+	})
+
+	t.Run("cannot nest a subcategory under a subcategory", func(t *testing.T) {
+		child, err := svc.Create(ctx, "Cold", 1, &parent.ID)
+		require.NoError(t, err)
+		_, err = svc.Create(ctx, "Ice", 0, &child.ID)
+		require.ErrorIs(t, err, service.ErrInvalidParent)
+	})
+
+	t.Run("cannot give a parent to a category that has children", func(t *testing.T) {
+		other, err := svc.Create(ctx, "Food", 2, nil)
+		require.NoError(t, err)
+		_, err = svc.Update(ctx, parent.ID, parent.Name, parent.Position, true, &other.ID, true)
+		require.ErrorIs(t, err, service.ErrInvalidParent)
+	})
+
+	t.Run("a category cannot be its own parent", func(t *testing.T) {
+		leaf, err := svc.Create(ctx, "Snacks", 3, nil)
+		require.NoError(t, err)
+		_, err = svc.Update(ctx, leaf.ID, leaf.Name, leaf.Position, true, &leaf.ID, true)
+		require.ErrorIs(t, err, service.ErrInvalidParent)
+	})
+
+	t.Run("unknown parent id is rejected", func(t *testing.T) {
+		_, err := svc.Create(ctx, "Ghost", 4, ptr(nanoid.New()))
+		require.ErrorIs(t, err, service.ErrInvalidParent)
+	})
+
+	t.Run("deleting a parent with children conflicts", func(t *testing.T) {
+		err := svc.Delete(ctx, parent.ID)
+		require.ErrorIs(t, err, repository.ErrConflict)
+	})
+}
+
+func ptr[T any](v T) *T { return &v }

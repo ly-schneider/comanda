@@ -19,29 +19,29 @@ type catalogEntry struct {
 	expiresAt time.Time
 }
 
-type catalogCache struct {
+type CatalogCache struct {
 	mu      sync.RWMutex
 	entries map[string]catalogEntry
 	gen     atomic.Uint64
 	sf      singleflight.Group
 }
 
-func newCatalogCache() *catalogCache {
-	return &catalogCache{entries: make(map[string]catalogEntry)}
+func NewCatalogCache() *CatalogCache {
+	return &CatalogCache{entries: make(map[string]catalogEntry)}
 }
 
-func (c *catalogCache) generation() uint64 {
+func (c *CatalogCache) generation() uint64 {
 	return c.gen.Load()
 }
 
-func (c *catalogCache) invalidate() {
+func (c *CatalogCache) invalidate() {
 	c.gen.Add(1)
 	c.mu.Lock()
 	c.entries = make(map[string]catalogEntry)
 	c.mu.Unlock()
 }
 
-func (c *catalogCache) get(key string, gen uint64, now time.Time) ([]*ent.Product, bool) {
+func (c *CatalogCache) get(key string, gen uint64, now time.Time) ([]*ent.Product, bool) {
 	if gen != c.generation() {
 		return nil, false
 	}
@@ -54,7 +54,7 @@ func (c *catalogCache) get(key string, gen uint64, now time.Time) ([]*ent.Produc
 	return e.products, true
 }
 
-func (c *catalogCache) set(key string, gen uint64, products []*ent.Product, expiresAt time.Time) {
+func (c *CatalogCache) set(key string, gen uint64, products []*ent.Product, expiresAt time.Time) {
 	if gen != c.generation() {
 		return
 	}
@@ -64,7 +64,7 @@ func (c *catalogCache) set(key string, gen uint64, products []*ent.Product, expi
 }
 
 // Entries and singleflight are tenant-keyed; no-tenant requests bypass the cache.
-func (c *catalogCache) load(ctx context.Context, key string, loader func(context.Context) ([]*ent.Product, error)) ([]*ent.Product, error) {
+func (c *CatalogCache) load(ctx context.Context, key string, loader func(context.Context) ([]*ent.Product, error)) ([]*ent.Product, error) {
 	tenantID, ok := repository.TenantIDFromContext(ctx)
 	if !ok {
 		return loader(ctx)

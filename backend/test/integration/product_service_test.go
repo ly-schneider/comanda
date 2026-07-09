@@ -28,6 +28,7 @@ func TestProductService_ListProducts(t *testing.T) {
 		repos.Inventory,
 		repos.Jeton,
 		nil,
+		service.NewCatalogCache(),
 	)
 	ctx := context.Background()
 
@@ -101,6 +102,7 @@ func TestProductService_BundleProducts(t *testing.T) {
 		repos.Inventory,
 		repos.Jeton,
 		nil,
+		service.NewCatalogCache(),
 	)
 	ctx := context.Background()
 
@@ -170,6 +172,7 @@ func TestProductService_EmptyResults(t *testing.T) {
 		repos.Inventory,
 		repos.Jeton,
 		nil,
+		service.NewCatalogCache(),
 	)
 	ctx := context.Background()
 

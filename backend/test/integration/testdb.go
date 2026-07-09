@@ -338,12 +338,13 @@ func NewProductSvc(repos *Repositories) service.ProductService {
 		repos.Inventory,
 		repos.Jeton,
 		nil,
+		service.NewCatalogCache(),
 	)
 }
 
 // CreateCategory creates a test category.
 func (f *Fixtures) CreateCategory(name string, position int, isActive bool) *ent.Category {
-	cat, err := f.repos.Category.Create(f.ctx, name, position, isActive)
+	cat, err := f.repos.Category.Create(f.ctx, name, position, isActive, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create category: %v", err))
 	}

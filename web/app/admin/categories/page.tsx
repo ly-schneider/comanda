@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,19 +31,24 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
+import { childrenOf, topLevelCategories } from "@/lib/categories"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 
-type Category = { id: string; name: string; isActive: boolean; position: number }
+type Category = { id: string; name: string; isActive: boolean; position: number; parentId: string | null }
+
+const NO_PARENT = "__none__"
 
 export default function AdminCategoriesPage() {
   const fetchAuth = useAuthorizedFetch()
   const [items, setItems] = useState<Category[]>([])
   const [name, setName] = useState("")
+  const [parentId, setParentId] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -57,13 +62,23 @@ export default function AdminCategoriesPage() {
     void reload()
   }, [])
 
+  const displayList = useMemo(() => {
+    const out: Category[] = []
+    for (const top of topLevelCategories(items)) {
+      out.push(top)
+      out.push(...childrenOf(items, top.id))
+    }
+    return out
+  }, [items])
+
+  const topLevel = useMemo(() => topLevelCategories(items), [items])
+
   async function reload() {
     try {
       const res = await fetchAuth(`/api/v1/categories`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { items: Category[] }
-      const sorted = (data.items || []).slice().sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
-      setItems(sorted)
+      setItems((data.items || []).map((c) => ({ ...c, parentId: c.parentId ?? null })))
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load"
       setError(msg)
@@ -85,14 +100,15 @@ export default function AdminCategoriesPage() {
       return
     }
     setNameError(null)
-    const nextPosition = items.reduce((max, c) => Math.max(max, c.position), -1) + 1
+    const siblings = parentId ? childrenOf(items, parentId) : topLevel
+    const nextPosition = siblings.reduce((max, c) => Math.max(max, c.position), -1) + 1
     setCreating(true)
     try {
       const csrf = getCSRFToken()
       const res = await fetchAuth(`/api/v1/categories`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
-        body: JSON.stringify({ name: name.trim(), position: nextPosition }),
+        body: JSON.stringify({ name: name.trim(), position: nextPosition, parentId: parentId || null }),
       })
       if (!res.ok) {
         setError(await readErrorMessage(res))
@@ -109,13 +125,21 @@ export default function AdminCategoriesPage() {
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = items.findIndex((c) => c.id === active.id)
-    const newIndex = items.findIndex((c) => c.id === over.id)
+    const activeCat = items.find((c) => c.id === active.id)
+    const overCat = items.find((c) => c.id === over.id)
+    if (!activeCat || !overCat) return
+    if ((activeCat.parentId ?? null) !== (overCat.parentId ?? null)) return
+
+    const group = displayList.filter((c) => (c.parentId ?? null) === (activeCat.parentId ?? null))
+    const oldIndex = group.findIndex((c) => c.id === active.id)
+    const newIndex = group.findIndex((c) => c.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
+    const reordered = arrayMove(group, oldIndex, newIndex).map((c, i) => ({ ...c, position: i }))
+    const nextPos = new Map(reordered.map((c) => [c.id, c.position]))
+
     const previous = items
-    const reordered = arrayMove(items, oldIndex, newIndex).map((c, i) => ({ ...c, position: i }))
-    setItems(reordered)
+    setItems((prev) => prev.map((c) => (nextPos.has(c.id) ? { ...c, position: nextPos.get(c.id) as number } : c)))
 
     const changed = reordered.filter((c) => previous.find((p) => p.id === c.id)?.position !== c.position)
     try {
@@ -143,7 +167,11 @@ export default function AdminCategoriesPage() {
       headers: { "X-CSRF": csrf || "" },
     })
     if (!res.ok) {
-      setError(await readErrorMessage(res))
+      if (res.status === 409) {
+        setError("Kategorie kann nicht gelöscht werden, solange ihr Produkte oder Unterkategorien zugeordnet sind.")
+      } else {
+        setError(await readErrorMessage(res))
+      }
       return
     }
     await reload()
@@ -165,7 +193,7 @@ export default function AdminCategoriesPage() {
       <h1 className="text-xl font-semibold">Kategorien</h1>
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="flex items-start gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         <div className="space-y-1">
           <Input
             value={name}
@@ -186,6 +214,19 @@ export default function AdminCategoriesPage() {
           />
           {nameError && <p className="text-destructive text-sm">{nameError}</p>}
         </div>
+        <Select value={parentId || NO_PARENT} onValueChange={(v) => setParentId(v === NO_PARENT ? "" : v)}>
+          <SelectTrigger className="h-8 w-56" aria-label="Übergeordnete Kategorie">
+            <SelectValue placeholder="Hauptkategorie" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_PARENT}>Hauptkategorie</SelectItem>
+            {topLevel.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                Unter „{c.name}“
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button variant="outline" size="sm" className="h-8" disabled={creating} onClick={() => void createCategory()}>
           Erstellen
         </Button>
@@ -209,11 +250,12 @@ export default function AdminCategoriesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <SortableContext items={items.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                  {items.map((c) => (
+                <SortableContext items={displayList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  {displayList.map((c) => (
                     <CategoryRow
                       key={c.id}
                       category={c}
+                      depth={c.parentId ? 1 : 0}
                       onNameChange={(newName) =>
                         setItems((prev) => prev.map((it) => (it.id === c.id ? { ...it, name: newName } : it)))
                       }
@@ -234,12 +276,14 @@ export default function AdminCategoriesPage() {
 
 function CategoryRow({
   category,
+  depth,
   onNameChange,
   onRename,
   onToggle,
   onRemove,
 }: {
   category: Category
+  depth: number
   onNameChange: (name: string) => void
   onRename: (name: string) => void
   onToggle: (isActive: boolean) => void
@@ -266,19 +310,22 @@ function CategoryRow({
         </button>
       </TableCell>
       <TableCell>
-        <Input
-          value={category.name}
-          onChange={(e) => onNameChange(e.target.value)}
-          onBlur={(e) => onRename(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              e.currentTarget.blur()
-            }
-          }}
-          maxLength={20}
-          className="h-7 w-40"
-        />
+        <div className="flex items-center" style={{ paddingLeft: depth * 20 }}>
+          {depth > 0 && <span className="text-muted-foreground mr-2 select-none">↳</span>}
+          <Input
+            value={category.name}
+            onChange={(e) => onNameChange(e.target.value)}
+            onBlur={(e) => onRename(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                e.currentTarget.blur()
+              }
+            }}
+            maxLength={20}
+            className="h-7 w-40"
+          />
+        </div>
       </TableCell>
       <TableCell>
         <label className="inline-flex items-center gap-2">

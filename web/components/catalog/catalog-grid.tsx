@@ -1,13 +1,14 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { CartButtons } from "@/components/cart/cart-buttons"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
 import { CategoryFilter } from "@/components/catalog/category-filter"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useCart } from "@/contexts/cart-context"
+import { categoryOrderMap, compareByCategory } from "@/lib/categories"
 import { formatChf } from "@/lib/utils"
 import { hasVariants } from "@/lib/variants"
 import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
@@ -20,26 +21,39 @@ export function CatalogGrid({
   categories?: CategoryDTO[]
 }) {
   const [activeCat, setActiveCat] = useState<string>("all")
+  const [activeSub, setActiveSub] = useState<string>("all")
 
-  const getCatPos = (p?: { position?: number | null } | null) => {
-    const v = p?.position
-    return typeof v === "number" && isFinite(v) ? v : 1_000_000
-  }
+  const order = useMemo(() => categoryOrderMap(categories), [categories])
 
   const activeItems = products.items.filter((it) => it.isActive !== false)
 
   const sortedProducts = [...activeItems].sort((a, b) => {
-    const pa = getCatPos(a.category)
-    const pb = getCatPos(b.category)
-    if (pa !== pb) return pa - pb
-    return a.name.localeCompare(b.name)
+    const byCat = compareByCategory(order, a.category?.id, b.category?.id)
+    return byCat !== 0 ? byCat : a.name.localeCompare(b.name)
   })
 
-  const filtered = activeCat === "all" ? sortedProducts : sortedProducts.filter((it) => it.category?.id === activeCat)
+  const filtered = sortedProducts.filter((it) => {
+    if (activeCat === "all") return true
+    if (activeSub !== "all") return it.category?.id === activeSub
+    return it.category?.id === activeCat || it.category?.parentId === activeCat
+  })
+
+  const selectCat = (value: string) => {
+    setActiveCat(value)
+    setActiveSub("all")
+  }
 
   return (
     <div className="space-y-4">
-      {categories.length > 0 && <CategoryFilter categories={categories} active={activeCat} onChange={setActiveCat} />}
+      {categories.length > 0 && (
+        <CategoryFilter
+          categories={categories}
+          active={activeCat}
+          onChange={selectCat}
+          activeSub={activeSub}
+          onSubChange={setActiveSub}
+        />
+      )}
 
       {filtered.length === 0 ? (
         <p className="text-muted-foreground py-10 text-center text-sm">Keine Produkte in dieser Kategorie.</p>
