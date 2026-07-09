@@ -718,7 +718,7 @@ function ProductCardEditable({
               value={description}
               maxLength={500}
               rows={3}
-              placeholder="Optional: Zutaten, Allergene, Hinweise…"
+              placeholder="Optional: Details, Hinweise…"
               onChange={(e) => {
                 setDescription(e.target.value)
                 setStatus("idle")
@@ -1368,7 +1368,7 @@ function CreateProductCard({
               maxLength={500}
               rows={3}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional: Zutaten, Allergene, Hinweise…"
+              placeholder="Optional: Details, Hinweise…"
             />
             <p className="text-muted-foreground text-xs">{description.length}/500</p>
           </div>

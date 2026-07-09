@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Sum of returnable-container deposits across a cart. The deposit is charged on
 // the ordered product itself (per unit), mirroring the backend order-build path
-// where menu components never add a deposit.
+// where bundle components never add a deposit.
 export function cartDepositCents(items: CartItem[]): number {
   return items.reduce((sum, item) => sum + (item.product.depositCents ?? 0) * item.quantity, 0)
 }

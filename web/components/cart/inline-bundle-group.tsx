@@ -38,7 +38,7 @@ export function InlineBundleGroup({ suggestion, items, onEditItem, onDismiss, is
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Bundle-Vorschlag: {suggestion.bundleProduct.name}</p>
             <p className="text-muted-foreground text-xs">
-              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Bundle bestellen – gleicher Preis"}
+              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Bundle bestellen (gleicher Preis)"}
               {!isPOS && " – Deine Auswahl bleibt erhalten."}
             </p>
           </div>

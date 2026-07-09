@@ -184,7 +184,7 @@ function PosInner() {
 
   const applyStockToProducts = useCallback((items: ProductDTO[], stockMap: Map<string, number>): ProductDTO[] => {
     return items.map((p) => {
-      // Update menu slot options with stock data
+      // Update bundle slot options with stock data
       if (p.type === "bundle" && p.bundle?.slots) {
         return {
           ...p,

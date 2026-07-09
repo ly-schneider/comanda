@@ -208,9 +208,9 @@ export default function AdminStaffPerksPage() {
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="meal-name">Name</Label>
+              <Label htmlFor="perk-name">Name</Label>
               <Input
-                id="meal-name"
+                id="perk-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="z.B. April Comanda"
@@ -219,9 +219,9 @@ export default function AdminStaffPerksPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="meal-count">Maximale Einlösungen</Label>
+                <Label htmlFor="perk-count">Maximale Einlösungen</Label>
                 <Input
-                  id="meal-count"
+                  id="perk-count"
                   type="number"
                   value={formMaxRedemptions}
                   min={1}
@@ -232,9 +232,9 @@ export default function AdminStaffPerksPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="meal-until">Gültig bis (optional)</Label>
+                <Label htmlFor="perk-until">Gültig bis (optional)</Label>
                 <Input
-                  id="meal-until"
+                  id="perk-until"
                   type="datetime-local"
                   value={formValidUntil}
                   onChange={(e) => setFormValidUntil(e.target.value)}

@@ -516,7 +516,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "tenant-settings.system-toggle",
         title: "System ein-/ausschalten",
-        action: "«Food System» deaktivieren, Shop aufrufen, wieder aktivieren.",
+        action: "«Bestellsystem» deaktivieren, Shop aufrufen, wieder aktivieren.",
         expected:
           "Deaktiviert zeigt der Shop «Aktuell geschlossen» und Checkout ist unmöglich; aktiviert funktioniert alles.",
       },

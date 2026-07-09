@@ -119,7 +119,7 @@ export default function ClaimPage() {
             </div>
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl font-semibold">Mitarbeiter-Gutschein</h1>
-              <p className="text-muted-foreground text-sm">Gib den 4-stelligen Code ein, um deinen Bezug zu holen.</p>
+              <p className="text-muted-foreground text-sm">Gib den 4-stelligen Code ein, um deinen Bezug einzulösen.</p>
             </div>
           </div>
 

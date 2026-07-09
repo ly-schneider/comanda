@@ -888,7 +888,7 @@ function CreateBundleDialog({
               value={description}
               maxLength={500}
               rows={3}
-              placeholder="Optional: Zutaten, Allergene, Hinweise…"
+              placeholder="Optional: Details, Hinweise…"
               onChange={(e) => setDescription(e.target.value)}
             />
             <p className="text-muted-foreground text-xs">{description.length}/500</p>
@@ -1068,7 +1068,7 @@ function EditBundleDialog({
                 value={description}
                 maxLength={500}
                 rows={3}
-                placeholder="Optional: Zutaten, Allergene, Hinweise…"
+                placeholder="Optional: Details, Hinweise…"
                 onChange={(e) => setDescription(e.target.value)}
               />
               <p className="text-muted-foreground text-xs">{description.length}/500</p>

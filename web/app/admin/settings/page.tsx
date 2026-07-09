@@ -90,7 +90,7 @@ export default function AdminSettingsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Food System</CardTitle>
+              <CardTitle>Bestellsystem</CardTitle>
               <p className="text-muted-foreground text-sm">
                 Aktiviere oder deaktiviere das gesamte System für Kunden, POS und Stationen.
               </p>
