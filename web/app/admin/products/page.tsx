@@ -56,7 +56,7 @@ const NO_JETON_VALUE = "__none__"
 export default function AdminProductsPage() {
   const fetchAuth = useAuthorizedFetch()
   const [items, setItems] = useState<Product[]>([])
-  const [, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cats, setCats] = useState<Category[]>([])
   const [jetons, setJetons] = useState<Jeton[]>([])
@@ -371,36 +371,42 @@ export default function AdminProductsPage() {
         adjustInventory={adjustInventory}
         updateJeton={updateJeton}
       />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {sortedItems.map((p) => (
-          <ProductCardEditable
-            key={p.id}
-            product={p}
-            categories={cats}
-            jetons={jetons}
-            posMode={posMode}
-            onError={(msg) => setError(msg)}
-            onUpdated={(next) => {
-              setItems((prev) => prev.map((it) => (it.id === next.id ? next : it)))
-            }}
-            onDelete={async (id) => {
-              await deleteHard(id)
-              setItems((prev) => prev.filter((it) => it.id !== id))
-            }}
-            updatePrice={updatePrice}
-            updateDeposit={updateDeposit}
-            updateName={updateName}
-            updateDescription={updateDescription}
-            moveCategory={moveCategory}
-            setActive={setActive}
-            updateJeton={updateJeton}
-            adjustInventory={adjustInventory}
-            updateVariants={updateVariants}
-            uploadImage={uploadProductImage}
-            deleteImage={deleteProductImage}
-          />
-        ))}
-      </div>
+      {!loading && sortedItems.length === 0 ? (
+        <div className="text-muted-foreground py-12 text-center text-sm">
+          Keine Produkte gefunden. Erstelle dein erstes Produkt.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {sortedItems.map((p) => (
+            <ProductCardEditable
+              key={p.id}
+              product={p}
+              categories={cats}
+              jetons={jetons}
+              posMode={posMode}
+              onError={(msg) => setError(msg)}
+              onUpdated={(next) => {
+                setItems((prev) => prev.map((it) => (it.id === next.id ? next : it)))
+              }}
+              onDelete={async (id) => {
+                await deleteHard(id)
+                setItems((prev) => prev.filter((it) => it.id !== id))
+              }}
+              updatePrice={updatePrice}
+              updateDeposit={updateDeposit}
+              updateName={updateName}
+              updateDescription={updateDescription}
+              moveCategory={moveCategory}
+              setActive={setActive}
+              updateJeton={updateJeton}
+              adjustInventory={adjustInventory}
+              updateVariants={updateVariants}
+              uploadImage={uploadProductImage}
+              deleteImage={deleteProductImage}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
