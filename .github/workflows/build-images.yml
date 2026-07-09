@@ -1,0 +1,168 @@
+name: Build Images (staging)
+
+# Builds api/web/docs/migrate for linux/amd64 and pushes them to GHCR, then
+# exposes each image digest as a workflow output. Deliberately does NOT dispatch
+# to hetzner — that is gated on CI passing and handled by dispatch.yml, so an
+# image can be built in parallel with the test suite without ever shipping a
+# broken commit.
+on:
+  workflow_call:
+    inputs:
+      needs-migrate:
+        description: "Build comanda-migrate (true when backend/db/migrations/** changed)"
+        type: boolean
+        default: false
+    outputs:
+      tag:
+        description: "sha-<commit> tag applied to every image"
+        value: ${{ jobs.build-api.outputs.tag }}
+      api-digest:
+        value: ${{ jobs.build-api.outputs.digest }}
+      web-digest:
+        value: ${{ jobs.build-web.outputs.digest }}
+      docs-digest:
+        value: ${{ jobs.build-docs.outputs.digest }}
+      migrate-digest:
+        value: ${{ jobs.build-migrate.outputs.digest }}
+
+env:
+  IMAGE_PREFIX: ghcr.io/ly-schneider/comanda
+
+jobs:
+  build-api:
+    name: Build & Push API
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      tag: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Build and push API image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:sha-${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          provenance: false
+
+  build-web:
+    name: Build & Push Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Build and push web image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: web
+          file: web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-web:sha-${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+          provenance: false
+
+  build-docs:
+    name: Build & Push Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Build and push docs image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: docs
+          file: docs/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-docs:sha-${{ github.sha }}
+          cache-from: type=gha,scope=docs
+          cache-to: type=gha,scope=docs,mode=max
+          provenance: false
+
+  build-migrate:
+    name: Build & Push Migrate
+    if: ${{ inputs.needs-migrate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+      - name: Build and push migrate image
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: backend/Dockerfile.migrate
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-migrate:sha-${{ github.sha }}
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,scope=migrate,mode=max
+          provenance: false

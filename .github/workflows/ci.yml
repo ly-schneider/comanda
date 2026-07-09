@@ -92,21 +92,41 @@ jobs:
 
           echo "All required jobs passed or were skipped"
 
-  build-and-dispatch:
-    name: Build & Dispatch
+  # Builds run in parallel with the test suite — nothing ships until dispatch,
+  # which is gated on the CI gate below. A red run just leaves an unused
+  # SHA-tagged image in GHCR; it is never deployed.
+  build-images:
+    name: Build Images
     needs:
-      - ci-gate
       - detect-changes
     if: >-
-      always() &&
-      needs.ci-gate.result == 'success' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
       id-token: write
-    uses: ./.github/workflows/build-and-dispatch.yml
+    uses: ./.github/workflows/build-images.yml
     with:
       needs-migrate: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    secrets: inherit
+
+  dispatch:
+    name: Dispatch to hetzner
+    needs:
+      - ci-gate
+      - build-images
+    if: >-
+      always() &&
+      needs.ci-gate.result == 'success' &&
+      needs.build-images.result == 'success' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/dispatch.yml
+    with:
+      tag: ${{ needs.build-images.outputs.tag }}
+      api-digest: ${{ needs.build-images.outputs.api-digest }}
+      web-digest: ${{ needs.build-images.outputs.web-digest }}
+      docs-digest: ${{ needs.build-images.outputs.docs-digest }}
+      migrate-digest: ${{ needs.build-images.outputs.migrate-digest }}
     secrets: inherit

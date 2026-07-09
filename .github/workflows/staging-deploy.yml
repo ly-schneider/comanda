@@ -1,0 +1,36 @@
+name: Deploy staging (manual)
+
+# Manual rebuild + deploy of staging, bypassing CI. Reuses the same build and
+# dispatch building blocks as the automated push-to-main path; the automated path
+# gates the dispatch on CI, this one is intentionally immediate.
+on:
+  workflow_dispatch:
+    inputs:
+      needs-migrate:
+        description: "Also build & deploy the migrate image"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build images
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/build-images.yml
+    with:
+      needs-migrate: ${{ inputs.needs-migrate }}
+    secrets: inherit
+
+  deploy:
+    name: Deploy
+    needs: build
+    uses: ./.github/workflows/dispatch.yml
+    with:
+      tag: ${{ needs.build.outputs.tag }}
+      api-digest: ${{ needs.build.outputs.api-digest }}
+      web-digest: ${{ needs.build.outputs.web-digest }}
+      docs-digest: ${{ needs.build.outputs.docs-digest }}
+      migrate-digest: ${{ needs.build.outputs.migrate-digest }}
+    secrets: inherit

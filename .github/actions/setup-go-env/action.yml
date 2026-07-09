@@ -1,5 +1,12 @@
 name: Setup Go Environment
-description: Install Go 1.25 with module cache
+description: Install Go 1.25 with module + per-job build caching
+
+inputs:
+  cache-suffix:
+    description: >-
+      Distinguishes the build cache per job (lint/test/integration) so each keeps
+      its own warm compile cache instead of racing for one shared key.
+    default: build
 
 runs:
   using: composite
@@ -7,4 +14,24 @@ runs:
     - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
         go-version: "1.25"
-        cache-dependency-path: backend/go.sum
+        # Managed explicitly below so we can key the build cache per job and fall
+        # back across go.sum churn (setup-go's cache is exact-go.sum-match only).
+        cache: false
+
+    - name: Cache Go modules + tools
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/go/bin
+        key: go-mod-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          go-mod-${{ runner.os }}-
+
+    - name: Cache Go build
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/go-build
+        key: go-build-${{ inputs.cache-suffix }}-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          go-build-${{ inputs.cache-suffix }}-${{ runner.os }}-

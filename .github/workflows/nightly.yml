@@ -1,0 +1,20 @@
+name: Nightly
+
+# Runs the backend suites under -race, which is too slow for the per-push CI.
+# Daytime CI compiles race-free (sharing a warm build cache); this catches data
+# races once a day and on demand.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  backend-race:
+    name: Backend (-race)
+    uses: ./.github/workflows/ci-backend.yml
+    with:
+      race: true

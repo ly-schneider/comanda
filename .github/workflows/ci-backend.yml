@@ -2,6 +2,11 @@ name: CI Backend
 
 on:
   workflow_call:
+    inputs:
+      race:
+        description: "Run the test suites under -race (slow; used by the nightly job)"
+        type: boolean
+        default: false
 
 jobs:
   lint:
@@ -11,8 +16,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-suffix: lint
 
       - uses: ./.github/actions/generate-backend
+
+      - name: Cache golangci-lint analysis
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-
 
       - name: Lint
         working-directory: backend
@@ -27,12 +42,14 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-suffix: test
 
       - uses: ./.github/actions/generate-backend
 
       - name: Run tests
         working-directory: backend
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test ${{ inputs.race && '-race' || '' }} -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
@@ -60,6 +77,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-suffix: integration
 
       - uses: ./.github/actions/generate-backend
 
@@ -82,7 +101,7 @@ jobs:
         env:
           POSTGRES_TEST_DSN: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
           POSTGRES_TEST_DSN_APP: postgres://comanda_app:app@localhost:5432/postgres?sslmode=disable
-        run: go test -race -count=1 -timeout=10m ./test/integration/...
+        run: go test ${{ inputs.race && '-race' || '' }} -count=1 -timeout=10m ./test/integration/...
 
   migrate-lint:
     name: Migration Lint

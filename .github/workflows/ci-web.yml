@@ -48,6 +48,14 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
 
+      - name: Cache Next.js build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ hashFiles('web/**/*.[jt]s', 'web/**/*.[jt]sx') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
+
       # Exercises the Turbopack production build (static export analysis) so
       # dep incompatibilities can't slip through to the Docker image build.
       - name: Build
@@ -64,9 +72,30 @@ jobs:
 
       - uses: ./.github/actions/setup-node-pnpm
 
-      - name: Install Playwright browser
+      - name: Cache Next.js build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ hashFiles('web/**/*.[jt]s', 'web/**/*.[jt]sx') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+
+      - name: Install Playwright (browser + system deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: web
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: pnpm exec playwright install-deps chromium
 
       - name: Build
         working-directory: web
