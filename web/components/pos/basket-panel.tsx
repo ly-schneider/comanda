@@ -151,7 +151,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     Map<string, { template: Omit<Receipt, "orderId" | "pickupQr"> & { orderTimestamp?: number } }>
   >(new Map())
   const cartIsEmpty = cart.items.length === 0
-  const itemTileClass = "border-border bg-card rounded-xl border p-3 shadow-sm"
+  const itemTileClass = "border-border bg-card rounded-xl border p-3"
   const jetonMode = mode === "JETON" || mode === "HYBRID"
   const shouldPrint = mode !== "JETON"
   const resolveBundleSelections = useCallback((item: CartItem) => {
@@ -784,7 +784,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
         <div className="px-4 py-4">
           <h3 className="text-lg font-semibold">Warenkorb</h3>
         </div>
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pt-0 pb-4">
           {cart.items.length === 0 ? (
             <div className="flex h-full items-start justify-center">
               <div className="flex flex-col items-center justify-center py-8 text-center">
