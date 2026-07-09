@@ -30,7 +30,7 @@ const STATUS_CLASS: Record<VolunteerCampaignStatus, string> = {
   ended: "bg-muted text-muted-foreground",
 }
 
-export default function AdminStaffMealsPage() {
+export default function AdminStaffPerksPage() {
   const fetchAuth = useAuthorizedFetch()
   const router = useRouter()
   const [meals, setMeals] = useState<VolunteerCampaignSummary[]>([])
