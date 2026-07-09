@@ -57,6 +57,7 @@ export function CatalogGrid({
 function CatalogProductCard({ product }: { product: ProductDTO }) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [isVariantPickerOpen, setIsVariantPickerOpen] = useState(false)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const { addToCart, getItemQuantity, getTotalProductQuantity } = useCart()
   const isBundle = product.type === "bundle"
   const productHasVariants = !isBundle && hasVariants(product)
@@ -145,9 +146,27 @@ function CatalogProductCard({ product }: { product: ProductDTO }) {
             <div className="flex min-w-0 flex-col">
               <h3 className="font-family-secondary text-lg font-semibold">{product.name}</h3>
               {product.description && (
-                <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs whitespace-pre-line">
-                  {product.description}
-                </p>
+                <div className="mt-0.5">
+                  <p
+                    className={`text-muted-foreground text-xs whitespace-pre-line ${
+                      descriptionExpanded ? "" : "line-clamp-3"
+                    }`}
+                  >
+                    {product.description}
+                  </p>
+                  {product.description.length > 90 && (
+                    <button
+                      type="button"
+                      className="text-muted-foreground text-xs underline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDescriptionExpanded((v) => !v)
+                      }}
+                    >
+                      {descriptionExpanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                    </button>
+                  )}
+                </div>
               )}
               <p className="font-family-secondary mt-1 text-base">{formatChf(product.priceCents)}</p>
               {product.depositCents > 0 && (

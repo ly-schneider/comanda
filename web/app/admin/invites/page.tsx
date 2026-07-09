@@ -108,13 +108,13 @@ export default function AdminInvitesPage() {
               if (fieldErrors.email) setFieldErrors({})
             }}
             placeholder="E-Mail-Adresse"
-            className="h-8 w-72"
+            className="h-9 w-72"
             aria-invalid={!!fieldErrors.email}
           />
           {fieldErrors.email && <p className="text-destructive mt-1 text-sm">{fieldErrors.email}</p>}
         </div>
         <Select value={memberRole} onValueChange={(v) => setMemberRole(v as InviteMemberRole)}>
-          <SelectTrigger className="h-8 w-44">
+          <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -123,7 +123,7 @@ export default function AdminInvitesPage() {
             <SelectItem value="catalog">{ROLE_LABELS_DE.catalog}</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" className="h-8" onClick={() => void createInvite()} disabled={creating}>
+        <Button variant="outline" onClick={() => void createInvite()} disabled={creating}>
           Einladen
         </Button>
       </div>

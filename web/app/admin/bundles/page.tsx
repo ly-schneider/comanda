@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ImageUpload } from "@/components/admin/image-upload"
+import { ProductImageCrop } from "@/components/admin/product-image-crop"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,7 +62,7 @@ type FetchFn = ReturnType<typeof useAuthorizedFetch>
 
 async function apiCreateBundle(
   fetchAuth: FetchFn,
-  body: { categoryId: string; name: string; priceCents: number; image?: string; description?: string | null }
+  body: { categoryId: string; name: string; priceCents: number; description?: string | null }
 ): Promise<Bundle> {
   const res = await fetchAuth(`/api/v1/bundles`, {
     method: "POST",
@@ -751,7 +751,7 @@ function CreateBundleDialog({
   const [name, setName] = useState("")
   const [categoryId, setCategoryId] = useState<string>("")
   const [priceInput, setPriceInput] = useState("")
-  const [image, setImage] = useState("")
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [description, setDescription] = useState("")
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -761,7 +761,7 @@ function CreateBundleDialog({
       setName("")
       setCategoryId("")
       setPriceInput("")
-      setImage("")
+      setImageFile(null)
       setDescription("")
       setErrors({})
     }
@@ -784,15 +784,25 @@ function CreateBundleDialog({
     try {
       const cents = parsePriceInputToCents(priceInput) ?? 0
       const trimmedDescription = description.trim()
-      await apiCreateBundle(fetchAuth, {
+      const created = await apiCreateBundle(fetchAuth, {
         categoryId,
         name: name.trim(),
         priceCents: cents,
-        ...(image.trim() ? { image: image.trim() } : {}),
         ...(trimmedDescription ? { description: trimmedDescription } : {}),
       })
+      let imageUploadFailed = false
+      if (imageFile) {
+        try {
+          await apiUploadBundleImage(fetchAuth, created.id, imageFile)
+        } catch {
+          imageUploadFailed = true
+        }
+      }
       onClose()
       await onCreated()
+      if (imageUploadFailed) {
+        onError("Bundle erstellt, aber das Bild konnte nicht hochgeladen werden.")
+      }
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : "Erstellen fehlgeschlagen")
     } finally {
@@ -809,7 +819,7 @@ function CreateBundleDialog({
     >
       <DialogContent className="max-w-[520px] rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-sm tracking-wider">NEUES BUNDLE</DialogTitle>
+          <DialogTitle>Neues Bundle anlegen</DialogTitle>
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
@@ -873,13 +883,8 @@ function CreateBundleDialog({
             {errors.price && <p className="text-destructive text-xs">{errors.price}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="create-image">Bild URL (optional)</Label>
-            <Input
-              id="create-image"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-              placeholder="https://..."
-            />
+            <Label>Bild (optional)</Label>
+            <ProductImageCrop onChange={setImageFile} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="create-description">Beschreibung (optional)</Label>
@@ -993,13 +998,13 @@ function EditBundleDialog({
     >
       <DialogContent className="max-w-[520px] rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-sm tracking-wider">BEARBEITEN</DialogTitle>
+          <DialogTitle>Bundle bearbeiten</DialogTitle>
         </DialogHeader>
         {bundle && (
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label>Bild</Label>
-              <ImageUpload
+              <ProductImageCrop
                 currentImageUrl={image}
                 onUpload={async (file) => {
                   try {

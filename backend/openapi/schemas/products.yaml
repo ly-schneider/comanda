@@ -284,6 +284,8 @@ InventoryLedgerEntry:
     createdBy:
       type: string
       nullable: true
+    createdByUser:
+      $ref: "users.yaml#/UserSummary"
     variantId:
       type: string
       nullable: true

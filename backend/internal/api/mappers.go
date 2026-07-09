@@ -541,6 +541,10 @@ func toAPIInventoryLedgerEntry(e *ent.InventoryLedger) generated.InventoryLedger
 	if e.VariantID != nil {
 		entry.VariantId = (*string)(e.VariantID)
 	}
+	if e.Edges.CreatedByUser != nil {
+		us := toAPIUserSummary(e.Edges.CreatedByUser)
+		entry.CreatedByUser = &us
+	}
 	return entry
 }
 

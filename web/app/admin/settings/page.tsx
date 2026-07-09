@@ -141,7 +141,7 @@ export default function AdminSettingsPage() {
               Hybrid
             </Button>
           </div>
-          {missingJetons > 0 && (
+          {missingJetons > 0 && posMode !== "QR_CODE" && (
             <div className="text-sm text-amber-700">
               {missingJetons} aktive Produkte haben keinen Jeton.{" "}
               <Link href="/admin/jetons" className="underline">

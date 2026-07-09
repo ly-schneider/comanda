@@ -1,6 +1,7 @@
 "use client"
 
-import { RotateCcw, RotateCw, Upload, ZoomIn, ZoomOut } from "lucide-react"
+import { Loader2, RotateCcw, RotateCw, Trash2, Upload, ZoomIn, ZoomOut } from "lucide-react"
+import NextImage from "next/image"
 import { type ComponentType, useEffect, useRef, useState } from "react"
 import CropperBase, { type Area, type CropperProps } from "react-easy-crop"
 import { Button } from "@/components/ui/button"
@@ -13,13 +14,30 @@ const Cropper = CropperBase as unknown as ComponentType<Partial<CropperProps>>
 
 const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp"
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
+const DEFAULT_ASPECT = 16 / 9
 
 type Props = {
-  // Fires with the cropped 1:1 WebP whenever the crop settles, or null when cleared.
-  onChange: (file: File | null) => void
+  aspect?: number
+  disabled?: boolean
+  // Deferred mode (e.g. two-step create dialogs): fires with the cropped WebP
+  // whenever the crop settles, or null when cleared. The parent uploads it later.
+  onChange?: (file: File | null) => void
+  // Immediate mode (edit flows): shows the persisted image and only uploads once
+  // the admin confirms the crop.
+  currentImageUrl?: string | null
+  onUpload?: (file: File) => Promise<string>
+  onRemove?: () => Promise<void>
 }
 
-export function ProductImageCrop({ onChange }: Props) {
+export function ProductImageCrop({
+  aspect = DEFAULT_ASPECT,
+  disabled,
+  onChange,
+  currentImageUrl,
+  onUpload,
+  onRemove,
+}: Props) {
+  const immediate = !!onUpload
   const [src, setSrc] = useState<string | null>(null)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
@@ -27,13 +45,19 @@ export function ProductImageCrop({ onChange }: Props) {
   const [area, setArea] = useState<CropArea | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Keep callback and revocable URLs in refs so the crop effect stays stable.
+  // Keep callbacks, the pending file, and revocable URLs in refs so the crop
+  // effect stays stable across re-renders.
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const srcRef = useRef<string | null>(null)
   const previewRef = useRef<string | null>(null)
+  const fileRef = useRef<File | null>(null)
+
+  const busy = disabled || saving || removing
 
   const pickFile = (file: File) => {
     setError(null)
@@ -54,17 +78,51 @@ export function ProductImageCrop({ onChange }: Props) {
     setRotation(0)
   }
 
-  const clear = () => {
+  const resetCropState = () => {
     if (srcRef.current) URL.revokeObjectURL(srcRef.current)
     if (previewRef.current) URL.revokeObjectURL(previewRef.current)
     srcRef.current = null
     previewRef.current = null
+    fileRef.current = null
     setSrc(null)
     setArea(null)
     setPreview(null)
     setError(null)
-    onChangeRef.current(null)
     if (inputRef.current) inputRef.current.value = ""
+  }
+
+  // Deferred mode: clears the picked image entirely. Immediate mode: cancels
+  // the in-progress crop and falls back to the currently persisted image.
+  const cancel = () => {
+    resetCropState()
+    if (!immediate) onChangeRef.current?.(null)
+  }
+
+  const handleRemove = async () => {
+    if (!onRemove) return
+    setError(null)
+    setRemoving(true)
+    try {
+      await onRemove()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Löschen fehlgeschlagen")
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  const confirmUpload = async () => {
+    if (!onUpload || !fileRef.current) return
+    setError(null)
+    setSaving(true)
+    try {
+      await onUpload(fileRef.current)
+      resetCropState()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Upload fehlgeschlagen")
+    } finally {
+      setSaving(false)
+    }
   }
 
   useEffect(() => {
@@ -79,7 +137,8 @@ export function ProductImageCrop({ onChange }: Props) {
         if (previewRef.current) URL.revokeObjectURL(previewRef.current)
         previewRef.current = url
         setPreview(url)
-        onChangeRef.current(file)
+        fileRef.current = file
+        if (!immediate) onChangeRef.current?.(file)
       } catch {
         // ignore transient crop failures while dragging
       }
@@ -97,15 +156,89 @@ export function ProductImageCrop({ onChange }: Props) {
     []
   )
 
+  const boxStyle = { aspectRatio: aspect }
+
+  // Immediate mode with a persisted image and nothing being edited right now:
+  // show the current image plus replace/remove actions.
+  if (immediate && !src && currentImageUrl) {
+    return (
+      <div className="space-y-2">
+        <div
+          role="button"
+          tabIndex={0}
+          className="bg-muted relative w-full cursor-pointer overflow-hidden rounded-[11px]"
+          style={boxStyle}
+          onClick={() => !busy && inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (!busy && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault()
+              inputRef.current?.click()
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            if (busy) return
+            const f = e.dataTransfer.files?.[0]
+            if (f) pickFile(f)
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          aria-label="Bild ersetzen"
+        >
+          <NextImage
+            src={currentImageUrl}
+            alt="Produktbild"
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
+            quality={90}
+            className="object-cover"
+            unoptimized={
+              currentImageUrl.startsWith("blob:") ||
+              currentImageUrl.includes("localhost") ||
+              currentImageUrl.includes("127.0.0.1")
+            }
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+          >
+            Bild ersetzen
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleRemove} disabled={busy}>
+            {removing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Trash2 className="mr-1 h-3 w-3" />}
+            Entfernen
+          </Button>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_TYPES}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) pickFile(f)
+            if (inputRef.current) inputRef.current.value = ""
+          }}
+        />
+        {error && <p className="text-destructive text-xs">{error}</p>}
+      </div>
+    )
+  }
+
   if (!src) {
     return (
       <div className="space-y-1">
         <div
           role="button"
           tabIndex={0}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => !busy && inputRef.current?.click()}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
+            if (!busy && (e.key === "Enter" || e.key === " ")) {
               e.preventDefault()
               inputRef.current?.click()
             }
@@ -116,7 +249,8 @@ export function ProductImageCrop({ onChange }: Props) {
             if (f) pickFile(f)
           }}
           onDragOver={(e) => e.preventDefault()}
-          className="border-border text-muted-foreground hover:bg-muted/50 flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[11px] border border-dashed"
+          className="border-border text-muted-foreground hover:bg-muted/50 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[11px] border border-dashed"
+          style={boxStyle}
         >
           <Upload className="size-6" />
           <span className="text-sm">Foto auswählen oder hierher ziehen</span>
@@ -140,13 +274,13 @@ export function ProductImageCrop({ onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="bg-muted relative aspect-square w-full overflow-hidden rounded-[11px]">
+      <div className="bg-muted relative w-full overflow-hidden rounded-[11px]" style={boxStyle}>
         <Cropper
           image={src}
           crop={crop}
           zoom={zoom}
           rotation={rotation}
-          aspect={1}
+          aspect={aspect}
           showGrid
           onCropChange={setCrop}
           onZoomChange={setZoom}
@@ -196,12 +330,26 @@ export function ProductImageCrop({ onChange }: Props) {
           aria-hidden
         />
         <p className="text-muted-foreground text-xs">
-          So erscheint das Bild im Shop und Checkout (1:1). Achte darauf, dass alles Wichtige im Quadrat liegt.
+          So erscheint das Bild im Shop. Für kleine Vorschauen wird die Bildmitte quadratisch zugeschnitten.
         </p>
-        <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={clear}>
-          Anderes Foto
-        </Button>
+        {!immediate && (
+          <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={cancel}>
+            Anderes Foto
+          </Button>
+        )}
       </div>
+
+      {immediate && (
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" className="flex-1" onClick={cancel} disabled={busy}>
+            Abbrechen
+          </Button>
+          <Button type="button" size="sm" className="flex-1" onClick={confirmUpload} disabled={busy || !preview}>
+            {saving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            Speichern
+          </Button>
+        </div>
+      )}
 
       {error && <p className="text-destructive text-xs">{error}</p>}
     </div>

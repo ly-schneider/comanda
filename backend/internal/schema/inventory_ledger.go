@@ -78,5 +78,9 @@ func (InventoryLedger) Edges() []ent.Edge {
 			Ref("inventory_ledger_entries").
 			Field("variant_id").
 			Unique(),
+		edge.From("created_by_user", User.Type).
+			Ref("inventory_ledger_entries_created").
+			Field("created_by").
+			Unique(),
 	}
 }

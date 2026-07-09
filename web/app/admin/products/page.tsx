@@ -2,7 +2,6 @@
 import { Minus, Plus } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { DepotInfo } from "@/components/admin/depot-info"
-import { ImageUpload } from "@/components/admin/image-upload"
 import { ProductImageCrop } from "@/components/admin/product-image-crop"
 import {
   AlertDialog,
@@ -690,7 +689,7 @@ function ProductCardEditable({
       <Card className="border-border flex h-full flex-col gap-0 overflow-hidden rounded-[11px] border p-0 pb-3">
         <CardHeader className="p-2">
           <div className="relative">
-            <ImageUpload
+            <ProductImageCrop
               currentImageUrl={product.image}
               onUpload={async (file) => {
                 const url = await uploadImage(product.id, file)

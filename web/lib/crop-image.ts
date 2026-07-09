@@ -25,9 +25,14 @@ function rotatedBBox(width: number, height: number, rotation: number): { width: 
   }
 }
 
-// Renders the (optionally rotated) source, extracts the crop area and normalizes
-// it to a square WebP — the 1:1 format used across the storefront and checkout.
-export async function getCroppedBlob(imageSrc: string, crop: CropArea, rotation = 0, outputSize = 800): Promise<Blob> {
+// Renders the (optionally rotated) source and extracts the crop area as a WebP,
+// keeping the aspect ratio the crop area was selected with.
+export async function getCroppedBlob(
+  imageSrc: string,
+  crop: CropArea,
+  rotation = 0,
+  outputWidth = 1200
+): Promise<Blob> {
   const image = await createImage(imageSrc)
   const canvas = document.createElement("canvas")
   const ctx = canvas.getContext("2d")
@@ -44,9 +49,9 @@ export async function getCroppedBlob(imageSrc: string, crop: CropArea, rotation 
   const out = document.createElement("canvas")
   const outCtx = out.getContext("2d")
   if (!outCtx) throw new Error("Canvas nicht verfügbar")
-  out.width = outputSize
-  out.height = outputSize
-  outCtx.drawImage(canvas, crop.x, crop.y, crop.width, crop.height, 0, 0, outputSize, outputSize)
+  out.width = outputWidth
+  out.height = Math.round(outputWidth * (crop.height / crop.width))
+  outCtx.drawImage(canvas, crop.x, crop.y, crop.width, crop.height, 0, 0, out.width, out.height)
 
   return new Promise<Blob>((resolve, reject) => {
     out.toBlob(

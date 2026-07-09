@@ -56,5 +56,6 @@ func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("sessions", Session.Type),
 		edge.To("invites", AdminInvite.Type),
+		edge.To("inventory_ledger_entries_created", InventoryLedger.Type),
 	}
 }

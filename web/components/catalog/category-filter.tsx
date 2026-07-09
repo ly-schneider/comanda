@@ -7,8 +7,10 @@ export type FilterCategory = { id: string; name: string }
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <Button
-      className={`border-border hover:bg-card hover:text-foreground flex h-10 shrink-0 items-center rounded-[10px] border px-3 text-sm ${
-        active ? "bg-card text-foreground" : "text-muted-foreground bg-transparent"
+      className={`border-border flex h-10 shrink-0 items-center rounded-[10px] border px-3 text-sm ${
+        active
+          ? "bg-primary text-primary-foreground hover:bg-primary-hover"
+          : "text-muted-foreground hover:bg-card hover:text-foreground bg-transparent"
       }`}
       onClick={onClick}
       aria-pressed={active}

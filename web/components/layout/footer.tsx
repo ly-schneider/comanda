@@ -30,15 +30,6 @@ export default function Footer({ version }: { version?: string }) {
           <Link href="/nutzungsbedingungen" className="hover:underline">
             Nutzungsbedingungen
           </Link>
-          <span className="text-gray-300">&middot;</span>
-          <Link
-            href="https://github.com/ly-schneider/comanda"
-            className="hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            GitHub
-          </Link>
         </nav>
       </div>
     </footer>

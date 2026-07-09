@@ -22,6 +22,7 @@ type LedgerEntry = {
   orderLineId?: string | null
   deviceId?: string | null
   createdBy?: string | null
+  createdByUser?: { id: string; name: string | null } | null
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -175,7 +176,7 @@ export default function InventoryHistoryPage() {
                         href={`/admin/users/${encodeURIComponent(e.createdBy)}`}
                         className="text-xs underline underline-offset-2"
                       >
-                        {e.createdBy.slice(0, 8)}…
+                        {e.createdByUser?.name || `${e.createdBy.slice(0, 8)}…`}
                       </Link>
                     ) : (
                       <span className="text-muted-foreground">–</span>

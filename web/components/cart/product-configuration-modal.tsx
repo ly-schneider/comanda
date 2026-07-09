@@ -114,11 +114,6 @@ export function ProductConfigurationModal({
   )
 }
 
-/** Strip the "-16x9" suffix before the file extension to get a 1:1 crop URL. */
-function squareImageUrl(url: string): string {
-  return url.replace(/-16x9(\.\w+)$/, "$1")
-}
-
 interface BundleSlotSelectorProps {
   slot: BundleSlotDTO
   selectedProductId?: string
@@ -170,7 +165,7 @@ function BundleSlotSelector({ slot, selectedProductId, onSelect, showDescription
                     <div className="relative flex size-14 shrink-0 items-center justify-center rounded-xl bg-[#cec9c6]">
                       <div className="relative size-11 overflow-hidden">
                         <Image
-                          src={squareImageUrl(item.image)}
+                          src={item.image}
                           alt={item.name}
                           fill
                           sizes="44px"
