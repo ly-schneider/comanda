@@ -1,6 +1,7 @@
 "use client"
 import { Minus, Plus } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { DepotInfo } from "@/components/admin/depot-info"
 import { ImageUpload } from "@/components/admin/image-upload"
 import {
   AlertDialog,
@@ -756,22 +757,24 @@ function ProductCardEditable({
           {product.type === "simple" && (
             <div className="space-y-1">
               <Label htmlFor={`deposit-${product.id}`}>Depot (CHF)</Label>
-              <Input
-                id={`deposit-${product.id}`}
-                inputMode="decimal"
-                value={depositInput}
-                onChange={(e) => {
-                  setDepositInput(e.target.value)
-                  setStatus("idle")
-                  setFieldError(null)
-                }}
-                onBlur={onDepositBlur}
-                aria-invalid={parsedDeposit == null || parsedDeposit < 0}
-              />
-              {parsedDeposit == null || parsedDeposit < 0 ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`deposit-${product.id}`}
+                  inputMode="decimal"
+                  value={depositInput}
+                  onChange={(e) => {
+                    setDepositInput(e.target.value)
+                    setStatus("idle")
+                    setFieldError(null)
+                  }}
+                  onBlur={onDepositBlur}
+                  aria-invalid={parsedDeposit == null || parsedDeposit < 0}
+                  className="flex-1"
+                />
+                <DepotInfo />
+              </div>
+              {(parsedDeposit == null || parsedDeposit < 0) && (
                 <p className="text-destructive text-xs">Depot muss 0 oder höher sein.</p>
-              ) : (
-                <p className="text-muted-foreground text-xs">Rückerstattbares Depot pro Stück. 0 = kein Depot.</p>
               )}
             </div>
           )}
@@ -1322,19 +1325,19 @@ function CreateProductCard({
           {type === "simple" && (
             <div className="space-y-1">
               <Label htmlFor="new-deposit">Depot (CHF)</Label>
-              <Input
-                id="new-deposit"
-                inputMode="decimal"
-                value={depositInput}
-                onChange={(e) => setDepositInput(e.target.value)}
-                placeholder="0.00"
-                aria-invalid={submitted && !depositValid}
-              />
-              {submitted && !depositValid ? (
-                <p className="text-destructive text-xs">Depot muss 0 oder höher sein.</p>
-              ) : (
-                <p className="text-muted-foreground text-xs">Rückerstattbares Depot pro Stück. Leer = kein Depot.</p>
-              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  id="new-deposit"
+                  inputMode="decimal"
+                  value={depositInput}
+                  onChange={(e) => setDepositInput(e.target.value)}
+                  placeholder="0.00"
+                  aria-invalid={submitted && !depositValid}
+                  className="flex-1"
+                />
+                <DepotInfo />
+              </div>
+              {submitted && !depositValid && <p className="text-destructive text-xs">Depot muss 0 oder höher sein.</p>}
             </div>
           )}
           <div className="space-y-1">
