@@ -1,3 +1,8 @@
+-- squawk-ignore-file renaming-table, renaming-column
+-- Deliberate in-place rename of the composite-product concept menu -> bundle.
+-- The table/column renames trip squawk's rename guards (stale-client risk during
+-- a rolling deploy); shipped atomically with the matching web+backend change, so
+-- the guard is scoped-off for this file only, not globally.
 ALTER TYPE product_type RENAME VALUE 'menu' TO 'bundle';
 
 ALTER TABLE menu_slot RENAME TO bundle_slot;

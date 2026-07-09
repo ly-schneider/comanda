@@ -1,4 +1,4 @@
-h1:ngD0stqHoIQvlP2MnGXn1WxAH7Tmv+G9M8UuGlSM9n0=
+h1:/jNX0ADV0uE/TKscCgoqDez/5Smny1If1XEhYUjLJCU=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -37,4 +37,4 @@ h1:ngD0stqHoIQvlP2MnGXn1WxAH7Tmv+G9M8UuGlSM9n0=
 20260710000000_payment_plugin_extension.sql h1:h+Buvh5fB4MtV/hIL/g2mtAWaEc9ZBkJRAhSb3mXH3E=
 20260711000000_club100_plugin_config.sql h1:btGp8mNqH44KMNpS8G9SQX/GZgZQaru5KCtLbyDN/MA=
 20260712000000_station_enroll_token.sql h1:NL2b8CgBEMt7ilh4ovQag5NZLDhPspycHvZXTlqvxYQ=
-20260713000000_menu_to_bundle.sql h1:TIJhoIYoaPZsw8oBoQNvj74VGXb7ZiLyriaeNINyLeo=
+20260713000000_menu_to_bundle.sql h1:IL7bILym/aVZGyAAA7MTnDlRSrsNq4UKKv0+4Qq7ksQ=
