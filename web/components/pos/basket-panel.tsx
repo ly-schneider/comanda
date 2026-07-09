@@ -151,6 +151,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     Map<string, { template: Omit<Receipt, "orderId" | "pickupQr"> & { orderTimestamp?: number } }>
   >(new Map())
   const cartIsEmpty = cart.items.length === 0
+  const itemTileClass = "border-border bg-card rounded-xl border p-3 shadow-sm"
   const jetonMode = mode === "JETON" || mode === "HYBRID"
   const shouldPrint = mode !== "JETON"
   const resolveBundleSelections = useCallback((item: CartItem) => {
@@ -779,7 +780,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
 
   return (
     <>
-      <aside className="bg-card top-0 mx-3 flex h-full min-h-0 flex-col rounded-2xl md:sticky md:mr-4 md:ml-0">
+      <aside className="bg-card border-border mx-3 flex h-full min-h-0 flex-col rounded-2xl border shadow-md md:sticky md:top-3 md:my-3 md:mr-3 md:ml-0 md:h-[calc(100%-1.5rem)]">
         <div className="px-4 py-4">
           <h3 className="text-lg font-semibold">Warenkorb</h3>
         </div>
@@ -798,7 +799,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                 for (let i = 0; i < startIndex; i++) {
                   const item = cart.items[i]!
                   rows.push(
-                    <div key={item.id} className="pb-2">
+                    <div key={item.id} className={itemTileClass}>
                       <CartItemDisplay
                         item={item}
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
@@ -812,7 +813,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                 }
                 const grouped = cart.items.slice(startIndex, endIndex + 1)
                 rows.push(
-                  <div key={`group-${grouped.map((g) => g.id).join("-")}`} className="pb-2">
+                  <div key={`group-${grouped.map((g) => g.id).join("-")}`}>
                     <InlineBundleGroup
                       suggestion={suggestion}
                       items={grouped}
@@ -825,7 +826,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                 for (let i = endIndex + 1; i < cart.items.length; i++) {
                   const item = cart.items[i]!
                   rows.push(
-                    <div key={item.id} className="pb-2">
+                    <div key={item.id} className={itemTileClass}>
                       <CartItemDisplay
                         item={item}
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
@@ -840,7 +841,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
               } else {
                 for (const item of cart.items) {
                   rows.push(
-                    <div key={item.id} className="pb-2">
+                    <div key={item.id} className={itemTileClass}>
                       <CartItemDisplay
                         item={item}
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
