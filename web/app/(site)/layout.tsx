@@ -3,6 +3,8 @@ import Footer from "@/components/layout/footer"
 import Header from "@/components/layout/header"
 import { CartProvider } from "@/contexts/cart-context"
 import { getBranding } from "@/lib/server/branding"
+import { getRequestHost } from "@/lib/server/host"
+import { parseTenantHost } from "@/lib/tenant"
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = await getBranding()
@@ -15,7 +17,14 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default function SiteLayout({ children }: { children: React.ReactNode }) {
+export default async function SiteLayout({ children }: { children: React.ReactNode }) {
+  // The platform host has no storefront: its root renders the platform landing,
+  // which stands alone without the tenant storefront chrome (header/cart/footer).
+  const host = await getRequestHost()
+  if (parseTenantHost(host).type === "platform") {
+    return <div className="flex min-h-screen flex-col overflow-x-hidden">{children}</div>
+  }
+
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden">
       <CartProvider>

@@ -20,8 +20,8 @@ export default function Header() {
     <header className="my-2 w-full">
       <div
         className={`mx-auto px-4 ${
-          pathname.includes("/food/orders") ||
-          pathname.includes("/food/checkout") ||
+          pathname.includes("/orders") ||
+          pathname.includes("/checkout") ||
           pathname.includes("/profile") ||
           pathname.includes("/claim")
             ? "max-w-xl"
@@ -29,7 +29,7 @@ export default function Header() {
         }`}
       >
         <div className="relative flex items-center justify-between">
-          <Link href="/food" className="flex items-center">
+          <Link href="/" className="flex items-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full">
               {logoUrl && (
                 <Image
@@ -56,7 +56,7 @@ export default function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48 rounded-2xl">
               <DropdownMenuItem asChild>
-                <Link href="/food/orders" className="flex items-center gap-2">
+                <Link href="/orders" className="flex items-center gap-2">
                   <LayoutList className="h-4 w-4" />
                   <span>Bestellungen</span>
                 </Link>

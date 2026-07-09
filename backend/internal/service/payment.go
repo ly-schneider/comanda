@@ -999,7 +999,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 // Order link must use the tenant's primary verified domain, not the platform
 // apex (which has no tenant context). Runs inside the receipt's tenant tx.
 func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) string {
-	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/food/orders/" + orderID
+	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/orders/" + orderID
 	if s.tenantDomainRepo == nil {
 		return fallback
 	}
@@ -1027,7 +1027,7 @@ func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) str
 	if host == "" {
 		return fallback
 	}
-	return "https://" + host + "/food/orders/" + orderID
+	return "https://" + host + "/orders/" + orderID
 }
 
 func safeStr(p *string) string {

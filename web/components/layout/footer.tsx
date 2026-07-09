@@ -10,17 +10,13 @@ export default function Footer({ version }: { version?: string }) {
   const { cart } = useCart()
   const totalItems = cart.items.reduce((sum, it) => sum + it.quantity, 0)
 
-  if (pathname?.startsWith("/food/checkout")) return null
+  if (pathname?.startsWith("/checkout")) return null
 
   return (
     <footer
       id="app-footer"
       className={`text-muted-foreground w-full py-4 text-sm ${
-        (pathname === "/" || pathname === "/food") && totalItems > 0
-          ? "mb-20"
-          : pathname === "/food/orders"
-            ? "mb-18"
-            : "mb-4"
+        pathname === "/" && totalItems > 0 ? "mb-20" : pathname === "/orders" ? "mb-18" : "mb-4"
       }`}
     >
       <div className="container mx-auto px-4">

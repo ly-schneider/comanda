@@ -52,7 +52,7 @@ export default function CheckoutClient() {
     setLoading(true)
     setError(null)
     try {
-      router.push("/food/checkout/payment")
+      router.push("/checkout/payment")
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Fehler beim Starten der Zahlung"
       setError(message)

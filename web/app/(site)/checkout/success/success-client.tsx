@@ -28,7 +28,7 @@ export default function CheckoutSuccessClient() {
         try {
           const status = await getPaymentStatus(orderIdParam)
           if (status.status !== "paid" && status.status !== "pending") {
-            router.replace("/food/checkout/cancel")
+            router.replace("/checkout/cancel")
             return
           }
         } catch {}
@@ -91,7 +91,7 @@ export default function CheckoutSuccessClient() {
       <div className="fixed inset-x-0 bottom-0 mx-auto max-w-xl p-4">
         <Button
           className="rounded-pill h-12 w-full text-base font-medium"
-          onClick={() => router.push(orderId ? `/food/orders/${orderId}?from=success` : "/")}
+          onClick={() => router.push(orderId ? `/orders/${orderId}?from=success` : "/")}
         >
           Weiter
         </Button>

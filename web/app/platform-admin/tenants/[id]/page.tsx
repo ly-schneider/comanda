@@ -266,7 +266,7 @@ export default function ManageTenantPage() {
             </a>
           ))}
           <a
-            href={`${tenantBaseUrl}/food`}
+            href={`${tenantBaseUrl}/`}
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground inline-block pt-1 text-sm underline-offset-4 hover:underline"

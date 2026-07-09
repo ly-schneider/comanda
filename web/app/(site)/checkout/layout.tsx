@@ -3,11 +3,11 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Warenkorb",
   description: "Prüfe deinen Warenkorb und starte die Zahlung bei Comanda.",
-  alternates: { canonical: "/food/checkout" },
+  alternates: { canonical: "/checkout" },
   openGraph: {
     title: "Warenkorb",
     description: "Warenkorb prüfen und zur Zahlung fortfahren.",
-    url: "/food/checkout",
+    url: "/checkout",
   },
 }
 

@@ -21,11 +21,11 @@ export default function PaymentNextClient() {
     const orderIdParam = sp.get("order_id")
 
     if (result === "cancel") {
-      router.replace("/food/checkout/cancel")
+      router.replace("/checkout/cancel")
       return
     }
     if (result === "failed") {
-      router.replace("/food/checkout/error")
+      router.replace("/checkout/error")
       return
     }
 
@@ -46,7 +46,7 @@ export default function PaymentNextClient() {
         }
       } catch {}
 
-      router.replace("/food/checkout")
+      router.replace("/checkout")
     }
 
     const pollOrder = async (orderId: string) => {
@@ -66,21 +66,21 @@ export default function PaymentNextClient() {
             try {
               sessionStorage.removeItem("comanda.pending_order")
             } catch {}
-            router.replace(`/food/checkout/success?order_id=${encodeURIComponent(orderId)}`)
+            router.replace(`/checkout/success?order_id=${encodeURIComponent(orderId)}`)
             return
           }
 
           if (res.status === "cancelled") {
-            router.replace("/food/checkout/cancel")
+            router.replace("/checkout/cancel")
             return
           }
 
           if (res.status !== "pending") {
-            router.replace("/food/checkout/error")
+            router.replace("/checkout/error")
             return
           }
         } catch {
-          router.replace("/food/checkout/error")
+          router.replace("/checkout/error")
           return
         }
 
@@ -89,7 +89,7 @@ export default function PaymentNextClient() {
         }
       }
 
-      router.replace("/food/checkout/error")
+      router.replace("/checkout/error")
     }
 
     void resolve()

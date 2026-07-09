@@ -1,26 +1,38 @@
 import { Metadata } from "next"
 import { FloatingBottomNav } from "@/components/cart/floating-bottom-nav"
+import { PlatformLanding } from "@/components/landing/platform-landing"
 import { MenuGridLive } from "@/components/menu/menu-grid-live"
 import { listCategories } from "@/lib/api/categories"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
 import { getRequestHost } from "@/lib/server/host"
+import { parseTenantHost } from "@/lib/tenant"
 import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
-export const metadata: Metadata = {
-  title: "Menu",
-  description: "Entdecke unser Angebot an frisch zubereiteten Gerichten und bestelle direkt online.",
-  openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+  const host = await getRequestHost()
+  if (parseTenantHost(host).type === "platform") {
+    return {}
+  }
+  return {
     title: "Menu",
-    description: "Frische Gerichte entdecken und online bestellen bei Comanda.",
-    url: "/food",
-  },
+    description: "Entdecke unser Angebot an frisch zubereiteten Gerichten und bestelle direkt online.",
+    openGraph: {
+      title: "Menu",
+      description: "Frische Gerichte entdecken und online bestellen bei Comanda.",
+      url: "/",
+    },
+  }
 }
 
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
   const host = await getRequestHost()
+  if (parseTenantHost(host).type === "platform") {
+    return <PlatformLanding />
+  }
+
   const hostHeaders: Record<string, string> = host ? { "X-Forwarded-Host": host } : {}
   const { enabled } = await getSystemStatus({ headers: hostHeaders })
 

@@ -408,7 +408,7 @@ export default function OrderPageClient() {
           <Button
             variant="outline"
             className="rounded-pill h-12 w-full bg-white text-base font-medium text-black"
-            onClick={() => router.push(from === "orders" ? "/food/orders" : "/")}
+            onClick={() => router.push(from === "orders" ? "/orders" : "/")}
           >
             <ArrowLeft style={{ width: 20, height: 20 }} /> {from === "orders" ? "Zurück" : "Zum Menü"}
           </Button>
@@ -417,7 +417,7 @@ export default function OrderPageClient() {
             <Button
               variant="selected"
               className="rounded-pill h-12 w-full text-base"
-              onClick={() => router.push("/food/orders")}
+              onClick={() => router.push("/orders")}
             >
               Alle Bestellungen
             </Button>

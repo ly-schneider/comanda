@@ -15,7 +15,7 @@ export default function PaymentPage() {
   const isAuthenticated = !!user
 
   useEffect(() => {
-    if (cart.items.length === 0) router.replace("/food/checkout")
+    if (cart.items.length === 0) router.replace("/checkout")
   }, [cart.items.length, router])
 
   return (

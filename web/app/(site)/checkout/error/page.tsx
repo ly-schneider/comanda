@@ -1,16 +1,16 @@
 "use client"
 
-import { X } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
 
-export default function CheckoutCancelPage() {
+export default function CheckoutErrorPage() {
   const router = useRouter()
   useCart()
 
   const handleRetry = () => {
-    router.push("/food/checkout")
+    router.push("/checkout")
   }
 
   return (
@@ -20,10 +20,13 @@ export default function CheckoutCancelPage() {
         <div className="absolute inset-8 rounded-full border-8 border-red-300/60" />
         <div className="absolute inset-16 rounded-full border-8 border-red-400/50" />
         <div className="absolute inset-24 flex items-center justify-center rounded-full bg-red-500/80">
-          <X className="h-9 w-9 text-white sm:h-14 sm:w-14" />
+          <AlertTriangle className="h-9 w-9 text-white sm:h-14 sm:w-14" />
         </div>
       </div>
-      <h1 className="text-center text-2xl font-semibold sm:text-3xl">Bezahlung abgebrochen</h1>
+      <h1 className="text-center text-2xl font-semibold sm:text-3xl">Bezahlung fehlgeschlagen</h1>
+      <p className="text-muted-foreground -mt-6 text-center">
+        Bitte versuche es erneut oder wähle eine andere Methode.
+      </p>
 
       <div className="fixed inset-x-0 bottom-0 mx-auto max-w-xl p-4">
         <div className="flex flex-col gap-3">
@@ -33,7 +36,7 @@ export default function CheckoutCancelPage() {
           <Button
             variant="outline"
             className="rounded-pill h-12 w-full bg-white text-base font-medium text-black"
-            onClick={() => router.push("/food/checkout?from=cancel")}
+            onClick={() => router.push("/checkout?from=error")}
           >
             Zurück zum Warenkorb
           </Button>

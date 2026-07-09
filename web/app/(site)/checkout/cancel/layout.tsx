@@ -3,11 +3,11 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Bezahlung abgebrochen",
   description: "Die Zahlung wurde abgebrochen – versuche es erneut oder kehre zum Warenkorb zurück.",
-  alternates: { canonical: "/food/checkout/cancel" },
+  alternates: { canonical: "/checkout/cancel" },
   openGraph: {
     title: "Bezahlung abgebrochen",
     description: "Zahlung nicht abgeschlossen – zurück zum Warenkorb oder erneut versuchen.",
-    url: "/food/checkout/cancel",
+    url: "/checkout/cancel",
   },
 }
 

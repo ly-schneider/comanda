@@ -3,11 +3,11 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Bestellungen",
   description: "Übersicht deiner Bestellungen und QR-Codes zur Abholung bei Comanda.",
-  alternates: { canonical: "/food/orders" },
+  alternates: { canonical: "/orders" },
   openGraph: {
     title: "Bestellungen",
     description: "Deine Bestellungen und Abholungs-QR-Codes verwalten.",
-    url: "/food/orders",
+    url: "/orders",
   },
 }
 

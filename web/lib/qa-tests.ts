@@ -64,7 +64,7 @@ export const QA_SECTIONS: QaSection[] = [
         key: "provisioning.create-tenant",
         title: "Tenant erstellen",
         action:
-          "Unter /platform-admin/tenants/new Slug + Name eingeben und erstellen; danach https://<slug>.<basisdomain>/food öffnen.",
+          "Unter /platform-admin/tenants/new Slug + Name eingeben und erstellen; danach https://<slug>.<basisdomain>/ öffnen.",
         expected:
           "Tenant erscheint aktiv in der Liste; die Subdomain liefert den (leeren) Shop mit neutralem Branding aus.",
       },
@@ -122,7 +122,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "E-Mail-OTP-Anmeldung",
         action: "/login öffnen, E-Mail eingeben, «Code senden», 6-stelligen Code aus dem Postfach eintragen.",
         expected:
-          "OTP-E-Mail kommt zeitnah an; nach korrektem Code ist die Session aktiv und es wird auf /food (bzw. ?next=) weitergeleitet.",
+          "OTP-E-Mail kommt zeitnah an; nach korrektem Code ist die Session aktiv und es wird auf / (bzw. ?next=) weitergeleitet.",
       },
       {
         key: "auth.otp-errors",
@@ -363,7 +363,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "domains.serves-both",
         title: "BYO-Domain liefert Shop und Admin",
-        action: "https://<domain>/food und https://<domain>/admin öffnen.",
+        action: "https://<domain>/ und https://<domain>/admin öffnen.",
         expected: "Beide Oberflächen laden über HTTPS mit gültigem Zertifikat und Tenant-Branding.",
       },
       {
@@ -542,7 +542,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.browse",
         title: "Storefront-Anzeige",
-        action: "/food auf dem Tenant-Host öffnen und das Grid prüfen.",
+        action: "/ auf dem Tenant-Host öffnen und das Grid prüfen.",
         expected:
           "Produkte nach Kategorieposition sortiert; Preis/Depot korrekt; Badges «Ausverkauft», «Nur X übrig» (≤10) und «Nicht aktiv» erscheinen situationsgerecht.",
       },
@@ -562,7 +562,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.checkout-empty",
         title: "Leerer Checkout",
-        action: "/food/checkout mit leerem Korb öffnen.",
+        action: "/checkout mit leerem Korb öffnen.",
         expected: "«Warenkorb ist leer»-Zustand; Bezahl-Button deaktiviert.",
       },
       {
@@ -600,7 +600,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.orders-list",
         title: "Bestellliste (Gast + eingeloggt)",
-        action: "/food/orders als Gast (gleicher Browser) und als eingeloggter Kunde öffnen.",
+        action: "/orders als Gast (gleicher Browser) und als eingeloggter Kunde öffnen.",
         expected:
           "Gast sieht lokal gespeicherte Bestellungen, eingeloggt kommen sie vom Backend; Detailseite je erreichbar.",
       },

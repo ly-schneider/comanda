@@ -96,7 +96,7 @@ export default function OrdersPage() {
             return (
               <li key={o.id} className="">
                 <Link
-                  href={`/food/orders/${encodeURIComponent(o.id)}?from=orders`}
+                  href={`/orders/${encodeURIComponent(o.id)}?from=orders`}
                   className="flex items-center justify-between gap-4"
                 >
                   {/* Left: QR icon in bordered rounded box */}

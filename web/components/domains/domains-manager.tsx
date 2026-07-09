@@ -58,7 +58,7 @@ function VerifiedDomainState({ hostname, certStatus }: { hostname: string; certS
     return (
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm" className="rounded-xl">
-          <a href={`${base}/food`} target="_blank" rel="noreferrer">
+          <a href={`${base}/`} target="_blank" rel="noreferrer">
             <ExternalLink className="size-4" /> Storefront öffnen
           </a>
         </Button>

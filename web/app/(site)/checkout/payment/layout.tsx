@@ -3,11 +3,11 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Zahlung",
   description: "Bezahle deine Bestellung bequem mit TWINT bei Comanda.",
-  alternates: { canonical: "/food/checkout/payment" },
+  alternates: { canonical: "/checkout/payment" },
   openGraph: {
     title: "Zahlung",
     description: "TWINT-Zahlung für deine Comanda Bestellung starten.",
-    url: "/food/checkout/payment",
+    url: "/checkout/payment",
   },
 }
 
