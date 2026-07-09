@@ -59,7 +59,7 @@ item:
   patch:
     tags: [Users]
     summary: Update user
-    description: Update a user's name.
+    description: Update a member's name and/or tenant role.
     operationId: updateUser
     security:
       - sessionAuth: []
@@ -75,6 +75,10 @@ item:
               summary: Rename
               value:
                 name: Jane Doe
+            changeRole:
+              summary: Change role
+              value:
+                role: staff
     responses:
       "200":
         description: User updated
@@ -82,6 +86,12 @@ item:
           application/json:
             schema:
               $ref: "../schemas/users.yaml#/User"
+      "400":
+        description: Invalid role
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
       "401":
         description: Authentication required
         content:

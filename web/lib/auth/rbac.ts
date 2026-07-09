@@ -32,7 +32,7 @@ export function isMember(tier: MemberTier | null | undefined): boolean {
 }
 
 // Ordinal tier rank — higher = more privileged.
-const TIER_RANK: Record<string, number> = {
+export const TIER_RANK: Record<string, number> = {
   owner: 5,
   admin: 4,
   app_admin: 3,

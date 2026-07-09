@@ -1,3 +1,9 @@
+TenantRole:
+  type: string
+  enum: [owner, admin, app_admin, staff, catalog]
+  x-enum-varnames: [TenantRoleOwner, TenantRoleAdmin, TenantRoleAppAdmin, TenantRoleStaff, TenantRoleCatalog]
+  description: The member's role within the bound tenant's organization.
+
 User:
   type: object
   required: [id, email, createdAt]
@@ -5,6 +11,8 @@ User:
     id:
       type: string
       description: Better Auth user ID
+    role:
+      $ref: "#/TenantRole"
     name:
       type: string
       nullable: true
@@ -39,6 +47,8 @@ UserUpdate:
   properties:
     name:
       type: string
+    role:
+      $ref: "#/TenantRole"
 
 UserSummary:
   type: object
