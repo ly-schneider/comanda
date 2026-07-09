@@ -80,7 +80,7 @@ export default function AdminDevicesPage() {
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
       setItems((prev) => prev.filter((d) => d.id !== id))
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Gerät konnte nicht gesperrt werden"
+      const msg = e instanceof Error ? e.message : "Gerät konnte nicht entfernt werden"
       setError(msg)
     } finally {
       setRevoking(null)
@@ -183,7 +183,7 @@ export default function AdminDevicesPage() {
                           disabled={revoking === d.id}
                           onClick={() => setConfirmRevoke({ id: d.id, name: d.name || d.id })}
                         >
-                          {revoking === d.id ? "Wird gesperrt..." : "Sperren"}
+                          {revoking === d.id ? "Wird entfernt..." : "Entfernen"}
                         </Button>
                       </TableCell>
                     )}
@@ -203,10 +203,10 @@ export default function AdminDevicesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Gerät sperren</AlertDialogTitle>
+            <AlertDialogTitle>Gerät entfernen</AlertDialogTitle>
             <AlertDialogDescription>
-              Möchtest du &quot;{confirmRevoke?.name}&quot; wirklich sperren? Das Gerät muss danach erneut registriert
-              werden.
+              Möchtest du &quot;{confirmRevoke?.name}&quot; wirklich entfernen? Das Gerät verliert damit den Zugriff und
+              muss erneut registriert werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -216,7 +216,7 @@ export default function AdminDevicesPage() {
                 if (confirmRevoke) void handleRevoke(confirmRevoke.id)
               }}
             >
-              Sperren
+              Entfernen
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

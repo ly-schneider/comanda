@@ -28,7 +28,7 @@ type PairingStatusResult struct {
 type DeviceService interface {
 	ListAll(ctx context.Context, deviceType *string, status *string) ([]*ent.Device, error)
 	GetByID(ctx context.Context, id string) (*ent.Device, error)
-	Revoke(ctx context.Context, id string) error
+	Remove(ctx context.Context, id string) error
 	CreatePairing(ctx context.Context, deviceKey, name, deviceType string, model, os *string) (*PairingResult, error)
 	GetPairingStatus(ctx context.Context, code string) (*PairingStatusResult, error)
 	CompletePairing(ctx context.Context, code string, adminUserID string) (*ent.Device, error)
@@ -36,23 +36,26 @@ type DeviceService interface {
 }
 
 type deviceService struct {
-	client      *ent.Client
-	devices     repository.DeviceRepository
-	bindings    repository.DeviceBindingRepository
-	sessionRepo repository.SessionRepository
+	client         *ent.Client
+	devices        repository.DeviceRepository
+	deviceProducts repository.DeviceProductRepository
+	bindings       repository.DeviceBindingRepository
+	sessionRepo    repository.SessionRepository
 }
 
 func NewDeviceService(
 	client *ent.Client,
 	devices repository.DeviceRepository,
+	deviceProducts repository.DeviceProductRepository,
 	bindings repository.DeviceBindingRepository,
 	sessionRepo repository.SessionRepository,
 ) DeviceService {
 	return &deviceService{
-		client:      client,
-		devices:     devices,
-		bindings:    bindings,
-		sessionRepo: sessionRepo,
+		client:         client,
+		devices:        devices,
+		deviceProducts: deviceProducts,
+		bindings:       bindings,
+		sessionRepo:    sessionRepo,
 	}
 }
 
@@ -71,15 +74,32 @@ func (s *deviceService) GetByID(ctx context.Context, id string) (*ent.Device, er
 	return s.devices.GetByID(ctx, id)
 }
 
-func (s *deviceService) Revoke(ctx context.Context, id string) error {
+func (s *deviceService) Remove(ctx context.Context, id string) error {
 	d, err := s.devices.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	_, err = s.devices.Update(ctx, d.ID, d.Name, d.DeviceKey, d.Type, device.StatusRejected,
-		d.Model, d.Os, d.DecidedBy, d.DecidedAt, d.ExpiresAt,
-		d.PendingSessionToken, d.PairingCode, d.PairingCodeExpiresAt)
-	return err
+
+	// Deleting the device cascades to its bindings (FK ON DELETE CASCADE), but a
+	// DB cascade cannot evict the in-memory token-hash auth cache, so a removed
+	// device would keep authorizing until the TTL. Revoke through the cached repo
+	// first to cut off auth immediately.
+	bindings, err := s.bindings.ListActiveByDeviceID(ctx, d.ID)
+	if err != nil {
+		return err
+	}
+	for _, b := range bindings {
+		if err := s.bindings.Revoke(ctx, b.ID); err != nil {
+			return err
+		}
+	}
+
+	// device_product FKs are ON DELETE NO ACTION and would block the delete.
+	if err := s.deviceProducts.DeleteByDeviceID(ctx, d.ID); err != nil {
+		return err
+	}
+
+	return s.devices.Delete(ctx, d.ID)
 }
 
 func (s *deviceService) CreatePairing(ctx context.Context, deviceKey, name, deviceType string, model, os *string) (*PairingResult, error) {

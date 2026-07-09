@@ -66,8 +66,8 @@ item:
 
   delete:
     tags: [Devices]
-    summary: Revoke device
-    description: Revokes the device binding. The device must re-pair to regain access.
+    summary: Remove device
+    description: Removes the device and revokes its authorization. The device must re-pair to regain access.
     operationId: revokeDevice
     security:
       - sessionAuth: []

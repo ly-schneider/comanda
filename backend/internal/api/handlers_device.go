@@ -46,10 +46,10 @@ func (h *Handlers) GetDevice(w http.ResponseWriter, r *http.Request, deviceId st
 	response.WriteJSON(w, http.StatusOK, toAPIDevice(device))
 }
 
-// RevokeDevice revokes a device binding.
+// RevokeDevice removes a device and revokes its authorization.
 // (DELETE /devices/{deviceId})
 func (h *Handlers) RevokeDevice(w http.ResponseWriter, r *http.Request, deviceId string) {
-	if err := h.devices.Revoke(r.Context(), deviceId); err != nil {
+	if err := h.devices.Remove(r.Context(), deviceId); err != nil {
 		writeEntError(w, err)
 		return
 	}

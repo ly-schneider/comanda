@@ -16,6 +16,7 @@ type DeviceBindingRepository interface {
 	Create(ctx context.Context, deviceType devicebinding.DeviceType, tokenHash, createdByUserID string, name *string, deviceID, stationID *string) (*ent.DeviceBinding, error)
 	UpdateLastSeen(ctx context.Context, id string) error
 	Revoke(ctx context.Context, id string) error
+	ListActiveByDeviceID(ctx context.Context, deviceID string) ([]*ent.DeviceBinding, error)
 	ListActive(ctx context.Context) ([]*ent.DeviceBinding, error)
 	ListByType(ctx context.Context, deviceType devicebinding.DeviceType) ([]*ent.DeviceBinding, error)
 }
@@ -101,6 +102,19 @@ func (r *deviceBindingRepo) Revoke(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *deviceBindingRepo) ListActiveByDeviceID(ctx context.Context, deviceID string) ([]*ent.DeviceBinding, error) {
+	rows, err := r.ec(ctx).DeviceBinding.Query().
+		Where(
+			devicebinding.DeviceIDEQ(deviceID),
+			devicebinding.RevokedAtIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return rows, nil
 }
 
 func (r *deviceBindingRepo) ListActive(ctx context.Context) ([]*ent.DeviceBinding, error) {

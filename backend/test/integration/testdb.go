@@ -20,6 +20,7 @@ import (
 	"backend/internal/enttenant"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/device"
+	"backend/internal/generated/ent/devicebinding"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
@@ -238,6 +239,7 @@ type Repositories struct {
 	Inventory         pgRepo.InventoryLedgerRepository
 	Device            pgRepo.DeviceRepository
 	DeviceProduct     pgRepo.DeviceProductRepository
+	DeviceBinding     pgRepo.DeviceBindingRepository
 	Settings          pgRepo.SettingsRepository
 	Idempotency       pgRepo.IdempotencyRepository
 	VolunteerCampaign pgRepo.VolunteerCampaignRepository
@@ -262,6 +264,7 @@ func NewRepositories(client *ent.Client) *Repositories {
 		Inventory:         pgRepo.NewInventoryLedgerRepository(client),
 		Device:            pgRepo.NewDeviceRepository(client),
 		DeviceProduct:     pgRepo.NewDeviceProductRepository(client),
+		DeviceBinding:     pgRepo.NewCachedDeviceBindingRepository(pgRepo.NewDeviceBindingRepository(client)),
 		Settings:          pgRepo.NewSettingsRepository(client),
 		Idempotency:       pgRepo.NewIdempotencyRepository(client),
 		VolunteerCampaign: pgRepo.NewVolunteerCampaignRepository(client),
@@ -428,6 +431,18 @@ func (f *Fixtures) CreateDevice(name, deviceKey string, deviceType device.Type, 
 		panic(fmt.Sprintf("failed to create device: %v", err))
 	}
 	return d
+}
+
+// CreateDeviceBinding creates a device binding (the auth credential) linked to a
+// device. The token_hash is stored as-is, so tests can look it up via
+// GetByTokenHash to prove the auth cut-off after a device is removed.
+func (f *Fixtures) CreateDeviceBinding(deviceType devicebinding.DeviceType, tokenHash, deviceID string) *ent.DeviceBinding {
+	f.ensureUser("user_test_seed")
+	b, err := f.repos.DeviceBinding.Create(f.ctx, deviceType, tokenHash, "user_test_seed", nil, &deviceID, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create device binding: %v", err))
+	}
+	return b
 }
 
 // AddInventory adds inventory for a product.
