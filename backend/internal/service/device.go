@@ -80,9 +80,10 @@ func (s *deviceService) Remove(ctx context.Context, id string) error {
 		return err
 	}
 
-	// device_binding.device_id is a loose link, not a foreign key, so deleting
-	// the device leaves its bindings authorizing. Revoke them first — this also
-	// evicts the token-hash auth cache.
+	// Deleting the device cascades to its bindings (FK ON DELETE CASCADE), but a
+	// DB cascade cannot evict the in-memory token-hash auth cache, so a removed
+	// device would keep authorizing until the TTL. Revoke through the cached repo
+	// first to cut off auth immediately.
 	bindings, err := s.bindings.ListActiveByDeviceID(ctx, d.ID)
 	if err != nil {
 		return err
