@@ -8,7 +8,7 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
   return (
     <Button
       className={`border-border hover:bg-card hover:text-foreground flex h-10 shrink-0 items-center rounded-[10px] border px-3 text-sm ${
-        active ? "bg-card" : "text-muted-foreground bg-transparent"
+        active ? "bg-card text-foreground" : "text-muted-foreground bg-transparent"
       }`}
       onClick={onClick}
       aria-pressed={active}
