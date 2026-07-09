@@ -270,7 +270,7 @@ func NewRouter(
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────
-		// Food-system settings, users, and app-role invites. Branding, domains and
+		// Shop settings, users, and app-role invites. Branding, domains and
 		// payments live on the account hub; UpdateSettings rejects branding below
 		// tenant-admin.
 		v1.Group(func(appadmin chi.Router) {

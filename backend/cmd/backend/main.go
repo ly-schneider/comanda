@@ -13,7 +13,7 @@ import (
 
 // @title Comanda API
 // @version 1.0
-// @description Comanda multi-tenant food-ordering API
+// @description Comanda multi-tenant ordering API
 // @schemes https http
 // @BasePath /
 // @securityDefinitions.apikey BearerAuth

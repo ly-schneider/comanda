@@ -124,7 +124,7 @@ export default function OrdersPage() {
           className="rounded-pill h-12 w-full bg-white text-base font-medium text-black"
           onClick={() => router.push("/")}
         >
-          <ArrowLeft style={{ width: 20, height: 20 }} /> Zum Menü
+          <ArrowLeft style={{ width: 20, height: 20 }} /> Zum Sortiment
         </Button>
       </div>
     </div>

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Comanda API
   description: |
-    RESTful API for the food system supporting all endpoints.
+    RESTful API for the ordering system supporting all endpoints.
 
     ## Authentication
     - **Customer/Admin**: Session-based authentication via Better Auth

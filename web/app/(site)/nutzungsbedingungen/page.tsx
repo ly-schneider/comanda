@@ -6,7 +6,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const branding = await getBranding()
   return {
     title: "Nutzungsbedingungen",
-    description: `Nutzungsbedingungen der ${branding.displayName} Plattform für die Online-Essensbestellung in der Schweiz.`,
+    description: `Nutzungsbedingungen der ${branding.displayName} Plattform für die Online-Bestellung in der Schweiz.`,
   }
 }
 

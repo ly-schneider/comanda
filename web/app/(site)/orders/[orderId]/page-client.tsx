@@ -410,7 +410,7 @@ export default function OrderPageClient() {
             className="rounded-pill h-12 w-full bg-white text-base font-medium text-black"
             onClick={() => router.push(from === "orders" ? "/orders" : "/")}
           >
-            <ArrowLeft style={{ width: 20, height: 20 }} /> {from === "orders" ? "Zurück" : "Zum Menü"}
+            <ArrowLeft style={{ width: 20, height: 20 }} /> {from === "orders" ? "Zurück" : "Zum Sortiment"}
           </Button>
 
           {from === "success" && (

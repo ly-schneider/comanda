@@ -1,6 +1,6 @@
 "use client"
 
-import { Loader2, LockKeyhole, Utensils } from "lucide-react"
+import { Loader2, LockKeyhole, Ticket } from "lucide-react"
 import Image from "next/image"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -195,7 +195,7 @@ export default function ClaimPage() {
       <div className="mx-auto max-w-xl p-4">
         <h1 className="mb-2 text-2xl font-semibold">Mitarbeiter-Essen</h1>
         <div className="mt-8 flex flex-col items-center gap-3 text-center">
-          <Utensils className="text-muted-foreground size-9" aria-hidden />
+          <Ticket className="text-muted-foreground size-9" aria-hidden />
           <p className="text-destructive">{error}</p>
         </div>
       </div>

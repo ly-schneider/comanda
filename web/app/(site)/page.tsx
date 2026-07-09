@@ -15,11 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
     return {}
   }
   return {
-    title: "Menu",
-    description: "Entdecke unser Angebot an frisch zubereiteten Gerichten und bestelle direkt online.",
+    title: "Sortiment",
+    description: "Entdecke unser Angebot und bestelle direkt online.",
     openGraph: {
-      title: "Menu",
-      description: "Frische Gerichte entdecken und online bestellen bei Comanda.",
+      title: "Sortiment",
+      description: "Unser Angebot entdecken und online bestellen bei Comanda.",
       url: "/",
     },
   }

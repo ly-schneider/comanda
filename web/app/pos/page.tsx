@@ -2,7 +2,7 @@
 
 import "./bridge.client"
 
-import { Banknote, CreditCard, QrCode, ShoppingCart, UtensilsCrossed } from "lucide-react"
+import { Banknote, CreditCard, QrCode, ShoppingCart, Store } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
@@ -74,7 +74,7 @@ function MobileTabBar({
         )}
         onClick={() => onViewChange("products")}
       >
-        <UtensilsCrossed className="size-5" />
+        <Store className="size-5" />
         <span>Menu</span>
       </button>
       <button
