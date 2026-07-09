@@ -11,7 +11,11 @@ Category:
       type: boolean
     position:
       type: integer
-      description: Display order (lower = first)
+      description: Display order within its sibling group (lower = first)
+    parentId:
+      type: string
+      nullable: true
+      description: Parent category id, or null for a top-level category
     createdAt:
       type: string
       format: date-time
@@ -28,7 +32,11 @@ CategorySummary:
       type: string
     position:
       type: integer
-      description: Display order (lower = first)
+      description: Display order within its sibling group (lower = first)
+    parentId:
+      type: string
+      nullable: true
+      description: Parent category id, or null for a top-level category
 
 CategoryCreate:
   type: object
@@ -40,6 +48,10 @@ CategoryCreate:
     position:
       type: integer
       default: 0
+    parentId:
+      type: string
+      nullable: true
+      description: Parent category id to create this as a subcategory of
 
 CategoryUpdate:
   type: object
@@ -51,6 +63,10 @@ CategoryUpdate:
       type: boolean
     position:
       type: integer
+    parentId:
+      type: string
+      nullable: true
+      description: Parent category id, or null to promote to a top-level category
 
 CategoryList:
   type: object

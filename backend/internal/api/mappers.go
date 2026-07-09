@@ -36,6 +36,7 @@ func toAPICategory(e *ent.Category) generated.Category {
 		Name:      e.Name,
 		IsActive:  e.IsActive,
 		Position:  e.Position,
+		ParentId:  e.ParentID,
 		CreatedAt: ptr(e.CreatedAt),
 		UpdatedAt: ptr(e.UpdatedAt),
 	}
@@ -54,6 +55,7 @@ func toAPICategorySummary(e *ent.Category) generated.CategorySummary {
 		Id:       ptr(e.ID),
 		Name:     ptr(e.Name),
 		Position: ptr(e.Position),
+		ParentId: e.ParentID,
 	}
 }
 

@@ -69,7 +69,7 @@ type productService struct {
 	inventoryRepo        repository.InventoryLedgerRepository
 	jetonRepo            repository.JetonRepository
 	inventoryHub         *inventory.Hub
-	cache                *catalogCache
+	cache                *CatalogCache
 }
 
 func NewProductService(
@@ -81,6 +81,7 @@ func NewProductService(
 	inventoryRepo repository.InventoryLedgerRepository,
 	jetonRepo repository.JetonRepository,
 	inventoryHub *inventory.Hub,
+	cache *CatalogCache,
 ) ProductService {
 	return &productService{
 		productRepo:          productRepo,
@@ -91,7 +92,7 @@ func NewProductService(
 		inventoryRepo:        inventoryRepo,
 		jetonRepo:            jetonRepo,
 		inventoryHub:         inventoryHub,
-		cache:                newCatalogCache(),
+		cache:                cache,
 	}
 }
 

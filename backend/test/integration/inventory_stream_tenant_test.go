@@ -34,6 +34,7 @@ func TestInventoryStream_TenantIsolation(t *testing.T) {
 		repos.Inventory,
 		repos.Jeton,
 		hub,
+		service.NewCatalogCache(),
 	)
 
 	chA := hub.Subscribe(nanoid.New(), tenantA)

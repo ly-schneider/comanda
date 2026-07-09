@@ -8,12 +8,13 @@ import (
 )
 
 type CategoryRepository interface {
-	Create(ctx context.Context, name string, position int, isActive bool) (*ent.Category, error)
+	Create(ctx context.Context, name string, position int, isActive bool, parentID *string) (*ent.Category, error)
 	GetByID(ctx context.Context, id string) (*ent.Category, error)
 	GetAll(ctx context.Context) ([]*ent.Category, error)
 	GetAllActive(ctx context.Context) ([]*ent.Category, error)
 	List(ctx context.Context, limit, offset int) ([]*ent.Category, int64, error)
-	Update(ctx context.Context, id string, name string, position int, isActive bool) (*ent.Category, error)
+	Update(ctx context.Context, id string, name string, position int, isActive bool, parentID *string, setParent bool) (*ent.Category, error)
+	CountChildren(ctx context.Context, id string) (int, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -29,12 +30,15 @@ func (r *categoryRepo) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
-func (r *categoryRepo) Create(ctx context.Context, name string, position int, isActive bool) (*ent.Category, error) {
-	created, err := r.ec(ctx).Category.Create().
+func (r *categoryRepo) Create(ctx context.Context, name string, position int, isActive bool, parentID *string) (*ent.Category, error) {
+	create := r.ec(ctx).Category.Create().
 		SetName(name).
 		SetIsActive(isActive).
-		SetPosition(position).
-		Save(ctx)
+		SetPosition(position)
+	if parentID != nil {
+		create.SetParentID(*parentID)
+	}
+	created, err := create.Save(ctx)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -90,16 +94,33 @@ func (r *categoryRepo) List(ctx context.Context, limit, offset int) ([]*ent.Cate
 	return rows, int64(total), nil
 }
 
-func (r *categoryRepo) Update(ctx context.Context, id string, name string, position int, isActive bool) (*ent.Category, error) {
-	updated, err := r.ec(ctx).Category.UpdateOneID(id).
+func (r *categoryRepo) Update(ctx context.Context, id string, name string, position int, isActive bool, parentID *string, setParent bool) (*ent.Category, error) {
+	update := r.ec(ctx).Category.UpdateOneID(id).
 		SetName(name).
 		SetIsActive(isActive).
-		SetPosition(position).
-		Save(ctx)
+		SetPosition(position)
+	if setParent {
+		if parentID != nil {
+			update.SetParentID(*parentID)
+		} else {
+			update.ClearParentID()
+		}
+	}
+	updated, err := update.Save(ctx)
 	if err != nil {
 		return nil, translateError(err)
 	}
 	return updated, nil
+}
+
+func (r *categoryRepo) CountChildren(ctx context.Context, id string) (int, error) {
+	n, err := r.ec(ctx).Category.Query().
+		Where(category.ParentID(id)).
+		Count(ctx)
+	if err != nil {
+		return 0, translateError(err)
+	}
+	return n, nil
 }
 
 func (r *categoryRepo) Delete(ctx context.Context, id string) error {

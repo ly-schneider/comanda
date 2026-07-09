@@ -18,6 +18,7 @@ func refundProviderResolver(f *payment.Factory) service.RefundProviderResolver {
 func NewServices() fx.Option {
 	return fx.Options(
 		fx.Provide(
+			service.NewCatalogCache,
 			service.NewPaymentService,
 			service.NewQRKeyService,
 			service.NewSettingsService,

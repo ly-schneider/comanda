@@ -40,6 +40,7 @@ func TestProductService_RequestScopedClient(t *testing.T) {
 		repos.Inventory,
 		repos.Jeton,
 		nil,
+		service.NewCatalogCache(),
 	)
 
 	t.Run("tenant A request tx sees only its product", func(t *testing.T) {

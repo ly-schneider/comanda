@@ -1,6 +1,7 @@
 "use client"
 import { Minus, Plus } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { CategorySelect } from "@/components/admin/category-select"
 import { DepotInfo } from "@/components/admin/depot-info"
 import { ProductImageCrop } from "@/components/admin/product-image-crop"
 import {
@@ -30,6 +31,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 
+import { categoryOrderMap, compareByCategory } from "@/lib/categories"
 import { getCSRFToken } from "@/lib/csrf"
 import { readApiError, readErrorMessage } from "@/lib/http"
 import type { Jeton, PosFulfillmentMode } from "@/types/jeton"
@@ -51,14 +53,14 @@ type Product = {
   isActive: boolean
   image?: string | null
   description?: string | null
-  category?: { id: string; name: string }
+  category?: { id: string; name: string; parentId?: string | null }
   stock?: number | null
   jeton?: Jeton
   type: "simple" | "bundle"
   variantLabel?: string | null
   variants?: ProductVariant[]
 }
-type Category = { id: string; name: string; isActive: boolean; position: number }
+type Category = { id: string; name: string; isActive: boolean; position: number; parentId: string | null }
 const NO_JETON_VALUE = "__none__"
 
 export default function AdminProductsPage() {
@@ -334,21 +336,15 @@ export default function AdminProductsPage() {
     return (await res.json()) as Partial<Product> & { id?: string }
   }
 
-  const catPositionMap = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const c of cats) m.set(c.id, c.position)
-    return m
-  }, [cats])
+  const categoryOrder = useMemo(() => categoryOrderMap(cats), [cats])
 
   const sortedItems = useMemo(
     () =>
       [...items].sort((a, b) => {
-        const posA = a.category ? (catPositionMap.get(a.category.id) ?? Infinity) : Infinity
-        const posB = b.category ? (catPositionMap.get(b.category.id) ?? Infinity) : Infinity
-        if (posA !== posB) return posA - posB
-        return a.name.localeCompare(b.name, "de")
+        const byCat = compareByCategory(categoryOrder, a.category?.id, b.category?.id)
+        return byCat !== 0 ? byCat : a.name.localeCompare(b.name, "de")
       }),
-    [items, catPositionMap]
+    [items, categoryOrder]
   )
 
   return (
@@ -482,7 +478,6 @@ function ProductCardEditable({
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const categoryLabelId = `category-label-${product.id}`
   const jetonLabelId = `jeton-label-${product.id}`
 
   const [variantLabel, setVariantLabel] = useState(product.variantLabel ?? "")
@@ -655,7 +650,11 @@ function ProductCardEditable({
           product.type === "simple" ? (parsedDeposit ?? product.depositCents ?? 0) : (product.depositCents ?? 0),
         description: descriptionDirty ? trimmedDescription || null : product.description,
         category: categoryId
-          ? { id: categoryId, name: categories.find((c) => c.id === categoryId)?.name ?? product.category?.name ?? "" }
+          ? {
+              id: categoryId,
+              name: categories.find((c) => c.id === categoryId)?.name ?? product.category?.name ?? "",
+              parentId: categories.find((c) => c.id === categoryId)?.parentId ?? null,
+            }
           : undefined,
         jeton: jetonId ? jetons.find((j) => j.id === jetonId) : undefined,
         isActive,
@@ -787,30 +786,16 @@ function ProductCardEditable({
             </div>
           )}
 
-          <div className="space-y-1">
-            <Label id={categoryLabelId} htmlFor={`category-${product.id}`}>
-              Kategorie
-            </Label>
-            <Select
-              value={categoryId || undefined}
-              onValueChange={(cid) => {
-                setCategoryId(cid)
-                setStatus("idle")
-                setFieldError(null)
-              }}
-            >
-              <SelectTrigger id={`category-${product.id}`} className="h-10" aria-labelledby={categoryLabelId}>
-                <SelectValue placeholder="Kategorie wählen" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <CategorySelect
+            categories={categories}
+            categoryId={categoryId}
+            onChange={(cid) => {
+              setCategoryId(cid)
+              setStatus("idle")
+              setFieldError(null)
+            }}
+            idPrefix={`edit-${product.id}`}
+          />
 
           {posMode !== "QR_CODE" && (
             <div className="space-y-1">
@@ -1268,7 +1253,7 @@ function CreateProductCard({
         priceCents: parsedPrice ?? 0,
         depositCents: type === "simple" ? (parsedDeposit ?? 0) : 0,
         isActive,
-        category: category ? { id: categoryId, name: category.name } : undefined,
+        category: category ? { id: categoryId, name: category.name, parentId: category.parentId ?? null } : undefined,
         jeton: jetonId ? jetons.find((j) => j.id === jetonId) : undefined,
         stock: stockValue,
         type,
@@ -1365,21 +1350,13 @@ function CreateProductCard({
                 )}
               </div>
             )}
-            <div className="space-y-1">
-              <Label htmlFor="new-category">Kategorie</Label>
-              <Select value={categoryId || undefined} onValueChange={setCategoryId}>
-                <SelectTrigger id="new-category">
-                  <SelectValue placeholder="Kategorie wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <CategorySelect
+              categories={categories}
+              categoryId={categoryId}
+              onChange={setCategoryId}
+              idPrefix="new"
+              invalid={submitted && !categoryId}
+            />
             <div className="space-y-1">
               <Label htmlFor="new-type">Typ</Label>
               <Select value={type} onValueChange={(v) => setType(v as "simple" | "bundle")}>

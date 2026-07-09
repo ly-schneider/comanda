@@ -53,7 +53,7 @@ func TestQRKeyService_Idempotency(t *testing.T) {
 	stored, err := repos.Settings.GetQRSigningKey(ctx)
 	require.NoError(t, err)
 
-	tok, err := qrsign.Sign(priv1, qrsign.Payload{Version: qrsign.Version, TenantID: DefaultTestTenantID, OrderID: "o", IssuedAt: 1})
+	tok, err := qrsign.Sign(priv1, qrsign.Payload{Version: qrsign.Version, TenantID: DefaultTestTenantID, OrderID: "order_test01", IssuedAt: 1})
 	require.NoError(t, err)
 	// Verify with a public key reconstructed from the stored base64url string.
 	verPub, err := decodePub(stored.PublicKey)
@@ -195,9 +195,9 @@ func TestQRKeyService_PublicKeyMatchesSigner(t *testing.T) {
 	tok, err := qrsign.Sign(priv, qrsign.Payload{
 		Version:  qrsign.Version,
 		TenantID: DefaultTestTenantID,
-		OrderID:  "o",
+		OrderID:  "order_test01",
 		IssuedAt: 1,
-		Lines:    []qrsign.Line{{ProductID: "p", Quantity: 1}},
+		Lines:    []qrsign.Line{{ProductID: "prod_test001", Quantity: 1}},
 	})
 	require.NoError(t, err)
 	_, err = qrsign.Verify(servedPub, tok)
