@@ -20,6 +20,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { VersionLabel } from "@/components/layout/version-label"
 import { useMemberTier } from "@/hooks/use-member-tier"
+import { usePosMode } from "@/hooks/use-pos-mode"
 import type { MemberTier } from "@/lib/auth/rbac"
 
 type NavItem = {
@@ -33,6 +34,7 @@ type NavItem = {
 export function AdminSidebar({ badges, version }: { badges?: Partial<Record<string, number>>; version?: string }) {
   const pathname = usePathname()
   const { tierAllows } = useMemberTier()
+  const posMode = usePosMode()
 
   const allItems: NavItem[] = [
     { href: "/admin", label: "Home", icon: <Home className="size-5" />, requiredTier: "catalog" },
@@ -84,7 +86,10 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     },
   ]
 
-  const items = allItems.filter((it) => tierAllows(it.requiredTier))
+  // Jetons only exist in JETON/HYBRID fulfillment; hide the nav item in QR mode.
+  const items = allItems.filter(
+    (it) => tierAllows(it.requiredTier) && !(it.href === "/admin/jetons" && posMode === "QR_CODE")
+  )
 
   return (
     <nav aria-label="Hauptnavigation" className="w-full">

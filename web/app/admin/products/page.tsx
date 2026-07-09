@@ -801,37 +801,39 @@ function ProductCardEditable({
             </Select>
           </div>
 
-          <div className="space-y-1">
-            <Label id={jetonLabelId} htmlFor={`jeton-${product.id}`}>
-              Jeton
-            </Label>
-            <Select
-              value={jetonId || NO_JETON_VALUE}
-              onValueChange={(jid) => {
-                setJetonId(jid === NO_JETON_VALUE ? "" : jid)
-                setStatus("idle")
-                setFieldError(null)
-              }}
-            >
-              <SelectTrigger id={`jeton-${product.id}`} className="h-10" aria-labelledby={jetonLabelId}>
-                <SelectValue placeholder="Jeton wählen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_JETON_VALUE}>Kein Jeton</SelectItem>
-                {jetons.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>
-                    <span
-                      aria-hidden
-                      className="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-                      style={{ backgroundColor: j.color }}
-                    />
-                    {j.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {jetonRequired && <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>}
-          </div>
+          {posMode !== "QR_CODE" && (
+            <div className="space-y-1">
+              <Label id={jetonLabelId} htmlFor={`jeton-${product.id}`}>
+                Jeton
+              </Label>
+              <Select
+                value={jetonId || NO_JETON_VALUE}
+                onValueChange={(jid) => {
+                  setJetonId(jid === NO_JETON_VALUE ? "" : jid)
+                  setStatus("idle")
+                  setFieldError(null)
+                }}
+              >
+                <SelectTrigger id={`jeton-${product.id}`} className="h-10" aria-labelledby={jetonLabelId}>
+                  <SelectValue placeholder="Jeton wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_JETON_VALUE}>Kein Jeton</SelectItem>
+                  {jetons.map((j) => (
+                    <SelectItem key={j.id} value={j.id}>
+                      <span
+                        aria-hidden
+                        className="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+                        style={{ backgroundColor: j.color }}
+                      />
+                      {j.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {jetonRequired && <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>}
+            </div>
+          )}
           {product.type === "simple" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -1378,30 +1380,35 @@ function CreateProductCard({
             />
             <p className="text-muted-foreground text-xs">{description.length}/500</p>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="new-jeton">Jeton</Label>
-            <Select value={jetonId || NO_JETON_VALUE} onValueChange={(v) => setJetonId(v === NO_JETON_VALUE ? "" : v)}>
-              <SelectTrigger id="new-jeton">
-                <SelectValue placeholder="Jeton wählen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_JETON_VALUE}>Kein Jeton</SelectItem>
-                {jetons.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>
-                    <span
-                      aria-hidden
-                      className="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-                      style={{ backgroundColor: j.color }}
-                    />
-                    {j.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {submitted && jetonRequired && (
-              <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>
-            )}
-          </div>
+          {posMode !== "QR_CODE" && (
+            <div className="space-y-1">
+              <Label htmlFor="new-jeton">Jeton</Label>
+              <Select
+                value={jetonId || NO_JETON_VALUE}
+                onValueChange={(v) => setJetonId(v === NO_JETON_VALUE ? "" : v)}
+              >
+                <SelectTrigger id="new-jeton">
+                  <SelectValue placeholder="Jeton wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_JETON_VALUE}>Kein Jeton</SelectItem>
+                  {jetons.map((j) => (
+                    <SelectItem key={j.id} value={j.id}>
+                      <span
+                        aria-hidden
+                        className="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+                        style={{ backgroundColor: j.color }}
+                      />
+                      {j.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {submitted && jetonRequired && (
+                <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Label htmlFor="new-active" className="text-sm font-medium">
