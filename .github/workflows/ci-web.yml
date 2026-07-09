@@ -55,3 +55,27 @@ jobs:
         env:
           BETTER_AUTH_SECRET: ci-build-stub-not-used-at-runtime
         run: pnpm run build
+
+  e2e:
+    name: Web E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install Playwright browser
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: web
+        env:
+          BETTER_AUTH_SECRET: ci-build-stub-not-used-at-runtime
+        run: pnpm run build
+
+      - name: Run e2e
+        working-directory: web
+        env:
+          BETTER_AUTH_SECRET: ci-build-stub-not-used-at-runtime
+        run: pnpm run e2e:headless
