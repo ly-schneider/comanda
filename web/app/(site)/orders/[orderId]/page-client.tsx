@@ -103,7 +103,11 @@ export default function OrderPageClient() {
   useEffect(() => {
     const el = footerRef.current
     if (!el) return
-    const update = () => setFooterHeight(el.offsetHeight || 0)
+    const update = () => {
+      const h = el.offsetHeight || 0
+      setFooterHeight(h)
+      document.body.style.setProperty("--bottom-bar-h", `${h}px`)
+    }
     update()
     let ro: ResizeObserver | null = null
     if (typeof ResizeObserver !== "undefined") {
@@ -115,6 +119,7 @@ export default function OrderPageClient() {
     return () => {
       window.removeEventListener("resize", onResize)
       if (ro) ro.disconnect()
+      document.body.style.removeProperty("--bottom-bar-h")
     }
   }, [from, mounted])
 
@@ -373,20 +378,7 @@ export default function OrderPageClient() {
             </div>
           )}
 
-          <div className="mt-6 rounded-xl border p-3 text-sm">
-            <p className="font-semibold">Comanda</p>
-            <p className="text-muted-foreground">Industriestrasse 5, 3600 Thun</p>
-            <p className="text-muted-foreground mt-2">Fragen zur Bestellung? Sprich uns an der Kasse an.</p>
-            <p className="text-muted-foreground mt-2 text-xs">
-              <a className="underline" href="/nutzungsbedingungen">
-                Nutzungsbedingungen
-              </a>
-              {" · "}
-              <a className="underline" href="/datenschutz">
-                Datenschutz
-              </a>
-            </p>
-          </div>
+          <p className="text-muted-foreground mt-6 text-sm">Fragen zur Bestellung? Sprich uns an der Kasse an.</p>
         </div>
       ) : mounted && orderId ? (
         <div className="mt-8">

@@ -12,12 +12,17 @@ export default function Footer({ version }: { version?: string }) {
 
   if (pathname?.startsWith("/checkout")) return null
 
+  // Order-detail screens render a fixed bottom action bar; it publishes its
+  // measured height as --bottom-bar-h so the footer links clear it.
+  const isOrderDetail = pathname?.startsWith("/orders/")
+
   return (
     <footer
       id="app-footer"
       className={`text-muted-foreground w-full py-4 text-sm ${
-        pathname === "/" && totalItems > 0 ? "mb-20" : pathname === "/orders" ? "mb-18" : "mb-4"
+        isOrderDetail ? "" : pathname === "/" && totalItems > 0 ? "mb-20" : pathname === "/orders" ? "mb-18" : "mb-4"
       }`}
+      style={isOrderDetail ? { marginBottom: "var(--bottom-bar-h, 1rem)" } : undefined}
     >
       <div className="container mx-auto px-4">
         <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
