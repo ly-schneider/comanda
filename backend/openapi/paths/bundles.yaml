@@ -1,0 +1,458 @@
+collection:
+  get:
+    tags: [Bundles]
+    summary: List bundles
+    description: Returns all bundle-type products with their slots and options.
+    operationId: listBundles
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    responses:
+      "200":
+        description: Bundle list
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/BundleList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  post:
+    tags: [Bundles]
+    summary: Create bundle
+    description: |
+      Creates a new bundle product (type=bundle) with the given name and price.
+      Add slots and options after creation.
+    operationId: createBundle
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleCreate"
+          example:
+            name: "Lunch Menu"
+            priceCents: 1200
+            categoryId: "spec_______5"
+    responses:
+      "201":
+        description: Bundle created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/Bundle"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+item:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+
+  get:
+    tags: [Bundles]
+    summary: Get bundle
+    description: Returns a bundle product with all its slots and option products.
+    operationId: getBundle
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    responses:
+      "200":
+        description: Bundle with slots and options
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/Bundle"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  patch:
+    tags: [Bundles]
+    summary: Update bundle
+    operationId: updateBundle
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleUpdate"
+          examples:
+            rename:
+              summary: Rename bundle
+              value:
+                name: "Dinner Menu"
+            deactivate:
+              summary: Deactivate bundle
+              value:
+                isActive: false
+    responses:
+      "200":
+        description: Bundle updated
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/Bundle"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  delete:
+    tags: [Bundles]
+    summary: Delete bundle
+    description: Deletes the bundle product and cascades to its slots and options.
+    operationId: deleteBundle
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    responses:
+      "204":
+        description: Bundle deleted
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+slots:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+
+  post:
+    tags: [Bundles]
+    summary: Create bundle slot
+    operationId: createBundleSlot
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleSlotCreate"
+          example:
+            name: "Main"
+    responses:
+      "201":
+        description: Slot created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/BundleSlot"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+slots-reorder:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+
+  patch:
+    tags: [Bundles]
+    summary: Reorder bundle slots
+    description: Sets the display order of all slots in this bundle.
+    operationId: reorderBundleSlots
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleSlotReorder"
+          example:
+            positions:
+              "spec_______6": 0
+              "spec_______7": 1
+              "spec_______8": 2
+    responses:
+      "200":
+        description: Slots reordered
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/BundleSlotList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+slot-item:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+    - name: slotId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  patch:
+    tags: [Bundles]
+    summary: Rename bundle slot
+    operationId: updateBundleSlot
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleSlotUpdate"
+          example:
+            name: "Side Dish"
+    responses:
+      "200":
+        description: Slot updated
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/BundleSlot"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  delete:
+    tags: [Bundles]
+    summary: Delete bundle slot
+    description: Deletes the slot and cascades to its option assignments.
+    operationId: deleteBundleSlot
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    responses:
+      "204":
+        description: Slot deleted
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+options:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+    - name: slotId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  post:
+    tags: [Bundles]
+    summary: Add option product to slot
+    description: Attaches an existing simple product as an option in this slot.
+    operationId: addSlotOption
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/bundles.yaml#/BundleSlotOptionCreate"
+          example:
+            productId: "spec_______9"
+    responses:
+      "201":
+        description: Option added
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/bundles.yaml#/BundleSlotOption"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Product already assigned to this slot
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+option-item:
+  parameters:
+    - name: bundleId
+      in: path
+      required: true
+      description: UUID of the bundle product
+      schema:
+        type: string
+    - name: slotId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: optionProductId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  delete:
+    tags: [Bundles]
+    summary: Remove option product from slot
+    operationId: removeSlotOption
+    security:
+      - sessionAuth: []
+    x-required-permissions: [bundles:write]
+    responses:
+      "204":
+        description: Option removed
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

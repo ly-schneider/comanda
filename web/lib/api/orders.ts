@@ -37,8 +37,8 @@ export interface OrderLineDTO {
   /** Units of this line refunded/returned so far (deposits: units returned). Present only when > 0. */
   refundedQuantity?: number
   parentLineId?: string | null
-  menuSlotId?: string | null
-  menuSlotName?: string | null
+  bundleSlotId?: string | null
+  bundleSlotName?: string | null
   variantId?: string | null
   variantValue?: string | null
   productImage?: string | null

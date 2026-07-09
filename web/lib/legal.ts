@@ -1,5 +1,5 @@
 // Fixed identity of the platform operator. Unlike tenant branding (which varies
-// per restaurant), this is identical on every storefront: Leys Services runs the
+// per tenant), this is identical on every storefront: Leys Services runs the
 // infrastructure as the tenant's Auftragsbearbeiter (processor) under the nDSG.
 export const PLATFORM_OPERATOR = {
   legalName: "Leys Services",

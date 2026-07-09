@@ -23,8 +23,8 @@ export interface AdminOrderLine {
   quantity: number
   unitPriceCents: Cents
   parentLineId?: string | null
-  menuSlotId?: string | null
-  menuSlotName?: string | null
+  bundleSlotId?: string | null
+  bundleSlotName?: string | null
   variantId?: string | null
   variantValue?: string | null
   productImage?: string | null

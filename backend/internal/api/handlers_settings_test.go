@@ -28,7 +28,7 @@ func TestToAPISettingsSumupMerchantCodeAbsent(t *testing.T) {
 }
 
 // A sumupMerchantCode-only PATCH must be treated as a branding-tier update so it
-// rides the tenant-admin gate, not the lower food-system path.
+// rides the tenant-admin gate, not the lower shop path.
 func TestBrandingPresentSumupMerchantCode(t *testing.T) {
 	code := "MC12345"
 	if !brandingPresent(&generated.SettingsUpdate{SumupMerchantCode: &code}) {

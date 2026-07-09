@@ -92,7 +92,7 @@ type CreateCheckoutInput struct {
 type CheckoutItemInput struct {
 	ProductID string `json:"productId"`
 	Quantity  int    `json:"quantity"`
-	// Configuration maps slotID -> selected productID for menu items.
+	// Configuration maps slotID -> selected productID for bundle items.
 	Configuration map[string]string `json:"configuration,omitempty"`
 	// VariantID selects a variant; required iff the product defines variants.
 	VariantID *string `json:"variantId,omitempty"`
@@ -116,7 +116,7 @@ type paymentService struct {
 	orderLineRepo    repository.OrderLineRepository
 	orderPaymentRepo repository.OrderPaymentRepository
 	products         ProductService
-	menuSlotRepo     repository.MenuSlotRepository
+	bundleSlotRepo   repository.BundleSlotRepository
 	inventoryRepo    repository.InventoryLedgerRepository
 	inventoryHub     *inventory.Hub
 	emailService     EmailService
@@ -135,7 +135,7 @@ func NewPaymentService(
 	orderLineRepo repository.OrderLineRepository,
 	orderPaymentRepo repository.OrderPaymentRepository,
 	products ProductService,
-	menuSlotRepo repository.MenuSlotRepository,
+	bundleSlotRepo repository.BundleSlotRepository,
 	inventoryRepo repository.InventoryLedgerRepository,
 	inventoryHub *inventory.Hub,
 	emailService EmailService,
@@ -153,7 +153,7 @@ func NewPaymentService(
 		orderLineRepo:    orderLineRepo,
 		orderPaymentRepo: orderPaymentRepo,
 		products:         products,
-		menuSlotRepo:     menuSlotRepo,
+		bundleSlotRepo:   bundleSlotRepo,
 		inventoryRepo:    inventoryRepo,
 		inventoryHub:     inventoryHub,
 		emailService:     emailService,
@@ -214,9 +214,9 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	if err != nil {
 		return nil, fmt.Errorf("load products: %w", err)
 	}
-	slots, err := s.menuSlotRepo.GetByMenuProductIDs(ctx, ids)
+	slots, err := s.bundleSlotRepo.GetByBundleProductIDs(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("load menu slots: %w", err)
+		return nil, fmt.Errorf("load bundle slots: %w", err)
 	}
 	preloadedStock, err := s.inventoryRepo.GetCurrentStockBatch(ctx, ids)
 	if err != nil {
@@ -267,7 +267,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		variantByItem[i] = selected
 	}
 
-	slotByID := make(map[string]*ent.MenuSlot, len(slots))
+	slotByID := make(map[string]*ent.BundleSlot, len(slots))
 	allowedBySlot := make(map[string]map[string]struct{}, len(slots))
 	for _, slot := range slots {
 		slotByID[slot.ID] = slot
@@ -360,7 +360,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 
 		// Determine parent line type
 		lt := orderline.LineTypeSimple
-		if p.Type == product.TypeMenu {
+		if p.Type == product.TypeBundle {
 			lt = orderline.LineTypeBundle
 		}
 
@@ -409,17 +409,17 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 			inventoryEntries = append(inventoryEntries, entry)
 		}
 
-		// Process menu configurations
-		if p.Type == product.TypeMenu && len(it.Configuration) > 0 {
+		// Process bundle configurations
+		if p.Type == product.TypeBundle && len(it.Configuration) > 0 {
 			for slotID, childProdID := range it.Configuration {
 				if childProdID == "" {
 					continue
 				}
 				if !nanoid.Valid(slotID) {
-					return nil, fmt.Errorf("invalid menu slot id: %s", slotID)
+					return nil, fmt.Errorf("invalid bundle slot id: %s", slotID)
 				}
 				slot, ok := slotByID[slotID]
-				if !ok || slot.MenuProductID != p.ID {
+				if !ok || slot.BundleProductID != p.ID {
 					return nil, fmt.Errorf("slot does not belong to product: %s", slotID)
 				}
 				if !nanoid.Valid(childProdID) {
@@ -434,7 +434,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 
 				childProd := productMap[childProdID]
 				if len(childProd.Edges.Variants) > 0 {
-					return nil, fmt.Errorf("menu option cannot have variants: %s", childProd.Name)
+					return nil, fmt.Errorf("bundle option cannot have variants: %s", childProd.Name)
 				}
 				slotName := slot.Name
 				childLine := repository.OrderLineCreateParams{
@@ -445,8 +445,8 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 					Quantity:       it.Quantity,
 					UnitPriceCents: 0,
 					ParentLineID:   &parentLineID,
-					MenuSlotID:     &slotID,
-					MenuSlotName:   &slotName,
+					BundleSlotID:   &slotID,
+					BundleSlotName: &slotName,
 				}
 				orderLines = append(orderLines, childLine)
 
@@ -526,8 +526,8 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 }
 
 // signOrderQR signs the pickup token over the order's redeemable physical items:
-// simple products and the chosen menu components — the items actually handed
-// over and tracked in inventory. A configured menu's bundle parent is a grouping
+// simple products and the chosen bundle components — the items actually handed
+// over and tracked in inventory. A configured bundle's parent is a grouping
 // row with no stock of its own, so it is omitted; its components carry the items.
 // A degenerate bundle with no components falls back to the parent so the item is
 // never lost from the token.
@@ -729,7 +729,7 @@ func (s *paymentService) CleanupPendingOrderByID(ctx context.Context, orderID st
 	var releaseEntries []repository.InventoryLedgerCreateParams
 	for _, line := range lines {
 		if line.Quantity > 0 {
-			// Only release for simple products or components (not menu bundles themselves)
+			// Only release for simple products or components (not the bundle parent itself)
 			if line.LineType == orderline.LineTypeSimple || line.LineType == orderline.LineTypeComponent {
 				releaseEntries = append(releaseEntries, repository.InventoryLedgerCreateParams{
 					ProductID: line.ProductID,
@@ -999,7 +999,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 // Order link must use the tenant's primary verified domain, not the platform
 // apex (which has no tenant context). Runs inside the receipt's tenant tx.
 func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) string {
-	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/food/orders/" + orderID
+	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/orders/" + orderID
 	if s.tenantDomainRepo == nil {
 		return fallback
 	}
@@ -1027,7 +1027,7 @@ func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) str
 	if host == "" {
 		return fallback
 	}
-	return "https://" + host + "/food/orders/" + orderID
+	return "https://" + host + "/orders/" + orderID
 }
 
 func safeStr(p *string) string {

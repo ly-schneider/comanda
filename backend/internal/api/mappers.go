@@ -90,13 +90,13 @@ func toAPIProduct(e *ent.Product) generated.Product {
 		p.Jeton = &js
 	}
 
-	// Map MenuSlots edge if loaded.
-	if slots, err := e.Edges.MenuSlotsOrErr(); err == nil && len(slots) > 0 {
-		summaries := make([]generated.MenuSlotSummary, 0, len(slots))
+	// Map BundleSlots edge if loaded.
+	if slots, err := e.Edges.BundleSlotsOrErr(); err == nil && len(slots) > 0 {
+		summaries := make([]generated.BundleSlotSummary, 0, len(slots))
 		for _, s := range slots {
-			summaries = append(summaries, toAPIMenuSlotSummary(s))
+			summaries = append(summaries, toAPIBundleSlotSummary(s))
 		}
-		p.MenuSlots = &summaries
+		p.BundleSlots = &summaries
 	}
 
 	// Map Variants edge if loaded.
@@ -214,8 +214,8 @@ func toAPIOrderLine(e *ent.OrderLine) generated.OrderLine {
 		Quantity:       e.Quantity,
 		UnitPriceCents: e.UnitPriceCents,
 		ParentLineId:   (*string)(e.ParentLineID),
-		MenuSlotId:     (*string)(e.MenuSlotID),
-		MenuSlotName:   e.MenuSlotName,
+		BundleSlotId:   (*string)(e.BundleSlotID),
+		BundleSlotName: e.BundleSlotName,
 		VariantId:      (*string)(e.VariantID),
 		VariantValue:   e.VariantValue,
 	}
@@ -378,22 +378,22 @@ func toAPIUsers(rows []*ent.User) []generated.User {
 }
 
 // ---------------------------------------------------------------------------
-// MenuSlot
+// BundleSlot
 // ---------------------------------------------------------------------------
 
-func toAPIMenuSlot(e *ent.MenuSlot) generated.MenuSlot {
-	ms := generated.MenuSlot{
-		Id:            e.ID,
-		MenuProductId: e.MenuProductID,
-		Name:          e.Name,
-		Sequence:      e.Sequence,
+func toAPIBundleSlot(e *ent.BundleSlot) generated.BundleSlot {
+	ms := generated.BundleSlot{
+		Id:              e.ID,
+		BundleProductId: e.BundleProductID,
+		Name:            e.Name,
+		Sequence:        e.Sequence,
 	}
 
 	// Map Options edge if loaded.
 	if opts, err := e.Edges.OptionsOrErr(); err == nil {
-		apiOpts := make([]generated.MenuSlotOption, 0, len(opts))
+		apiOpts := make([]generated.BundleSlotOption, 0, len(opts))
 		for _, o := range opts {
-			apiOpts = append(apiOpts, toAPIMenuSlotOption(o))
+			apiOpts = append(apiOpts, toAPIBundleSlotOption(o))
 		}
 		ms.Options = &apiOpts
 	}
@@ -401,8 +401,8 @@ func toAPIMenuSlot(e *ent.MenuSlot) generated.MenuSlot {
 	return ms
 }
 
-func toAPIMenuSlotSummary(e *ent.MenuSlot) generated.MenuSlotSummary {
-	ms := generated.MenuSlotSummary{
+func toAPIBundleSlotSummary(e *ent.BundleSlot) generated.BundleSlotSummary {
+	ms := generated.BundleSlotSummary{
 		Id:       ptr(e.ID),
 		Name:     ptr(e.Name),
 		Sequence: ptr(e.Sequence),
@@ -442,12 +442,12 @@ func toAPIMenuSlotSummary(e *ent.MenuSlot) generated.MenuSlotSummary {
 }
 
 // ---------------------------------------------------------------------------
-// MenuSlotOption
+// BundleSlotOption
 // ---------------------------------------------------------------------------
 
-func toAPIMenuSlotOption(e *ent.MenuSlotOption) generated.MenuSlotOption {
-	mso := generated.MenuSlotOption{
-		MenuSlotId:      e.MenuSlotID,
+func toAPIBundleSlotOption(e *ent.BundleSlotOption) generated.BundleSlotOption {
+	mso := generated.BundleSlotOption{
+		BundleSlotId:    e.BundleSlotID,
 		OptionProductId: e.OptionProductID,
 	}
 

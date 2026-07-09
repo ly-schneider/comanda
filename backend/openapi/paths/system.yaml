@@ -2,7 +2,7 @@ status:
   get:
     tags: [System]
     summary: Get system status
-    description: Returns whether the food system is currently enabled. No authentication required.
+    description: Returns whether the ordering system is currently enabled. No authentication required.
     operationId: getSystemStatus
     responses:
       "200":

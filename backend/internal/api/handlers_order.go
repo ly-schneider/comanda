@@ -141,9 +141,9 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 			Quantity:  item.Quantity,
 			VariantID: item.VariantId,
 		}
-		if item.MenuSelections != nil {
-			ci.Configuration = make(map[string]string, len(*item.MenuSelections))
-			for _, sel := range *item.MenuSelections {
+		if item.BundleSelections != nil {
+			ci.Configuration = make(map[string]string, len(*item.BundleSelections))
+			for _, sel := range *item.BundleSelections {
 				ci.Configuration[sel.SlotId] = sel.ProductId
 			}
 		}

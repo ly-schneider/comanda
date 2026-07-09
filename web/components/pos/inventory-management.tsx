@@ -161,7 +161,7 @@ const ItemCard = memo(function ItemCard({
   onActiveUpdated: (productId: string, isActive: boolean) => void
 }) {
   const isActive = product.isActive !== false
-  const isMenu = product.type === "menu"
+  const isBundle = product.type === "bundle"
   const stock = product.availableQuantity ?? 0
 
   return (
@@ -187,8 +187,8 @@ const ItemCard = memo(function ItemCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="truncate text-sm font-medium">{product.name}</p>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {isMenu ? (
-            <span className="text-muted-foreground text-xs">Menü</span>
+          {isBundle ? (
+            <span className="text-muted-foreground text-xs">Bundle</span>
           ) : (
             <StockControl product={product} currentStock={stock} token={token} onStockUpdated={onStockUpdated} />
           )}
@@ -210,8 +210,8 @@ export function InventoryManagement({
   onStockUpdated: (productId: string, newStock: number) => void
   onActiveUpdated: (productId: string, isActive: boolean) => void
 }) {
-  const simpleProducts = products.items.filter((p) => p.type !== "menu")
-  const menus = products.items.filter((p) => p.type === "menu")
+  const simpleProducts = products.items.filter((p) => p.type !== "bundle")
+  const bundles = products.items.filter((p) => p.type === "bundle")
 
   const renderGrid = (items: ProductDTO[]) => (
     <div className="flex flex-col gap-2 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -239,11 +239,11 @@ export function InventoryManagement({
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-xl font-semibold">Menüs verwalten</h2>
-        {menus.length > 0 ? (
-          renderGrid(menus)
+        <h2 className="text-xl font-semibold">Bundles verwalten</h2>
+        {bundles.length > 0 ? (
+          renderGrid(bundles)
         ) : (
-          <p className="text-muted-foreground py-4 text-center text-sm">Keine Menüs gefunden.</p>
+          <p className="text-muted-foreground py-4 text-center text-sm">Keine Bundles gefunden.</p>
         )}
       </div>
     </div>

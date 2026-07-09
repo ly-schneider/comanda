@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest"
 import { proxy } from "./proxy"
 
 // These lock the cross-host routing contract that makes BYO custom domains work:
-// a verified custom domain must serve the same /food storefront + /admin ops
+// a verified custom domain must serve the same / storefront + /admin ops
 // admin as a tenant subdomain, while the platform-only surfaces (/account,
 // /platform-admin) must NOT exist there. The backend resolves the tenant from
-// the Host for both /food and /admin, so the proxy must not block either.
+// the Host for both / and /admin, so the proxy must not block either.
 
 const SESSION_COOKIE = "better-auth.session_token=test-session" // dev (http) cookie name
 
@@ -28,8 +28,8 @@ async function run(host: string, pathname: string, opts?: { session?: boolean })
 describe("proxy — custom domain (BYO)", () => {
   const host = "food.myevent.ch"
 
-  it("serves /food (public storefront)", async () => {
-    const res = await run(host, "/food")
+  it("serves / (public storefront)", async () => {
+    const res = await run(host, "/")
     expect(redirectTarget(res)).toBeNull()
     expect(res.status).toBe(200)
   })
@@ -64,8 +64,8 @@ describe("proxy — custom domain (BYO)", () => {
 describe("proxy — tenant subdomain", () => {
   const host = "myevent.comanda.leys.ch"
 
-  it("serves /food", async () => {
-    const res = await run(host, "/food")
+  it("serves /", async () => {
+    const res = await run(host, "/")
     expect(redirectTarget(res)).toBeNull()
     expect(res.status).toBe(200)
   })
@@ -83,7 +83,7 @@ describe("proxy — tenant subdomain", () => {
 })
 
 // Regression: the session pre-check accepts either cookie name regardless of
-// x-forwarded-proto (the /admin → /login → /food loop).
+// x-forwarded-proto (the /admin → /login → / loop).
 describe("proxy — session cookie name is proto-independent", () => {
   const host = "food.myevent.ch"
 

@@ -8,7 +8,7 @@ Settings:
     systemEnabled:
       type: boolean
       default: true
-      description: Whether the food system is active for customers
+      description: Whether the shop is active for customers
     posMode:
       $ref: "pos.yaml#/PosFulfillmentMode"
     missingJetons:

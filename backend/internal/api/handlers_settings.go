@@ -65,7 +65,7 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if brandingPresent(&body) {
-		// Branding is tenant-admin only: an app-admin may PATCH food-system fields
+		// Branding is tenant-admin only: an app-admin may PATCH shop fields
 		// but not branding, even via a crafted request.
 		ok, err := auth.HasTenantTier(ctx, auth.TierTenantAdmin)
 		if err != nil {

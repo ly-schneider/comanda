@@ -131,16 +131,16 @@ func TestPaymentService_SignsBundleComponentsAtCreation(t *testing.T) {
 	ctx := tenantCtx()
 
 	cat := fixtures.CreateCategory("Food", 1, true)
-	combo := fixtures.CreateProduct("Combo", cat.ID, 900, product.TypeMenu, nil)
+	combo := fixtures.CreateProduct("Combo", cat.ID, 900, product.TypeBundle, nil)
 	burger := fixtures.CreateProduct("Burger", cat.ID, 0, product.TypeSimple, nil)
 	drink := fixtures.CreateProduct("Drink", cat.ID, 0, product.TypeSimple, nil)
 	fixtures.AddInventory(burger.ID, 50, inventoryledger.ReasonOpeningBalance)
 	fixtures.AddInventory(drink.ID, 50, inventoryledger.ReasonOpeningBalance)
 
-	mainSlot := fixtures.CreateMenuSlot(combo.ID, "Main", 1)
-	drinkSlot := fixtures.CreateMenuSlot(combo.ID, "Drink", 2)
-	fixtures.CreateMenuSlotOption(mainSlot.ID, burger.ID)
-	fixtures.CreateMenuSlotOption(drinkSlot.ID, drink.ID)
+	mainSlot := fixtures.CreateBundleSlot(combo.ID, "Main", 1)
+	drinkSlot := fixtures.CreateBundleSlot(combo.ID, "Drink", 2)
+	fixtures.CreateBundleSlotOption(mainSlot.ID, burger.ID)
+	fixtures.CreateBundleSlotOption(drinkSlot.ID, drink.ID)
 
 	input := service.CreateCheckoutInput{
 		Items: []service.CheckoutItemInput{

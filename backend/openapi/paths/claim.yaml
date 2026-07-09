@@ -7,10 +7,10 @@ item:
         type: string
 
   get:
-    tags: [StaffMeals]
+    tags: [StaffPerks]
     summary: Get claim campaign
     description: |
-      Returns the public claim view for a staff-meal campaign. Requires a valid
+      Returns the public claim view for a staff-perk campaign. Requires a valid
       access session cookie established via the auth endpoint.
     operationId: getClaimCampaign
     security:
@@ -21,7 +21,7 @@ item:
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/ClaimCampaign"
+              $ref: "../schemas/staff-perks.yaml#/ClaimCampaign"
       "400":
         description: Invalid token
         content:
@@ -50,7 +50,7 @@ auth:
         type: string
 
   post:
-    tags: [StaffMeals]
+    tags: [StaffPerks]
     summary: Verify claim access code
     description: |
       Validates a campaign access code and establishes an access session cookie
@@ -63,14 +63,14 @@ auth:
       content:
         application/json:
           schema:
-            $ref: "../schemas/staff-meals.yaml#/ClaimAccessVerify"
+            $ref: "../schemas/staff-perks.yaml#/ClaimAccessVerify"
     responses:
       "200":
         description: Access granted
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/ClaimAccessResult"
+              $ref: "../schemas/staff-perks.yaml#/ClaimAccessResult"
       "400":
         description: Invalid token or request body
         content:

@@ -156,7 +156,7 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	})
 }
 
-func TestPaymentService_MenuCheckout(t *testing.T) {
+func TestPaymentService_BundleCheckout(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
 	tdb.Cleanup(t)
@@ -168,8 +168,8 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
 	ctx := tenantCtx()
 
-	// Setup menu product
-	category := fixtures.CreateCategory("Menus", 1, true)
+	// Setup bundle product
+	category := fixtures.CreateCategory("Bundles", 1, true)
 	optionCat := fixtures.CreateCategory("Options", 2, true)
 
 	cola := fixtures.CreateProduct("Cola", optionCat.ID, 350, product.TypeSimple, nil)
@@ -178,19 +178,19 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 	fixtures.AddInventory(cola.ID, 50, inventoryledger.ReasonOpeningBalance)
 	fixtures.AddInventory(fries.ID, 50, inventoryledger.ReasonOpeningBalance)
 
-	menu := fixtures.CreateProduct("Combo Menu", category.ID, 1500, product.TypeMenu, nil)
+	bundle := fixtures.CreateProduct("Combo Menu", category.ID, 1500, product.TypeBundle, nil)
 
-	drinkSlot := fixtures.CreateMenuSlot(menu.ID, "Drink", 1)
-	sideSlot := fixtures.CreateMenuSlot(menu.ID, "Side", 2)
+	drinkSlot := fixtures.CreateBundleSlot(bundle.ID, "Drink", 1)
+	sideSlot := fixtures.CreateBundleSlot(bundle.ID, "Side", 2)
 
-	fixtures.CreateMenuSlotOption(drinkSlot.ID, cola.ID)
-	fixtures.CreateMenuSlotOption(sideSlot.ID, fries.ID)
+	fixtures.CreateBundleSlotOption(drinkSlot.ID, cola.ID)
+	fixtures.CreateBundleSlotOption(sideSlot.ID, fries.ID)
 
-	t.Run("PrepareAndCreateOrder with menu configuration", func(t *testing.T) {
+	t.Run("PrepareAndCreateOrder with bundle configuration", func(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID,
+					ProductID: bundle.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
 						drinkSlot.ID: cola.ID,
@@ -202,13 +202,13 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 
 		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
 		require.NoError(t, err)
-		require.Equal(t, int64(1500), prep.TotalCents) // Menu price only
+		require.Equal(t, int64(1500), prep.TotalCents) // Bundle price only
 
 		// Verify order lines were created
 		lines, err := repos.OrderLine.GetByOrderID(ctx, prep.OrderID)
 		require.NoError(t, err)
 
-		// Should have 3 lines: menu parent + 2 components
+		// Should have 3 lines: bundle parent + 2 components
 		require.Len(t, lines, 3)
 
 		var bundleCount, componentCount int
@@ -231,7 +231,7 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID,
+					ProductID: bundle.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
 						invalidSlotID: cola.ID,
@@ -249,7 +249,7 @@ func TestPaymentService_MenuCheckout(t *testing.T) {
 		input := service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{
 				{
-					ProductID: menu.ID,
+					ProductID: bundle.ID,
 					Quantity:  1,
 					Configuration: map[string]string{
 						drinkSlot.ID: fries.ID, // Fries not allowed in drink slot

@@ -1,9 +1,9 @@
+import type { BundleDTO } from "./bundle"
 import type { CategoryDTO } from "./category"
 import type { Cents } from "./common"
 import type { Jeton } from "./jeton"
-import type { MenuDTO } from "./menu"
 
-export type ProductType = "simple" | "menu"
+export type ProductType = "simple" | "bundle"
 
 export interface Product {
   id: string
@@ -50,5 +50,5 @@ export interface ProductSummaryDTO {
 }
 
 export interface ProductDTO extends ProductSummaryDTO {
-  menu: MenuDTO | null
+  bundle: BundleDTO | null
 }

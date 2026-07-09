@@ -131,8 +131,8 @@ func NewRouter(
 			pub.Get("/products", wrapper.ListProducts)
 			pub.Get("/products/{productId}", wrapper.GetProduct)
 			pub.Get("/orders/{orderId}", wrapper.GetOrder)
-			pub.Get("/menus", wrapper.ListMenus)
-			pub.Get("/menus/{menuId}", wrapper.GetMenu)
+			pub.Get("/bundles", wrapper.ListBundles)
+			pub.Get("/bundles/{bundleId}", wrapper.GetBundle)
 			pub.Get("/categories", wrapper.ListCategories)
 			pub.Get("/categories/{categoryId}", wrapper.GetCategory)
 
@@ -183,7 +183,7 @@ func NewRouter(
 
 		// ── Catalog routes (auth + catalog membership + CSRF) ──
 		// The lowest tenant tier: products (incl. images and inventory),
-		// categories, and menus. Staff and tenant-admins satisfy it too.
+		// categories, and bundles. Staff and tenant-admins satisfy it too.
 		v1.Group(func(catalog chi.Router) {
 			catalog.Use(betterAuthMw.RequireAuth())
 			catalog.Use(betterAuthMw.RequireTenantRole(auth.TierCatalog))
@@ -203,21 +203,21 @@ func NewRouter(
 			catalog.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
 			catalog.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
 
-			catalog.Post("/menus", wrapper.CreateMenu)
-			catalog.Patch("/menus/{menuId}", wrapper.UpdateMenu)
-			catalog.Delete("/menus/{menuId}", wrapper.DeleteMenu)
-			catalog.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
-			catalog.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
-			catalog.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
-			catalog.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
-			catalog.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
-			catalog.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
+			catalog.Post("/bundles", wrapper.CreateBundle)
+			catalog.Patch("/bundles/{bundleId}", wrapper.UpdateBundle)
+			catalog.Delete("/bundles/{bundleId}", wrapper.DeleteBundle)
+			catalog.Post("/bundles/{bundleId}/slots", wrapper.CreateBundleSlot)
+			catalog.Patch("/bundles/{bundleId}/slots/reorder", wrapper.ReorderBundleSlots)
+			catalog.Patch("/bundles/{bundleId}/slots/{slotId}", wrapper.UpdateBundleSlot)
+			catalog.Delete("/bundles/{bundleId}/slots/{slotId}", wrapper.DeleteBundleSlot)
+			catalog.Post("/bundles/{bundleId}/slots/{slotId}/options", wrapper.AddSlotOption)
+			catalog.Delete("/bundles/{bundleId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
 		})
 
 		// ── Staff routes (auth + staff membership + CSRF, NOT blocked) ─
 		// The subdomain /admin surface is gated by the tenant-scoped org member
 		// role, not the global user.role. Staff is the day-to-day operational tier
-		// (orders, stations, POS, jetons, devices, staff-meals), strictly above
+		// (orders, stations, POS, jetons, devices, staff-perks), strictly above
 		// catalog.
 		v1.Group(func(ops chi.Router) {
 			ops.Use(betterAuthMw.RequireAuth())
@@ -260,17 +260,17 @@ func NewRouter(
 
 			ops.Get("/events", wrapper.ListEvents)
 
-			ops.Post("/staff-meals", wrapper.CreateVolunteerCampaign)
-			ops.Get("/staff-meals", wrapper.ListVolunteerCampaigns)
-			ops.Get("/staff-meals/{campaignId}", wrapper.GetVolunteerCampaign)
-			ops.Patch("/staff-meals/{campaignId}", wrapper.UpdateVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/end", wrapper.EndVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
-			ops.Get("/staff-meals/{campaignId}/print.pdf", wrapper.PrintStaffMealSlips)
+			ops.Post("/staff-perks", wrapper.CreateVolunteerCampaign)
+			ops.Get("/staff-perks", wrapper.ListVolunteerCampaigns)
+			ops.Get("/staff-perks/{campaignId}", wrapper.GetVolunteerCampaign)
+			ops.Patch("/staff-perks/{campaignId}", wrapper.UpdateVolunteerCampaign)
+			ops.Post("/staff-perks/{campaignId}/end", wrapper.EndVolunteerCampaign)
+			ops.Post("/staff-perks/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
+			ops.Get("/staff-perks/{campaignId}/print.pdf", wrapper.PrintStaffPerkSlips)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────
-		// Food-system settings, users, and app-role invites. Branding, domains and
+		// Shop settings, users, and app-role invites. Branding, domains and
 		// payments live on the account hub; UpdateSettings rejects branding below
 		// tenant-admin.
 		v1.Group(func(appadmin chi.Router) {

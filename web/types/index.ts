@@ -3,7 +3,15 @@ export type { User } from "./user"
 export type { Station, StationRequestStatus, StationRequest, StationProduct } from "./station"
 export type { Category, CategoryDTO } from "./category"
 export type { ProductType, Product, ProductSummaryDTO, ProductDTO, ProductVariantDTO } from "./product"
-export type { Menu, MenuSlot, MenuSlotOption, MenuSlotDTO, MenuSlotItem, MenuSlotItemDTO, MenuDTO } from "./menu"
+export type {
+  Bundle,
+  BundleSlot,
+  BundleSlotOption,
+  BundleSlotDTO,
+  BundleSlotItem,
+  BundleSlotItemDTO,
+  BundleDTO,
+} from "./bundle"
 export type { OrderStatus, Order, OrderItemType, OrderItem } from "./order"
 export type { AdminInviteStatus, AdminInvite } from "./admin"
 export type { InventoryReason, InventoryLedger } from "./inventory"

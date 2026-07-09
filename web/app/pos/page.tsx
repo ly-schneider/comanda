@@ -2,7 +2,7 @@
 
 import "./bridge.client"
 
-import { Banknote, CreditCard, QrCode, ShoppingCart, UtensilsCrossed } from "lucide-react"
+import { Banknote, CreditCard, QrCode, ShoppingCart, Store } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
@@ -74,8 +74,8 @@ function MobileTabBar({
         )}
         onClick={() => onViewChange("products")}
       >
-        <UtensilsCrossed className="size-5" />
-        <span>Menu</span>
+        <Store className="size-5" />
+        <span>Sortiment</span>
       </button>
       <button
         className={cn(
@@ -184,13 +184,13 @@ function PosInner() {
 
   const applyStockToProducts = useCallback((items: ProductDTO[], stockMap: Map<string, number>): ProductDTO[] => {
     return items.map((p) => {
-      // Update menu slot options with stock data
-      if (p.type === "menu" && p.menu?.slots) {
+      // Update bundle slot options with stock data
+      if (p.type === "bundle" && p.bundle?.slots) {
         return {
           ...p,
-          menu: {
-            ...p.menu,
-            slots: p.menu.slots.map((slot) => ({
+          bundle: {
+            ...p.bundle,
+            slots: p.bundle.slots.map((slot) => ({
               ...slot,
               options:
                 slot.options?.map((opt) => {

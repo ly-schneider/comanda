@@ -1,9 +1,9 @@
 ProductType:
   type: string
-  enum: [simple, menu]
+  enum: [simple, bundle]
   description: |
     - `simple`: Standalone product
-    - `menu`: Composite product with menu slots and options
+    - `bundle`: Composite product with bundle slots and options
 
 Product:
   type: object
@@ -69,11 +69,11 @@ Product:
     jeton:
       $ref: "jetons.yaml#/JetonSummary"
       nullable: true
-    menuSlots:
+    bundleSlots:
       type: array
       items:
-        $ref: "menus.yaml#/MenuSlotSummary"
-      description: Only present for menu-type products
+        $ref: "bundles.yaml#/BundleSlotSummary"
+      description: Only present for bundle-type products
 
 ProductVariant:
   type: object

@@ -37,9 +37,9 @@ export function AdminMainHeader({ className }: { className?: string }) {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/food" className="flex items-center gap-2">
+                  <Link href="/" className="flex items-center gap-2">
                     <Home className="h-4 w-4" />
-                    <span>Food</span>
+                    <span>Shop</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem

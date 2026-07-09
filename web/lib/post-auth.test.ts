@@ -9,7 +9,7 @@ describe("postAuthPath", () => {
   it("prefers a safe next over role defaults", () => {
     expect(postAuthPath(member, "/admin")).toBe("/admin")
     expect(postAuthPath(admin, "/admin")).toBe("/admin")
-    expect(postAuthPath(customer, "/food")).toBe("/food")
+    expect(postAuthPath(customer, "/orders")).toBe("/orders")
   })
 
   it("falls back to role defaults without next", () => {

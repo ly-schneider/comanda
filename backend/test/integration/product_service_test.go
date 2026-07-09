@@ -23,8 +23,8 @@ func TestProductService_ListProducts(t *testing.T) {
 		repos.Product,
 		repos.ProductVariant,
 		repos.Category,
-		repos.MenuSlot,
-		repos.MenuSlotOption,
+		repos.BundleSlot,
+		repos.BundleSlotOption,
 		repos.Inventory,
 		repos.Jeton,
 		nil,
@@ -84,7 +84,7 @@ func TestProductService_ListProducts(t *testing.T) {
 	})
 }
 
-func TestProductService_MenuProducts(t *testing.T) {
+func TestProductService_BundleProducts(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
 	tdb.Cleanup(t)
@@ -96,8 +96,8 @@ func TestProductService_MenuProducts(t *testing.T) {
 		repos.Product,
 		repos.ProductVariant,
 		repos.Category,
-		repos.MenuSlot,
-		repos.MenuSlotOption,
+		repos.BundleSlot,
+		repos.BundleSlotOption,
 		repos.Inventory,
 		repos.Jeton,
 		nil,
@@ -105,9 +105,9 @@ func TestProductService_MenuProducts(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	category := fixtures.CreateCategory("Menus", 1, true)
+	category := fixtures.CreateCategory("Bundles", 1, true)
 
-	// Create simple products for menu options
+	// Create simple products for bundle options
 	optionCat := fixtures.CreateCategory("Options", 2, true)
 	cola := fixtures.CreateProduct("Cola", optionCat.ID, 350, product.TypeSimple, nil)
 	sprite := fixtures.CreateProduct("Sprite", optionCat.ID, 350, product.TypeSimple, nil)
@@ -117,39 +117,39 @@ func TestProductService_MenuProducts(t *testing.T) {
 	fixtures.AddInventory(sprite.ID, 50, inventoryledger.ReasonOpeningBalance)
 	fixtures.AddInventory(fries.ID, 30, inventoryledger.ReasonOpeningBalance)
 
-	// Create menu product
-	menu := fixtures.CreateProduct("Combo Menu", category.ID, 1500, product.TypeMenu, nil)
+	// Create bundle product
+	bundle := fixtures.CreateProduct("Combo Menu", category.ID, 1500, product.TypeBundle, nil)
 
-	// Create menu slots
-	drinkSlot := fixtures.CreateMenuSlot(menu.ID, "Drink", 1)
-	sideSlot := fixtures.CreateMenuSlot(menu.ID, "Side", 2)
+	// Create bundle slots
+	drinkSlot := fixtures.CreateBundleSlot(bundle.ID, "Drink", 1)
+	sideSlot := fixtures.CreateBundleSlot(bundle.ID, "Side", 2)
 
 	// Add options to slots
-	fixtures.CreateMenuSlotOption(drinkSlot.ID, cola.ID)
-	fixtures.CreateMenuSlotOption(drinkSlot.ID, sprite.ID)
-	fixtures.CreateMenuSlotOption(sideSlot.ID, fries.ID)
+	fixtures.CreateBundleSlotOption(drinkSlot.ID, cola.ID)
+	fixtures.CreateBundleSlotOption(drinkSlot.ID, sprite.ID)
+	fixtures.CreateBundleSlotOption(sideSlot.ID, fries.ID)
 
-	t.Run("GetMenus returns menu products", func(t *testing.T) {
-		menus, err := svc.GetMenus(ctx)
+	t.Run("GetBundles returns bundle products", func(t *testing.T) {
+		bundles, err := svc.GetBundles(ctx)
 		require.NoError(t, err)
-		require.Len(t, menus, 1)
-		require.Equal(t, "Combo Menu", menus[0].Name)
-		require.Equal(t, product.TypeMenu, menus[0].Type)
+		require.Len(t, bundles, 1)
+		require.Equal(t, "Combo Menu", bundles[0].Name)
+		require.Equal(t, product.TypeBundle, bundles[0].Type)
 	})
 
-	t.Run("Menu slot operations", func(t *testing.T) {
+	t.Run("Bundle slot operations", func(t *testing.T) {
 		// Create a new slot
-		newSlot, err := svc.CreateMenuSlot(ctx, menu.ID, "Dessert")
+		newSlot, err := svc.CreateBundleSlot(ctx, bundle.ID, "Dessert")
 		require.NoError(t, err)
 		require.Equal(t, "Dessert", newSlot.Name)
 
 		// Update the slot
-		updated, err := svc.UpdateMenuSlot(ctx, menu.ID, newSlot.ID, "Sweet Treat")
+		updated, err := svc.UpdateBundleSlot(ctx, bundle.ID, newSlot.ID, "Sweet Treat")
 		require.NoError(t, err)
 		require.Equal(t, "Sweet Treat", updated.Name)
 
 		// Delete the slot
-		err = svc.DeleteMenuSlot(ctx, menu.ID, newSlot.ID)
+		err = svc.DeleteBundleSlot(ctx, bundle.ID, newSlot.ID)
 		require.NoError(t, err)
 	})
 }
@@ -165,8 +165,8 @@ func TestProductService_EmptyResults(t *testing.T) {
 		repos.Product,
 		repos.ProductVariant,
 		repos.Category,
-		repos.MenuSlot,
-		repos.MenuSlotOption,
+		repos.BundleSlot,
+		repos.BundleSlotOption,
 		repos.Inventory,
 		repos.Jeton,
 		nil,

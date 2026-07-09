@@ -68,7 +68,7 @@ func (m *SystemDisableMiddleware) RequireEnabled(next http.Handler) http.Handler
 			response.WriteProblem(w, response.NewProblem(
 				http.StatusServiceUnavailable,
 				"Service Unavailable",
-				"The food system is currently closed.",
+				"The shop is currently closed.",
 			))
 			return
 		}

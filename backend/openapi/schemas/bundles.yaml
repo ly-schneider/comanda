@@ -1,0 +1,204 @@
+Bundle:
+  type: object
+  description: |
+    A bundle is a product with `type: bundle`. It contains ordered slots,
+    each of which offers option products the customer picks from.
+  required: [id, categoryId, name, priceCents, isActive]
+  properties:
+    id:
+      type: string
+    categoryId:
+      type: string
+    name:
+      type: string
+      maxLength: 20
+    image:
+      type: string
+      nullable: true
+    description:
+      type: string
+      maxLength: 500
+      nullable: true
+    priceCents:
+      type: integer
+      format: int64
+    isActive:
+      type: boolean
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    slots:
+      type: array
+      items:
+        $ref: "#/BundleSlot"
+
+BundleCreate:
+  type: object
+  required: [categoryId, name]
+  properties:
+    categoryId:
+      type: string
+    name:
+      type: string
+      maxLength: 20
+    priceCents:
+      type: integer
+      format: int64
+      minimum: 0
+      default: 0
+    image:
+      type: string
+    description:
+      type: string
+      maxLength: 500
+      nullable: true
+
+BundleUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+      maxLength: 20
+    priceCents:
+      type: integer
+      format: int64
+      minimum: 0
+    isActive:
+      type: boolean
+    image:
+      type: string
+      nullable: true
+    description:
+      type: string
+      maxLength: 500
+      nullable: true
+
+BundleList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Bundle"
+
+BundleSlot:
+  type: object
+  required: [id, bundleProductId, name, sequence]
+  properties:
+    id:
+      type: string
+    bundleProductId:
+      type: string
+    name:
+      type: string
+      maxLength: 20
+    sequence:
+      type: integer
+      description: Display order (lower = first)
+    options:
+      type: array
+      items:
+        $ref: "#/BundleSlotOption"
+
+BundleSlotSummary:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    sequence:
+      type: integer
+    options:
+      type: array
+      items:
+        type: object
+        properties:
+          productId:
+            type: string
+          name:
+            type: string
+          priceCents:
+            type: integer
+            format: int64
+          image:
+            type: string
+            nullable: true
+          description:
+            type: string
+            maxLength: 500
+            nullable: true
+          jeton:
+            $ref: "jetons.yaml#/JetonSummary"
+            nullable: true
+
+BundleSlotCreate:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+      maxLength: 20
+
+BundleSlotUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+      maxLength: 20
+
+BundleSlotReorder:
+  type: object
+  required: [positions]
+  properties:
+    positions:
+      type: object
+      additionalProperties:
+        type: integer
+        minimum: 0
+      description: |
+        Map of slot UUID to desired sequence number.
+        Example: `{ "mns_______11": 0, "mns_______12": 1 }`
+
+BundleSlotList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/BundleSlot"
+
+BundleSlotOption:
+  type: object
+  required: [bundleSlotId, optionProductId]
+  properties:
+    bundleSlotId:
+      type: string
+    optionProductId:
+      type: string
+    optionProduct:
+      type: object
+      description: Embedded product summary (when included)
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        priceCents:
+          type: integer
+          format: int64
+        image:
+          type: string
+          nullable: true
+
+BundleSlotOptionCreate:
+  type: object
+  required: [productId]
+  properties:
+    productId:
+      type: string

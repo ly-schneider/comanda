@@ -8,13 +8,13 @@ import {
   Home,
   MailPlus,
   MonitorCheck,
+  Package,
   ReceiptText,
   Settings,
   Smartphone,
   Ticket,
   Undo2,
   Users,
-  UtensilsCrossed,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -45,7 +45,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       requiredTier: "app_admin",
     },
     { href: "/admin/products", label: "Produkte", icon: <Hamburger className="size-5" />, requiredTier: "catalog" },
-    { href: "/admin/menu", label: "Menus", icon: <UtensilsCrossed className="size-5" />, requiredTier: "catalog" },
+    { href: "/admin/bundles", label: "Bundles", icon: <Package className="size-5" />, requiredTier: "catalog" },
     { href: "/admin/categories", label: "Kategorien", icon: <Grid2x2 className="size-5" />, requiredTier: "catalog" },
     {
       href: "/admin/orders",
@@ -71,8 +71,8 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     { href: "/admin/pos", label: "POS", icon: <CreditCard className="size-5" />, requiredTier: "staff" },
     { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" />, requiredTier: "staff" },
     {
-      href: "/admin/staff-meals",
-      label: "Mitarbeiter-Essen",
+      href: "/admin/staff-perks",
+      label: "Mitarbeiter-Gutscheine",
       icon: <Ticket className="size-5" />,
       requiredTier: "staff",
     },

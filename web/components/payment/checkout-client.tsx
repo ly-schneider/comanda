@@ -29,7 +29,7 @@ export function CheckoutClient() {
       const items = cart.items.map((i) => ({
         productId: i.product.id,
         quantity: i.quantity,
-        menuSelections: i.configuration
+        bundleSelections: i.configuration
           ? Object.entries(i.configuration).map(([slotId, productId]) => ({ slotId, productId }))
           : undefined,
         variantId: i.variantId,
@@ -38,7 +38,7 @@ export function CheckoutClient() {
       // Step 1: Create order
       const orderRes = await createOrder({ items, contactEmail: email || undefined }, accessToken || undefined)
 
-      const returnUrl = `${window.location.origin}/food/checkout/payment/next?order_id=${encodeURIComponent(orderRes.id)}`
+      const returnUrl = `${window.location.origin}/checkout/payment/next?order_id=${encodeURIComponent(orderRes.id)}`
 
       // Store order ID for success page
       try {

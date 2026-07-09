@@ -219,7 +219,7 @@ export function AccountOverview() {
             </a>
           </Button>
           <Button asChild variant="outline">
-            <a href={`${opsBaseUrl}/food`} target="_blank" rel="noopener noreferrer">
+            <a href={`${opsBaseUrl}/`} target="_blank" rel="noopener noreferrer">
               Storefront ansehen
             </a>
           </Button>

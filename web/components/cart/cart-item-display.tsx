@@ -31,7 +31,7 @@ export function CartItemDisplay({
   discountInfo,
   maxQuantity,
 }: CartItemDisplayProps) {
-  const isMenuProduct = item.product.type === "menu"
+  const isBundleProduct = item.product.type === "bundle"
   const hasConfiguration = item.configuration && Object.keys(item.configuration).length > 0
   const isFullyDiscounted = discountInfo && discountInfo.discountedQuantity >= item.quantity
   const isPartiallyDiscounted =
@@ -58,7 +58,7 @@ export function CartItemDisplay({
         </div>
       )}
       <div className="flex w-full flex-col gap-4">
-        {isMenuProduct ? (
+        {isBundleProduct ? (
           <>
             <div className="flex flex-row justify-between">
               <div className="flex flex-col gap-1">
@@ -73,7 +73,7 @@ export function CartItemDisplay({
                 {hasConfiguration && (
                   <div className="flex flex-row flex-wrap gap-1.5">
                     {Object.entries(item.configuration || {}).map(([slotId, productId]) => {
-                      const slot = item.product.menu?.slots?.find((s) => s.id === slotId)
+                      const slot = item.product.bundle?.slots?.find((s) => s.id === slotId)
                       const slotItem = slot?.options?.find((si) => si.id === productId)
 
                       if (slot && slotItem) {

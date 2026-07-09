@@ -211,18 +211,18 @@ func toPublicOrderLines(lines []*ent.OrderLine) []map[string]any {
 	out := make([]map[string]any, 0, len(lines))
 	for _, line := range lines {
 		parentID := line.ParentLineID
-		msID := line.MenuSlotID
+		msID := line.BundleSlotID
 		isRedeemed := line.Edges.Redemption != nil
 		out = append(out, map[string]any{
-			"id":           line.ID,
-			"orderId":      line.OrderID,
-			"productId":    line.ProductID,
-			"title":        line.Title,
-			"quantity":     line.Quantity,
-			"isRedeemed":   isRedeemed,
-			"parentItemId": parentID,
-			"menuSlotId":   msID,
-			"menuSlotName": line.MenuSlotName,
+			"id":             line.ID,
+			"orderId":        line.OrderID,
+			"productId":      line.ProductID,
+			"title":          line.Title,
+			"quantity":       line.Quantity,
+			"isRedeemed":     isRedeemed,
+			"parentItemId":   parentID,
+			"bundleSlotId":   msID,
+			"bundleSlotName": line.BundleSlotName,
 		})
 	}
 	return out

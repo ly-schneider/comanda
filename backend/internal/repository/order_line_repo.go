@@ -12,12 +12,12 @@ import (
 )
 
 type OrderLineRepository interface {
-	Create(ctx context.Context, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, menuSlotID *string, menuSlotName *string) (*ent.OrderLine, error)
+	Create(ctx context.Context, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, bundleSlotID *string, bundleSlotName *string) (*ent.OrderLine, error)
 	CreateBatch(ctx context.Context, lines []OrderLineCreateParams) ([]*ent.OrderLine, error)
 	GetByID(ctx context.Context, id string) (*ent.OrderLine, error)
 	GetByOrderID(ctx context.Context, orderID string) ([]*ent.OrderLine, error)
 	GetUnredeemed(ctx context.Context, orderID string) ([]*ent.OrderLine, error)
-	Update(ctx context.Context, id, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, menuSlotID *string, menuSlotName *string) (*ent.OrderLine, error)
+	Update(ctx context.Context, id, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, bundleSlotID *string, bundleSlotName *string) (*ent.OrderLine, error)
 	GetByOrderAndProductIDs(ctx context.Context, orderID string, productIDs []string) ([]*ent.OrderLine, error)
 	GetByOrderAndStationID(ctx context.Context, orderID, stationID string) ([]*ent.OrderLine, error)
 	GetByParentLineIDs(ctx context.Context, parentIDs []string) ([]*ent.OrderLine, error)
@@ -33,8 +33,8 @@ type OrderLineCreateParams struct {
 	Quantity       int
 	UnitPriceCents int64
 	ParentLineID   *string
-	MenuSlotID     *string
-	MenuSlotName   *string
+	BundleSlotID   *string
+	BundleSlotName *string
 	VariantID      *string
 	VariantValue   *string
 }
@@ -51,7 +51,7 @@ func (r *orderLineRepo) ec(ctx context.Context) *ent.Client {
 	return ClientFromContext(ctx, r.client)
 }
 
-func (r *orderLineRepo) Create(ctx context.Context, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, menuSlotID *string, menuSlotName *string) (*ent.OrderLine, error) {
+func (r *orderLineRepo) Create(ctx context.Context, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, bundleSlotID *string, bundleSlotName *string) (*ent.OrderLine, error) {
 	builder := r.ec(ctx).OrderLine.Create().
 		SetOrderID(orderID).
 		SetLineType(lineType).
@@ -62,11 +62,11 @@ func (r *orderLineRepo) Create(ctx context.Context, orderID string, lineType ord
 	if parentLineID != nil {
 		builder.SetParentLineID(*parentLineID)
 	}
-	if menuSlotID != nil {
-		builder.SetMenuSlotID(*menuSlotID)
+	if bundleSlotID != nil {
+		builder.SetBundleSlotID(*bundleSlotID)
 	}
-	if menuSlotName != nil {
-		builder.SetMenuSlotName(*menuSlotName)
+	if bundleSlotName != nil {
+		builder.SetBundleSlotName(*bundleSlotName)
 	}
 	created, err := builder.Save(ctx)
 	if err != nil {
@@ -94,11 +94,11 @@ func (r *orderLineRepo) CreateBatch(ctx context.Context, lines []OrderLineCreate
 		if line.ParentLineID != nil {
 			b.SetParentLineID(*line.ParentLineID)
 		}
-		if line.MenuSlotID != nil {
-			b.SetMenuSlotID(*line.MenuSlotID)
+		if line.BundleSlotID != nil {
+			b.SetBundleSlotID(*line.BundleSlotID)
 		}
-		if line.MenuSlotName != nil {
-			b.SetMenuSlotName(*line.MenuSlotName)
+		if line.BundleSlotName != nil {
+			b.SetBundleSlotName(*line.BundleSlotName)
 		}
 		if line.VariantID != nil {
 			b.SetVariantID(*line.VariantID)
@@ -154,7 +154,7 @@ func (r *orderLineRepo) GetUnredeemed(ctx context.Context, orderID string) ([]*e
 	return rows, nil
 }
 
-func (r *orderLineRepo) Update(ctx context.Context, id, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, menuSlotID *string, menuSlotName *string) (*ent.OrderLine, error) {
+func (r *orderLineRepo) Update(ctx context.Context, id, orderID string, lineType orderline.LineType, productID string, title string, quantity int, unitPriceCents int64, parentLineID, bundleSlotID *string, bundleSlotName *string) (*ent.OrderLine, error) {
 	builder := r.ec(ctx).OrderLine.UpdateOneID(id).
 		SetOrderID(orderID).
 		SetLineType(lineType).
@@ -167,15 +167,15 @@ func (r *orderLineRepo) Update(ctx context.Context, id, orderID string, lineType
 	} else {
 		builder.ClearParentLineID()
 	}
-	if menuSlotID != nil {
-		builder.SetMenuSlotID(*menuSlotID)
+	if bundleSlotID != nil {
+		builder.SetBundleSlotID(*bundleSlotID)
 	} else {
-		builder.ClearMenuSlotID()
+		builder.ClearBundleSlotID()
 	}
-	if menuSlotName != nil {
-		builder.SetMenuSlotName(*menuSlotName)
+	if bundleSlotName != nil {
+		builder.SetBundleSlotName(*bundleSlotName)
 	} else {
-		builder.ClearMenuSlotName()
+		builder.ClearBundleSlotName()
 	}
 	updated, err := builder.Save(ctx)
 	if err != nil {

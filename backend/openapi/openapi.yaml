@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Comanda API
   description: |
-    RESTful API for the food system supporting all endpoints.
+    RESTful API for the ordering system supporting all endpoints.
 
     ## Authentication
     - **Customer/Admin**: Session-based authentication via Better Auth
@@ -21,11 +21,11 @@ tags:
   - name: Auth
     description: Authentication (OTP email delivery)
   - name: Products
-    description: Product catalog (simple and menu types)
+    description: Product catalog (simple and bundle types)
   - name: Categories
     description: Product categories
-  - name: Menus
-    description: Menu product configuration with slots and options
+  - name: Bundles
+    description: Bundle product configuration with slots and options
   - name: Orders
     description: Order management (shop and POS origins)
   - name: Refunds
@@ -58,8 +58,8 @@ tags:
     description: Vendor account hub (self-service, scoped to the vendor's tenant)
   - name: OwnerInvites
     description: Owner-invite registration (platform-host invite → tenant owner)
-  - name: StaffMeals
-    description: Staff-meal (volunteer) campaigns, claim access, and station redemption
+  - name: StaffPerks
+    description: Staff-perk (volunteer) campaigns, claim access, and station redemption
   - name: Inventory
     description: Real-time inventory stream
   - name: Android
@@ -89,20 +89,20 @@ paths:
   /categories/{categoryId}:
     $ref: "paths/categories.yaml#/item"
 
-  /menus:
-    $ref: "paths/menus.yaml#/collection"
-  /menus/{menuId}:
-    $ref: "paths/menus.yaml#/item"
-  /menus/{menuId}/slots:
-    $ref: "paths/menus.yaml#/slots"
-  /menus/{menuId}/slots/reorder:
-    $ref: "paths/menus.yaml#/slots-reorder"
-  /menus/{menuId}/slots/{slotId}:
-    $ref: "paths/menus.yaml#/slot-item"
-  /menus/{menuId}/slots/{slotId}/options:
-    $ref: "paths/menus.yaml#/options"
-  /menus/{menuId}/slots/{slotId}/options/{optionProductId}:
-    $ref: "paths/menus.yaml#/option-item"
+  /bundles:
+    $ref: "paths/bundles.yaml#/collection"
+  /bundles/{bundleId}:
+    $ref: "paths/bundles.yaml#/item"
+  /bundles/{bundleId}/slots:
+    $ref: "paths/bundles.yaml#/slots"
+  /bundles/{bundleId}/slots/reorder:
+    $ref: "paths/bundles.yaml#/slots-reorder"
+  /bundles/{bundleId}/slots/{slotId}:
+    $ref: "paths/bundles.yaml#/slot-item"
+  /bundles/{bundleId}/slots/{slotId}/options:
+    $ref: "paths/bundles.yaml#/options"
+  /bundles/{bundleId}/slots/{slotId}/options/{optionProductId}:
+    $ref: "paths/bundles.yaml#/option-item"
 
   /orders:
     $ref: "paths/orders.yaml#/collection"
@@ -271,16 +271,16 @@ paths:
   /events:
     $ref: "paths/events.yaml#/collection"
 
-  /staff-meals:
-    $ref: "paths/staff-meals.yaml#/collection"
-  /staff-meals/{campaignId}:
-    $ref: "paths/staff-meals.yaml#/item"
-  /staff-meals/{campaignId}/end:
-    $ref: "paths/staff-meals.yaml#/end"
-  /staff-meals/{campaignId}/rotate-token:
-    $ref: "paths/staff-meals.yaml#/rotate-token"
-  /staff-meals/{campaignId}/print.pdf:
-    $ref: "paths/staff-meals.yaml#/print"
+  /staff-perks:
+    $ref: "paths/staff-perks.yaml#/collection"
+  /staff-perks/{campaignId}:
+    $ref: "paths/staff-perks.yaml#/item"
+  /staff-perks/{campaignId}/end:
+    $ref: "paths/staff-perks.yaml#/end"
+  /staff-perks/{campaignId}/rotate-token:
+    $ref: "paths/staff-perks.yaml#/rotate-token"
+  /staff-perks/{campaignId}/print.pdf:
+    $ref: "paths/staff-perks.yaml#/print"
 
   /claim/{token}:
     $ref: "paths/claim.yaml#/item"

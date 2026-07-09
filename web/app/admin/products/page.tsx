@@ -46,7 +46,7 @@ type Product = {
   category?: { id: string; name: string }
   stock?: number | null
   jeton?: Jeton
-  type: "simple" | "menu"
+  type: "simple" | "bundle"
   variantLabel?: string | null
   variants?: ProductVariant[]
 }
@@ -280,15 +280,15 @@ export default function AdminProductsPage() {
     priceCents: number
     depositCents?: number
     categoryId: string
-    type: "simple" | "menu"
+    type: "simple" | "bundle"
     isActive: boolean
     image?: string | null
     description?: string | null
     jetonId?: string | null
   }) {
     const csrf = getCSRFToken()
-    if (payload.type === "menu") {
-      const res = await fetchAuth(`/api/v1/menus`, {
+    if (payload.type === "bundle") {
+      const res = await fetchAuth(`/api/v1/bundles`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRF": csrf || "" },
         body: JSON.stringify({
@@ -718,7 +718,7 @@ function ProductCardEditable({
               value={description}
               maxLength={500}
               rows={3}
-              placeholder="Optional: Zutaten, Allergene, Hinweise…"
+              placeholder="Optional: Details, Hinweise…"
               onChange={(e) => {
                 setDescription(e.target.value)
                 setStatus("idle")
@@ -1148,7 +1148,7 @@ type CreateProductCardProps = {
     priceCents: number
     depositCents?: number
     categoryId: string
-    type: "simple" | "menu"
+    type: "simple" | "bundle"
     isActive: boolean
     image?: string | null
     description?: string | null
@@ -1176,7 +1176,7 @@ function CreateProductCard({
   const [priceInput, setPriceInput] = useState("")
   const [depositInput, setDepositInput] = useState("")
   const [categoryId, setCategoryId] = useState<string>("")
-  const [type, setType] = useState<"simple" | "menu">("simple")
+  const [type, setType] = useState<"simple" | "bundle">("simple")
   const [jetonId, setJetonId] = useState<string>("")
   const [isActive, setIsActive] = useState(true)
   const [initialStock, setInitialStock] = useState<number | "">(0)
@@ -1198,7 +1198,7 @@ function CreateProductCard({
     !!categoryId &&
     !jetonRequired &&
     stockValid &&
-    (type === "simple" || type === "menu")
+    (type === "simple" || type === "bundle")
 
   const reset = () => {
     setName("")
@@ -1346,12 +1346,12 @@ function CreateProductCard({
           </div>
           <div className="space-y-1">
             <Label htmlFor="new-type">Typ</Label>
-            <Select value={type} onValueChange={(v) => setType(v as "simple" | "menu")}>
+            <Select value={type} onValueChange={(v) => setType(v as "simple" | "bundle")}>
               <SelectTrigger id="new-type">
                 <SelectValue placeholder="Typ wählen" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="menu">Menu</SelectItem>
+                <SelectItem value="bundle">Bundle</SelectItem>
                 <SelectItem value="simple">Einfaches Produkt</SelectItem>
               </SelectContent>
             </Select>
@@ -1368,7 +1368,7 @@ function CreateProductCard({
               maxLength={500}
               rows={3}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional: Zutaten, Allergene, Hinweise…"
+              placeholder="Optional: Details, Hinweise…"
             />
             <p className="text-muted-foreground text-xs">{description.length}/500</p>
           </div>

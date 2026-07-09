@@ -16,11 +16,11 @@ interface CartButtonsProps {
 export function CartButtons({ product, configuration, onConfigureProduct, disabled }: CartButtonsProps) {
   const { addToCart, updateQuantity, getItemQuantity, getTotalProductQuantity, cart } = useCart()
 
-  const productHasVariants = product.type !== "menu" && hasVariants(product)
+  const productHasVariants = product.type !== "bundle" && hasVariants(product)
 
   const quantity = configuration
     ? getItemQuantity(product.id, configuration)
-    : product.type === "menu"
+    : product.type === "bundle"
       ? getTotalProductQuantity(product.id)
       : productHasVariants
         ? getTotalProductQuantity(product.id)
@@ -32,7 +32,7 @@ export function CartButtons({ product, configuration, onConfigureProduct, disabl
 
   const handleAdd = () => {
     if (disabled || reachedMax) return
-    if ((product.type === "menu" || productHasVariants) && !configuration && onConfigureProduct) {
+    if ((product.type === "bundle" || productHasVariants) && !configuration && onConfigureProduct) {
       onConfigureProduct()
     } else {
       addToCart(product, configuration)
@@ -48,8 +48,8 @@ export function CartButtons({ product, configuration, onConfigureProduct, disabl
         if (currentItem) {
           updateQuantity(currentItem.id, currentItem.quantity - 1)
         }
-      } else if (product.type === "menu") {
-        // For menu products without configuration, remove one from the last added configuration
+      } else if (product.type === "bundle") {
+        // For bundle products without configuration, remove one from the last added configuration
         const productItems = cart.items.filter((item) => item.product.id === product.id)
         if (productItems.length > 0) {
           const lastItem = productItems[productItems.length - 1]
@@ -76,7 +76,7 @@ export function CartButtons({ product, configuration, onConfigureProduct, disabl
       if (currentItem) {
         updateQuantity(currentItem.id, currentItem.quantity + 1)
       }
-    } else if (product.type === "menu" || productHasVariants) {
+    } else if (product.type === "bundle" || productHasVariants) {
       if (onConfigureProduct) {
         onConfigureProduct()
       }

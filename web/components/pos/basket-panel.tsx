@@ -3,9 +3,9 @@
 import { Banknote, Check, CreditCard, Gift, Printer, QrCode, ShoppingCart, XCircle } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CartItemDisplay } from "@/components/cart/cart-item-display"
-import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
+import { InlineBundleGroup } from "@/components/cart/inline-bundle-group"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
-import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
+import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { GratisTypeDialog } from "@/components/pos/gratis-type-dialog"
 import { Button } from "@/components/ui/button"
@@ -44,7 +44,7 @@ type Tender = PosPaymentMethod | null
 
 type JetonTotal = { id: string; name: string; color: string; count: number }
 
-function toMenuSelections(config?: Record<string, string>) {
+function toBundleSelections(config?: Record<string, string>) {
   if (!config) return undefined
   return Object.entries(config).map(([slotId, productId]) => ({ slotId, productId }))
 }
@@ -53,7 +53,7 @@ function buildOrderItems(items: CartItem[]) {
   return items.map((it) => ({
     productId: it.product.id,
     quantity: it.quantity,
-    menuSelections: toMenuSelections(it.configuration),
+    bundleSelections: toBundleSelections(it.configuration),
     variantId: it.variantId,
   }))
 }
@@ -95,13 +95,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
 
   const getMaxQuantity = useCallback(
     (item: CartItem): number | null => {
-      if (!stockMap || item.product.type === "menu") return null
+      if (!stockMap || item.product.type === "bundle") return null
       const key = item.variantId ?? item.product.id
       return stockMap.get(key) ?? null
     },
     [stockMap]
   )
-  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestMenuSuggestion()
+  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestBundleSuggestion()
   const [showCheckout, setShowCheckout] = useState(false)
   const [tender, setTender] = useState<Tender>(null)
   const [received, setReceived] = useState<string>("")
@@ -153,9 +153,9 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   const cartIsEmpty = cart.items.length === 0
   const jetonMode = mode === "JETON" || mode === "HYBRID"
   const shouldPrint = mode !== "JETON"
-  const resolveMenuSelections = useCallback((item: CartItem) => {
-    if (item.product.type !== "menu" || !item.configuration) return []
-    const slots = item.product.menu?.slots || []
+  const resolveBundleSelections = useCallback((item: CartItem) => {
+    if (item.product.type !== "bundle" || !item.configuration) return []
+    const slots = item.product.bundle?.slots || []
     const selections: ProductSummaryDTO[] = []
     for (const [slotId, productId] of Object.entries(item.configuration)) {
       const slot = slots.find((s) => s.id === slotId)
@@ -166,8 +166,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   }, [])
   const hasMissingJeton = useMemo(() => {
     for (const it of cart.items) {
-      if (it.product.type === "menu") {
-        const selections = resolveMenuSelections(it)
+      if (it.product.type === "bundle") {
+        const selections = resolveBundleSelections(it)
         const configuredSlots = Object.keys(it.configuration || {})
         if (configuredSlots.length === 0 || selections.length < configuredSlots.length) return true
         for (const choice of selections) {
@@ -178,12 +178,12 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       }
     }
     return false
-  }, [cart.items, resolveMenuSelections])
+  }, [cart.items, resolveBundleSelections])
   const computeJetonTotals = useCallback((): JetonTotal[] => {
     const totals = new Map<string, JetonTotal>()
     for (const it of cart.items) {
-      if (it.product.type === "menu") {
-        const selections = resolveMenuSelections(it)
+      if (it.product.type === "bundle") {
+        const selections = resolveBundleSelections(it)
         for (const choice of selections) {
           const jeton = choice.jeton
           if (!jeton) continue
@@ -200,13 +200,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       else totals.set(jeton.id, { id: jeton.id, name: jeton.name, color: jeton.color, count: it.quantity })
     }
     return Array.from(totals.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [cart.items, resolveMenuSelections])
+  }, [cart.items, resolveBundleSelections])
   const buildPrintItems = useCallback((): NonNullable<Receipt["items"]> => {
     return cart.items.map((it) => {
       const cfg: Array<{ slot: string; choice: string }> = []
-      if (it.product.type === "menu" && it.configuration && it.product.menu?.slots) {
+      if (it.product.type === "bundle" && it.configuration && it.product.bundle?.slots) {
         for (const [slotId, productId] of Object.entries(it.configuration)) {
-          const slot = it.product.menu.slots.find((s) => s.id === slotId)
+          const slot = it.product.bundle!.slots.find((s) => s.id === slotId)
           const choice = slot?.options?.find((p) => p.id === productId)
           if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
         }
@@ -265,9 +265,9 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       } else {
         decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
       }
-      if (item.product.type === "menu" && item.configuration && item.product.menu?.slots) {
+      if (item.product.type === "bundle" && item.configuration && item.product.bundle?.slots) {
         for (const [slotId, productId] of Object.entries(item.configuration)) {
-          const slot = item.product.menu.slots.find((s) => s.id === slotId)
+          const slot = item.product.bundle!.slots.find((s) => s.id === slotId)
           const choice = slot?.options?.find((p) => p.id === productId)
           if (choice) {
             decrements.set(productId, (decrements.get(productId) || 0) - item.quantity)
@@ -813,7 +813,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                 const grouped = cart.items.slice(startIndex, endIndex + 1)
                 rows.push(
                   <div key={`group-${grouped.map((g) => g.id).join("-")}`} className="pb-2">
-                    <InlineMenuGroup
+                    <InlineBundleGroup
                       suggestion={suggestion}
                       items={grouped}
                       onEditItem={(it) => setEditingItem(it)}

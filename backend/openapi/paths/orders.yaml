@@ -103,13 +103,13 @@ collection:
                   - productId: "spec______11"
                     quantity: 1
                 contactEmail: "customer@example.com"
-            menu_order:
-              summary: Order with menu selections
+            bundle_order:
+              summary: Order with bundle selections
               value:
                 items:
                   - productId: "spec_______6"
                     quantity: 1
-                    menuSelections:
+                    bundleSelections:
                       - slotId: "spec______12"
                         productId: "spec_______9"
                       - slotId: "spec______13"

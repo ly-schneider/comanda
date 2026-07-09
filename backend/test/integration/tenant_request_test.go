@@ -233,7 +233,7 @@ func TestTenantRequest_ReceiptHasLineItems(t *testing.T) {
 		repos.OrderLine,
 		repos.OrderPayment,
 		NewProductSvc(repos),
-		repos.MenuSlot,
+		repos.BundleSlot,
 		repos.Inventory,
 		nil,
 		capture,

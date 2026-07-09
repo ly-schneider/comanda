@@ -16,7 +16,7 @@ export function isTenantAdmin(tier: MemberTier | null | undefined): boolean {
   return tier === "owner" || tier === "admin"
 }
 
-// App management tier: owner/admin/app_admin — users, invites, food settings.
+// App management tier: owner/admin/app_admin — users, invites, shop settings.
 export function isAppAdmin(tier: MemberTier | null | undefined): boolean {
   return tier === "owner" || tier === "admin" || tier === "app_admin"
 }

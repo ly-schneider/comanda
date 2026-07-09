@@ -42,10 +42,10 @@ func (OrderLine) Fields() []ent.Field {
 		field.String("parent_line_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.String("menu_slot_id").MaxLen(12).
+		field.String("bundle_slot_id").MaxLen(12).
 			Optional().
 			Nillable(),
-		field.String("menu_slot_name").
+		field.String("bundle_slot_name").
 			MaxLen(20).
 			Optional().
 			Nillable(),
@@ -77,9 +77,9 @@ func (OrderLine) Edges() []ent.Edge {
 			Ref("child_lines").
 			Field("parent_line_id").
 			Unique(),
-		edge.From("menu_slot", MenuSlot.Type).
+		edge.From("bundle_slot", BundleSlot.Type).
 			Ref("order_lines").
-			Field("menu_slot_id").
+			Field("bundle_slot_id").
 			Unique(),
 		edge.From("variant", ProductVariant.Type).
 			Ref("order_lines").

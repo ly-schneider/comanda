@@ -167,7 +167,7 @@ func TestRLSPlatformOnlyPolicies(t *testing.T) {
 // the platform-admin bypass (OR app_is_platform_admin()). Mirrors the scoped
 // array in the migrations plus the tenant root and tenant_domain.
 var scopedRLSTables = []string{
-	"product", "category", "jeton", "menu_slot", "menu_slot_option", "order",
+	"product", "category", "jeton", "bundle_slot", "bundle_slot_option", "order",
 	"order_line", "order_payment", "order_line_redemption", "inventory_ledger",
 	"club100_redemption", "settings", "idempotency",
 	"device", "device_binding", "device_product", "admin_invite",

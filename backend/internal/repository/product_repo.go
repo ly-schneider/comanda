@@ -67,8 +67,8 @@ func (r *ProductRepository) GetByIDWithRelations(ctx context.Context, id string)
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(q *ent.MenuSlotQuery) {
-			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(q *ent.BundleSlotQuery) {
+			q.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})
@@ -86,8 +86,8 @@ func (r *ProductRepository) GetAll(ctx context.Context) ([]*ent.Product, error) 
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(q *ent.MenuSlotQuery) {
-			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(q *ent.BundleSlotQuery) {
+			q.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})
@@ -107,8 +107,8 @@ func (r *ProductRepository) GetAllActive(ctx context.Context) ([]*ent.Product, e
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(q *ent.MenuSlotQuery) {
-			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(q *ent.BundleSlotQuery) {
+			q.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})
@@ -128,8 +128,8 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID string
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(q *ent.MenuSlotQuery) {
-			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(q *ent.BundleSlotQuery) {
+			q.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})
@@ -152,8 +152,8 @@ func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID 
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(q *ent.MenuSlotQuery) {
-			q.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(q *ent.BundleSlotQuery) {
+			q.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})
@@ -219,10 +219,10 @@ func (r *ProductRepository) Delete(ctx context.Context, id string) error {
 	return translateError(r.ec(ctx).Product.DeleteOneID(id).Exec(ctx))
 }
 
-func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *bool, limit, offset int) ([]*ent.Product, int64, error) {
+func (r *ProductRepository) GetBundles(ctx context.Context, q *string, active *bool, limit, offset int) ([]*ent.Product, int64, error) {
 	// Build count query
 	countQ := r.ec(ctx).Product.Query().
-		Where(product.TypeEQ(product.TypeMenu))
+		Where(product.TypeEQ(product.TypeBundle))
 	if active != nil {
 		countQ = countQ.Where(product.IsActive(*active))
 	}
@@ -236,12 +236,12 @@ func (r *ProductRepository) GetMenus(ctx context.Context, q *string, active *boo
 
 	// Build data query
 	dataQ := r.ec(ctx).Product.Query().
-		Where(product.TypeEQ(product.TypeMenu)).
+		Where(product.TypeEQ(product.TypeBundle)).
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
-		WithMenuSlots(func(msq *ent.MenuSlotQuery) {
-			msq.WithOptions(func(oq *ent.MenuSlotOptionQuery) {
+		WithBundleSlots(func(msq *ent.BundleSlotQuery) {
+			msq.WithOptions(func(oq *ent.BundleSlotOptionQuery) {
 				oq.WithOptionProduct(func(pq *ent.ProductQuery) {
 					pq.WithJeton()
 				})

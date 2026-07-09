@@ -15,13 +15,13 @@ type TenantTier int
 
 const (
 	// TierCatalog is the lowest tier: products (incl. images and inventory),
-	// categories, and menus only.
+	// categories, and bundles only.
 	TierCatalog TenantTier = iota
 	// TierOps (the staff tier) covers day-to-day operations: orders, stations,
-	// POS, jetons, devices, staff-meals, events — plus everything catalog can do.
+	// POS, jetons, devices, staff-perks, events — plus everything catalog can do.
 	TierOps
 	// TierAppAdmin (the app-admin tier) covers full app management — users,
-	// invites, food-system settings — but not branding, domains, or payments.
+	// invites, shop settings — but not branding, domains, or payments.
 	TierAppAdmin
 	// TierTenantAdmin covers branding, domains, payments, and the account hub.
 	TierTenantAdmin

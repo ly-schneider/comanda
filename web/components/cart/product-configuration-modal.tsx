@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useCart } from "@/contexts/cart-context"
-import { CartItemConfiguration, MenuSlotDTO, ProductDTO } from "@/types"
+import { BundleSlotDTO, CartItemConfiguration, ProductDTO } from "@/types"
 
 interface ProductConfigurationModalProps {
   product: ProductDTO
@@ -53,15 +53,15 @@ export function ProductConfigurationModal({
   }, [isOpen, initialConfiguration])
 
   const isConfigurationComplete = () => {
-    if (!product.menu?.slots) return true
+    if (!product.bundle?.slots) return true
 
-    return product.menu.slots.every((slot) => selectedConfiguration[slot.id] !== undefined)
+    return product.bundle!.slots.every((slot) => selectedConfiguration[slot.id] !== undefined)
   }
 
   const isConfigurationValid = () => {
-    if (!product.menu?.slots) return true
+    if (!product.bundle?.slots) return true
     // Ensure selected products are still active
-    return product.menu.slots.every((slot) => {
+    return product.bundle!.slots.every((slot) => {
       const sel = selectedConfiguration[slot.id]
       if (!sel) return false
       const item = slot.options?.find((it) => it.id === sel)
@@ -73,7 +73,7 @@ export function ProductConfigurationModal({
     })
   }
 
-  if (!product.menu?.slots) {
+  if (!product.bundle?.slots) {
     return null
   }
 
@@ -85,10 +85,10 @@ export function ProductConfigurationModal({
         </DialogHeader>
 
         <div className="space-y-6">
-          {[...product.menu.slots]
+          {[...product.bundle!.slots]
             .sort((a, b) => a.sequence - b.sequence)
             .map((slot) => (
-              <MenuSlotSelector
+              <BundleSlotSelector
                 key={slot.id}
                 slot={slot}
                 selectedProductId={selectedConfiguration[slot.id]}
@@ -119,14 +119,14 @@ function squareImageUrl(url: string): string {
   return url.replace(/-16x9(\.\w+)$/, "$1")
 }
 
-interface MenuSlotSelectorProps {
-  slot: MenuSlotDTO
+interface BundleSlotSelectorProps {
+  slot: BundleSlotDTO
   selectedProductId?: string
   onSelect: (productId: string) => void
   showDescription?: boolean
 }
 
-function MenuSlotSelector({ slot, selectedProductId, onSelect, showDescription = false }: MenuSlotSelectorProps) {
+function BundleSlotSelector({ slot, selectedProductId, onSelect, showDescription = false }: BundleSlotSelectorProps) {
   if (!slot.options) {
     return null
   }

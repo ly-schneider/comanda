@@ -92,7 +92,7 @@ type claimCampaignResponse struct {
 	QRPayload string                     `json:"qrPayload"`
 }
 
-// CreateVolunteerCampaign (POST /v1/staff-meals)
+// CreateVolunteerCampaign (POST /v1/staff-perks)
 func (h *Handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
 	var req createVolunteerCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -120,7 +120,7 @@ func (h *Handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 	response.WriteJSON(w, http.StatusCreated, campaignToAdminResponse(campaign))
 }
 
-// ListVolunteerCampaigns (GET /v1/staff-meals)
+// ListVolunteerCampaigns (GET /v1/staff-perks)
 func (h *Handlers) ListVolunteerCampaigns(w http.ResponseWriter, r *http.Request) {
 	summaries, err := h.volunteers.ListCampaigns(r.Context())
 	if err != nil {
@@ -135,7 +135,7 @@ func (h *Handlers) ListVolunteerCampaigns(w http.ResponseWriter, r *http.Request
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-// GetVolunteerCampaign (GET /v1/staff-meals/{campaignId})
+// GetVolunteerCampaign (GET /v1/staff-perks/{campaignId})
 func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
@@ -172,7 +172,7 @@ func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 	response.WriteJSON(w, http.StatusOK, resp)
 }
 
-// UpdateVolunteerCampaign (PATCH /v1/staff-meals/{campaignId})
+// UpdateVolunteerCampaign (PATCH /v1/staff-perks/{campaignId})
 func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
@@ -214,7 +214,7 @@ func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 	response.WriteJSON(w, http.StatusOK, campaignToAdminResponse(campaign))
 }
 
-// EndVolunteerCampaign (POST /v1/staff-meals/{campaignId}/end)
+// EndVolunteerCampaign (POST /v1/staff-perks/{campaignId}/end)
 func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
@@ -228,7 +228,7 @@ func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 	response.WriteNoContent(w)
 }
 
-// RotateVolunteerCampaignToken (POST /v1/staff-meals/{campaignId}/rotate-token)
+// RotateVolunteerCampaignToken (POST /v1/staff-perks/{campaignId}/rotate-token)
 func (h *Handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
@@ -322,7 +322,7 @@ func (h *Handlers) writeVolunteerError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrVolunteerMaxBelowCount):
 		writeError(w, http.StatusConflict, "max_redemptions_below_count", "New maximum cannot be lower than the current redemption count.")
 	case errors.Is(err, service.ErrVolunteerStationNoMatchingProducts):
-		writeError(w, http.StatusConflict, "station_no_matching_products", "Diese Station bietet keine Artikel aus diesem Helfer-Essen an.")
+		writeError(w, http.StatusConflict, "station_no_matching_products", "Diese Station bietet keine Artikel aus diesem Gutschein an.")
 	default:
 		h.logger.Error("volunteer error", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())

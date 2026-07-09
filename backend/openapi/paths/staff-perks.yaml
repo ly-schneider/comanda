@@ -1,0 +1,240 @@
+collection:
+  get:
+    tags: [StaffPerks]
+    summary: List staff-perk campaigns
+    operationId: listVolunteerCampaigns
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Campaign list
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  post:
+    tags: [StaffPerks]
+    summary: Create staff-perk campaign
+    operationId: createVolunteerCampaign
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignCreate"
+    responses:
+      "201":
+        description: Campaign created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaign"
+      "400":
+        description: Invalid request body
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient permissions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+item:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  get:
+    tags: [StaffPerks]
+    summary: Get staff-perk campaign
+    operationId: getVolunteerCampaign
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Campaign detail with products and redemptions
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignDetail"
+      "400":
+        description: Invalid id
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  patch:
+    tags: [StaffPerks]
+    summary: Update staff-perk campaign
+    operationId: updateVolunteerCampaign
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignUpdate"
+    responses:
+      "200":
+        description: Campaign updated
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaign"
+      "400":
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Maximum below current redemption count
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+end:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  post:
+    tags: [StaffPerks]
+    summary: End staff-perk campaign
+    operationId: endVolunteerCampaign
+    security:
+      - sessionAuth: []
+    responses:
+      "204":
+        description: Campaign ended
+      "400":
+        description: Invalid id
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+rotate-token:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  post:
+    tags: [StaffPerks]
+    summary: Rotate staff-perk campaign claim token
+    operationId: rotateVolunteerCampaignToken
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: New claim token
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignToken"
+      "400":
+        description: Invalid id
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+print:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  get:
+    tags: [StaffPerks]
+    summary: Print staff-perk QR slips
+    description: |
+      Streams a printable PDF of campaign QR slips.
+
+      The optional `count` query parameter sets the number of slips (1–500,
+      default 30); out-of-range values return `400`.
+    operationId: printStaffPerkSlips
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: PDF document of QR slips
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      "400":
+        description: Invalid id or count
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Campaign not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

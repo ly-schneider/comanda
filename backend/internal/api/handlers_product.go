@@ -380,7 +380,7 @@ func (h *Handlers) AdjustProductInventory(w http.ResponseWriter, r *http.Request
 	response.WriteJSON(w, http.StatusOK, inv)
 }
 
-// SetProductActive toggles isActive for a product or menu from a POS device.
+// SetProductActive toggles isActive for a product or bundle from a POS device.
 // PATCH /v1/pos/products/{productId}/active
 func (h *Handlers) SetProductActive(w http.ResponseWriter, r *http.Request, productId string) {
 	ctx := r.Context()

@@ -24,7 +24,7 @@
 //	last 64    Ed25519 signature over all preceding bytes
 //
 // Lines are the redeemable physical items to hand over — simple products and
-// the chosen menu components. A configured menu's bundle parent is not listed;
+// the chosen bundle components. A configured bundle's parent is not listed;
 // its components carry the items. Variants are not encoded.
 //
 // This is not encryption: the ids are readable ASCII inside the blob, exactly

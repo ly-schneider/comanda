@@ -335,7 +335,7 @@ export default function AdminDashboard() {
 
   const lowStockProducts = useMemo(() => {
     return products
-      .filter((p) => p.type !== "menu" && typeof p.stock === "number" && p.stock <= LOW_STOCK_THRESHOLD)
+      .filter((p) => p.type !== "bundle" && typeof p.stock === "number" && p.stock <= LOW_STOCK_THRESHOLD)
       .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
       .slice(0, 10)
   }, [products])

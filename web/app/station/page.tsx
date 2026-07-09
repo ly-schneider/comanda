@@ -45,8 +45,8 @@ type OrderLine = {
   productImage?: string | null
   redemption?: { id: string; redeemedAt: string } | null
   parentLineId?: string | null
-  menuSlotId?: string | null
-  menuSlotName?: string | null
+  bundleSlotId?: string | null
+  bundleSlotName?: string | null
   variantId?: string | null
   variantValue?: string | null
   childLines?: OrderLine[]
@@ -503,8 +503,8 @@ export default function StationPage() {
                 quantity: number
                 isRedeemed: boolean
                 parentItemId?: string | null
-                menuSlotId?: string | null
-                menuSlotName?: string | null
+                bundleSlotId?: string | null
+                bundleSlotName?: string | null
               }>
             }
           }
@@ -520,8 +520,8 @@ export default function StationPage() {
             unitPriceCents: 0,
             redemption: it.isRedeemed ? { id: it.id, redeemedAt } : null,
             parentLineId: it.parentItemId ?? null,
-            menuSlotId: it.menuSlotId ?? null,
-            menuSlotName: it.menuSlotName ?? null,
+            bundleSlotId: it.bundleSlotId ?? null,
+            bundleSlotName: it.bundleSlotName ?? null,
           }))
           const unredeemed = lines.filter((l) => !l.redemption)
           const allRedeemed = lines.length > 0 && unredeemed.length === 0
@@ -1018,13 +1018,13 @@ function LineGroupCard({ group, redeemed }: { group: LineGroup; redeemed: boolea
             <div className="mt-1 flex flex-row flex-wrap gap-1.5">
               {children.map((c) => (
                 <span key={c.id} className="text-muted-foreground border-border rounded-lg border px-2 py-0.5 text-xs">
-                  {c.menuSlotName ?? "Option"}: {c.title}
+                  {c.bundleSlotName ?? "Option"}: {c.title}
                 </span>
               ))}
             </div>
           ) : (
-            parent.menuSlotName && (
-              <div className="text-muted-foreground mt-0.5 truncate text-xs">{parent.menuSlotName}</div>
+            parent.bundleSlotName && (
+              <div className="text-muted-foreground mt-0.5 truncate text-xs">{parent.bundleSlotName}</div>
             )
           )}
           {redeemed && redemptionTime && (

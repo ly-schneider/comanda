@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CategoryFilter } from "@/components/menu/category-filter"
+import { CategoryFilter } from "@/components/catalog/category-filter"
 import { ProductCardPOS } from "@/components/pos/product-card-pos"
 import { listCategories } from "@/lib/api/categories"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
@@ -40,7 +40,7 @@ export function ProductGrid({
 
   return (
     <main className="container mx-auto h-full space-y-3 overflow-y-auto px-3 pb-4 md:px-4">
-      <h1 className="mb-1 text-xl font-semibold">Menu</h1>
+      <h1 className="mb-1 text-xl font-semibold">Sortiment</h1>
       <CategoryFilter categories={categories} active={activeCat} onChange={setActiveCat} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">

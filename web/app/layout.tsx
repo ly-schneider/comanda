@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
       default: branding.displayName,
       template: `%s - ${branding.displayName}`,
     },
-    description: `Das Food-Bestellsystem von ${branding.displayName} – mit TWINT bezahlen und abholen.`,
+    description: `Das Bestellsystem von ${branding.displayName} – mit TWINT bezahlen und abholen.`,
     openGraph: {
       siteName: branding.displayName,
       type: "website",

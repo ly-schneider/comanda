@@ -64,7 +64,7 @@ export const QA_SECTIONS: QaSection[] = [
         key: "provisioning.create-tenant",
         title: "Tenant erstellen",
         action:
-          "Unter /platform-admin/tenants/new Slug + Name eingeben und erstellen; danach https://<slug>.<basisdomain>/food öffnen.",
+          "Unter /platform-admin/tenants/new Slug + Name eingeben und erstellen; danach https://<slug>.<basisdomain>/ öffnen.",
         expected:
           "Tenant erscheint aktiv in der Liste; die Subdomain liefert den (leeren) Shop mit neutralem Branding aus.",
       },
@@ -122,7 +122,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "E-Mail-OTP-Anmeldung",
         action: "/login öffnen, E-Mail eingeben, «Code senden», 6-stelligen Code aus dem Postfach eintragen.",
         expected:
-          "OTP-E-Mail kommt zeitnah an; nach korrektem Code ist die Session aktiv und es wird auf /food (bzw. ?next=) weitergeleitet.",
+          "OTP-E-Mail kommt zeitnah an; nach korrektem Code ist die Session aktiv und es wird auf / (bzw. ?next=) weitergeleitet.",
       },
       {
         key: "auth.otp-errors",
@@ -363,7 +363,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "domains.serves-both",
         title: "BYO-Domain liefert Shop und Admin",
-        action: "https://<domain>/food und https://<domain>/admin öffnen.",
+        action: "https://<domain>/ und https://<domain>/admin öffnen.",
         expected: "Beide Oberflächen laden über HTTPS mit gültigem Zertifikat und Tenant-Branding.",
       },
       {
@@ -411,7 +411,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "Stufen-Gating in /admin",
         action: "Mit catalog-, staff- und app_admin-Konten die /admin-Bereiche durchklicken.",
         expected:
-          "catalog: nur Produkte/Kategorien/Menü. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Essen, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
+          "catalog: nur Produkte/Kategorien/Bundles. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Gutscheine, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
       },
       {
         key: "invites.hub-gating",
@@ -435,7 +435,7 @@ export const QA_SECTIONS: QaSection[] = [
   },
   {
     key: "catalog",
-    title: "9 · Sortiment (Produkte, Kategorien, Menüs, Jetons)",
+    title: "9 · Sortiment (Produkte, Kategorien, Bundles, Jetons)",
     haveReady: ["Produktbilder", "Entscheid für den POS-Modus (QR_CODE/JETON/HYBRID)"],
     tests: [
       {
@@ -493,16 +493,16 @@ export const QA_SECTIONS: QaSection[] = [
       },
       {
         key: "catalog.menu-create",
-        title: "Menü mit Slots aufbauen",
+        title: "Bundle mit Slots aufbauen",
         action:
-          "Unter /admin/menu ein Menü mit 2 Slots (z. B. Hauptgang + Getränk) samt Optionen und Mengen anlegen und publizieren.",
+          "Unter /admin/bundles ein Bundle mit 2 Slots (z. B. Hauptgang + Getränk) samt Optionen und Mengen anlegen und publizieren.",
         expected:
-          "Slots/Optionen speichern korrekt; unpubliziertes Menü bleibt im Shop unsichtbar, publiziertes erscheint.",
+          "Slots/Optionen speichern korrekt; unpubliziertes Bundle bleibt im Shop unsichtbar, publiziertes erscheint.",
       },
       {
         key: "catalog.menu-shop",
-        title: "Menü-Konfiguration im Shop",
-        action: "Das Menü im Storefront öffnen und konfigurieren.",
+        title: "Bundle-Konfiguration im Shop",
+        action: "Das Bundle im Storefront öffnen und konfigurieren.",
         expected:
           "Modal zeigt Slots in Reihenfolge mit Optionen inkl. Preis/Lagerstatus; Konfiguration landet korrekt im Warenkorb.",
       },
@@ -516,7 +516,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "tenant-settings.system-toggle",
         title: "System ein-/ausschalten",
-        action: "«Food System» deaktivieren, Shop aufrufen, wieder aktivieren.",
+        action: "«Bestellsystem» deaktivieren, Shop aufrufen, wieder aktivieren.",
         expected:
           "Deaktiviert zeigt der Shop «Aktuell geschlossen» und Checkout ist unmöglich; aktiviert funktioniert alles.",
       },
@@ -533,7 +533,7 @@ export const QA_SECTIONS: QaSection[] = [
     key: "shop",
     title: "11 · Kunden-Shop & TWINT-Checkout",
     haveReady: [
-      "Publizierte Produkte inkl. Depot-Produkt und Menü",
+      "Publizierte Produkte inkl. Depot-Produkt und Bundle",
       "Payrexx vollständig konfiguriert (Abschnitt 5)",
       "Smartphone mit TWINT",
       "Testpostfach für die Quittung",
@@ -542,16 +542,16 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.browse",
         title: "Storefront-Anzeige",
-        action: "/food auf dem Tenant-Host öffnen und das Grid prüfen.",
+        action: "/ auf dem Tenant-Host öffnen und das Grid prüfen.",
         expected:
           "Produkte nach Kategorieposition sortiert; Preis/Depot korrekt; Badges «Ausverkauft», «Nur X übrig» (≤10) und «Nicht aktiv» erscheinen situationsgerecht.",
       },
       {
         key: "shop.cart",
         title: "Warenkorb-Bedienung",
-        action: "Produkte hinzufügen, Mengen ändern, Position entfernen, Menü-Position umkonfigurieren.",
+        action: "Produkte hinzufügen, Mengen ändern, Position entfernen, Bundle-Position umkonfigurieren.",
         expected:
-          "Zähler und Summen aktualisieren live; leerer Korb blendet die Bottom-Nav aus; Menü-Änderung persistiert.",
+          "Zähler und Summen aktualisieren live; leerer Korb blendet die Bottom-Nav aus; Bundle-Änderung persistiert.",
       },
       {
         key: "shop.totals",
@@ -562,7 +562,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.checkout-empty",
         title: "Leerer Checkout",
-        action: "/food/checkout mit leerem Korb öffnen.",
+        action: "/checkout mit leerem Korb öffnen.",
         expected: "«Warenkorb ist leer»-Zustand; Bezahl-Button deaktiviert.",
       },
       {
@@ -595,12 +595,12 @@ export const QA_SECTIONS: QaSection[] = [
         title: "Quittungs-E-Mail",
         action: "Nach erfolgreicher Zahlung das Postfach prüfen.",
         expected:
-          "Betreff «Deine Quittung von <Marke>»; Positionen inkl. Menü-Konfiguration und Depot; Summen korrekt; QR-Link nutzt die Standard-Domain des Tenants.",
+          "Betreff «Deine Quittung von <Marke>»; Positionen inkl. Bundle-Konfiguration und Depot; Summen korrekt; QR-Link nutzt die Standard-Domain des Tenants.",
       },
       {
         key: "shop.orders-list",
         title: "Bestellliste (Gast + eingeloggt)",
-        action: "/food/orders als Gast (gleicher Browser) und als eingeloggter Kunde öffnen.",
+        action: "/orders als Gast (gleicher Browser) und als eingeloggter Kunde öffnen.",
         expected:
           "Gast sieht lokal gespeicherte Bestellungen, eingeloggt kommen sie vom Backend; Detailseite je erreichbar.",
       },
@@ -854,7 +854,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "orders-refunds.detail",
         title: "Bestelldetail",
-        action: "Eine Menü-Bestellung öffnen.",
+        action: "Eine Bundle-Bestellung öffnen.",
         expected:
           "Positionsbaum zeigt Eltern-Artikel mit Komponenten; Zahlungen mit Methode und Details; Summen konsistent.",
       },
@@ -921,8 +921,8 @@ export const QA_SECTIONS: QaSection[] = [
     ],
   },
   {
-    key: "staff-meals",
-    title: "17 · Mitarbeiter-Essen (Kampagnen)",
+    key: "staff-perks",
+    title: "17 · Mitarbeiter-Gutscheine (Kampagnen)",
     haveReady: [
       "Produkte für die Kampagne",
       "Stationsgerät für die Einlösung",
@@ -931,46 +931,46 @@ export const QA_SECTIONS: QaSection[] = [
     ],
     tests: [
       {
-        key: "staff-meals.create",
+        key: "staff-perks.create",
         title: "Kampagne anlegen und publizieren",
         action:
-          "Unter /admin/staff-meals eine Kampagne mit Produkten (inkl. Mengen), Max-Einlösungen und Ablauf anlegen; publizieren.",
+          "Unter /admin/staff-perks eine Kampagne mit Produkten (inkl. Mengen), Max-Einlösungen und Ablauf anlegen; publizieren.",
         expected: "Kampagne startet als Entwurf und wird aktiv; Detailseite zeigt Zugangscode, Claim-Link und Zähler.",
       },
       {
-        key: "staff-meals.claim-gate",
+        key: "staff-perks.claim-gate",
         title: "Claim-Seite mit Zugangscode",
         action: "Claim-Link im Inkognito öffnen; falschen, dann richtigen 4er-Code eingeben.",
         expected:
           "Falscher Code: Shake + «Code ist falsch.»; Zeichensatz ohne 0/O/I/l; richtiger Code lädt die Kampagne.",
       },
       {
-        key: "staff-meals.claim-qr",
+        key: "staff-perks.claim-qr",
         title: "Claim-QR mit Produktliste",
         action: "Nach dem Code die Ansicht prüfen.",
         expected: "Signierter QR (Ed25519) wird angezeigt; Produktliste mit Mengen stimmt.",
       },
       {
-        key: "staff-meals.redeem",
+        key: "staff-perks.redeem",
         title: "Einlösung an der Station",
         action: "QR an der Station scannen; Kampagnen-Detail parallel offen halten; bis zum Maximum wiederholen.",
         expected:
           "Zähler steigt live (5-s-Poll); Bestand der Produkte wird abgebucht; über dem Maximum wird abgewiesen.",
       },
       {
-        key: "staff-meals.rotate",
+        key: "staff-perks.rotate",
         title: "Claim-Link erneuern",
         action: "«Link erneuern» bestätigen und den alten Link testen.",
         expected: "Alter Link ist ungültig; Einlösezähler bleibt erhalten; neuer Link funktioniert.",
       },
       {
-        key: "staff-meals.vouchers",
+        key: "staff-perks.vouchers",
         title: "Voucher-PDF drucken",
         action: "Über das Drucker-Icon z. B. 5 Voucher generieren.",
         expected: "PDF mit QR-Codes + Zugangscode und Anleitung öffnet sich; Codes sind einlösbar.",
       },
       {
-        key: "staff-meals.end",
+        key: "staff-perks.end",
         title: "Kampagne beenden",
         action: "«Beenden» bestätigen und eine weitere Einlösung versuchen.",
         expected: "Status «beendet»; keine Einlösungen mehr möglich.",

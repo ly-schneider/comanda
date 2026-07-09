@@ -19,9 +19,9 @@ export default function NotFound() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild className="h-10 rounded-xl px-6!">
-            <Link href="/food">
+            <Link href="/">
               <Home className="size-4" />
-              Zur Speisekarte
+              Zum Sortiment
             </Link>
           </Button>
 

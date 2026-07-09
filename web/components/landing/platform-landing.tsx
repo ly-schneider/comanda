@@ -7,7 +7,7 @@ export function PlatformLanding() {
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-20 text-center">
       <p className="eyebrow mb-5">Comanda</p>
       <h1 className="font-primary text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-6xl">
-        Das Bestellsystem für Foodstände und Events.
+        Das Bestellsystem für Stände und Events.
       </h1>
       <p className="text-muted-foreground mt-6 max-w-xl text-lg text-pretty">
         Eine Plattform, dein Auftritt. Bestellung, Bezahlung und Abholung. Mit eigenem Logo, eigener Domain und eigenem
