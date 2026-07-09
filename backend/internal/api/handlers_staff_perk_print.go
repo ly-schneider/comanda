@@ -18,9 +18,9 @@ const (
 	printSlipMaxCount     = 500
 )
 
-// PrintStaffMealSlips streams a PDF of printable QR slips for a campaign.
-// GET /v1/staff-meals/{campaignId}/print.pdf?count=30
-func (h *Handlers) PrintStaffMealSlips(w http.ResponseWriter, r *http.Request, campaignId string) {
+// PrintStaffPerkSlips streams a PDF of printable QR slips for a campaign.
+// GET /v1/staff-perks/{campaignId}/print.pdf?count=30
+func (h *Handlers) PrintStaffPerkSlips(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
@@ -52,20 +52,20 @@ func (h *Handlers) PrintStaffMealSlips(w http.ResponseWriter, r *http.Request, c
 		})
 	}
 
-	body, err := pdf.RenderStaffMealSlips(pdf.SlipInput{
+	body, err := pdf.RenderStaffPerkSlips(pdf.SlipInput{
 		CampaignName: detail.Campaign.Name,
 		QRPayload:    service.BuildQRPayload(detail.Campaign.ClaimToken),
 		Products:     products,
 		Count:        count,
 	})
 	if err != nil {
-		h.logger.Error("render staff meal slips", zap.Error(err))
+		h.logger.Error("render staff perk slips", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "render_failed", err.Error())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="staff-meal-%s.pdf"`, detail.Campaign.ID))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="staff-perk-%s.pdf"`, detail.Campaign.ID))
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
 }

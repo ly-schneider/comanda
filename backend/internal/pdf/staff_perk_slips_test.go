@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestRenderStaffMealSlips_ProducesPDF(t *testing.T) {
-	out, err := RenderStaffMealSlips(SlipInput{
+func TestRenderStaffPerkSlips_ProducesPDF(t *testing.T) {
+	out, err := RenderStaffPerkSlips(SlipInput{
 		CampaignName: "Helferessen Samstag",
 		QRPayload:    "CAMP:tkn_camp___1",
 		Products: []SlipProduct{
@@ -26,11 +26,11 @@ func TestRenderStaffMealSlips_ProducesPDF(t *testing.T) {
 	}
 }
 
-func TestRenderStaffMealSlips_RejectsBadInput(t *testing.T) {
-	if _, err := RenderStaffMealSlips(SlipInput{Count: 0, QRPayload: "x"}); err == nil {
+func TestRenderStaffPerkSlips_RejectsBadInput(t *testing.T) {
+	if _, err := RenderStaffPerkSlips(SlipInput{Count: 0, QRPayload: "x"}); err == nil {
 		t.Fatal("expected error for count=0")
 	}
-	if _, err := RenderStaffMealSlips(SlipInput{Count: 1, QRPayload: ""}); err == nil {
+	if _, err := RenderStaffPerkSlips(SlipInput{Count: 1, QRPayload: ""}); err == nil {
 		t.Fatal("expected error for empty payload")
 	}
 }

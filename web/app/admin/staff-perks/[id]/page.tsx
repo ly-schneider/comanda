@@ -62,7 +62,7 @@ export default function AdminStaffMealDetailPage() {
   const load = useCallback(async () => {
     if (!id) return
     try {
-      const res = await fetchAuth(`/api/v1/staff-meals/${encodeURIComponent(id)}`)
+      const res = await fetchAuth(`/api/v1/staff-perks/${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error(await readErrorMessage(res))
       const j = (await res.json()) as VolunteerCampaignDetail
       setDetail(j)
@@ -83,7 +83,7 @@ export default function AdminStaffMealDetailPage() {
   async function endCampaign() {
     if (!id) return
     try {
-      const res = await fetchAuth(`/api/v1/staff-meals/${encodeURIComponent(id)}/end`, {
+      const res = await fetchAuth(`/api/v1/staff-perks/${encodeURIComponent(id)}/end`, {
         method: "POST",
         headers: { "X-CSRF": getCSRFToken() || "" },
       })
@@ -98,7 +98,7 @@ export default function AdminStaffMealDetailPage() {
     if (!id) return
     setRotating(true)
     try {
-      const res = await fetchAuth(`/api/v1/staff-meals/${encodeURIComponent(id)}/rotate-token`, {
+      const res = await fetchAuth(`/api/v1/staff-perks/${encodeURIComponent(id)}/rotate-token`, {
         method: "POST",
         headers: { "X-CSRF": getCSRFToken() || "" },
       })
@@ -125,7 +125,7 @@ export default function AdminStaffMealDetailPage() {
     }
     setSavingMax(true)
     try {
-      const res = await fetchAuth(`/api/v1/staff-meals/${encodeURIComponent(id)}`, {
+      const res = await fetchAuth(`/api/v1/staff-perks/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-CSRF": getCSRFToken() || "" },
         body: JSON.stringify({
@@ -170,7 +170,7 @@ export default function AdminStaffMealDetailPage() {
     if (!id) return
     const raw = printCount === "" ? 0 : printCount
     const count = Math.max(1, Math.min(500, raw || 0))
-    const url = `/api/v1/staff-meals/${encodeURIComponent(id)}/print.pdf?count=${count}`
+    const url = `/api/v1/staff-perks/${encodeURIComponent(id)}/print.pdf?count=${count}`
     window.open(url, "_blank")
     setPrintOpen(false)
   }
@@ -189,11 +189,11 @@ export default function AdminStaffMealDetailPage() {
     return (
       <div className="space-y-3 pt-4">
         <Link
-          href="/admin/staff-meals"
+          href="/admin/staff-perks"
           className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm"
         >
           <ArrowLeft className="size-4" aria-hidden />
-          Mitarbeiter-Essen
+          Mitarbeiter-Gutscheine
         </Link>
         <p className="text-destructive">{error}</p>
       </div>
@@ -213,11 +213,11 @@ export default function AdminStaffMealDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <Link
-            href="/admin/staff-meals"
+            href="/admin/staff-perks"
             className="text-muted-foreground hover:text-foreground -ml-1 flex w-fit items-center gap-1 text-sm"
           >
             <ArrowLeft className="size-3.5" aria-hidden />
-            Mitarbeiter-Essen
+            Mitarbeiter-Gutscheine
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-primary truncate text-2xl font-semibold">{detail.name}</h1>
@@ -478,7 +478,7 @@ export default function AdminStaffMealDetailPage() {
       <AlertDialog open={endConfirmOpen} onOpenChange={setEndConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mitarbeiter-Essen beenden?</AlertDialogTitle>
+            <AlertDialogTitle>Mitarbeiter-Gutschein beenden?</AlertDialogTitle>
             <AlertDialogDescription>
               Der QR-Code kann nach dem Beenden nicht mehr eingelöst werden. Diese Aktion kann nicht rückgängig gemacht
               werden.

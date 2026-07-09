@@ -49,7 +49,7 @@ export default function AdminStaffMealsPage() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const res = await fetchAuth("/api/v1/staff-meals")
+      const res = await fetchAuth("/api/v1/staff-perks")
       if (!res.ok) throw new Error(await readErrorMessage(res))
       const j = (await res.json()) as { items?: VolunteerCampaignSummary[] }
       setMeals(j.items || [])
@@ -113,7 +113,7 @@ export default function AdminStaffMealsPage() {
     }))
     setSaving(true)
     try {
-      const res = await fetchAuth("/api/v1/staff-meals", {
+      const res = await fetchAuth("/api/v1/staff-perks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -130,7 +130,7 @@ export default function AdminStaffMealsPage() {
       const created = (await res.json()) as VolunteerCampaignSummary
       setDialogOpen(false)
       resetForm()
-      router.push(`/admin/staff-meals/${created.id}`)
+      router.push(`/admin/staff-perks/${created.id}`)
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Erstellen fehlgeschlagen")
     } finally {
@@ -142,14 +142,14 @@ export default function AdminStaffMealsPage() {
     <div className="space-y-4 pt-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-primary text-2xl font-semibold">Mitarbeiter-Essen</h1>
+          <h1 className="font-primary text-2xl font-semibold">Mitarbeiter-Gutscheine</h1>
           <p className="text-muted-foreground text-sm">
-            Gratis-Mahlzeiten, die Mitarbeiter per QR-Code an der Station einlösen.
+            Gratis-Bezüge, die Mitarbeiter per QR-Code an der Station einlösen.
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0">
           <Plus className="size-4" aria-hidden />
-          Neues Essen
+          Neuer Gutschein
         </Button>
       </div>
 
@@ -167,7 +167,7 @@ export default function AdminStaffMealsPage() {
             return (
               <Link
                 key={m.id}
-                href={`/admin/staff-meals/${m.id}`}
+                href={`/admin/staff-perks/${m.id}`}
                 className="border-border bg-card hover:bg-accent/40 focus-visible:ring-ring/40 group flex flex-col gap-4 rounded-2xl border p-5 transition focus-visible:ring-2 focus-visible:outline-none"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -204,7 +204,7 @@ export default function AdminStaffMealsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Neues Mitarbeiter-Essen</DialogTitle>
+            <DialogTitle>Neuer Mitarbeiter-Gutschein</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="grid gap-2">
@@ -342,12 +342,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         <Ticket className="size-5" aria-hidden />
       </div>
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium">Noch keine Mitarbeiter-Essen angelegt</p>
+        <p className="text-sm font-medium">Noch keine Mitarbeiter-Gutscheine angelegt</p>
         <p className="text-muted-foreground text-xs">Lege das erste an und verteile den Link an dein Team.</p>
       </div>
       <Button variant="outline" size="sm" onClick={onCreate}>
         <Plus className="size-4" aria-hidden />
-        Erstes Essen anlegen
+        Ersten Gutschein anlegen
       </Button>
     </div>
   )

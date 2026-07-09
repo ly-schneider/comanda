@@ -71,8 +71,8 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     { href: "/admin/pos", label: "POS", icon: <CreditCard className="size-5" />, requiredTier: "staff" },
     { href: "/admin/jetons", label: "Jetons", icon: <Circle className="size-5" />, requiredTier: "staff" },
     {
-      href: "/admin/staff-meals",
-      label: "Mitarbeiter-Essen",
+      href: "/admin/staff-perks",
+      label: "Mitarbeiter-Gutscheine",
       icon: <Ticket className="size-5" />,
       requiredTier: "staff",
     },

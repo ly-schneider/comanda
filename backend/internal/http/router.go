@@ -217,7 +217,7 @@ func NewRouter(
 		// ── Staff routes (auth + staff membership + CSRF, NOT blocked) ─
 		// The subdomain /admin surface is gated by the tenant-scoped org member
 		// role, not the global user.role. Staff is the day-to-day operational tier
-		// (orders, stations, POS, jetons, devices, staff-meals), strictly above
+		// (orders, stations, POS, jetons, devices, staff-perks), strictly above
 		// catalog.
 		v1.Group(func(ops chi.Router) {
 			ops.Use(betterAuthMw.RequireAuth())
@@ -260,13 +260,13 @@ func NewRouter(
 
 			ops.Get("/events", wrapper.ListEvents)
 
-			ops.Post("/staff-meals", wrapper.CreateVolunteerCampaign)
-			ops.Get("/staff-meals", wrapper.ListVolunteerCampaigns)
-			ops.Get("/staff-meals/{campaignId}", wrapper.GetVolunteerCampaign)
-			ops.Patch("/staff-meals/{campaignId}", wrapper.UpdateVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/end", wrapper.EndVolunteerCampaign)
-			ops.Post("/staff-meals/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
-			ops.Get("/staff-meals/{campaignId}/print.pdf", wrapper.PrintStaffMealSlips)
+			ops.Post("/staff-perks", wrapper.CreateVolunteerCampaign)
+			ops.Get("/staff-perks", wrapper.ListVolunteerCampaigns)
+			ops.Get("/staff-perks/{campaignId}", wrapper.GetVolunteerCampaign)
+			ops.Patch("/staff-perks/{campaignId}", wrapper.UpdateVolunteerCampaign)
+			ops.Post("/staff-perks/{campaignId}/end", wrapper.EndVolunteerCampaign)
+			ops.Post("/staff-perks/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
+			ops.Get("/staff-perks/{campaignId}/print.pdf", wrapper.PrintStaffPerkSlips)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────

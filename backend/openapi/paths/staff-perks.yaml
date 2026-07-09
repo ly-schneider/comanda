@@ -1,7 +1,7 @@
 collection:
   get:
-    tags: [StaffMeals]
-    summary: List staff-meal campaigns
+    tags: [StaffPerks]
+    summary: List staff-perk campaigns
     operationId: listVolunteerCampaigns
     security:
       - sessionAuth: []
@@ -11,7 +11,7 @@ collection:
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/VolunteerCampaignList"
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignList"
       "401":
         description: Authentication required
         content:
@@ -26,8 +26,8 @@ collection:
               $ref: "../schemas/common.yaml#/Error"
 
   post:
-    tags: [StaffMeals]
-    summary: Create staff-meal campaign
+    tags: [StaffPerks]
+    summary: Create staff-perk campaign
     operationId: createVolunteerCampaign
     security:
       - sessionAuth: []
@@ -36,14 +36,14 @@ collection:
       content:
         application/json:
           schema:
-            $ref: "../schemas/staff-meals.yaml#/VolunteerCampaignCreate"
+            $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignCreate"
     responses:
       "201":
         description: Campaign created
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/VolunteerCampaign"
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaign"
       "400":
         description: Invalid request body
         content:
@@ -72,8 +72,8 @@ item:
         type: string
 
   get:
-    tags: [StaffMeals]
-    summary: Get staff-meal campaign
+    tags: [StaffPerks]
+    summary: Get staff-perk campaign
     operationId: getVolunteerCampaign
     security:
       - sessionAuth: []
@@ -83,7 +83,7 @@ item:
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/VolunteerCampaignDetail"
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignDetail"
       "400":
         description: Invalid id
         content:
@@ -98,8 +98,8 @@ item:
               $ref: "../schemas/common.yaml#/Error"
 
   patch:
-    tags: [StaffMeals]
-    summary: Update staff-meal campaign
+    tags: [StaffPerks]
+    summary: Update staff-perk campaign
     operationId: updateVolunteerCampaign
     security:
       - sessionAuth: []
@@ -108,14 +108,14 @@ item:
       content:
         application/json:
           schema:
-            $ref: "../schemas/staff-meals.yaml#/VolunteerCampaignUpdate"
+            $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignUpdate"
     responses:
       "200":
         description: Campaign updated
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/VolunteerCampaign"
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaign"
       "400":
         description: Invalid request
         content:
@@ -144,8 +144,8 @@ end:
         type: string
 
   post:
-    tags: [StaffMeals]
-    summary: End staff-meal campaign
+    tags: [StaffPerks]
+    summary: End staff-perk campaign
     operationId: endVolunteerCampaign
     security:
       - sessionAuth: []
@@ -174,8 +174,8 @@ rotate-token:
         type: string
 
   post:
-    tags: [StaffMeals]
-    summary: Rotate staff-meal campaign claim token
+    tags: [StaffPerks]
+    summary: Rotate staff-perk campaign claim token
     operationId: rotateVolunteerCampaignToken
     security:
       - sessionAuth: []
@@ -185,7 +185,7 @@ rotate-token:
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/VolunteerCampaignToken"
+              $ref: "../schemas/staff-perks.yaml#/VolunteerCampaignToken"
       "400":
         description: Invalid id
         content:
@@ -208,14 +208,14 @@ print:
         type: string
 
   get:
-    tags: [StaffMeals]
-    summary: Print staff-meal QR slips
+    tags: [StaffPerks]
+    summary: Print staff-perk QR slips
     description: |
       Streams a printable PDF of campaign QR slips.
 
       The optional `count` query parameter sets the number of slips (1–500,
       default 30); out-of-range values return `400`.
-    operationId: printStaffMealSlips
+    operationId: printStaffPerkSlips
     security:
       - sessionAuth: []
     responses:

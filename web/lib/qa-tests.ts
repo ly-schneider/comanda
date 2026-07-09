@@ -411,7 +411,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "Stufen-Gating in /admin",
         action: "Mit catalog-, staff- und app_admin-Konten die /admin-Bereiche durchklicken.",
         expected:
-          "catalog: nur Produkte/Kategorien/Menü. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Essen, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
+          "catalog: nur Produkte/Kategorien/Menü. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Gutscheine, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
       },
       {
         key: "invites.hub-gating",
@@ -921,8 +921,8 @@ export const QA_SECTIONS: QaSection[] = [
     ],
   },
   {
-    key: "staff-meals",
-    title: "17 · Mitarbeiter-Essen (Kampagnen)",
+    key: "staff-perks",
+    title: "17 · Mitarbeiter-Gutscheine (Kampagnen)",
     haveReady: [
       "Produkte für die Kampagne",
       "Stationsgerät für die Einlösung",
@@ -931,46 +931,46 @@ export const QA_SECTIONS: QaSection[] = [
     ],
     tests: [
       {
-        key: "staff-meals.create",
+        key: "staff-perks.create",
         title: "Kampagne anlegen und publizieren",
         action:
-          "Unter /admin/staff-meals eine Kampagne mit Produkten (inkl. Mengen), Max-Einlösungen und Ablauf anlegen; publizieren.",
+          "Unter /admin/staff-perks eine Kampagne mit Produkten (inkl. Mengen), Max-Einlösungen und Ablauf anlegen; publizieren.",
         expected: "Kampagne startet als Entwurf und wird aktiv; Detailseite zeigt Zugangscode, Claim-Link und Zähler.",
       },
       {
-        key: "staff-meals.claim-gate",
+        key: "staff-perks.claim-gate",
         title: "Claim-Seite mit Zugangscode",
         action: "Claim-Link im Inkognito öffnen; falschen, dann richtigen 4er-Code eingeben.",
         expected:
           "Falscher Code: Shake + «Code ist falsch.»; Zeichensatz ohne 0/O/I/l; richtiger Code lädt die Kampagne.",
       },
       {
-        key: "staff-meals.claim-qr",
+        key: "staff-perks.claim-qr",
         title: "Claim-QR mit Produktliste",
         action: "Nach dem Code die Ansicht prüfen.",
         expected: "Signierter QR (Ed25519) wird angezeigt; Produktliste mit Mengen stimmt.",
       },
       {
-        key: "staff-meals.redeem",
+        key: "staff-perks.redeem",
         title: "Einlösung an der Station",
         action: "QR an der Station scannen; Kampagnen-Detail parallel offen halten; bis zum Maximum wiederholen.",
         expected:
           "Zähler steigt live (5-s-Poll); Bestand der Produkte wird abgebucht; über dem Maximum wird abgewiesen.",
       },
       {
-        key: "staff-meals.rotate",
+        key: "staff-perks.rotate",
         title: "Claim-Link erneuern",
         action: "«Link erneuern» bestätigen und den alten Link testen.",
         expected: "Alter Link ist ungültig; Einlösezähler bleibt erhalten; neuer Link funktioniert.",
       },
       {
-        key: "staff-meals.vouchers",
+        key: "staff-perks.vouchers",
         title: "Voucher-PDF drucken",
         action: "Über das Drucker-Icon z. B. 5 Voucher generieren.",
         expected: "PDF mit QR-Codes + Zugangscode und Anleitung öffnet sich; Codes sind einlösbar.",
       },
       {
-        key: "staff-meals.end",
+        key: "staff-perks.end",
         title: "Kampagne beenden",
         action: "«Beenden» bestätigen und eine weitere Einlösung versuchen.",
         expected: "Status «beendet»; keine Einlösungen mehr möglich.",

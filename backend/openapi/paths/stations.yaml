@@ -114,9 +114,9 @@ redeem:
 redeem-campaign:
   post:
     tags: [Stations]
-    summary: Redeem staff-meal campaign at station
+    summary: Redeem staff-perk campaign at station
     description: |
-      Redeems a shared staff-meal campaign QR at the authenticated station.
+      Redeems a shared staff-perk campaign QR at the authenticated station.
 
       An optional `Idempotency-Key` header enables at-most-once redemption.
     operationId: redeemCampaignAtStation
@@ -139,7 +139,7 @@ redeem-campaign:
         content:
           application/json:
             schema:
-              $ref: "../schemas/staff-meals.yaml#/CampaignRedemptionResult"
+              $ref: "../schemas/staff-perks.yaml#/CampaignRedemptionResult"
       "400":
         description: Invalid claim token or redemption failed
         content:

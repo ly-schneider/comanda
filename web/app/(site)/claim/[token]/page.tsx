@@ -118,8 +118,8 @@ export default function ClaimPage() {
               <LockKeyhole className="size-6" aria-hidden />
             </div>
             <div className="flex flex-col gap-2">
-              <h1 className="text-2xl font-semibold">Mitarbeiter-Essen</h1>
-              <p className="text-muted-foreground text-sm">Gib den 4-stelligen Code ein, um deine Mahlzeit zu holen.</p>
+              <h1 className="text-2xl font-semibold">Mitarbeiter-Gutschein</h1>
+              <p className="text-muted-foreground text-sm">Gib den 4-stelligen Code ein, um deinen Bezug zu holen.</p>
             </div>
           </div>
 
@@ -193,7 +193,7 @@ export default function ClaimPage() {
   if (error && !data) {
     return (
       <div className="mx-auto max-w-xl p-4">
-        <h1 className="mb-2 text-2xl font-semibold">Mitarbeiter-Essen</h1>
+        <h1 className="mb-2 text-2xl font-semibold">Mitarbeiter-Gutschein</h1>
         <div className="mt-8 flex flex-col items-center gap-3 text-center">
           <Ticket className="text-muted-foreground size-9" aria-hidden />
           <p className="text-destructive">{error}</p>
@@ -221,7 +221,7 @@ export default function ClaimPage() {
 
       {data.products.length > 0 && (
         <div className="mt-8">
-          <h2 className="mb-3 text-lg font-semibold">Dein Essen</h2>
+          <h2 className="mb-3 text-lg font-semibold">Dein Bezug</h2>
           <ul className="flex flex-col gap-3">
             {data.products.map((p) => (
               <li key={p.productId} className="rounded-xl border p-3">

@@ -40,7 +40,7 @@ const (
 	instructionText = "An der Station vorzeigen"
 )
 
-func RenderStaffMealSlips(in SlipInput) ([]byte, error) {
+func RenderStaffPerkSlips(in SlipInput) ([]byte, error) {
 	if in.Count <= 0 {
 		return nil, fmt.Errorf("count must be positive")
 	}

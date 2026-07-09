@@ -58,8 +58,8 @@ tags:
     description: Vendor account hub (self-service, scoped to the vendor's tenant)
   - name: OwnerInvites
     description: Owner-invite registration (platform-host invite → tenant owner)
-  - name: StaffMeals
-    description: Staff-meal (volunteer) campaigns, claim access, and station redemption
+  - name: StaffPerks
+    description: Staff-perk (volunteer) campaigns, claim access, and station redemption
   - name: Inventory
     description: Real-time inventory stream
   - name: Android
@@ -271,16 +271,16 @@ paths:
   /events:
     $ref: "paths/events.yaml#/collection"
 
-  /staff-meals:
-    $ref: "paths/staff-meals.yaml#/collection"
-  /staff-meals/{campaignId}:
-    $ref: "paths/staff-meals.yaml#/item"
-  /staff-meals/{campaignId}/end:
-    $ref: "paths/staff-meals.yaml#/end"
-  /staff-meals/{campaignId}/rotate-token:
-    $ref: "paths/staff-meals.yaml#/rotate-token"
-  /staff-meals/{campaignId}/print.pdf:
-    $ref: "paths/staff-meals.yaml#/print"
+  /staff-perks:
+    $ref: "paths/staff-perks.yaml#/collection"
+  /staff-perks/{campaignId}:
+    $ref: "paths/staff-perks.yaml#/item"
+  /staff-perks/{campaignId}/end:
+    $ref: "paths/staff-perks.yaml#/end"
+  /staff-perks/{campaignId}/rotate-token:
+    $ref: "paths/staff-perks.yaml#/rotate-token"
+  /staff-perks/{campaignId}/print.pdf:
+    $ref: "paths/staff-perks.yaml#/print"
 
   /claim/{token}:
     $ref: "paths/claim.yaml#/item"
