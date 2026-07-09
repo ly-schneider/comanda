@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CategoryFilter } from "@/components/menu/category-filter"
+import { CategoryFilter } from "@/components/catalog/category-filter"
 import { ProductCardPOS } from "@/components/pos/product-card-pos"
 import { listCategories } from "@/lib/api/categories"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"

@@ -1,19 +1,19 @@
 collection:
   get:
-    tags: [Menus]
-    summary: List menus
-    description: Returns all menu-type products with their slots and options.
-    operationId: listMenus
+    tags: [Bundles]
+    summary: List bundles
+    description: Returns all bundle-type products with their slots and options.
+    operationId: listBundles
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     responses:
       "200":
-        description: Menu list
+        description: Bundle list
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/MenuList"
+              $ref: "../schemas/bundles.yaml#/BundleList"
       "401":
         description: Authentication required
         content:
@@ -28,32 +28,32 @@ collection:
               $ref: "../schemas/common.yaml#/Error"
 
   post:
-    tags: [Menus]
-    summary: Create menu
+    tags: [Bundles]
+    summary: Create bundle
     description: |
-      Creates a new menu product (type=menu) with the given name and price.
+      Creates a new bundle product (type=bundle) with the given name and price.
       Add slots and options after creation.
-    operationId: createMenu
+    operationId: createBundle
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuCreate"
+            $ref: "../schemas/bundles.yaml#/BundleCreate"
           example:
             name: "Lunch Menu"
             priceCents: 1200
             categoryId: "spec_______5"
     responses:
       "201":
-        description: Menu created
+        description: Bundle created
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/Menu"
+              $ref: "../schemas/bundles.yaml#/Bundle"
       "401":
         description: Authentication required
         content:
@@ -69,28 +69,28 @@ collection:
 
 item:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
 
   get:
-    tags: [Menus]
-    summary: Get menu
-    description: Returns a menu product with all its slots and option products.
-    operationId: getMenu
+    tags: [Bundles]
+    summary: Get bundle
+    description: Returns a bundle product with all its slots and option products.
+    operationId: getBundle
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     responses:
       "200":
-        description: Menu with slots and options
+        description: Bundle with slots and options
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/Menu"
+              $ref: "../schemas/bundles.yaml#/Bundle"
       "404":
         description: Resource not found
         content:
@@ -99,34 +99,34 @@ item:
               $ref: "../schemas/common.yaml#/Error"
 
   patch:
-    tags: [Menus]
-    summary: Update menu
-    operationId: updateMenu
+    tags: [Bundles]
+    summary: Update bundle
+    operationId: updateBundle
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuUpdate"
+            $ref: "../schemas/bundles.yaml#/BundleUpdate"
           examples:
             rename:
-              summary: Rename menu
+              summary: Rename bundle
               value:
                 name: "Dinner Menu"
             deactivate:
-              summary: Deactivate menu
+              summary: Deactivate bundle
               value:
                 isActive: false
     responses:
       "200":
-        description: Menu updated
+        description: Bundle updated
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/Menu"
+              $ref: "../schemas/bundles.yaml#/Bundle"
       "401":
         description: Authentication required
         content:
@@ -147,16 +147,16 @@ item:
               $ref: "../schemas/common.yaml#/Error"
 
   delete:
-    tags: [Menus]
-    summary: Delete menu
-    description: Deletes the menu product and cascades to its slots and options.
-    operationId: deleteMenu
+    tags: [Bundles]
+    summary: Delete bundle
+    description: Deletes the bundle product and cascades to its slots and options.
+    operationId: deleteBundle
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     responses:
       "204":
-        description: Menu deleted
+        description: Bundle deleted
       "401":
         description: Authentication required
         content:
@@ -178,26 +178,26 @@ item:
 
 slots:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
 
   post:
-    tags: [Menus]
-    summary: Create menu slot
-    operationId: createMenuSlot
+    tags: [Bundles]
+    summary: Create bundle slot
+    operationId: createBundleSlot
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuSlotCreate"
+            $ref: "../schemas/bundles.yaml#/BundleSlotCreate"
           example:
             name: "Main"
     responses:
@@ -206,7 +206,7 @@ slots:
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/MenuSlot"
+              $ref: "../schemas/bundles.yaml#/BundleSlot"
       "401":
         description: Authentication required
         content:
@@ -222,27 +222,27 @@ slots:
 
 slots-reorder:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
 
   patch:
-    tags: [Menus]
-    summary: Reorder menu slots
-    description: Sets the display order of all slots in this menu.
-    operationId: reorderMenuSlots
+    tags: [Bundles]
+    summary: Reorder bundle slots
+    description: Sets the display order of all slots in this bundle.
+    operationId: reorderBundleSlots
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuSlotReorder"
+            $ref: "../schemas/bundles.yaml#/BundleSlotReorder"
           example:
             positions:
               "spec_______6": 0
@@ -254,7 +254,7 @@ slots-reorder:
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/MenuSlotList"
+              $ref: "../schemas/bundles.yaml#/BundleSlotList"
       "401":
         description: Authentication required
         content:
@@ -270,10 +270,10 @@ slots-reorder:
 
 slot-item:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
     - name: slotId
@@ -283,18 +283,18 @@ slot-item:
         type: string
 
   patch:
-    tags: [Menus]
-    summary: Rename menu slot
-    operationId: updateMenuSlot
+    tags: [Bundles]
+    summary: Rename bundle slot
+    operationId: updateBundleSlot
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuSlotUpdate"
+            $ref: "../schemas/bundles.yaml#/BundleSlotUpdate"
           example:
             name: "Side Dish"
     responses:
@@ -303,7 +303,7 @@ slot-item:
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/MenuSlot"
+              $ref: "../schemas/bundles.yaml#/BundleSlot"
       "401":
         description: Authentication required
         content:
@@ -324,13 +324,13 @@ slot-item:
               $ref: "../schemas/common.yaml#/Error"
 
   delete:
-    tags: [Menus]
-    summary: Delete menu slot
+    tags: [Bundles]
+    summary: Delete bundle slot
     description: Deletes the slot and cascades to its option assignments.
-    operationId: deleteMenuSlot
+    operationId: deleteBundleSlot
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     responses:
       "204":
         description: Slot deleted
@@ -355,10 +355,10 @@ slot-item:
 
 options:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
     - name: slotId
@@ -368,19 +368,19 @@ options:
         type: string
 
   post:
-    tags: [Menus]
+    tags: [Bundles]
     summary: Add option product to slot
     description: Attaches an existing simple product as an option in this slot.
     operationId: addSlotOption
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     requestBody:
       required: true
       content:
         application/json:
           schema:
-            $ref: "../schemas/menus.yaml#/MenuSlotOptionCreate"
+            $ref: "../schemas/bundles.yaml#/BundleSlotOptionCreate"
           example:
             productId: "spec_______9"
     responses:
@@ -389,7 +389,7 @@ options:
         content:
           application/json:
             schema:
-              $ref: "../schemas/menus.yaml#/MenuSlotOption"
+              $ref: "../schemas/bundles.yaml#/BundleSlotOption"
       "401":
         description: Authentication required
         content:
@@ -411,10 +411,10 @@ options:
 
 option-item:
   parameters:
-    - name: menuId
+    - name: bundleId
       in: path
       required: true
-      description: UUID of the menu product
+      description: UUID of the bundle product
       schema:
         type: string
     - name: slotId
@@ -429,12 +429,12 @@ option-item:
         type: string
 
   delete:
-    tags: [Menus]
+    tags: [Bundles]
     summary: Remove option product from slot
     operationId: removeSlotOption
     security:
       - sessionAuth: []
-    x-required-permissions: [menus:write]
+    x-required-permissions: [bundles:write]
     responses:
       "204":
         description: Option removed

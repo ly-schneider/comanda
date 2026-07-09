@@ -8,26 +8,26 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-type MenuSlot struct {
+type BundleSlot struct {
 	ent.Schema
 }
 
-func (MenuSlot) Annotations() []schema.Annotation {
+func (BundleSlot) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "menu_slot"},
+		entsql.Annotation{Table: "bundle_slot"},
 	}
 }
 
-func (MenuSlot) Mixin() []ent.Mixin {
+func (BundleSlot) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		TenantMixin{},
 	}
 }
 
-func (MenuSlot) Fields() []ent.Field {
+func (BundleSlot) Fields() []ent.Field {
 	return []ent.Field{
 		nanoidPK(),
-		field.String("menu_product_id").MaxLen(12),
+		field.String("bundle_product_id").MaxLen(12),
 		field.String("name").
 			MaxLen(20).
 			NotEmpty(),
@@ -36,15 +36,15 @@ func (MenuSlot) Fields() []ent.Field {
 	}
 }
 
-func (MenuSlot) Edges() []ent.Edge {
+func (BundleSlot) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("menu_product", Product.Type).
-			Ref("menu_slots").
-			Field("menu_product_id").
+		edge.From("bundle_product", Product.Type).
+			Ref("bundle_slots").
+			Field("bundle_product_id").
 			Unique().
 			Required(),
 		edge.To("option_products", Product.Type).
-			Through("options", MenuSlotOption.Type),
+			Through("options", BundleSlotOption.Type),
 		edge.To("order_lines", OrderLine.Type),
 	}
 }

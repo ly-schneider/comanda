@@ -31,7 +31,7 @@ func (Product) Fields() []ent.Field {
 		nanoidPK(),
 		field.String("category_id").MaxLen(12),
 		field.Enum("type").
-			Values("simple", "menu").
+			Values("simple", "bundle").
 			Default("simple").
 			StorageKey("type"),
 		field.String("name").
@@ -77,11 +77,11 @@ func (Product) Edges() []ent.Edge {
 			Ref("products").
 			Field("jeton_id").
 			Unique(),
-		edge.To("menu_slots", MenuSlot.Type),
+		edge.To("bundle_slots", BundleSlot.Type),
 		edge.To("variants", ProductVariant.Type),
-		edge.From("menu_slot_options", MenuSlot.Type).
+		edge.From("bundle_slot_options", BundleSlot.Type).
 			Ref("option_products").
-			Through("menu_slot_option_links", MenuSlotOption.Type),
+			Through("bundle_slot_option_links", BundleSlotOption.Type),
 		edge.From("devices", Device.Type).
 			Ref("products").
 			Through("device_products", DeviceProduct.Type),

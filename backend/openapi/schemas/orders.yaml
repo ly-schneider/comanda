@@ -21,8 +21,8 @@ OrderItemType:
   enum: [simple, bundle, component, deposit]
   description: |
     - `simple`: Standalone product line
-    - `bundle`: Menu product parent line
-    - `component`: Menu slot selection (child of bundle)
+    - `bundle`: Bundle product parent line
+    - `component`: Bundle slot selection (child of bundle)
     - `deposit`: Refundable per-unit container deposit (child of the product line)
 
 Order:
@@ -113,10 +113,10 @@ OrderLine:
       type: string
       nullable: true
       description: Parent bundle line (for component lines)
-    menuSlotId:
+    bundleSlotId:
       type: string
       nullable: true
-    menuSlotName:
+    bundleSlotName:
       type: string
       maxLength: 20
       nullable: true
@@ -204,9 +204,9 @@ OrderCreate:
           variantId:
             type: string
             description: Required for products with variants; forbidden otherwise
-          menuSelections:
+          bundleSelections:
             type: array
-            description: Required for menu-type products. One selection per slot.
+            description: Required for bundle-type products. One selection per slot.
             items:
               type: object
               required: [slotId, productId]

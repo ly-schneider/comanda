@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
-import type { Menu, MenuSlot, MenuSlotOption } from "@/types/menu"
+import type { Bundle, BundleSlot, BundleSlotOption } from "@/types/bundle"
 import type { ProductSummaryDTO } from "@/types/product"
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -60,23 +60,23 @@ function csrfHeaders(method: string, json = true): Record<string, string> {
 
 type FetchFn = ReturnType<typeof useAuthorizedFetch>
 
-async function apiCreateMenu(
+async function apiCreateBundle(
   fetchAuth: FetchFn,
   body: { categoryId: string; name: string; priceCents: number; image?: string; description?: string | null }
-): Promise<Menu> {
-  const res = await fetchAuth(`/api/v1/menus`, {
+): Promise<Bundle> {
+  const res = await fetchAuth(`/api/v1/bundles`, {
     method: "POST",
     headers: csrfHeaders("POST"),
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
-  return (await res.json()) as Menu
+  return (await res.json()) as Bundle
 }
 
-async function apiUploadMenuImage(fetchAuth: FetchFn, menuId: string, file: File): Promise<string> {
+async function apiUploadBundleImage(fetchAuth: FetchFn, bundleId: string, file: File): Promise<string> {
   const formData = new FormData()
   formData.append("file", file)
-  const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(menuId)}/image`, {
+  const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(bundleId)}/image`, {
     method: "POST",
     headers: { "X-CSRF": getCSRFToken() || "" },
     body: formData,
@@ -86,17 +86,17 @@ async function apiUploadMenuImage(fetchAuth: FetchFn, menuId: string, file: File
   return data.imageUrl
 }
 
-async function apiDeleteMenuImage(fetchAuth: FetchFn, menuId: string): Promise<void> {
-  const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(menuId)}/image`, {
+async function apiDeleteBundleImage(fetchAuth: FetchFn, bundleId: string): Promise<void> {
+  const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(bundleId)}/image`, {
     method: "DELETE",
     headers: { "X-CSRF": getCSRFToken() || "" },
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
 }
 
-async function apiUpdateMenu(
+async function apiUpdateBundle(
   fetchAuth: FetchFn,
-  menuId: string,
+  bundleId: string,
   body: Partial<{
     name: string
     priceCents: number
@@ -104,54 +104,54 @@ async function apiUpdateMenu(
     image: string | null
     description: string | null
   }>
-): Promise<Menu> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}`, {
+): Promise<Bundle> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}`, {
     method: "PATCH",
     headers: csrfHeaders("PATCH"),
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
-  return (await res.json()) as Menu
+  return (await res.json()) as Bundle
 }
 
-async function apiDeleteMenu(fetchAuth: FetchFn, menuId: string): Promise<void> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}`, {
+async function apiDeleteBundle(fetchAuth: FetchFn, bundleId: string): Promise<void> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}`, {
     method: "DELETE",
     headers: csrfHeaders("DELETE", false),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
 }
 
-async function apiCreateSlot(fetchAuth: FetchFn, menuId: string, name: string): Promise<MenuSlot> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}/slots`, {
+async function apiCreateSlot(fetchAuth: FetchFn, bundleId: string, name: string): Promise<BundleSlot> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}/slots`, {
     method: "POST",
     headers: csrfHeaders("POST"),
     body: JSON.stringify({ name }),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
-  return (await res.json()) as MenuSlot
+  return (await res.json()) as BundleSlot
 }
 
-async function apiUpdateSlot(fetchAuth: FetchFn, menuId: string, slotId: string, name: string): Promise<MenuSlot> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}/slots/${encodeURIComponent(slotId)}`, {
+async function apiUpdateSlot(fetchAuth: FetchFn, bundleId: string, slotId: string, name: string): Promise<BundleSlot> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}/slots/${encodeURIComponent(slotId)}`, {
     method: "PATCH",
     headers: csrfHeaders("PATCH"),
     body: JSON.stringify({ name }),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
-  return (await res.json()) as MenuSlot
+  return (await res.json()) as BundleSlot
 }
 
-async function apiDeleteSlot(fetchAuth: FetchFn, menuId: string, slotId: string): Promise<void> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}/slots/${encodeURIComponent(slotId)}`, {
+async function apiDeleteSlot(fetchAuth: FetchFn, bundleId: string, slotId: string): Promise<void> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}/slots/${encodeURIComponent(slotId)}`, {
     method: "DELETE",
     headers: csrfHeaders("DELETE", false),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
 }
 
-async function apiReorderSlots(fetchAuth: FetchFn, menuId: string, positions: Record<string, number>): Promise<void> {
-  const res = await fetchAuth(`/api/v1/menus/${encodeURIComponent(menuId)}/slots/reorder`, {
+async function apiReorderSlots(fetchAuth: FetchFn, bundleId: string, positions: Record<string, number>): Promise<void> {
+  const res = await fetchAuth(`/api/v1/bundles/${encodeURIComponent(bundleId)}/slots/reorder`, {
     method: "PATCH",
     headers: csrfHeaders("PATCH"),
     body: JSON.stringify({ positions }),
@@ -161,12 +161,12 @@ async function apiReorderSlots(fetchAuth: FetchFn, menuId: string, positions: Re
 
 async function apiAddOption(
   fetchAuth: FetchFn,
-  menuId: string,
+  bundleId: string,
   slotId: string,
   productId: string
-): Promise<MenuSlotOption> {
+): Promise<BundleSlotOption> {
   const res = await fetchAuth(
-    `/api/v1/menus/${encodeURIComponent(menuId)}/slots/${encodeURIComponent(slotId)}/options`,
+    `/api/v1/bundles/${encodeURIComponent(bundleId)}/slots/${encodeURIComponent(slotId)}/options`,
     {
       method: "POST",
       headers: csrfHeaders("POST"),
@@ -174,17 +174,17 @@ async function apiAddOption(
     }
   )
   if (!res.ok) throw new Error(await readErrorMessage(res))
-  return (await res.json()) as MenuSlotOption
+  return (await res.json()) as BundleSlotOption
 }
 
 async function apiRemoveOption(
   fetchAuth: FetchFn,
-  menuId: string,
+  bundleId: string,
   slotId: string,
   optionProductId: string
 ): Promise<void> {
   const res = await fetchAuth(
-    `/api/v1/menus/${encodeURIComponent(menuId)}/slots/${encodeURIComponent(slotId)}/options/${encodeURIComponent(optionProductId)}`,
+    `/api/v1/bundles/${encodeURIComponent(bundleId)}/slots/${encodeURIComponent(slotId)}/options/${encodeURIComponent(optionProductId)}`,
     {
       method: "DELETE",
       headers: csrfHeaders("DELETE", false),
@@ -195,31 +195,31 @@ async function apiRemoveOption(
 
 // ─── Page ─────────────────────────────────────────────────────────────
 
-export default function AdminMenuPage() {
+export default function AdminBundlesPage() {
   const fetchAuth = useAuthorizedFetch()
-  const [menus, setMenus] = useState<Menu[]>([])
+  const [bundles, setBundles] = useState<Bundle[]>([])
   const [cats, setCats] = useState<{ id: string; name: string }[]>([])
   const [products, setProducts] = useState<ProductSummaryDTO[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [editMenu, setEditMenu] = useState<Menu | null>(null)
+  const [editBundle, setEditBundle] = useState<Bundle | null>(null)
 
   const sorted = useMemo(() => {
-    return [...menus].sort((a, b) => a.name.localeCompare(b.name))
-  }, [menus])
+    return [...bundles].sort((a, b) => a.name.localeCompare(b.name))
+  }, [bundles])
 
   const refetch = useCallback(async () => {
     setError(null)
     try {
-      const [mr, cr, pr] = await Promise.all([
-        fetchAuth(`/api/v1/menus`),
+      const [br, cr, pr] = await Promise.all([
+        fetchAuth(`/api/v1/bundles`),
         fetchAuth(`/api/v1/categories`),
         fetchAuth(`/api/v1/products?type=simple`),
       ])
-      if (!mr.ok) throw new Error(`Menus: HTTP ${mr.status}`)
-      const menuData = (await mr.json()) as { items: Menu[] }
-      setMenus(menuData.items || [])
+      if (!br.ok) throw new Error(`Bundles: HTTP ${br.status}`)
+      const bundleData = (await br.json()) as { items: Bundle[] }
+      setBundles(bundleData.items || [])
 
       if (cr.ok) {
         const catData = (await cr.json()) as { items: { id: string; name: string }[] }
@@ -247,9 +247,9 @@ export default function AdminMenuPage() {
   }, [refetch])
 
   const handleDelete = useCallback(
-    async (menuId: string) => {
+    async (bundleId: string) => {
       try {
-        await apiDeleteMenu(fetchAuth, menuId)
+        await apiDeleteBundle(fetchAuth, bundleId)
         await refetch()
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Löschen fehlgeschlagen")
@@ -261,14 +261,13 @@ export default function AdminMenuPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Menus</h1>
+        <h1 className="text-xl font-semibold">Bundles</h1>
         <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
           <Plus className="size-4" />
-          Neues Menu
+          Neues Bundle
         </Button>
       </div>
 
-      {/* Grid */}
       {!loaded ? (
         <div className="grid grid-cols-1 gap-5 sm:gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -285,22 +284,22 @@ export default function AdminMenuPage() {
         </div>
       ) : sorted.length === 0 ? (
         <div className="text-muted-foreground py-12 text-center text-sm">
-          Keine Menus gefunden. Erstelle dein erstes Menu.
+          Keine Bundles gefunden. Erstelle dein erstes Bundle.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:gap-3 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
-          {sorted.map((menu) => (
-            <MenuCard
-              key={menu.id}
-              menu={menu}
+          {sorted.map((bundle) => (
+            <BundleCard
+              key={bundle.id}
+              bundle={bundle}
               products={products}
               fetchAuth={fetchAuth}
-              onEdit={() => setEditMenu(menu)}
-              onDelete={() => handleDelete(menu.id)}
+              onEdit={() => setEditBundle(bundle)}
+              onDelete={() => handleDelete(bundle.id)}
               onRefetch={refetch}
               onError={setError}
               onUpdateSlots={(newSlots) =>
-                setMenus((prev) => prev.map((m) => (m.id === menu.id ? { ...m, slots: newSlots } : m)))
+                setBundles((prev) => prev.map((b) => (b.id === bundle.id ? { ...b, slots: newSlots } : b)))
               }
             />
           ))}
@@ -309,7 +308,7 @@ export default function AdminMenuPage() {
 
       {error && <div className="text-destructive text-sm">{error}</div>}
 
-      <CreateMenuDialog
+      <CreateBundleDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         cats={cats}
@@ -318,9 +317,9 @@ export default function AdminMenuPage() {
         onError={setError}
       />
 
-      <EditMenuDialog
-        menu={editMenu}
-        onClose={() => setEditMenu(null)}
+      <EditBundleDialog
+        bundle={editBundle}
+        onClose={() => setEditBundle(null)}
         fetchAuth={fetchAuth}
         onSaved={refetch}
         onError={setError}
@@ -329,10 +328,10 @@ export default function AdminMenuPage() {
   )
 }
 
-// ─── MenuCard ─────────────────────────────────────────────────────────
+// ─── BundleCard ───────────────────────────────────────────────────────
 
-function MenuCard({
-  menu,
+function BundleCard({
+  bundle,
   products,
   fetchAuth,
   onEdit,
@@ -341,26 +340,26 @@ function MenuCard({
   onError,
   onUpdateSlots,
 }: {
-  menu: Menu
+  bundle: Bundle
   products: ProductSummaryDTO[]
   fetchAuth: FetchFn
   onEdit: () => void
   onDelete: () => void
   onRefetch: () => Promise<void>
   onError: (msg: string) => void
-  onUpdateSlots: (slots: MenuSlot[]) => void
+  onUpdateSlots: (slots: BundleSlot[]) => void
 }) {
   const [open, setOpen] = useState(false)
-  const slots = useMemo(() => [...(menu.slots || [])].sort((a, b) => a.sequence - b.sequence), [menu.slots])
+  const slots = useMemo(() => [...(bundle.slots || [])].sort((a, b) => a.sequence - b.sequence), [bundle.slots])
 
   return (
     <Card className="gap-0 overflow-hidden rounded-[11px] p-0">
       <CardHeader className="p-2">
         <div className="relative aspect-video rounded-[11px] bg-[#cec9c6]">
-          {menu.image ? (
+          {bundle.image ? (
             <Image
-              src={menu.image}
-              alt={"Menubild von " + menu.name}
+              src={bundle.image}
+              alt={"Bundlebild von " + bundle.name}
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
               quality={90}
@@ -369,7 +368,7 @@ function MenuCard({
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-zinc-500">Kein Bild</div>
           )}
-          {!menu.isActive && (
+          {!bundle.isActive && (
             <div className="absolute inset-0 z-10 grid place-items-center rounded-[11px] bg-black/55">
               <span className="rounded-full bg-zinc-700 px-3 py-1 text-sm font-medium text-white">Nicht aktiv</span>
             </div>
@@ -378,18 +377,17 @@ function MenuCard({
       </CardHeader>
 
       <CardContent className="space-y-3 px-3 pt-0 pb-3">
-        {/* Title row */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-family-secondary text-lg font-medium">{menu.name}</h3>
-            <p className="font-family-secondary text-muted-foreground text-sm">{formatPriceLabel(menu.priceCents)}</p>
+            <h3 className="font-family-secondary text-lg font-medium">{bundle.name}</h3>
+            <p className="font-family-secondary text-muted-foreground text-sm">{formatPriceLabel(bundle.priceCents)}</p>
           </div>
           <div className="flex items-center gap-1">
             <Button
               size="icon"
               variant="ghost"
               onClick={onEdit}
-              aria-label={`Menu ${menu.name} bearbeiten`}
+              aria-label={`Bundle ${bundle.name} bearbeiten`}
               className="size-9"
             >
               <Pencil className="size-4" />
@@ -399,7 +397,7 @@ function MenuCard({
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`Menu ${menu.name} löschen`}
+                  aria-label={`Bundle ${bundle.name} löschen`}
                   className="text-destructive hover:text-destructive size-9"
                 >
                   <Trash2 className="size-4" />
@@ -407,9 +405,9 @@ function MenuCard({
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Menu löschen?</AlertDialogTitle>
+                  <AlertDialogTitle>Bundle löschen?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    &laquo;{menu.name}&raquo; wird dauerhaft gelöscht inkl. aller Slots und Optionen.
+                    &laquo;{bundle.name}&raquo; wird dauerhaft gelöscht inkl. aller Slots und Optionen.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -421,7 +419,6 @@ function MenuCard({
           </div>
         </div>
 
-        {/* Collapsible slots section */}
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 gap-1.5 text-xs">
@@ -431,7 +428,7 @@ function MenuCard({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <SlotsSection
-              menuId={menu.id}
+              bundleId={bundle.id}
               slots={slots}
               products={products}
               fetchAuth={fetchAuth}
@@ -449,7 +446,7 @@ function MenuCard({
 // ─── SlotsSection ─────────────────────────────────────────────────────
 
 function SlotsSection({
-  menuId,
+  bundleId,
   slots,
   products,
   fetchAuth,
@@ -457,13 +454,13 @@ function SlotsSection({
   onError,
   onUpdateSlots,
 }: {
-  menuId: string
-  slots: MenuSlot[]
+  bundleId: string
+  slots: BundleSlot[]
   products: ProductSummaryDTO[]
   fetchAuth: FetchFn
   onRefetch: () => Promise<void>
   onError: (msg: string) => void
-  onUpdateSlots: (slots: MenuSlot[]) => void
+  onUpdateSlots: (slots: BundleSlot[]) => void
 }) {
   const [newSlotName, setNewSlotName] = useState("")
   const [busy, setBusy] = useState(false)
@@ -473,7 +470,7 @@ function SlotsSection({
     if (!name || busy) return
     setBusy(true)
     try {
-      await apiCreateSlot(fetchAuth, menuId, name)
+      await apiCreateSlot(fetchAuth, bundleId, name)
       setNewSlotName("")
       await onRefetch()
     } catch (e: unknown) {
@@ -492,12 +489,10 @@ function SlotsSection({
     const swapIdx = direction === "up" ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= slots.length) return
 
-    // Swap and normalize sequences to 0, 1, 2, ...
     const reordered = [...slots]
     ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx]!, reordered[idx]!]
     const normalizedSlots = reordered.map((s, i) => ({ ...s, sequence: i }))
 
-    // Optimistic UI update
     onUpdateSlots(normalizedSlots)
 
     const positions: Record<string, number> = {}
@@ -505,7 +500,7 @@ function SlotsSection({
 
     setReordering(true)
     try {
-      await apiReorderSlots(fetchAuth, menuId, positions)
+      await apiReorderSlots(fetchAuth, bundleId, positions)
     } catch (e: unknown) {
       await onRefetch()
       onError(e instanceof Error ? e.message : "Reihenfolge ändern fehlgeschlagen")
@@ -516,7 +511,7 @@ function SlotsSection({
 
   const handleDeleteSlot = async (slotId: string) => {
     try {
-      await apiDeleteSlot(fetchAuth, menuId, slotId)
+      await apiDeleteSlot(fetchAuth, bundleId, slotId)
       await onRefetch()
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : "Slot löschen fehlgeschlagen")
@@ -528,7 +523,7 @@ function SlotsSection({
       {slots.map((slot, idx) => (
         <SlotRow
           key={slot.id}
-          menuId={menuId}
+          bundleId={bundleId}
           slot={slot}
           products={products}
           fetchAuth={fetchAuth}
@@ -542,7 +537,6 @@ function SlotsSection({
         />
       ))}
 
-      {/* New slot input */}
       <div className="flex items-center gap-2">
         <Input
           value={newSlotName}
@@ -575,7 +569,7 @@ function SlotsSection({
 // ─── SlotRow ──────────────────────────────────────────────────────────
 
 function SlotRow({
-  menuId,
+  bundleId,
   slot,
   products,
   fetchAuth,
@@ -587,8 +581,8 @@ function SlotRow({
   onMoveDown,
   onDelete,
 }: {
-  menuId: string
-  slot: MenuSlot
+  bundleId: string
+  slot: BundleSlot
   products: ProductSummaryDTO[]
   fetchAuth: FetchFn
   onRefetch: () => Promise<void>
@@ -610,7 +604,7 @@ function SlotRow({
       return
     }
     try {
-      await apiUpdateSlot(fetchAuth, menuId, slot.id, name)
+      await apiUpdateSlot(fetchAuth, bundleId, slot.id, name)
       setRenaming(false)
       await onRefetch()
     } catch (e: unknown) {
@@ -623,7 +617,7 @@ function SlotRow({
 
   const handleAddOption = async (productId: string) => {
     try {
-      await apiAddOption(fetchAuth, menuId, slot.id, productId)
+      await apiAddOption(fetchAuth, bundleId, slot.id, productId)
       await onRefetch()
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : "Option hinzufügen fehlgeschlagen")
@@ -632,7 +626,7 @@ function SlotRow({
 
   const handleRemoveOption = async (optionProductId: string) => {
     try {
-      await apiRemoveOption(fetchAuth, menuId, slot.id, optionProductId)
+      await apiRemoveOption(fetchAuth, bundleId, slot.id, optionProductId)
       await onRefetch()
     } catch (e: unknown) {
       onError(e instanceof Error ? e.message : "Option entfernen fehlgeschlagen")
@@ -641,7 +635,6 @@ function SlotRow({
 
   return (
     <div className="border-border rounded-lg border p-2">
-      {/* Slot header */}
       <div className="flex items-center gap-1">
         {renaming ? (
           <Input
@@ -703,7 +696,6 @@ function SlotRow({
         </div>
       </div>
 
-      {/* Option badges */}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {(slot.options || []).map((opt) => (
           <Badge key={opt.optionProductId} variant="secondary" className="gap-1 pr-1">
@@ -719,7 +711,6 @@ function SlotRow({
         ))}
       </div>
 
-      {/* Add option picker */}
       {availableProducts.length > 0 && (
         <div className="mt-2">
           <Select value="" onValueChange={handleAddOption}>
@@ -740,9 +731,9 @@ function SlotRow({
   )
 }
 
-// ─── CreateMenuDialog ─────────────────────────────────────────────────
+// ─── CreateBundleDialog ───────────────────────────────────────────────
 
-function CreateMenuDialog({
+function CreateBundleDialog({
   open,
   onClose,
   cats,
@@ -793,7 +784,7 @@ function CreateMenuDialog({
     try {
       const cents = parsePriceInputToCents(priceInput) ?? 0
       const trimmedDescription = description.trim()
-      await apiCreateMenu(fetchAuth, {
+      await apiCreateBundle(fetchAuth, {
         categoryId,
         name: name.trim(),
         priceCents: cents,
@@ -818,7 +809,7 @@ function CreateMenuDialog({
     >
       <DialogContent className="max-w-[520px] rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-sm tracking-wider">NEUES MENU</DialogTitle>
+          <DialogTitle className="text-sm tracking-wider">NEUES BUNDLE</DialogTitle>
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
@@ -917,16 +908,16 @@ function CreateMenuDialog({
   )
 }
 
-// ─── EditMenuDialog ───────────────────────────────────────────────────
+// ─── EditBundleDialog ─────────────────────────────────────────────────
 
-function EditMenuDialog({
-  menu,
+function EditBundleDialog({
+  bundle,
   onClose,
   fetchAuth,
   onSaved,
   onError,
 }: {
-  menu: Menu | null
+  bundle: Bundle | null
   onClose: () => void
   fetchAuth: FetchFn
   onSaved: () => Promise<void>
@@ -941,30 +932,30 @@ function EditMenuDialog({
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "price", string>>>({})
 
   useEffect(() => {
-    if (menu) {
-      setName(menu.name)
-      setPriceInput((menu.priceCents / 100).toString())
-      setImage(menu.image)
-      setDescription(menu.description ?? "")
-      setIsActive(menu.isActive)
+    if (bundle) {
+      setName(bundle.name)
+      setPriceInput((bundle.priceCents / 100).toString())
+      setImage(bundle.image)
+      setDescription(bundle.description ?? "")
+      setIsActive(bundle.isActive)
       setFieldErrors({})
     }
-  }, [menu])
+  }, [bundle])
 
   const dirty = useMemo(() => {
-    if (!menu) return false
+    if (!bundle) return false
     const cents = parsePriceInputToCents(priceInput)
     return (
-      name.trim() !== menu.name ||
-      (cents !== null && cents !== menu.priceCents) ||
-      description.trim() !== (menu.description ?? "") ||
-      isActive !== menu.isActive
+      name.trim() !== bundle.name ||
+      (cents !== null && cents !== bundle.priceCents) ||
+      description.trim() !== (bundle.description ?? "") ||
+      isActive !== bundle.isActive
     )
-  }, [menu, name, priceInput, description, isActive])
+  }, [bundle, name, priceInput, description, isActive])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!menu) return
+    if (!bundle) return
     const errs: Partial<Record<"name" | "price", string>> = {}
     if (!name.trim()) errs.name = "Name ist erforderlich."
     const cents = parsePriceInputToCents(priceInput)
@@ -974,16 +965,16 @@ function EditMenuDialog({
     if (!dirty) return
     setSaving(true)
     try {
-      const patch: Parameters<typeof apiUpdateMenu>[2] = {}
-      if (name.trim() !== menu.name) patch.name = name.trim()
-      if (cents !== null && cents !== menu.priceCents) patch.priceCents = cents
+      const patch: Parameters<typeof apiUpdateBundle>[2] = {}
+      if (name.trim() !== bundle.name) patch.name = name.trim()
+      if (cents !== null && cents !== bundle.priceCents) patch.priceCents = cents
       const trimmedDescription = description.trim()
-      if (trimmedDescription !== (menu.description ?? "")) {
+      if (trimmedDescription !== (bundle.description ?? "")) {
         patch.description = trimmedDescription || null
       }
-      if (isActive !== menu.isActive) patch.isActive = isActive
+      if (isActive !== bundle.isActive) patch.isActive = isActive
 
-      await apiUpdateMenu(fetchAuth, menu.id, patch)
+      await apiUpdateBundle(fetchAuth, bundle.id, patch)
       onClose()
       await onSaved()
     } catch (e: unknown) {
@@ -995,7 +986,7 @@ function EditMenuDialog({
 
   return (
     <Dialog
-      open={!!menu}
+      open={!!bundle}
       onOpenChange={(o) => {
         if (!o) onClose()
       }}
@@ -1004,7 +995,7 @@ function EditMenuDialog({
         <DialogHeader>
           <DialogTitle className="text-sm tracking-wider">BEARBEITEN</DialogTitle>
         </DialogHeader>
-        {menu && (
+        {bundle && (
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label>Bild</Label>
@@ -1012,7 +1003,7 @@ function EditMenuDialog({
                 currentImageUrl={image}
                 onUpload={async (file) => {
                   try {
-                    const url = await apiUploadMenuImage(fetchAuth, menu.id, file)
+                    const url = await apiUploadBundleImage(fetchAuth, bundle.id, file)
                     setImage(url)
                     await onSaved()
                     return url
@@ -1023,7 +1014,7 @@ function EditMenuDialog({
                 }}
                 onRemove={async () => {
                   try {
-                    await apiDeleteMenuImage(fetchAuth, menu.id)
+                    await apiDeleteBundleImage(fetchAuth, bundle.id)
                     setImage(null)
                     await onSaved()
                   } catch (e: unknown) {

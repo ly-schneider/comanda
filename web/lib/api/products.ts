@@ -18,7 +18,7 @@ interface RawSlotOption {
   jeton?: { id: string; name: string; color: string } | null
 }
 
-interface RawMenuSlot {
+interface RawBundleSlot {
   id: string
   name: string
   sequence?: number
@@ -36,14 +36,14 @@ interface RawVariant {
 
 interface RawProduct extends Omit<ProductDTO, "variants"> {
   stock?: number
-  menuSlots?: RawMenuSlot[]
+  bundleSlots?: RawBundleSlot[]
   variants?: RawVariant[]
 }
 
 function normalizeProduct(raw: RawProduct): ProductDTO {
   const product = raw as ProductDTO
 
-  const isMenu = raw.type === "menu"
+  const isBundle = raw.type === "bundle"
   const stock = raw.stock
 
   if (raw.variants && raw.variants.length > 0) {
@@ -66,16 +66,16 @@ function normalizeProduct(raw: RawProduct): ProductDTO {
     product.isAvailable = anyActiveAvailable
     product.isLowStock = anyActiveAvailable && active.some((v) => v.isLowStock === true)
     product.availableQuantity = active.reduce((s, v) => s + (v.availableQuantity ?? 0), 0)
-  } else if (!isMenu && typeof stock === "number") {
+  } else if (!isBundle && typeof stock === "number") {
     product.availableQuantity = stock
     product.isAvailable = stock > 0
     product.isLowStock = stock > 0 && stock <= 10
   }
 
-  const menuSlots = raw.menuSlots
-  if (menuSlots && menuSlots.length > 0) {
-    product.menu = {
-      slots: menuSlots.map((slot) => ({
+  const bundleSlots = raw.bundleSlots
+  if (bundleSlots && bundleSlots.length > 0) {
+    product.bundle = {
+      slots: bundleSlots.map((slot) => ({
         id: slot.id,
         name: slot.name,
         sequence: slot.sequence ?? 0,
@@ -125,10 +125,10 @@ export async function listProducts(
   const raw = await apiRequest<ListResponse<RawProduct>>(endpoint, options)
   const items = (raw.items || []).map(normalizeProduct)
 
-  // Build stock map from simple products to apply to menu slot options
+  // Build stock map from simple products to apply to bundle slot options
   const stockMap = new Map<string, { stock: number; isAvailable: boolean; isLowStock: boolean }>()
   for (const p of items) {
-    if (p.type !== "menu" && typeof p.availableQuantity === "number") {
+    if (p.type !== "bundle" && typeof p.availableQuantity === "number") {
       stockMap.set(p.id, {
         stock: p.availableQuantity,
         isAvailable: p.isAvailable !== false,
@@ -137,10 +137,10 @@ export async function listProducts(
     }
   }
 
-  // Apply stock to menu slot options
+  // Apply stock to bundle slot options
   for (const p of items) {
-    if (p.type === "menu" && p.menu?.slots) {
-      for (const slot of p.menu.slots) {
+    if (p.type === "bundle" && p.bundle?.slots) {
+      for (const slot of p.bundle.slots) {
         if (slot.options) {
           for (const opt of slot.options) {
             const stockInfo = stockMap.get(opt.id)

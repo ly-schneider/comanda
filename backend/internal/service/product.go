@@ -36,18 +36,18 @@ type ProductService interface {
 	AdjustStock(ctx context.Context, id string, variantID *string, delta int64, reason string) error
 	ListInventoryHistory(ctx context.Context, productID string, limit, offset int) ([]*ent.InventoryLedger, error)
 
-	// Menus
-	GetMenus(ctx context.Context) ([]*ent.Product, error)
+	// Bundles
+	GetBundles(ctx context.Context) ([]*ent.Product, error)
 
-	// Menu slots
-	CreateMenuSlot(ctx context.Context, menuID string, name string) (*ent.MenuSlot, error)
-	UpdateMenuSlot(ctx context.Context, menuID, slotID string, name string) (*ent.MenuSlot, error)
-	DeleteMenuSlot(ctx context.Context, menuID, slotID string) error
-	ReorderMenuSlots(ctx context.Context, menuID string, positions map[string]int) error
+	// Bundle slots
+	CreateBundleSlot(ctx context.Context, bundleID string, name string) (*ent.BundleSlot, error)
+	UpdateBundleSlot(ctx context.Context, bundleID, slotID string, name string) (*ent.BundleSlot, error)
+	DeleteBundleSlot(ctx context.Context, bundleID, slotID string) error
+	ReorderBundleSlots(ctx context.Context, bundleID string, positions map[string]int) error
 
-	// Menu slot options
-	AddSlotOption(ctx context.Context, menuID, slotID string, productID string) (*ent.MenuSlotOption, error)
-	RemoveSlotOption(ctx context.Context, menuID, slotID, optionProductID string) error
+	// Bundle slot options
+	AddSlotOption(ctx context.Context, bundleID, slotID string, productID string) (*ent.BundleSlotOption, error)
+	RemoveSlotOption(ctx context.Context, bundleID, slotID, optionProductID string) error
 }
 
 // Entries with an ID update, without one create; existing rows absent from the
@@ -61,37 +61,37 @@ type VariantInput struct {
 }
 
 type productService struct {
-	productRepo        *repository.ProductRepository
-	variantRepo        repository.ProductVariantRepository
-	categoryRepo       repository.CategoryRepository
-	menuSlotRepo       repository.MenuSlotRepository
-	menuSlotOptionRepo repository.MenuSlotOptionRepository
-	inventoryRepo      repository.InventoryLedgerRepository
-	jetonRepo          repository.JetonRepository
-	inventoryHub       *inventory.Hub
-	cache              *catalogCache
+	productRepo          *repository.ProductRepository
+	variantRepo          repository.ProductVariantRepository
+	categoryRepo         repository.CategoryRepository
+	bundleSlotRepo       repository.BundleSlotRepository
+	bundleSlotOptionRepo repository.BundleSlotOptionRepository
+	inventoryRepo        repository.InventoryLedgerRepository
+	jetonRepo            repository.JetonRepository
+	inventoryHub         *inventory.Hub
+	cache                *catalogCache
 }
 
 func NewProductService(
 	productRepo *repository.ProductRepository,
 	variantRepo repository.ProductVariantRepository,
 	categoryRepo repository.CategoryRepository,
-	menuSlotRepo repository.MenuSlotRepository,
-	menuSlotOptionRepo repository.MenuSlotOptionRepository,
+	bundleSlotRepo repository.BundleSlotRepository,
+	bundleSlotOptionRepo repository.BundleSlotOptionRepository,
 	inventoryRepo repository.InventoryLedgerRepository,
 	jetonRepo repository.JetonRepository,
 	inventoryHub *inventory.Hub,
 ) ProductService {
 	return &productService{
-		productRepo:        productRepo,
-		variantRepo:        variantRepo,
-		categoryRepo:       categoryRepo,
-		menuSlotRepo:       menuSlotRepo,
-		menuSlotOptionRepo: menuSlotOptionRepo,
-		inventoryRepo:      inventoryRepo,
-		jetonRepo:          jetonRepo,
-		inventoryHub:       inventoryHub,
-		cache:              newCatalogCache(),
+		productRepo:          productRepo,
+		variantRepo:          variantRepo,
+		categoryRepo:         categoryRepo,
+		bundleSlotRepo:       bundleSlotRepo,
+		bundleSlotOptionRepo: bundleSlotOptionRepo,
+		inventoryRepo:        inventoryRepo,
+		jetonRepo:            jetonRepo,
+		inventoryHub:         inventoryHub,
+		cache:                newCatalogCache(),
 	}
 }
 
@@ -223,12 +223,12 @@ func validateVariantInputs(productType product.Type, variants []VariantInput) er
 
 func (s *productService) reconcileVariants(ctx context.Context, productID string, variants []VariantInput) error {
 	if len(variants) > 0 {
-		usedAsOption, err := s.menuSlotOptionRepo.CountByOptionProductID(ctx, productID)
+		usedAsOption, err := s.bundleSlotOptionRepo.CountByOptionProductID(ctx, productID)
 		if err != nil {
 			return err
 		}
 		if usedAsOption > 0 {
-			return fmt.Errorf("products used as menu options cannot have variants")
+			return fmt.Errorf("products used as bundle options cannot have variants")
 		}
 	}
 
@@ -307,12 +307,12 @@ func (s *productService) reconcileVariants(ctx context.Context, productID string
 }
 
 func (s *productService) Delete(ctx context.Context, id string) error {
-	slots, _ := s.menuSlotRepo.GetByMenuProductID(ctx, id)
+	slots, _ := s.bundleSlotRepo.GetByBundleProductID(ctx, id)
 	for _, slot := range slots {
-		_ = s.menuSlotOptionRepo.DeleteByMenuSlotID(ctx, slot.ID)
+		_ = s.bundleSlotOptionRepo.DeleteByBundleSlotID(ctx, slot.ID)
 	}
 	if len(slots) > 0 {
-		_ = s.menuSlotRepo.DeleteByMenuProductID(ctx, id)
+		_ = s.bundleSlotRepo.DeleteByBundleProductID(ctx, id)
 	}
 	variants, _ := s.variantRepo.GetByProductID(ctx, id)
 	for _, v := range variants {
@@ -442,20 +442,20 @@ func (s *productService) AdjustStock(ctx context.Context, id string, variantID *
 }
 
 // ---------------------------------------------------------------------------
-// Menus
+// Bundles
 // ---------------------------------------------------------------------------
 
-func (s *productService) GetMenus(ctx context.Context) ([]*ent.Product, error) {
-	menus, _, err := s.productRepo.GetMenus(ctx, nil, nil, 1000, 0)
-	return menus, err
+func (s *productService) GetBundles(ctx context.Context) ([]*ent.Product, error) {
+	bundles, _, err := s.productRepo.GetBundles(ctx, nil, nil, 1000, 0)
+	return bundles, err
 }
 
 // ---------------------------------------------------------------------------
-// Menu Slots
+// Bundle Slots
 // ---------------------------------------------------------------------------
 
-func (s *productService) CreateMenuSlot(ctx context.Context, menuID string, name string) (*ent.MenuSlot, error) {
-	existing, err := s.menuSlotRepo.GetByMenuProductID(ctx, menuID)
+func (s *productService) CreateBundleSlot(ctx context.Context, bundleID string, name string) (*ent.BundleSlot, error) {
+	existing, err := s.bundleSlotRepo.GetByBundleProductID(ctx, bundleID)
 	if err != nil {
 		return nil, err
 	}
@@ -465,52 +465,50 @@ func (s *productService) CreateMenuSlot(ctx context.Context, menuID string, name
 			seq = slot.Sequence + 1
 		}
 	}
-	created, err := s.menuSlotRepo.Create(ctx, menuID, name, seq)
+	created, err := s.bundleSlotRepo.Create(ctx, bundleID, name, seq)
 	if err == nil {
 		s.cache.invalidate()
 	}
 	return created, err
 }
 
-func (s *productService) UpdateMenuSlot(ctx context.Context, menuID, slotID string, name string) (*ent.MenuSlot, error) {
-	slot, err := s.menuSlotRepo.GetByID(ctx, slotID)
+func (s *productService) UpdateBundleSlot(ctx context.Context, bundleID, slotID string, name string) (*ent.BundleSlot, error) {
+	slot, err := s.bundleSlotRepo.GetByID(ctx, slotID)
 	if err != nil {
 		return nil, err
 	}
 	if name == "" {
 		name = slot.Name
 	}
-	updated, err := s.menuSlotRepo.Update(ctx, slotID, menuID, name, slot.Sequence)
+	updated, err := s.bundleSlotRepo.Update(ctx, slotID, bundleID, name, slot.Sequence)
 	if err == nil {
 		s.cache.invalidate()
 	}
 	return updated, err
 }
 
-func (s *productService) DeleteMenuSlot(ctx context.Context, menuID, slotID string) error {
-	// Verify the slot belongs to this menu.
-	slot, err := s.menuSlotRepo.GetByID(ctx, slotID)
+func (s *productService) DeleteBundleSlot(ctx context.Context, bundleID, slotID string) error {
+	slot, err := s.bundleSlotRepo.GetByID(ctx, slotID)
 	if err != nil {
 		return err
 	}
-	if slot.MenuProductID != menuID {
-		return fmt.Errorf("slot does not belong to menu")
+	if slot.BundleProductID != bundleID {
+		return fmt.Errorf("slot does not belong to bundle")
 	}
-	// Delete options first, then the slot.
-	if err := s.menuSlotOptionRepo.DeleteByMenuSlotID(ctx, slotID); err != nil {
+	if err := s.bundleSlotOptionRepo.DeleteByBundleSlotID(ctx, slotID); err != nil {
 		return err
 	}
-	if err := s.menuSlotRepo.Delete(ctx, slotID); err != nil {
+	if err := s.bundleSlotRepo.Delete(ctx, slotID); err != nil {
 		return err
 	}
 	// Re-normalize remaining slot sequences to eliminate gaps.
-	remaining, err := s.menuSlotRepo.GetByMenuProductID(ctx, menuID)
+	remaining, err := s.bundleSlotRepo.GetByBundleProductID(ctx, bundleID)
 	if err != nil {
 		return err
 	}
 	for i, sl := range remaining {
 		if sl.Sequence != i {
-			if _, err := s.menuSlotRepo.Update(ctx, sl.ID, menuID, sl.Name, i); err != nil {
+			if _, err := s.bundleSlotRepo.Update(ctx, sl.ID, bundleID, sl.Name, i); err != nil {
 				return err
 			}
 		}
@@ -519,14 +517,14 @@ func (s *productService) DeleteMenuSlot(ctx context.Context, menuID, slotID stri
 	return nil
 }
 
-func (s *productService) ReorderMenuSlots(ctx context.Context, menuID string, positions map[string]int) error {
-	slots, err := s.menuSlotRepo.GetByMenuProductID(ctx, menuID)
+func (s *productService) ReorderBundleSlots(ctx context.Context, bundleID string, positions map[string]int) error {
+	slots, err := s.bundleSlotRepo.GetByBundleProductID(ctx, bundleID)
 	if err != nil {
 		return err
 	}
 	for _, slot := range slots {
 		if newSeq, ok := positions[slot.ID]; ok {
-			if _, err := s.menuSlotRepo.Update(ctx, slot.ID, menuID, slot.Name, newSeq); err != nil {
+			if _, err := s.bundleSlotRepo.Update(ctx, slot.ID, bundleID, slot.Name, newSeq); err != nil {
 				return err
 			}
 		}
@@ -535,23 +533,23 @@ func (s *productService) ReorderMenuSlots(ctx context.Context, menuID string, po
 	return nil
 }
 
-func (s *productService) AddSlotOption(ctx context.Context, menuID, slotID string, productID string) (*ent.MenuSlotOption, error) {
+func (s *productService) AddSlotOption(ctx context.Context, bundleID, slotID string, productID string) (*ent.BundleSlotOption, error) {
 	hasVariants, err := s.variantRepo.ExistsForProduct(ctx, productID)
 	if err != nil {
 		return nil, err
 	}
 	if hasVariants {
-		return nil, fmt.Errorf("products with variants cannot be menu options")
+		return nil, fmt.Errorf("products with variants cannot be bundle options")
 	}
-	opt, err := s.menuSlotOptionRepo.Create(ctx, slotID, productID)
+	opt, err := s.bundleSlotOptionRepo.Create(ctx, slotID, productID)
 	if err == nil {
 		s.cache.invalidate()
 	}
 	return opt, err
 }
 
-func (s *productService) RemoveSlotOption(ctx context.Context, menuID, slotID, optionProductID string) error {
-	err := s.menuSlotOptionRepo.Delete(ctx, slotID, optionProductID)
+func (s *productService) RemoveSlotOption(ctx context.Context, bundleID, slotID, optionProductID string) error {
+	err := s.bundleSlotOptionRepo.Delete(ctx, slotID, optionProductID)
 	if err == nil {
 		s.cache.invalidate()
 	}

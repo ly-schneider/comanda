@@ -1,7 +1,7 @@
-Menu:
+Bundle:
   type: object
   description: |
-    A menu is a product with `type: menu`. It contains ordered slots,
+    A bundle is a product with `type: bundle`. It contains ordered slots,
     each of which offers option products the customer picks from.
   required: [id, categoryId, name, priceCents, isActive]
   properties:
@@ -33,9 +33,9 @@ Menu:
     slots:
       type: array
       items:
-        $ref: "#/MenuSlot"
+        $ref: "#/BundleSlot"
 
-MenuCreate:
+BundleCreate:
   type: object
   required: [categoryId, name]
   properties:
@@ -56,7 +56,7 @@ MenuCreate:
       maxLength: 500
       nullable: true
 
-MenuUpdate:
+BundleUpdate:
   type: object
   properties:
     name:
@@ -76,22 +76,22 @@ MenuUpdate:
       maxLength: 500
       nullable: true
 
-MenuList:
+BundleList:
   type: object
   required: [items]
   properties:
     items:
       type: array
       items:
-        $ref: "#/Menu"
+        $ref: "#/Bundle"
 
-MenuSlot:
+BundleSlot:
   type: object
-  required: [id, menuProductId, name, sequence]
+  required: [id, bundleProductId, name, sequence]
   properties:
     id:
       type: string
-    menuProductId:
+    bundleProductId:
       type: string
     name:
       type: string
@@ -102,9 +102,9 @@ MenuSlot:
     options:
       type: array
       items:
-        $ref: "#/MenuSlotOption"
+        $ref: "#/BundleSlotOption"
 
-MenuSlotSummary:
+BundleSlotSummary:
   type: object
   properties:
     id:
@@ -136,7 +136,7 @@ MenuSlotSummary:
             $ref: "jetons.yaml#/JetonSummary"
             nullable: true
 
-MenuSlotCreate:
+BundleSlotCreate:
   type: object
   required: [name]
   properties:
@@ -144,14 +144,14 @@ MenuSlotCreate:
       type: string
       maxLength: 20
 
-MenuSlotUpdate:
+BundleSlotUpdate:
   type: object
   properties:
     name:
       type: string
       maxLength: 20
 
-MenuSlotReorder:
+BundleSlotReorder:
   type: object
   required: [positions]
   properties:
@@ -164,20 +164,20 @@ MenuSlotReorder:
         Map of slot UUID to desired sequence number.
         Example: `{ "mns_______11": 0, "mns_______12": 1 }`
 
-MenuSlotList:
+BundleSlotList:
   type: object
   required: [items]
   properties:
     items:
       type: array
       items:
-        $ref: "#/MenuSlot"
+        $ref: "#/BundleSlot"
 
-MenuSlotOption:
+BundleSlotOption:
   type: object
-  required: [menuSlotId, optionProductId]
+  required: [bundleSlotId, optionProductId]
   properties:
-    menuSlotId:
+    bundleSlotId:
       type: string
     optionProductId:
       type: string
@@ -196,7 +196,7 @@ MenuSlotOption:
           type: string
           nullable: true
 
-MenuSlotOptionCreate:
+BundleSlotOptionCreate:
   type: object
   required: [productId]
   properties:

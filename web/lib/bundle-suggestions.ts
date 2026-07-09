@@ -1,55 +1,53 @@
+import { BundleDTO, BundleSlotDTO } from "@/types/bundle"
 import { Cart, CartItem } from "@/types/cart"
-import { MenuDTO, MenuSlotDTO } from "@/types/menu"
 import { ProductDTO } from "@/types/product"
 
-export interface MenuSuggestion {
-  menuProduct: ProductDTO
+export interface BundleSuggestion {
+  bundleProduct: ProductDTO
   configuration: Record<string, string> // slotId -> productId
   sourceItems: { slotId: string; cartItem: CartItem }[]
   savingsCents: number
 }
 
-function canMapCartItemToSlot(cartItem: CartItem, slot: MenuSlotDTO): boolean {
+function canMapCartItemToSlot(cartItem: CartItem, slot: BundleSlotDTO): boolean {
   if (!slot.options) return false
   return slot.options.some((p) => p.id === cartItem.product.id)
 }
 
 function buildConfiguration(
-  slots: MenuSlotDTO[],
+  slots: BundleSlotDTO[],
   chosen: { slotId: string; cartItem: CartItem }[]
 ): Record<string, string> {
   const cfg: Record<string, string> = {}
   for (const { slotId, cartItem } of chosen) {
     cfg[slotId] = cartItem.product.id
   }
-  // Ensure all slots are present (fallback none)
   for (const s of slots) {
     if (!(s.id in cfg)) cfg[s.id] = ""
   }
   return cfg
 }
 
-export function findBestMenuSuggestion(cart: Cart, allProducts: ProductDTO[]): MenuSuggestion | null {
-  const menus = allProducts.filter((p) => p.type === "menu" && p.menu && p.menu.slots && p.menu.slots.length > 0)
-  if (menus.length === 0) return null
+export function findBestBundleSuggestion(cart: Cart, allProducts: ProductDTO[]): BundleSuggestion | null {
+  const bundles = allProducts.filter(
+    (p) => p.type === "bundle" && p.bundle && p.bundle.slots && p.bundle.slots.length > 0
+  )
+  if (bundles.length === 0) return null
 
-  // Consider only simple products in cart with available quantity
   const simpleItems = cart.items.filter((i) => i.product.type === "simple" && i.quantity > 0)
   if (simpleItems.length === 0) return null
 
-  let best: MenuSuggestion | null = null
+  let best: BundleSuggestion | null = null
 
-  for (const menu of menus) {
-    const slots = (menu.menu as MenuDTO).slots as MenuSlotDTO[]
+  for (const bundle of bundles) {
+    const slots = (bundle.bundle as BundleDTO).slots as BundleSlotDTO[]
 
-    // For each slot, try to find a cart item that fits it
     const chosen: { slotId: string; cartItem: CartItem }[] = []
     const usedItemIds = new Set<string>()
 
     for (const slot of slots) {
       const match = simpleItems.find((it) => !usedItemIds.has(it.id) && canMapCartItemToSlot(it, slot))
       if (!match) {
-        // This menu cannot be built from current cart
         chosen.length = 0
         break
       }
@@ -59,10 +57,10 @@ export function findBestMenuSuggestion(cart: Cart, allProducts: ProductDTO[]): M
 
     if (chosen.length === slots.length) {
       const sumSimple = chosen.reduce((sum, ch) => sum + ch.cartItem.product.priceCents, 0)
-      const savings = sumSimple - menu.priceCents
+      const savings = sumSimple - bundle.priceCents
       if (savings >= 0) {
-        const suggestion: MenuSuggestion = {
-          menuProduct: menu,
+        const suggestion: BundleSuggestion = {
+          bundleProduct: bundle,
           configuration: buildConfiguration(slots, chosen),
           sourceItems: chosen,
           savingsCents: savings,

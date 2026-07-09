@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"backend/internal/generated/ent/admininvite"
+	"backend/internal/generated/ent/bundleslot"
+	"backend/internal/generated/ent/bundleslotoption"
 	"backend/internal/generated/ent/category"
 	"backend/internal/generated/ent/club100redemption"
 	"backend/internal/generated/ent/device"
@@ -13,8 +15,6 @@ import (
 	"backend/internal/generated/ent/idempotency"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/jeton"
-	"backend/internal/generated/ent/menuslot"
-	"backend/internal/generated/ent/menuslotoption"
 	"backend/internal/generated/ent/migrate"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
@@ -42,8 +42,8 @@ var typeToTable = map[string]string{
 	"ProductVariant":           productvariant.Table,
 	"Category":                 category.Table,
 	"Jeton":                    jeton.Table,
-	"MenuSlot":                 menuslot.Table,
-	"MenuSlotOption":           menuslotoption.Table,
+	"BundleSlot":               bundleslot.Table,
+	"BundleSlotOption":         bundleslotoption.Table,
 	"Order":                    order.Table,
 	"OrderLine":                orderline.Table,
 	"OrderPayment":             orderpayment.Table,

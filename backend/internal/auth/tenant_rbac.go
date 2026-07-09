@@ -15,7 +15,7 @@ type TenantTier int
 
 const (
 	// TierCatalog is the lowest tier: products (incl. images and inventory),
-	// categories, and menus only.
+	// categories, and bundles only.
 	TierCatalog TenantTier = iota
 	// TierOps (the staff tier) covers day-to-day operations: orders, stations,
 	// POS, jetons, devices, staff-perks, events — plus everything catalog can do.

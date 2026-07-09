@@ -411,7 +411,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "Stufen-Gating in /admin",
         action: "Mit catalog-, staff- und app_admin-Konten die /admin-Bereiche durchklicken.",
         expected:
-          "catalog: nur Produkte/Kategorien/Menü. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Gutscheine, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
+          "catalog: nur Produkte/Kategorien/Bundles. staff: zusätzlich Bestellungen/POS/Stationen/Geräte/Inventar/Jetons/Mitarbeiter-Gutscheine, aber keine Benutzer/Einladungen/Einstellungen. app_admin: alles in /admin.",
       },
       {
         key: "invites.hub-gating",
@@ -435,7 +435,7 @@ export const QA_SECTIONS: QaSection[] = [
   },
   {
     key: "catalog",
-    title: "9 · Sortiment (Produkte, Kategorien, Menüs, Jetons)",
+    title: "9 · Sortiment (Produkte, Kategorien, Bundles, Jetons)",
     haveReady: ["Produktbilder", "Entscheid für den POS-Modus (QR_CODE/JETON/HYBRID)"],
     tests: [
       {
@@ -493,16 +493,16 @@ export const QA_SECTIONS: QaSection[] = [
       },
       {
         key: "catalog.menu-create",
-        title: "Menü mit Slots aufbauen",
+        title: "Bundle mit Slots aufbauen",
         action:
-          "Unter /admin/menu ein Menü mit 2 Slots (z. B. Hauptgang + Getränk) samt Optionen und Mengen anlegen und publizieren.",
+          "Unter /admin/bundles ein Bundle mit 2 Slots (z. B. Hauptgang + Getränk) samt Optionen und Mengen anlegen und publizieren.",
         expected:
-          "Slots/Optionen speichern korrekt; unpubliziertes Menü bleibt im Shop unsichtbar, publiziertes erscheint.",
+          "Slots/Optionen speichern korrekt; unpubliziertes Bundle bleibt im Shop unsichtbar, publiziertes erscheint.",
       },
       {
         key: "catalog.menu-shop",
-        title: "Menü-Konfiguration im Shop",
-        action: "Das Menü im Storefront öffnen und konfigurieren.",
+        title: "Bundle-Konfiguration im Shop",
+        action: "Das Bundle im Storefront öffnen und konfigurieren.",
         expected:
           "Modal zeigt Slots in Reihenfolge mit Optionen inkl. Preis/Lagerstatus; Konfiguration landet korrekt im Warenkorb.",
       },
@@ -533,7 +533,7 @@ export const QA_SECTIONS: QaSection[] = [
     key: "shop",
     title: "11 · Kunden-Shop & TWINT-Checkout",
     haveReady: [
-      "Publizierte Produkte inkl. Depot-Produkt und Menü",
+      "Publizierte Produkte inkl. Depot-Produkt und Bundle",
       "Payrexx vollständig konfiguriert (Abschnitt 5)",
       "Smartphone mit TWINT",
       "Testpostfach für die Quittung",
@@ -549,9 +549,9 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "shop.cart",
         title: "Warenkorb-Bedienung",
-        action: "Produkte hinzufügen, Mengen ändern, Position entfernen, Menü-Position umkonfigurieren.",
+        action: "Produkte hinzufügen, Mengen ändern, Position entfernen, Bundle-Position umkonfigurieren.",
         expected:
-          "Zähler und Summen aktualisieren live; leerer Korb blendet die Bottom-Nav aus; Menü-Änderung persistiert.",
+          "Zähler und Summen aktualisieren live; leerer Korb blendet die Bottom-Nav aus; Bundle-Änderung persistiert.",
       },
       {
         key: "shop.totals",
@@ -595,7 +595,7 @@ export const QA_SECTIONS: QaSection[] = [
         title: "Quittungs-E-Mail",
         action: "Nach erfolgreicher Zahlung das Postfach prüfen.",
         expected:
-          "Betreff «Deine Quittung von <Marke>»; Positionen inkl. Menü-Konfiguration und Depot; Summen korrekt; QR-Link nutzt die Standard-Domain des Tenants.",
+          "Betreff «Deine Quittung von <Marke>»; Positionen inkl. Bundle-Konfiguration und Depot; Summen korrekt; QR-Link nutzt die Standard-Domain des Tenants.",
       },
       {
         key: "shop.orders-list",
@@ -854,7 +854,7 @@ export const QA_SECTIONS: QaSection[] = [
       {
         key: "orders-refunds.detail",
         title: "Bestelldetail",
-        action: "Eine Menü-Bestellung öffnen.",
+        action: "Eine Bundle-Bestellung öffnen.",
         expected:
           "Positionsbaum zeigt Eltern-Artikel mit Komponenten; Zahlungen mit Methode und Details; Summen konsistent.",
       },

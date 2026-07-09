@@ -1,7 +1,7 @@
 import type { ProductSummaryDTO } from "./product"
 
-/** Full menu object returned by GET /v1/menus */
-export interface Menu {
+/** Full bundle object returned by GET /v1/bundles */
+export interface Bundle {
   id: string
   categoryId: string
   name: string
@@ -11,19 +11,19 @@ export interface Menu {
   isActive: boolean
   createdAt: string
   updatedAt: string
-  slots: MenuSlot[]
+  slots: BundleSlot[]
 }
 
-export interface MenuSlot {
+export interface BundleSlot {
   id: string
-  menuProductId: string
+  bundleProductId: string
   name: string
   sequence: number
-  options: MenuSlotOption[]
+  options: BundleSlotOption[]
 }
 
-export interface MenuSlotOption {
-  menuSlotId: string
+export interface BundleSlotOption {
+  bundleSlotId: string
   optionProductId: string
   optionProduct?: {
     id: string
@@ -33,21 +33,21 @@ export interface MenuSlotOption {
   }
 }
 
-export interface MenuSlotDTO {
+export interface BundleSlotDTO {
   id: string
   name: string
   sequence: number
-  options: MenuSlotItemDTO[] | null
+  options: BundleSlotItemDTO[] | null
 }
 
-export interface MenuSlotItem {
+export interface BundleSlotItem {
   id: string
-  menuSlotId: string
+  bundleSlotId: string
   productId: string
 }
 
-export type MenuSlotItemDTO = ProductSummaryDTO
+export type BundleSlotItemDTO = ProductSummaryDTO
 
-export interface MenuDTO {
-  slots: MenuSlotDTO[] | null
+export interface BundleDTO {
+  slots: BundleSlotDTO[] | null
 }

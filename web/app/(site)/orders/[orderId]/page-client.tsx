@@ -266,7 +266,7 @@ export default function OrderPageClient() {
                                   key={c.id}
                                   className="text-muted-foreground border-border rounded-lg border px-2 py-0.5 text-xs"
                                 >
-                                  {c.menuSlotName ?? "Option"}: {c.title}
+                                  {c.bundleSlotName ?? "Option"}: {c.title}
                                 </span>
                               ))}
                             </div>

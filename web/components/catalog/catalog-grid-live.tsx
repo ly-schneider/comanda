@@ -3,18 +3,17 @@
 import { useCallback, useState } from "react"
 import { useInventoryStream } from "@/hooks/use-inventory-stream"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
-import MenuGrid from "./menu-grid"
+import CatalogGrid from "./catalog-grid"
 
 function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): ProductDTO {
   let updated = p
 
-  // Update menu slot options with stock data
-  if (p.type === "menu" && p.menu?.slots) {
+  if (p.type === "bundle" && p.bundle?.slots) {
     updated = {
       ...p,
-      menu: {
-        ...p.menu,
-        slots: p.menu.slots.map((slot) => ({
+      bundle: {
+        ...p.bundle,
+        slots: p.bundle.slots.map((slot) => ({
           ...slot,
           options:
             slot.options?.map((opt) => {
@@ -31,7 +30,6 @@ function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): Prod
       },
     }
   } else {
-    // Update simple product stock
     const newStock = stockMap.get(p.id)
     if (newStock !== undefined) {
       updated = {
@@ -46,7 +44,7 @@ function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): Prod
   return updated
 }
 
-export function MenuGridLive({
+export function CatalogGridLive({
   initialProducts,
   categories = [],
 }: {
@@ -64,5 +62,5 @@ export function MenuGridLive({
 
   useInventoryStream({ onUpdate: handleStockUpdate, enabled: true })
 
-  return <MenuGrid products={products} categories={categories} />
+  return <CatalogGrid products={products} categories={categories} />
 }

@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from "react"
 import { AuthNudgeBanner } from "@/components/auth/auth-nudge"
 import { CartItemDisplay } from "@/components/cart/cart-item-display"
 import { CartTotalSummary } from "@/components/cart/cart-total-summary"
-import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
+import { InlineBundleGroup } from "@/components/cart/inline-bundle-group"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
-import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
+import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
 import { cartDepositCents } from "@/lib/utils"
@@ -61,7 +61,7 @@ export default function CheckoutClient() {
     }
   }
 
-  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestMenuSuggestion()
+  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestBundleSuggestion()
 
   return (
     <div className="flex flex-1 flex-col">
@@ -99,7 +99,7 @@ export default function CheckoutClient() {
                   }
                   const grouped = cart.items.slice(startIndex, endIndex + 1)
                   rows.push(
-                    <InlineMenuGroup
+                    <InlineBundleGroup
                       key={`group-${grouped.map((g) => g.id).join("-")}`}
                       suggestion={suggestion}
                       items={grouped}

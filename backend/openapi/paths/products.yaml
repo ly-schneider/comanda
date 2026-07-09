@@ -48,11 +48,11 @@ collection:
                 name: "Bratwurst"
                 priceCents: 650
                 image: "https://cdn.example.com/bratwurst.jpg"
-            menu:
-              summary: Menu product
+            bundle:
+              summary: Bundle product
               value:
                 categoryId: "spec_______5"
-                type: menu
+                type: bundle
                 name: "Lunch Menu"
                 priceCents: 1200
     responses:

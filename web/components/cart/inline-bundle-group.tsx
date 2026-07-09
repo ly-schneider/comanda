@@ -5,20 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useCart } from "@/contexts/cart-context"
-import type { MenuSuggestion } from "@/lib/menu-suggestions"
+import type { BundleSuggestion } from "@/lib/bundle-suggestions"
 import { formatChf } from "@/lib/utils"
 import type { CartItem } from "@/types/cart"
 import { CartItemDisplay } from "./cart-item-display"
 
-interface InlineMenuGroupProps {
-  suggestion: MenuSuggestion
+interface InlineBundleGroupProps {
+  suggestion: BundleSuggestion
   items: CartItem[]
   onEditItem: (item: CartItem) => void
   onDismiss?: () => void
   isPOS?: boolean
 }
 
-export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPOS = false }: InlineMenuGroupProps) {
+export function InlineBundleGroup({ suggestion, items, onEditItem, onDismiss, isPOS = false }: InlineBundleGroupProps) {
   const { updateQuantity, removeFromCart, addToCart } = useCart()
 
   const sumSimpleCents = useMemo(() => items.reduce((sum, it) => sum + it.product.priceCents, 0), [items])
@@ -28,7 +28,7 @@ export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPO
     for (const ci of items) {
       updateQuantity(ci.id, ci.quantity - 1)
     }
-    addToCart(suggestion.menuProduct, suggestion.configuration)
+    addToCart(suggestion.bundleProduct, suggestion.configuration)
   }
 
   return (
@@ -36,9 +36,9 @@ export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPO
       <div className="p-4">
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Menü-Vorschlag: {suggestion.menuProduct.name}</p>
+            <p className="truncate text-sm font-semibold">Bundle-Vorschlag: {suggestion.bundleProduct.name}</p>
             <p className="text-muted-foreground text-xs">
-              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Menü bestellen – gleicher Preis"}
+              {hasSavings ? `Spare ${formatChf(suggestion.savingsCents)}` : "Als Bundle bestellen – gleicher Preis"}
               {!isPOS && " – Deine Auswahl bleibt erhalten."}
             </p>
           </div>
@@ -62,8 +62,8 @@ export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPO
                     <span className="font-medium">{formatChf(sumSimpleCents)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>{suggestion.menuProduct.name}</span>
-                    <span className="font-medium">{formatChf(suggestion.menuProduct.priceCents)}</span>
+                    <span>{suggestion.bundleProduct.name}</span>
+                    <span className="font-medium">{formatChf(suggestion.bundleProduct.priceCents)}</span>
                   </div>
                   {hasSavings && (
                     <div className="mt-1 flex items-center justify-between border-t pt-1">
@@ -91,8 +91,8 @@ export function InlineMenuGroup({ suggestion, items, onEditItem, onDismiss, isPO
           ))}
         </div>
         <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="font-medium">Menü-Preis</span>
-          <span className="font-medium">{formatChf(suggestion.menuProduct.priceCents)}</span>
+          <span className="font-medium">Bundle-Preis</span>
+          <span className="font-medium">{formatChf(suggestion.bundleProduct.priceCents)}</span>
         </div>
         <div className="mt-3 flex flex-col gap-2">
           <Button className="w-full" onClick={applyConversion}>

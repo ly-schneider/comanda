@@ -18,19 +18,19 @@ function formatPriceLabel(cents: number): string {
 
 export function ProductCardPOS({ product, onConfigure }: { product: ProductDTO; onConfigure: () => void }) {
   const { addToCart, getTotalProductQuantity } = useCart()
-  const isMenu = product.type === "menu"
-  const productHasVariants = !isMenu && hasVariants(product)
-  const isAvailable = isMenu || product.isAvailable !== false
-  const isLowStock = !isMenu && !productHasVariants && product.isLowStock === true
-  const availableQty = isMenu || productHasVariants ? null : (product.availableQuantity ?? null)
+  const isBundle = product.type === "bundle"
+  const productHasVariants = !isBundle && hasVariants(product)
+  const isAvailable = isBundle || product.isAvailable !== false
+  const isLowStock = !isBundle && !productHasVariants && product.isLowStock === true
+  const availableQty = isBundle || productHasVariants ? null : (product.availableQuantity ?? null)
   const isActive = product.isActive !== false
   const cartQuantity = getTotalProductQuantity(product.id)
-  const atMaxInventory = !isMenu && !productHasVariants && availableQty !== null && cartQuantity >= availableQty
+  const atMaxInventory = !isBundle && !productHasVariants && availableQty !== null && cartQuantity >= availableQty
   const disabled = !isAvailable || !isActive || atMaxInventory
 
   const handleAdd = () => {
     if (disabled) return
-    if (isMenu || productHasVariants) onConfigure()
+    if (isBundle || productHasVariants) onConfigure()
     else addToCart(product)
   }
 

@@ -22,8 +22,8 @@ export interface OrderItem {
   quantity: number
   pricePerUnitCents: Cents
   parentItemId: string | null
-  menuSlotId: string | null
-  menuSlotName: string | null
+  bundleSlotId: string | null
+  bundleSlotName: string | null
   variantId?: string | null
   variantValue?: string | null
   isRedeemed: boolean

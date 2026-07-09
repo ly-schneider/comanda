@@ -8,34 +8,34 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-type MenuSlotOption struct {
+type BundleSlotOption struct {
 	ent.Schema
 }
 
-func (MenuSlotOption) Annotations() []schema.Annotation {
+func (BundleSlotOption) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "menu_slot_option"},
-		field.ID("menu_slot_id", "option_product_id"),
+		entsql.Annotation{Table: "bundle_slot_option"},
+		field.ID("bundle_slot_id", "option_product_id"),
 	}
 }
 
-func (MenuSlotOption) Mixin() []ent.Mixin {
+func (BundleSlotOption) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		TenantMixin{},
 	}
 }
 
-func (MenuSlotOption) Fields() []ent.Field {
+func (BundleSlotOption) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("menu_slot_id").MaxLen(12),
+		field.String("bundle_slot_id").MaxLen(12),
 		field.String("option_product_id").MaxLen(12),
 	}
 }
 
-func (MenuSlotOption) Edges() []ent.Edge {
+func (BundleSlotOption) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("menu_slot", MenuSlot.Type).
-			Field("menu_slot_id").
+		edge.To("bundle_slot", BundleSlot.Type).
+			Field("bundle_slot_id").
 			Unique().
 			Required(),
 		edge.To("option_product", Product.Type).

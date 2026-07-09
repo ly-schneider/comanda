@@ -189,8 +189,8 @@ func (tdb *TestDB) Cleanup(t *testing.T) {
 		"order_payment",
 		"order_line",
 		"\"order\"",
-		"menu_slot_option",
-		"menu_slot",
+		"bundle_slot_option",
+		"bundle_slot",
 		"device_product",
 		"device_binding",
 		"device",
@@ -228,8 +228,8 @@ type Repositories struct {
 	Product           *pgRepo.ProductRepository
 	ProductVariant    pgRepo.ProductVariantRepository
 	Jeton             pgRepo.JetonRepository
-	MenuSlot          pgRepo.MenuSlotRepository
-	MenuSlotOption    pgRepo.MenuSlotOptionRepository
+	BundleSlot        pgRepo.BundleSlotRepository
+	BundleSlotOption  pgRepo.BundleSlotOptionRepository
 	Order             pgRepo.OrderRepository
 	OrderLine         pgRepo.OrderLineRepository
 	OrderPayment      pgRepo.OrderPaymentRepository
@@ -252,8 +252,8 @@ func NewRepositories(client *ent.Client) *Repositories {
 		Product:           pgRepo.NewProductRepository(client),
 		ProductVariant:    pgRepo.NewProductVariantRepository(client),
 		Jeton:             pgRepo.NewJetonRepository(client),
-		MenuSlot:          pgRepo.NewMenuSlotRepository(client),
-		MenuSlotOption:    pgRepo.NewMenuSlotOptionRepository(client),
+		BundleSlot:        pgRepo.NewBundleSlotRepository(client),
+		BundleSlotOption:  pgRepo.NewBundleSlotOptionRepository(client),
 		Order:             pgRepo.NewOrderRepository(client),
 		OrderLine:         pgRepo.NewOrderLineRepository(client),
 		OrderPayment:      pgRepo.NewOrderPaymentRepository(client),
@@ -314,7 +314,7 @@ func NewPaymentSvc(cfg config.Config, repos *Repositories, products service.Prod
 		repos.OrderLine,
 		repos.OrderPayment,
 		products,
-		repos.MenuSlot,
+		repos.BundleSlot,
 		repos.Inventory,
 		nil, // inventory hub
 		nil, // email service
@@ -333,8 +333,8 @@ func NewProductSvc(repos *Repositories) service.ProductService {
 		repos.Product,
 		repos.ProductVariant,
 		repos.Category,
-		repos.MenuSlot,
-		repos.MenuSlotOption,
+		repos.BundleSlot,
+		repos.BundleSlotOption,
 		repos.Inventory,
 		repos.Jeton,
 		nil,
@@ -456,20 +456,20 @@ func (f *Fixtures) AddVariantInventory(productID, variantID string, delta int, r
 	return entry
 }
 
-// CreateMenuSlot creates a test menu slot.
-func (f *Fixtures) CreateMenuSlot(menuProductID string, name string, sequence int) *ent.MenuSlot {
-	slot, err := f.repos.MenuSlot.Create(f.ctx, menuProductID, name, sequence)
+// CreateBundleSlot creates a test bundle slot.
+func (f *Fixtures) CreateBundleSlot(bundleProductID string, name string, sequence int) *ent.BundleSlot {
+	slot, err := f.repos.BundleSlot.Create(f.ctx, bundleProductID, name, sequence)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create menu slot: %v", err))
+		panic(fmt.Sprintf("failed to create bundle slot: %v", err))
 	}
 	return slot
 }
 
-// CreateMenuSlotOption creates a test menu slot option.
-func (f *Fixtures) CreateMenuSlotOption(slotID, optionProductID string) *ent.MenuSlotOption {
-	opt, err := f.repos.MenuSlotOption.Create(f.ctx, slotID, optionProductID)
+// CreateBundleSlotOption creates a test bundle slot option.
+func (f *Fixtures) CreateBundleSlotOption(slotID, optionProductID string) *ent.BundleSlotOption {
+	opt, err := f.repos.BundleSlotOption.Create(f.ctx, slotID, optionProductID)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create menu slot option: %v", err))
+		panic(fmt.Sprintf("failed to create bundle slot option: %v", err))
 	}
 	return opt
 }

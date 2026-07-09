@@ -98,8 +98,8 @@ func TestProductVariants_CRUD(t *testing.T) {
 		require.Contains(t, err.Error(), "duplicate variant value")
 	})
 
-	t.Run("variants rejected on menu products", func(t *testing.T) {
-		_, err := svc.Create(ctx, category.ID, product.TypeMenu, "Combo", 1500, 0, true, nil, nil, nil,
+	t.Run("variants rejected on bundle products", func(t *testing.T) {
+		_, err := svc.Create(ctx, category.ID, product.TypeBundle, "Combo", 1500, 0, true, nil, nil, nil,
 			nil, []service.VariantInput{{Value: "M", IsActive: true}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "simple products")
@@ -181,7 +181,7 @@ func TestProductVariants_CRUD(t *testing.T) {
 	})
 }
 
-func TestProductVariants_MenuInterlock(t *testing.T) {
+func TestProductVariants_BundleInterlock(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
 	tdb.Cleanup(t)
@@ -191,29 +191,29 @@ func TestProductVariants_MenuInterlock(t *testing.T) {
 	svc := NewProductSvc(repos)
 	ctx := tenantCtx()
 
-	category := fixtures.CreateCategory("Menus", 1, true)
-	menu := fixtures.CreateProduct("Combo", category.ID, 1500, product.TypeMenu, nil)
-	slot := fixtures.CreateMenuSlot(menu.ID, "Getränk", 0)
+	category := fixtures.CreateCategory("Bundles", 1, true)
+	bundle := fixtures.CreateProduct("Combo", category.ID, 1500, product.TypeBundle, nil)
+	slot := fixtures.CreateBundleSlot(bundle.ID, "Getränk", 0)
 
 	t.Run("variant product cannot become a slot option", func(t *testing.T) {
 		shirt, err := svc.Create(ctx, category.ID, product.TypeSimple, "T-Shirt", 2500, 0, true, nil, nil, nil,
 			nil, []service.VariantInput{{Value: "M", IsActive: true}})
 		require.NoError(t, err)
 
-		_, err = svc.AddSlotOption(ctx, menu.ID, slot.ID, shirt.ID)
+		_, err = svc.AddSlotOption(ctx, bundle.ID, slot.ID, shirt.ID)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "cannot be menu options")
+		require.Contains(t, err.Error(), "cannot be bundle options")
 	})
 
 	t.Run("slot option product cannot gain variants", func(t *testing.T) {
 		cola := fixtures.CreateProduct("Cola", category.ID, 350, product.TypeSimple, nil)
-		_, err := svc.AddSlotOption(ctx, menu.ID, slot.ID, cola.ID)
+		_, err := svc.AddSlotOption(ctx, bundle.ID, slot.ID, cola.ID)
 		require.NoError(t, err)
 
 		_, err = svc.Update(ctx, cola.ID, category.ID, product.TypeSimple, "Cola", 350, 0, true, nil, nil, nil,
 			nil, []service.VariantInput{{Value: "M", IsActive: true}})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "menu options cannot have variants")
+		require.Contains(t, err.Error(), "bundle options cannot have variants")
 	})
 }
 

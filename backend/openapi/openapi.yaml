@@ -21,11 +21,11 @@ tags:
   - name: Auth
     description: Authentication (OTP email delivery)
   - name: Products
-    description: Product catalog (simple and menu types)
+    description: Product catalog (simple and bundle types)
   - name: Categories
     description: Product categories
-  - name: Menus
-    description: Menu product configuration with slots and options
+  - name: Bundles
+    description: Bundle product configuration with slots and options
   - name: Orders
     description: Order management (shop and POS origins)
   - name: Refunds
@@ -89,20 +89,20 @@ paths:
   /categories/{categoryId}:
     $ref: "paths/categories.yaml#/item"
 
-  /menus:
-    $ref: "paths/menus.yaml#/collection"
-  /menus/{menuId}:
-    $ref: "paths/menus.yaml#/item"
-  /menus/{menuId}/slots:
-    $ref: "paths/menus.yaml#/slots"
-  /menus/{menuId}/slots/reorder:
-    $ref: "paths/menus.yaml#/slots-reorder"
-  /menus/{menuId}/slots/{slotId}:
-    $ref: "paths/menus.yaml#/slot-item"
-  /menus/{menuId}/slots/{slotId}/options:
-    $ref: "paths/menus.yaml#/options"
-  /menus/{menuId}/slots/{slotId}/options/{optionProductId}:
-    $ref: "paths/menus.yaml#/option-item"
+  /bundles:
+    $ref: "paths/bundles.yaml#/collection"
+  /bundles/{bundleId}:
+    $ref: "paths/bundles.yaml#/item"
+  /bundles/{bundleId}/slots:
+    $ref: "paths/bundles.yaml#/slots"
+  /bundles/{bundleId}/slots/reorder:
+    $ref: "paths/bundles.yaml#/slots-reorder"
+  /bundles/{bundleId}/slots/{slotId}:
+    $ref: "paths/bundles.yaml#/slot-item"
+  /bundles/{bundleId}/slots/{slotId}/options:
+    $ref: "paths/bundles.yaml#/options"
+  /bundles/{bundleId}/slots/{slotId}/options/{optionProductId}:
+    $ref: "paths/bundles.yaml#/option-item"
 
   /orders:
     $ref: "paths/orders.yaml#/collection"

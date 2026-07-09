@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { CartItemDisplay } from "@/components/cart/cart-item-display"
 import { CartTotalSummary } from "@/components/cart/cart-total-summary"
-import { InlineMenuGroup } from "@/components/cart/inline-menu-group"
-import { useBestMenuSuggestion } from "@/components/cart/use-best-menu-suggestion"
+import { InlineBundleGroup } from "@/components/cart/inline-bundle-group"
+import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { Button } from "@/components/ui/button"
 import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -22,7 +22,7 @@ export function FloatingBottomNav() {
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const isMobile = useIsMobile()
   const router = useRouter()
-  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestMenuSuggestion()
+  const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestBundleSuggestion()
 
   const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0)
   const depositCents = cartDepositCents(cart.items)
@@ -125,7 +125,7 @@ export function FloatingBottomNav() {
                         }
                         const grouped = cart.items.slice(startIndex, endIndex + 1)
                         rows.push(
-                          <InlineMenuGroup
+                          <InlineBundleGroup
                             key={`group-${grouped.map((g) => g.id).join("-")}`}
                             suggestion={suggestion}
                             items={grouped}
@@ -226,7 +226,7 @@ export function FloatingBottomNav() {
                         }
                         const grouped = cart.items.slice(startIndex, endIndex + 1)
                         rows.push(
-                          <InlineMenuGroup
+                          <InlineBundleGroup
                             key={`group-${grouped.map((g) => g.id).join("-")}`}
                             suggestion={suggestion}
                             items={grouped}

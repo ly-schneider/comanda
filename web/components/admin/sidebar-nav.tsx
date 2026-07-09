@@ -45,7 +45,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       requiredTier: "app_admin",
     },
     { href: "/admin/products", label: "Produkte", icon: <Hamburger className="size-5" />, requiredTier: "catalog" },
-    { href: "/admin/menu", label: "Menus", icon: <Package className="size-5" />, requiredTier: "catalog" },
+    { href: "/admin/bundles", label: "Bundles", icon: <Package className="size-5" />, requiredTier: "catalog" },
     { href: "/admin/categories", label: "Kategorien", icon: <Grid2x2 className="size-5" />, requiredTier: "catalog" },
     {
       href: "/admin/orders",

@@ -107,7 +107,7 @@ func (e *rlsEnv) buildWebhookRouter(t *testing.T, enc *crypto.Encryptor) http.Ha
 		repos.OrderLine,
 		repos.OrderPayment,
 		NewProductSvc(repos),
-		repos.MenuSlot,
+		repos.BundleSlot,
 		repos.Inventory,
 		nil,
 		nil,

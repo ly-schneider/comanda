@@ -131,8 +131,8 @@ func NewRouter(
 			pub.Get("/products", wrapper.ListProducts)
 			pub.Get("/products/{productId}", wrapper.GetProduct)
 			pub.Get("/orders/{orderId}", wrapper.GetOrder)
-			pub.Get("/menus", wrapper.ListMenus)
-			pub.Get("/menus/{menuId}", wrapper.GetMenu)
+			pub.Get("/bundles", wrapper.ListBundles)
+			pub.Get("/bundles/{bundleId}", wrapper.GetBundle)
 			pub.Get("/categories", wrapper.ListCategories)
 			pub.Get("/categories/{categoryId}", wrapper.GetCategory)
 
@@ -183,7 +183,7 @@ func NewRouter(
 
 		// ── Catalog routes (auth + catalog membership + CSRF) ──
 		// The lowest tenant tier: products (incl. images and inventory),
-		// categories, and menus. Staff and tenant-admins satisfy it too.
+		// categories, and bundles. Staff and tenant-admins satisfy it too.
 		v1.Group(func(catalog chi.Router) {
 			catalog.Use(betterAuthMw.RequireAuth())
 			catalog.Use(betterAuthMw.RequireTenantRole(auth.TierCatalog))
@@ -203,15 +203,15 @@ func NewRouter(
 			catalog.Patch("/categories/{categoryId}", wrapper.UpdateCategory)
 			catalog.Delete("/categories/{categoryId}", wrapper.DeleteCategory)
 
-			catalog.Post("/menus", wrapper.CreateMenu)
-			catalog.Patch("/menus/{menuId}", wrapper.UpdateMenu)
-			catalog.Delete("/menus/{menuId}", wrapper.DeleteMenu)
-			catalog.Post("/menus/{menuId}/slots", wrapper.CreateMenuSlot)
-			catalog.Patch("/menus/{menuId}/slots/reorder", wrapper.ReorderMenuSlots)
-			catalog.Patch("/menus/{menuId}/slots/{slotId}", wrapper.UpdateMenuSlot)
-			catalog.Delete("/menus/{menuId}/slots/{slotId}", wrapper.DeleteMenuSlot)
-			catalog.Post("/menus/{menuId}/slots/{slotId}/options", wrapper.AddSlotOption)
-			catalog.Delete("/menus/{menuId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
+			catalog.Post("/bundles", wrapper.CreateBundle)
+			catalog.Patch("/bundles/{bundleId}", wrapper.UpdateBundle)
+			catalog.Delete("/bundles/{bundleId}", wrapper.DeleteBundle)
+			catalog.Post("/bundles/{bundleId}/slots", wrapper.CreateBundleSlot)
+			catalog.Patch("/bundles/{bundleId}/slots/reorder", wrapper.ReorderBundleSlots)
+			catalog.Patch("/bundles/{bundleId}/slots/{slotId}", wrapper.UpdateBundleSlot)
+			catalog.Delete("/bundles/{bundleId}/slots/{slotId}", wrapper.DeleteBundleSlot)
+			catalog.Post("/bundles/{bundleId}/slots/{slotId}/options", wrapper.AddSlotOption)
+			catalog.Delete("/bundles/{bundleId}/slots/{slotId}/options/{optionProductId}", wrapper.RemoveSlotOption)
 		})
 
 		// ── Staff routes (auth + staff membership + CSRF, NOT blocked) ─

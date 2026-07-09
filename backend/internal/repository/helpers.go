@@ -5,8 +5,8 @@ import (
 	stdsql "database/sql"
 
 	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/bundleslotoption"
 	"backend/internal/generated/ent/deviceproduct"
-	"backend/internal/generated/ent/menuslotoption"
 	"backend/internal/generated/ent/predicate"
 
 	"entgo.io/ent/dialect/sql"
@@ -80,14 +80,14 @@ func entDeviceProductProductID(id string) predicate.DeviceProduct {
 	return deviceproduct.ProductIDEQ(id)
 }
 
-// entMenuSlotOptionMenuSlotID returns a predicate matching menu_slot_option rows
-// by menu_slot_id.
-func entMenuSlotOptionMenuSlotID(id string) predicate.MenuSlotOption {
-	return menuslotoption.MenuSlotIDEQ(id)
+// entBundleSlotOptionBundleSlotID returns a predicate matching bundle_slot_option
+// rows by bundle_slot_id.
+func entBundleSlotOptionBundleSlotID(id string) predicate.BundleSlotOption {
+	return bundleslotoption.BundleSlotIDEQ(id)
 }
 
-// entMenuSlotOptionProductID returns a predicate matching menu_slot_option rows
-// by option_product_id.
-func entMenuSlotOptionProductID(id string) predicate.MenuSlotOption {
-	return menuslotoption.OptionProductIDEQ(id)
+// entBundleSlotOptionProductID returns a predicate matching bundle_slot_option
+// rows by option_product_id.
+func entBundleSlotOptionProductID(id string) predicate.BundleSlotOption {
+	return bundleslotoption.OptionProductIDEQ(id)
 }

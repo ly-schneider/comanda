@@ -5,14 +5,14 @@ import { useState } from "react"
 import { CartButtons } from "@/components/cart/cart-buttons"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { VariantPickerModal } from "@/components/cart/variant-picker-modal"
-import { CategoryFilter } from "@/components/menu/category-filter"
+import { CategoryFilter } from "@/components/catalog/category-filter"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useCart } from "@/contexts/cart-context"
 import { formatChf } from "@/lib/utils"
 import { hasVariants } from "@/lib/variants"
 import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
-export function MenuGrid({
+export function CatalogGrid({
   products,
   categories = [],
 }: {
@@ -46,7 +46,7 @@ export function MenuGrid({
       ) : (
         <div className="xs:grid-cols-2 grid grid-cols-1 gap-3 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((product) => (
-            <MenuProductCard key={product.id} product={product} />
+            <CatalogProductCard key={product.id} product={product} />
           ))}
         </div>
       )}
@@ -54,20 +54,19 @@ export function MenuGrid({
   )
 }
 
-function MenuProductCard({ product }: { product: ProductDTO }) {
+function CatalogProductCard({ product }: { product: ProductDTO }) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [isVariantPickerOpen, setIsVariantPickerOpen] = useState(false)
   const { addToCart, getItemQuantity, getTotalProductQuantity } = useCart()
-  const isMenu = product.type === "menu"
-  const productHasVariants = !isMenu && hasVariants(product)
-  const isAvailable = isMenu || product.isAvailable !== false
-  const isLowStock = !isMenu && !productHasVariants && product.isLowStock === true
-  const availableQty = isMenu || productHasVariants ? null : (product.availableQuantity ?? null)
+  const isBundle = product.type === "bundle"
+  const productHasVariants = !isBundle && hasVariants(product)
+  const isAvailable = isBundle || product.isAvailable !== false
+  const isLowStock = !isBundle && !productHasVariants && product.isLowStock === true
+  const availableQty = isBundle || productHasVariants ? null : (product.availableQuantity ?? null)
   const isActive = product.isActive !== false
   const disabled = !isAvailable || !isActive
 
-  // Determine current quantity for max check, mirroring CartButtons logic
-  const quantity = product.type === "menu" ? getTotalProductQuantity(product.id) : getItemQuantity(product.id)
+  const quantity = product.type === "bundle" ? getTotalProductQuantity(product.id) : getItemQuantity(product.id)
   const maxQty = typeof availableQty === "number" ? availableQty : undefined
   const reachedMax = typeof maxQty === "number" && quantity >= maxQty
 
@@ -77,7 +76,7 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
 
   const handleCardActivate = () => {
     if (disabled || reachedMax) return
-    if (product.type === "menu") {
+    if (product.type === "bundle") {
       handleConfigureProduct()
     } else if (productHasVariants) {
       setIsVariantPickerOpen(true)
@@ -177,4 +176,4 @@ function MenuProductCard({ product }: { product: ProductDTO }) {
   )
 }
 
-export default MenuGrid
+export default CatalogGrid

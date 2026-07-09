@@ -3,7 +3,7 @@ import { apiRequest } from "../api"
 export interface CheckoutItem {
   productId: string
   quantity: number
-  menuSelections?: { slotId: string; productId: string }[]
+  bundleSelections?: { slotId: string; productId: string }[]
   variantId?: string
 }
 

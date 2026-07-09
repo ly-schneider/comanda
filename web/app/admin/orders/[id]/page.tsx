@@ -263,7 +263,7 @@ export default function AdminOrderDetailPage() {
                           <div key={c.id} className="flex items-center justify-between gap-2 pl-6 text-sm">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="truncate">
-                                {c.menuSlotName ? `${c.menuSlotName}: ` : ""}
+                                {c.bundleSlotName ? `${c.bundleSlotName}: ` : ""}
                                 {c.title}
                               </span>
                               {c.lineType !== "deposit" && <RedemptionBadge redemption={c.redemption} />}

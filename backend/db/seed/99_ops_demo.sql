@@ -34,8 +34,8 @@ DECLARE
   v_p_wasser        varchar(12) := 'prd________4';
   v_p_redbull       varchar(12) := 'prd________6';
   v_p_capri         varchar(12) := 'prd________7';
-  v_p_menu_small    varchar(12) := 'prd_menu___1';
-  v_p_menu_large    varchar(12) := 'prd_menu___2';
+  v_p_bundle_small  varchar(12) := 'prd_bndl___1';
+  v_p_bundle_large  varchar(12) := 'prd_bndl___2';
 
   v_now             TIMESTAMPTZ := NOW();
   v_order_id        varchar(12);
@@ -185,7 +185,7 @@ BEGIN
   END LOOP;
 
   ----------------------------------------------------------------------
-  -- MENU BUNDLES — 6 redeemed combos in the last hour to exercise
+  -- BUNDLES — 6 redeemed combos in the last hour to exercise
   -- bundle/component flattening and "top products last hour"
   ----------------------------------------------------------------------
   FOR i IN 1..6 LOOP
@@ -198,7 +198,7 @@ BEGIN
     -- bundle parent (filtered out by flattenOrderLines)
     v_line_id := pg_temp.nanoid();
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents)
-      VALUES (v_line_id, v_order_id, 'bundle', v_p_menu_large, 'Menü Gross', 1, 1500);
+      VALUES (v_line_id, v_order_id, 'bundle', v_p_bundle_large, 'Menü Gross', 1, 1500);
 
     -- component: Smash Burger -> grill
     INSERT INTO order_line (id, order_id, line_type, product_id, title, quantity, unit_price_cents, parent_line_id)
