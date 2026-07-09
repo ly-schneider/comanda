@@ -372,7 +372,7 @@ func memberRoleLabelDE(role admininvite.MemberRole) string {
 	case admininvite.MemberRoleAppAdmin:
 		return "App-Admin"
 	case admininvite.MemberRoleCatalog:
-		return "Sortiment"
+		return "Produktpflege"
 	default:
 		return "Mitarbeiter"
 	}

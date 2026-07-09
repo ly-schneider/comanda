@@ -403,8 +403,9 @@ export const QA_SECTIONS: QaSection[] = [
         key: "invites.admin-roles",
         title: "/admin: Rollen staff/catalog/app_admin einladen",
         action:
-          "Unter /admin/invites je eine Einladung als Mitarbeiter, Sortiment und App-Admin versenden und annehmen.",
-        expected: "Jede Annahme ergibt die korrekte Stufe; Betreff nennt die Rolle (z. B. «Einladung als Sortiment»).",
+          "Unter /admin/invites je eine Einladung als Mitarbeiter, Produktpflege und App-Admin versenden und annehmen.",
+        expected:
+          "Jede Annahme ergibt die korrekte Stufe; Betreff nennt die Rolle (z. B. «Einladung als Produktpflege»).",
       },
       {
         key: "invites.tier-gating",

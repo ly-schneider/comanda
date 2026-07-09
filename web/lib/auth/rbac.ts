@@ -7,7 +7,7 @@ export const ROLE_LABELS_DE: Record<string, string> = {
   admin: "Administrator",
   app_admin: "App-Admin",
   staff: "Mitarbeiter",
-  catalog: "Sortiment",
+  catalog: "Produktpflege",
 }
 
 // The branding/domains/payments tier. owner is the singleton org creator and
