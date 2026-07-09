@@ -88,6 +88,10 @@ func (f *fakeBindingRepo) UpdateLastSeen(_ context.Context, _ string) error {
 
 func (f *fakeBindingRepo) Revoke(_ context.Context, _ string) error { return nil }
 
+func (f *fakeBindingRepo) ListActiveByDeviceID(_ context.Context, _ string) ([]*ent.DeviceBinding, error) {
+	return nil, nil
+}
+
 func (f *fakeBindingRepo) ListActive(_ context.Context) ([]*ent.DeviceBinding, error) {
 	return nil, nil
 }

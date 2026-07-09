@@ -236,8 +236,8 @@ item:
 
   delete:
     tags: [Stations]
-    summary: Revoke station
-    description: Revokes the station device binding.
+    summary: Remove station
+    description: Removes the station and revokes its authorization. The device must re-pair to regain access.
     operationId: revokeStation
     security:
       - sessionAuth: []

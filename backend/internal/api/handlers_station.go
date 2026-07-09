@@ -231,10 +231,10 @@ func (h *Handlers) RenameStation(w http.ResponseWriter, r *http.Request, station
 	response.WriteJSON(w, http.StatusOK, toAPIStation(station))
 }
 
-// RevokeStation revokes a station device.
+// RevokeStation removes a station and revokes its authorization.
 // (DELETE /stations/{stationId})
 func (h *Handlers) RevokeStation(w http.ResponseWriter, r *http.Request, stationId string) {
-	if err := h.devices.Revoke(r.Context(), stationId); err != nil {
+	if err := h.devices.Remove(r.Context(), stationId); err != nil {
 		writeEntError(w, err)
 		return
 	}

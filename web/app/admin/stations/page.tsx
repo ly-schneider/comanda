@@ -4,6 +4,16 @@ import { Check, ChevronDown, ChevronRight, Pencil, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { PairDeviceCard } from "@/components/admin/pair-device-card"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -45,6 +55,7 @@ export default function AdminStationRequestsPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -88,19 +99,20 @@ export default function AdminStationRequestsPage() {
     }
   }
 
-  async function revokeStation(id: string) {
+  async function removeStation(id: string) {
+    setConfirmRemove(null)
     try {
       const res = await fetchAuth(`/api/v1/stations/${id}`, {
         method: "DELETE",
         headers: csrfHeaders("DELETE", false),
       })
-      if (!res.ok) {
+      if (!res.ok && res.status !== 204) {
         const j = (await res.json().catch(() => ({}))) as { detail?: string; message?: string }
         throw new Error(j.detail || j.message || `Error ${res.status}`)
       }
-      setStations((prev) => prev.map((s) => (s.id === id ? { ...s, status: "revoked", approved: false } : s)))
+      setStations((prev) => prev.filter((s) => s.id !== id))
     } catch {
-      setError("Sperrung fehlgeschlagen")
+      setError("Entfernen fehlgeschlagen")
     }
   }
 
@@ -190,10 +202,37 @@ export default function AdminStationRequestsPage() {
             onAddProduct={(productId) => addProduct(st.id, productId)}
             onRemoveProduct={(productId) => removeProduct(st.id, productId)}
             onRename={(name) => renameStation(st.id, name)}
-            onRevoke={() => revokeStation(st.id)}
+            onRevoke={() => setConfirmRemove({ id: st.id, name: st.name })}
           />
         ))}
       </div>
+
+      <AlertDialog
+        open={!!confirmRemove}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Station entfernen</AlertDialogTitle>
+            <AlertDialogDescription>
+              Möchtest du &quot;{confirmRemove?.name}&quot; wirklich entfernen? Die Station verliert damit den Zugriff
+              und muss erneut registriert werden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmRemove) void removeStation(confirmRemove.id)
+              }}
+            >
+              Entfernen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -296,11 +335,9 @@ function StationCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StatusBadge status={st.status} />
-          {st.status === "approved" && (
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={onRevoke}>
-              Entfernen
-            </Button>
-          )}
+          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={onRevoke}>
+            Entfernen
+          </Button>
         </div>
       </div>
 

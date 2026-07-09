@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react"
 import { PairDeviceCard } from "@/components/admin/pair-device-card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
@@ -23,6 +33,7 @@ export default function AdminPOSPage() {
   const [devices, setDevices] = useState<PosDevice[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -49,20 +60,21 @@ export default function AdminPOSPage() {
         (new Date(a.approvedAt ?? a.createdAt ?? "").getTime() || 0)
   )
 
-  async function revoke(id: string) {
+  async function removeDevice(id: string) {
+    setConfirmRemove(null)
     try {
       const csrf = getCSRFToken()
       const res = await fetchAuth(`/api/v1/devices/${id}`, {
         method: "DELETE",
         headers: { "X-CSRF": csrf || "" },
       })
-      if (!res.ok) {
+      if (!res.ok && res.status !== 204) {
         const j = (await res.json().catch(() => ({}))) as { detail?: string; message?: string }
         throw new Error(j.detail || j.message || `Error ${res.status}`)
       }
-      setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, status: "revoked", approved: false } : d)))
+      setDevices((prev) => prev.filter((d) => d.id !== id))
     } catch {
-      setError("Sperrung fehlgeschlagen")
+      setError("Entfernen fehlgeschlagen")
     }
   }
 
@@ -104,21 +116,46 @@ export default function AdminPOSPage() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <StatusBadge status={d.status} />
-                {d.status === "approved" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => revoke(d.id)}
-                  >
-                    Entfernen
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setConfirmRemove({ id: d.id, name: d.name || d.id })}
+                >
+                  Entfernen
+                </Button>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      <AlertDialog
+        open={!!confirmRemove}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerät entfernen</AlertDialogTitle>
+            <AlertDialogDescription>
+              Möchtest du &quot;{confirmRemove?.name}&quot; wirklich entfernen? Das Gerät verliert damit den Zugriff und
+              muss erneut registriert werden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmRemove) void removeDevice(confirmRemove.id)
+              }}
+            >
+              Entfernen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

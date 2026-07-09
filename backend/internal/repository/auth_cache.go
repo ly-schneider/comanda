@@ -260,6 +260,10 @@ func (r *cachedDeviceBindingRepo) Revoke(ctx context.Context, id string) error {
 	return r.inner.Revoke(ctx, id)
 }
 
+func (r *cachedDeviceBindingRepo) ListActiveByDeviceID(ctx context.Context, deviceID string) ([]*ent.DeviceBinding, error) {
+	return r.inner.ListActiveByDeviceID(ctx, deviceID)
+}
+
 func (r *cachedDeviceBindingRepo) ListActive(ctx context.Context) ([]*ent.DeviceBinding, error) {
 	return r.inner.ListActive(ctx)
 }
