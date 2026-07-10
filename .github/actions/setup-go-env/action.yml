@@ -1,5 +1,5 @@
 name: Setup Go Environment
-description: Install Go 1.25 with module + per-job build caching
+description: Install Go (version pinned in backend/go.mod) with module + per-job build caching
 
 inputs:
   cache-suffix:
@@ -13,7 +13,7 @@ runs:
   steps:
     - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: "1.25"
+        go-version-file: backend/go.mod
         # Managed explicitly below so we can key the build cache per job and fall
         # back across go.sum churn (setup-go's cache is exact-go.sum-match only).
         cache: false
