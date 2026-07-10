@@ -35,3 +35,21 @@ export function formatPriceAdjustment(cents: number): string {
   const sign = cents > 0 ? "+" : "−"
   return `${sign} ${formatChf(abs)}`
 }
+
+export const LOW_STOCK_THRESHOLD = 5
+
+export function stockAvailability(quantity: number): { isAvailable: boolean; isLowStock: boolean } {
+  return { isAvailable: quantity > 0, isLowStock: quantity > 0 && quantity <= LOW_STOCK_THRESHOLD }
+}
+
+// Product-level availability aggregated from its variants: available when any
+// active variant has stock, low-stock when any active variant is low.
+export function variantProductAvailability(
+  variants: Pick<ProductVariantDTO, "isActive" | "isAvailable" | "isLowStock">[]
+): { isAvailable: boolean; isLowStock: boolean } {
+  const anyActive = variants.some((v) => v.isActive && v.isAvailable !== false)
+  return {
+    isAvailable: anyActive,
+    isLowStock: anyActive && variants.some((v) => v.isActive && v.isLowStock === true),
+  }
+}

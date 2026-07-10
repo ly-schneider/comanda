@@ -28,9 +28,7 @@ const RESERVED_SLUGS = new Set([
 const PLATFORM_BARE_HOSTS = new Set(["localhost", "127.0.0.1", "comanda.leys.ch", "staging.comanda.leys.ch"])
 
 export type TenantHostResult =
-  | { type: "platform" }
-  | { type: "tenant-subdomain"; slug: string }
-  | { type: "custom-domain" }
+  { type: "platform" } | { type: "tenant-subdomain"; slug: string } | { type: "custom-domain" }
 
 // First entry of a comma-list, port stripped, lowercased. Empty in → empty out.
 export function normalizeHost(raw: string | null | undefined): string {

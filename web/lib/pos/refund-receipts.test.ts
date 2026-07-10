@@ -1,21 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { Refund, RefundView } from "@/types/refund"
-import { buildPickupSlip, buildRefundSlip, mapRefundMethod, planRefundReceipts } from "./refund-receipts"
-
-function refund(overrides: Partial<Refund> = {}): Refund {
-  return {
-    id: "r1",
-    orderId: "order00000001",
-    amountCents: 400,
-    kind: "line",
-    method: "cash",
-    actorType: "operator",
-    actorId: "dev1",
-    status: "succeeded",
-    createdAt: "2026-06-30T10:00:00Z",
-    ...overrides,
-  }
-}
+import type { RefundView } from "@/types/refund"
+import { buildPickupSlip, planRefundReceipts } from "./refund-receipts"
 
 function view(overrides: Partial<RefundView> = {}): RefundView {
   return {
@@ -25,6 +10,7 @@ function view(overrides: Partial<RefundView> = {}): RefundView {
       status: "partially_refunded",
       createdAt: "2026-06-30T09:00:00Z",
       qrPayload: "newtoken",
+      payments: [{ method: "card" }],
     },
     lines: [
       {
@@ -45,43 +31,66 @@ function view(overrides: Partial<RefundView> = {}): RefundView {
   }
 }
 
-describe("mapRefundMethod", () => {
-  it("routes online TWINT to twint and everything else to cash-out", () => {
-    expect(mapRefundMethod("twint")).toBe("twint")
-    expect(mapRefundMethod("cash")).toBe("cash-out")
-  })
-})
-
-describe("slip builders", () => {
-  it("builds a refund slip with negative-rendered amount and mapped method", () => {
-    const slip = buildRefundSlip({ refund: refund({ amountCents: 250, method: "twint" }) })
-    expect(slip.kind).toBe("refund")
-    expect(slip.method).toBe("twint")
-    expect(slip.refundCents).toBe(250)
-    expect(slip.orderId).toBe("order00000001")
-  })
-
+describe("buildPickupSlip", () => {
   it("builds a pickup slip carrying the new QR", () => {
-    const slip = buildPickupSlip({ orderId: "o1", pickupQr: "tok", method: "cash-out", items: [] })
+    const slip = buildPickupSlip({ orderId: "o1", pickupQr: "tok", method: "cash", items: [] })
     expect(slip.kind).toBe("pickup")
     expect(slip.pickupQr).toBe("tok")
   })
 })
 
 describe("planRefundReceipts", () => {
-  it("prints refund + new-QR pickup slip and collects the old receipt on a product refund", () => {
-    const plan = planRefundReceipts({ action: "line", refund: refund(), view: view() })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["refund", "pickup"])
+  it("reprints only the re-issued pickup slip on a product refund and collects the old receipt", () => {
+    const plan = planRefundReceipts({ action: "line", view: view() })
+    expect(plan.slips.map((s) => s.kind)).toEqual(["pickup"])
     expect(plan.collectOldReceipt).toBe(true)
-    const pickup = plan.slips[1]!
+    const pickup = plan.slips[0]!
     expect(pickup.pickupQr).toBe("newtoken")
     expect(pickup.items).toEqual([{ title: "Kaffee", quantity: 1, unitPriceCents: 200 }])
   })
 
-  it("does not swap the receipt when the QR is unchanged (redeemed-line refund)", () => {
+  it("carries the product variant into the reprinted pickup line title", () => {
     const plan = planRefundReceipts({
       action: "line",
-      refund: refund(),
+      view: view({
+        lines: [
+          {
+            orderLineId: "l1",
+            productId: "p1",
+            title: "Glace",
+            variantValue: "Vanille",
+            unitPriceCents: 200,
+            boughtQuantity: 2,
+            refundedQuantity: 1,
+            refundableQuantity: 1,
+            redeemed: false,
+          },
+        ],
+      }),
+    })
+    expect(plan.slips[0]!.items).toEqual([{ title: "Glace (Vanille)", quantity: 1, unitPriceCents: 200 }])
+  })
+
+  it("mirrors the original sale's payment method on the pickup slip, not the refund's", () => {
+    const plan = planRefundReceipts({
+      action: "line",
+      view: view({
+        order: {
+          id: "order00000001",
+          totalCents: 800,
+          status: "partially_refunded",
+          createdAt: "x",
+          qrPayload: "newtoken",
+          payments: [{ method: "twint" }],
+        },
+      }),
+    })
+    expect(plan.slips[0]!.method).toBe("twint")
+  })
+
+  it("prints nothing when the QR is unchanged (redeemed-line refund)", () => {
+    const plan = planRefundReceipts({
+      action: "line",
       view: view({
         order: {
           id: "order00000001",
@@ -93,31 +102,30 @@ describe("planRefundReceipts", () => {
       }),
       previousQr: "sametoken",
     })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["refund"])
+    expect(plan.slips).toEqual([])
     expect(plan.collectOldReceipt).toBe(false)
   })
 
-  it("omits the pickup slip when no QR was re-issued", () => {
+  it("prints nothing but collects the old receipt when the order is terminal", () => {
     const plan = planRefundReceipts({
       action: "line",
-      refund: refund(),
       view: view({
         order: { id: "order00000001", totalCents: 800, status: "refunded", createdAt: "x", qrPayload: null },
       }),
     })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["refund"])
+    expect(plan.slips).toEqual([])
     expect(plan.collectOldReceipt).toBe(true)
   })
 
-  it("prints only a refund slip and keeps the QR on a deposit return", () => {
-    const plan = planRefundReceipts({ action: "deposit", refund: refund({ amountCents: 200 }), view: view() })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["refund"])
+  it("prints nothing and keeps the QR on a deposit return", () => {
+    const plan = planRefundReceipts({ action: "deposit", view: view() })
+    expect(plan.slips).toEqual([])
     expect(plan.collectOldReceipt).toBe(false)
   })
 
-  it("prints a refund slip (no void) on cancel and collects the old receipt", () => {
-    const plan = planRefundReceipts({ action: "cancel", refund: refund({ amountCents: 800 }), view: view() })
-    expect(plan.slips.map((s) => s.kind)).toEqual(["refund"])
+  it("prints nothing on cancel and collects the old receipt", () => {
+    const plan = planRefundReceipts({ action: "cancel", view: view() })
+    expect(plan.slips).toEqual([])
     expect(plan.collectOldReceipt).toBe(true)
   })
 })

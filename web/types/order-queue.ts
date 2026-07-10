@@ -3,13 +3,7 @@ import type { Cents } from "./common"
 export type OrderSyncStatus = "pending" | "syncing" | "synced" | "failed" | "paid"
 
 export type PosPaymentMethod =
-  | "cash"
-  | "card"
-  | "twint"
-  | "gratis_guest"
-  | "gratis_vip"
-  | "gratis_staff"
-  | "gratis_plugin"
+  "cash" | "card" | "twint" | "gratis_guest" | "gratis_vip" | "gratis_staff" | "gratis_plugin"
 
 export interface GratisInfo {
   type: "guest" | "vip" | "staff"

@@ -5,7 +5,9 @@ import {
   findVariant,
   formatPriceAdjustment,
   hasVariants,
+  stockAvailability,
   variantPickerLabel,
+  variantProductAvailability,
   variantUnitPrice,
 } from "./variants"
 
@@ -119,5 +121,54 @@ describe("formatPriceAdjustment", () => {
 
   it("formats fractional amounts", () => {
     expect(formatPriceAdjustment(150)).toBe("+ CHF 1.50")
+  })
+})
+
+describe("stockAvailability", () => {
+  it("is unavailable at zero", () => {
+    expect(stockAvailability(0)).toEqual({ isAvailable: false, isLowStock: false })
+  })
+
+  it("is available and low within the threshold", () => {
+    expect(stockAvailability(3)).toEqual({ isAvailable: true, isLowStock: true })
+    expect(stockAvailability(5)).toEqual({ isAvailable: true, isLowStock: true })
+  })
+
+  it("is available and not low above the threshold", () => {
+    expect(stockAvailability(6)).toEqual({ isAvailable: true, isLowStock: false })
+  })
+})
+
+describe("variantProductAvailability", () => {
+  it("is unavailable when every active variant is out of stock", () => {
+    const variants = [
+      makeVariant({ id: "v1", isActive: true, isAvailable: false, isLowStock: false }),
+      makeVariant({ id: "v2", isActive: false, isAvailable: true, isLowStock: false }),
+    ]
+    expect(variantProductAvailability(variants)).toEqual({ isAvailable: false, isLowStock: false })
+  })
+
+  it("is available when any active variant has stock", () => {
+    const variants = [
+      makeVariant({ id: "v1", isActive: true, isAvailable: true, isLowStock: false }),
+      makeVariant({ id: "v2", isActive: true, isAvailable: false, isLowStock: false }),
+    ]
+    expect(variantProductAvailability(variants)).toEqual({ isAvailable: true, isLowStock: false })
+  })
+
+  it("is low-stock only when an active variant is low", () => {
+    const variants = [
+      makeVariant({ id: "v1", isActive: true, isAvailable: true, isLowStock: false }),
+      makeVariant({ id: "v2", isActive: true, isAvailable: true, isLowStock: true }),
+    ]
+    expect(variantProductAvailability(variants)).toEqual({ isAvailable: true, isLowStock: true })
+  })
+
+  it("ignores an inactive low-stock variant", () => {
+    const variants = [
+      makeVariant({ id: "v1", isActive: true, isAvailable: true, isLowStock: false }),
+      makeVariant({ id: "v2", isActive: false, isAvailable: true, isLowStock: true }),
+    ]
+    expect(variantProductAvailability(variants)).toEqual({ isAvailable: true, isLowStock: false })
   })
 })

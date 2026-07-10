@@ -8,18 +8,23 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { setProductActive } from "@/lib/api/products"
 import { cn } from "@/lib/utils"
+import { activeVariants } from "@/lib/variants"
 import type { ListResponse, ProductDTO } from "@/types"
+
+type StockUpdatedHandler = (productId: string, newStock: number, variantId?: string) => void
 
 function StockControl({
   product,
+  variantId,
   currentStock,
   token,
   onStockUpdated,
 }: {
   product: ProductDTO
+  variantId?: string
   currentStock: number
   token: string
-  onStockUpdated: (productId: string, newStock: number) => void
+  onStockUpdated: StockUpdatedHandler
 }) {
   const [localStock, setLocalStock] = useState(String(currentStock))
   const [saving, setSaving] = useState(false)
@@ -31,7 +36,7 @@ function StockControl({
 
       const optimistic = Math.max(0, parseInt(localStock, 10) + delta)
       setLocalStock(String(optimistic))
-      onStockUpdated(product.id, optimistic)
+      onStockUpdated(product.id, optimistic, variantId)
 
       const controller = new AbortController()
       pendingRef.current = controller
@@ -43,26 +48,34 @@ function StockControl({
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ delta, reason: "manual_adjust" }),
+          body: JSON.stringify({ delta, reason: "manual_adjust", ...(variantId ? { variantId } : {}) }),
           signal: controller.signal,
         })
         if (res.ok) {
-          const data = (await res.json()) as { quantity: number }
-          setLocalStock(String(data.quantity))
-          onStockUpdated(product.id, data.quantity)
+          const data = (await res.json()) as {
+            quantity: number
+            variants?: { variantId: string; quantity: number }[]
+          }
+          // For a variant product the top-level quantity is the product-level
+          // aggregate; the variant's own stock lives in variants[].
+          const next = variantId
+            ? (data.variants?.find((v) => v.variantId === variantId)?.quantity ?? data.quantity)
+            : data.quantity
+          setLocalStock(String(next))
+          onStockUpdated(product.id, next, variantId)
         } else {
           setLocalStock(String(currentStock))
-          onStockUpdated(product.id, currentStock)
+          onStockUpdated(product.id, currentStock, variantId)
         }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return
         setLocalStock(String(currentStock))
-        onStockUpdated(product.id, currentStock)
+        onStockUpdated(product.id, currentStock, variantId)
       } finally {
         setSaving(false)
       }
     },
-    [product.id, token, onStockUpdated, localStock, currentStock]
+    [product.id, variantId, token, onStockUpdated, localStock, currentStock]
   )
 
   const handleAbsoluteSet = useCallback(async () => {
@@ -157,15 +170,16 @@ const ItemCard = memo(function ItemCard({
 }: {
   product: ProductDTO
   token: string
-  onStockUpdated: (productId: string, newStock: number) => void
+  onStockUpdated: StockUpdatedHandler
   onActiveUpdated: (productId: string, isActive: boolean) => void
 }) {
   const isActive = product.isActive !== false
   const isBundle = product.type === "bundle"
+  const variants = isBundle ? [] : activeVariants(product)
   const stock = product.availableQuantity ?? 0
 
   return (
-    <div className={cn("flex items-center gap-4 rounded-xl border p-3", !isActive && "opacity-60")}>
+    <div className={cn("flex items-start gap-4 rounded-xl border p-3", !isActive && "opacity-60")}>
       <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-[#cec9c6]">
         {product.image && (
           <Image
@@ -185,15 +199,30 @@ const ItemCard = memo(function ItemCard({
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <p className="truncate text-sm font-medium">{product.name}</p>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {isBundle ? (
-            <span className="text-muted-foreground text-xs">Bundle</span>
-          ) : (
-            <StockControl product={product} currentStock={stock} token={token} onStockUpdated={onStockUpdated} />
-          )}
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate text-sm font-medium">{product.name}</p>
           <ActiveToggle product={product} token={token} onActiveUpdated={onActiveUpdated} />
         </div>
+        {isBundle ? (
+          <span className="text-muted-foreground text-xs">Bundle</span>
+        ) : variants.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            {variants.map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground min-w-0 truncate text-xs">{v.value}</span>
+                <StockControl
+                  product={product}
+                  variantId={v.id}
+                  currentStock={v.availableQuantity ?? v.stock ?? 0}
+                  token={token}
+                  onStockUpdated={onStockUpdated}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <StockControl product={product} currentStock={stock} token={token} onStockUpdated={onStockUpdated} />
+        )}
       </div>
     </div>
   )
@@ -207,7 +236,7 @@ export function InventoryManagement({
 }: {
   products: ListResponse<ProductDTO>
   token: string
-  onStockUpdated: (productId: string, newStock: number) => void
+  onStockUpdated: StockUpdatedHandler
   onActiveUpdated: (productId: string, isActive: boolean) => void
 }) {
   const simpleProducts = products.items.filter((p) => p.type !== "bundle")

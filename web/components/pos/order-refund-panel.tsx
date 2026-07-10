@@ -26,12 +26,7 @@ import {
   lookupPosOrders,
 } from "@/lib/api/pos-refunds"
 import { canPrintReceipt, printReceipt, type ReceiptBranding } from "@/lib/pos/receipt"
-import {
-  planRefundReceipts,
-  type ReceiptLineItem,
-  type RefundAction,
-  type RefundReceiptPlan,
-} from "@/lib/pos/refund-receipts"
+import { planRefundReceipts, type RefundAction, type RefundReceiptPlan } from "@/lib/pos/refund-receipts"
 import {
   ORDER_STATUS_COLORS,
   ORDER_STATUS_LABELS,
@@ -53,7 +48,7 @@ import type {
 
 const REFUNDABLE_STATUSES = new Set<AdminOrderStatus>(["paid", "partially_refunded"])
 
-type RefundedHandler = (action: RefundAction, refund: Refund, refundedItems?: ReceiptLineItem[]) => Promise<void>
+type RefundedHandler = (action: RefundAction, refund: Refund) => Promise<void>
 
 export function OrderRefundPanel() {
   const { displayName, logoUrl, legal, currency } = useBranding()
@@ -161,7 +156,7 @@ export function OrderRefundPanel() {
   }, [])
 
   const handleRefunded = useCallback<RefundedHandler>(
-    async (action, refund, refundedItems) => {
+    async (action, refund) => {
       const previousQr = view?.order.qrPayload ?? null
       let fresh: RefundView | null = null
       if (selectedId) {
@@ -172,7 +167,7 @@ export function OrderRefundPanel() {
       }
       const v = fresh ?? view
       const plan = v
-        ? planRefundReceipts({ action, refund, view: v, previousQr, refundedItems, branding })
+        ? planRefundReceipts({ action, view: v, previousQr, branding })
         : { slips: [], collectOldReceipt: action !== "deposit" }
       if (canPrintReceipt()) plan.slips.forEach(printReceipt)
       setResult({ plan, refund, action })
@@ -357,6 +352,12 @@ function OrderHeader({ order, refundableBalanceCents }: { order: AdminOrder; ref
             <span className="text-foreground text-right">{cardLabel}</span>
           </>
         )}
+        {payment?.cardTransactionId && (
+          <>
+            <span>Trans.-Nr.</span>
+            <span className="text-foreground text-right font-mono text-xs break-all">{payment.cardTransactionId}</span>
+          </>
+        )}
         <span>Erstellt</span>
         <span className="text-foreground text-right">{new Date(order.createdAt).toLocaleString("de-CH")}</span>
       </div>
@@ -481,13 +482,8 @@ function PosLineRefundSection({
         orderId,
         selected.map((x) => ({ orderLineId: x.line.orderLineId, quantity: x.q }))
       )
-      const items: ReceiptLineItem[] = selected.map((x) => ({
-        title: x.line.title,
-        quantity: x.q,
-        unitPriceCents: x.line.unitPriceCents,
-      }))
       setQty({})
-      await onRefunded("line", refund, items)
+      await onRefunded("line", refund)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Rückerstattung fehlgeschlagen")
     } finally {
@@ -505,7 +501,10 @@ function PosLineRefundSection({
             <div key={l.orderLineId} className="flex items-center justify-between gap-3 rounded-lg border p-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">{l.title}</span>
+                  <span className="truncate text-sm font-medium">
+                    {l.title}
+                    {l.variantValue ? ` (${l.variantValue})` : ""}
+                  </span>
                   {l.redeemed && (
                     <span className="inline-flex shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                       Bereits eingelöst
@@ -571,13 +570,8 @@ function PosDepositReturnSection({
         selected.map((x) => ({ orderLineId: x.deposit.orderLineId, quantity: x.q })),
         token
       )
-      const items: ReceiptLineItem[] = selected.map((x) => ({
-        title: x.deposit.title,
-        quantity: x.q,
-        unitPriceCents: x.deposit.unitPriceCents,
-      }))
       setQty({})
-      await onRefunded("deposit", refund, items)
+      await onRefunded("deposit", refund)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Depot-Rücknahme fehlgeschlagen")
     } finally {
@@ -663,7 +657,7 @@ function PosCancelSection({ orderId, onRefunded }: { orderId: string; onRefunded
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive-hover text-white"
               disabled={busy}
               onClick={(e) => {
                 e.preventDefault()

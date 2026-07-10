@@ -24,7 +24,7 @@ import { useOrderQueue } from "@/hooks/use-order-queue"
 import { listProducts } from "@/lib/api/products"
 import { getDeviceToken } from "@/lib/device-auth"
 import { cn, formatChf } from "@/lib/utils"
-import { hasVariants } from "@/lib/variants"
+import { hasVariants, stockAvailability, variantProductAvailability } from "@/lib/variants"
 import type { ListResponse, ProductDTO } from "@/types"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type { PosPaymentMethod } from "@/types/order-queue"
@@ -196,12 +196,7 @@ function PosInner() {
                 slot.options?.map((opt) => {
                   const optStock = stockMap.get(opt.id)
                   if (optStock === undefined) return opt
-                  return {
-                    ...opt,
-                    availableQuantity: optStock,
-                    isAvailable: optStock > 0,
-                    isLowStock: optStock > 0 && optStock <= 5,
-                  }
+                  return { ...opt, availableQuantity: optStock, ...stockAvailability(optStock) }
                 }) ?? null,
             })),
           },
@@ -212,21 +207,13 @@ function PosInner() {
         const updatedVariants = p.variants.map((v) => {
           const vStock = stockMap.get(v.id)
           if (vStock === undefined) return v
-          return {
-            ...v,
-            stock: vStock,
-            availableQuantity: vStock,
-            isAvailable: vStock > 0,
-            isLowStock: vStock > 0 && vStock <= 5,
-          }
+          return { ...v, stock: vStock, availableQuantity: vStock, ...stockAvailability(vStock) }
         })
-        const anyActive = updatedVariants.some((v) => v.isActive && v.isAvailable !== false)
         const productStock = stockMap.get(p.id)
         return {
           ...p,
           variants: updatedVariants,
-          isAvailable: anyActive,
-          isLowStock: !anyActive ? false : updatedVariants.some((v) => v.isActive && v.isLowStock === true),
+          ...variantProductAvailability(updatedVariants),
           availableQuantity: productStock !== undefined ? productStock : p.availableQuantity,
         }
       }
@@ -234,12 +221,7 @@ function PosInner() {
       // Update simple product stock
       const newStock = stockMap.get(p.id)
       if (newStock === undefined) return p
-      return {
-        ...p,
-        availableQuantity: newStock,
-        isAvailable: newStock > 0,
-        isLowStock: newStock > 0 && newStock <= 5,
-      }
+      return { ...p, availableQuantity: newStock, ...stockAvailability(newStock) }
     })
   }, [])
 
@@ -290,15 +272,8 @@ function PosInner() {
               const delta = ce.detail.get(v.id)
               if (!delta) return v
               const newQty = Math.max(0, (v.availableQuantity ?? 0) + delta)
-              return {
-                ...v,
-                stock: newQty,
-                availableQuantity: newQty,
-                isAvailable: newQty > 0,
-                isLowStock: newQty > 0 && newQty <= 5,
-              }
+              return { ...v, stock: newQty, availableQuantity: newQty, ...stockAvailability(newQty) }
             })
-            const anyActive = updatedVariants.some((v) => v.isActive && v.isAvailable !== false)
             const productDelta = ce.detail.get(p.id)
             const newProductQty = productDelta
               ? Math.max(0, (p.availableQuantity ?? 0) + productDelta)
@@ -306,20 +281,14 @@ function PosInner() {
             return {
               ...p,
               variants: updatedVariants,
-              isAvailable: anyActive,
-              isLowStock: !anyActive ? false : updatedVariants.some((v) => v.isActive && v.isLowStock === true),
+              ...variantProductAvailability(updatedVariants),
               availableQuantity: newProductQty,
             }
           }
           const delta = ce.detail.get(p.id)
           if (!delta) return p
           const newQty = Math.max(0, (p.availableQuantity ?? 0) + delta)
-          return {
-            ...p,
-            availableQuantity: newQty,
-            isAvailable: newQty > 0,
-            isLowStock: newQty > 0 && newQty <= 5,
-          }
+          return { ...p, availableQuantity: newQty, ...stockAvailability(newQty) }
         }),
       }))
     }
@@ -383,18 +352,21 @@ function PosInner() {
 
   const [activeTab, setActiveTab] = useState<string>("kasse")
 
-  const handleInventoryStockUpdated = useCallback((productId: string, newStock: number) => {
-    stockSnapshotRef.current.set(productId, newStock)
+  const handleInventoryStockUpdated = useCallback((productId: string, newStock: number, variantId?: string) => {
+    stockSnapshotRef.current.set(variantId ?? productId, newStock)
     setProducts((prev) => ({
       ...prev,
       items: prev.items.map((p) => {
         if (p.id !== productId) return p
-        return {
-          ...p,
-          availableQuantity: newStock,
-          isAvailable: newStock > 0,
-          isLowStock: newStock > 0 && newStock <= 5,
+        if (variantId && p.variants && p.variants.length > 0) {
+          const updatedVariants = p.variants.map((v) =>
+            v.id === variantId
+              ? { ...v, stock: newStock, availableQuantity: newStock, ...stockAvailability(newStock) }
+              : v
+          )
+          return { ...p, variants: updatedVariants, ...variantProductAvailability(updatedVariants) }
         }
+        return { ...p, availableQuantity: newStock, ...stockAvailability(newStock) }
       }),
     }))
   }, [])

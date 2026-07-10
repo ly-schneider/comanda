@@ -1,9 +1,10 @@
 "use client"
 
-import { Plus } from "lucide-react"
+import { Info, Plus } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCart } from "@/contexts/cart-context"
 import { hasVariants } from "@/lib/variants"
 import type { ProductDTO } from "@/types"
@@ -80,6 +81,27 @@ export function ProductCardPOS({ product, onConfigure }: { product: ProductDTO; 
               >
                 {availableQty} übrig
               </span>
+            </div>
+          )}
+          {product.description && (
+            <div className="absolute top-1 right-1 z-20">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Beschreibung von ${product.name}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="flex size-6 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                  >
+                    <Info className="size-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" onClick={(e) => e.stopPropagation()} className="w-60">
+                  <p className="text-sm font-medium">{product.name}</p>
+                  <p className="text-muted-foreground mt-1 text-sm whitespace-pre-line">{product.description}</p>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
         </div>
