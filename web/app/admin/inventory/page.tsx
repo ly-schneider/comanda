@@ -10,6 +10,7 @@ type Product = {
   id: string
   name: string
   priceCents: number
+  variantLabel?: string | null
 }
 
 type LedgerEntry = {
@@ -23,6 +24,8 @@ type LedgerEntry = {
   deviceId?: string | null
   createdBy?: string | null
   createdByUser?: { id: string; name: string | null } | null
+  variantId?: string | null
+  variantValue?: string | null
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -107,6 +110,10 @@ export default function InventoryHistoryPage() {
     }
   }
 
+  const showVariant = entries.some((e) => e.variantValue)
+  const selectedProduct = products.find((p) => p.id === selectedProductId)
+  const variantHeader = selectedProduct?.variantLabel || "Variante"
+
   return (
     <div className="min-w-0 space-y-6">
       <h1 className="text-xl font-semibold">Inventarverlauf</h1>
@@ -140,6 +147,7 @@ export default function InventoryHistoryPage() {
             <thead>
               <tr className="border-b text-left">
                 <th className="pr-4 pb-2 font-medium">Datum</th>
+                {showVariant && <th className="pr-4 pb-2 font-medium">{variantHeader}</th>}
                 <th className="pr-4 pb-2 font-medium">Delta</th>
                 <th className="pr-4 pb-2 font-medium">Grund</th>
                 <th className="pr-4 pb-2 font-medium">Bestellung</th>
@@ -152,6 +160,11 @@ export default function InventoryHistoryPage() {
                   <td className="text-muted-foreground py-2 pr-4 whitespace-nowrap">
                     {new Date(e.createdAt).toLocaleString("de-CH")}
                   </td>
+                  {showVariant && (
+                    <td className="py-2 pr-4">
+                      {e.variantValue ? e.variantValue : <span className="text-muted-foreground">–</span>}
+                    </td>
+                  )}
                   <td className="py-2 pr-4">
                     <span className={e.delta >= 0 ? "font-medium text-green-700" : "font-medium text-red-600"}>
                       {e.delta >= 0 ? `+${e.delta}` : e.delta}

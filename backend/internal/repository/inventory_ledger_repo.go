@@ -132,6 +132,7 @@ func (r *inventoryLedgerRepo) GetByProductIDWithPagination(ctx context.Context, 
 		Where(inventoryledger.ProductIDEQ(productID)).
 		Order(inventoryledger.ByCreatedAt(entDescOpt())).
 		WithCreatedByUser().
+		WithVariant().
 		Limit(limit).
 		Offset(offset).
 		All(ctx)

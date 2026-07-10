@@ -289,6 +289,10 @@ InventoryLedgerEntry:
     variantId:
       type: string
       nullable: true
+    variantValue:
+      type: string
+      nullable: true
+      description: Human-readable variant value (e.g. "M"); present when the entry targets a variant
 
 InventoryLedgerList:
   type: object
