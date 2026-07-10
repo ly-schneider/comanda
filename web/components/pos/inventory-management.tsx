@@ -52,9 +52,17 @@ function StockControl({
           signal: controller.signal,
         })
         if (res.ok) {
-          const data = (await res.json()) as { quantity: number }
-          setLocalStock(String(data.quantity))
-          onStockUpdated(product.id, data.quantity, variantId)
+          const data = (await res.json()) as {
+            quantity: number
+            variants?: { variantId: string; quantity: number }[]
+          }
+          // For a variant product the top-level quantity is the product-level
+          // aggregate; the variant's own stock lives in variants[].
+          const next = variantId
+            ? (data.variants?.find((v) => v.variantId === variantId)?.quantity ?? data.quantity)
+            : data.quantity
+          setLocalStock(String(next))
+          onStockUpdated(product.id, next, variantId)
         } else {
           setLocalStock(String(currentStock))
           onStockUpdated(product.id, currentStock, variantId)
