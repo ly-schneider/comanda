@@ -61,7 +61,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-api:sha-${{ github.sha }}
           cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
+          cache-to: type=gha,scope=api,mode=max,ignore-error=true
           provenance: false
 
   build-web:
@@ -95,7 +95,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+          cache-to: type=gha,scope=web,mode=max,ignore-error=true
           provenance: false
 
   build-docs:
@@ -129,7 +129,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-docs:sha-${{ github.sha }}
           cache-from: type=gha,scope=docs
-          cache-to: type=gha,scope=docs,mode=max
+          cache-to: type=gha,scope=docs,mode=max,ignore-error=true
           provenance: false
 
   build-migrate:
@@ -164,5 +164,5 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-migrate:sha-${{ github.sha }}
           cache-from: type=gha,scope=migrate
-          cache-to: type=gha,scope=migrate,mode=max
+          cache-to: type=gha,scope=migrate,mode=max,ignore-error=true
           provenance: false
