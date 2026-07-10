@@ -24,7 +24,7 @@ import {
   type ReceiptRefundMethod,
 } from "@/lib/pos/receipt"
 import { cartDepositCents, formatChf } from "@/lib/utils"
-import { findVariant, hasVariants, variantPickerLabel } from "@/lib/variants"
+import { findVariant, hasVariants } from "@/lib/variants"
 import type { PluginDiscount } from "@/plugins/slots"
 
 import type { CartItem } from "@/types/cart"
@@ -212,14 +212,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
           if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
         }
       }
+      let title = it.product.name
       if (it.variantId && hasVariants(it.product)) {
         const variant = findVariant(it.product, it.variantId)
-        if (variant) {
-          cfg.push({ slot: variantPickerLabel(it.product), choice: variant.value })
-        }
+        if (variant) title = `${title} (${variant.value})`
       }
       return {
-        title: it.product.name,
+        title,
         quantity: it.quantity,
         unitPriceCents: it.totalPriceCents,
         configuration: cfg.length ? cfg : undefined,
@@ -584,18 +583,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     )
     emitInventoryDecrement(cart.items)
 
-    if (shouldPrint && canPrint && queued) {
-      pendingPrintsRef.current.set(queued.localId, {
-        template: {
-          method: "twint",
-          totalCents: payableTotal,
-          depositCents: depositCents > 0 ? depositCents : undefined,
-          items: printItems,
-          orderTimestamp: Date.now(),
-          branding: receiptBranding,
-        },
-      })
-    }
+    // TWINT is fully digital — no pickup ticket is printed.
     if (jetonMode && queued) {
       setJetonSummary({ items: jetons, orderId: queued.localId, payment: "twint" })
     }
@@ -608,16 +596,11 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   }, [
     busy,
     jetonMode,
-    shouldPrint,
     hasMissingJeton,
     cart.items,
     computeJetonTotals,
     buildPrintItems,
     originalTotal,
-    total,
-    payableTotal,
-    depositCents,
-    canPrint,
     clearCart,
     submitOrder,
     emitInventoryDecrement,
@@ -632,12 +615,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     const bridge = getBridge()
     if (bridge && typeof bridge.payWithCard === "function") {
       const ref = `pos_${Date.now()}`
-      const { title, details } = buildCardCheckoutSummary(buildPrintItems())
+      // No title: SumUp then labels the charge with its own unique transaction
+      // code (searchable in the dashboard). Products stay in the detail field.
+      const { details } = buildCardCheckoutSummary(buildPrintItems())
       const payload: CardCheckoutPayload = {
         amountCents: payableTotal,
         currency: "CHF",
         reference: ref,
-        title: title || undefined,
         items: details || undefined,
       }
       setCardRef(ref)

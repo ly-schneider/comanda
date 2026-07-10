@@ -1,5 +1,5 @@
-import type { Receipt, ReceiptBranding, ReceiptRefundMethod } from "@/lib/pos/receipt"
-import type { Refund, RefundMethod, RefundView } from "@/types/refund"
+import type { Receipt, ReceiptBranding } from "@/lib/pos/receipt"
+import type { RefundView } from "@/types/refund"
 
 export type ReceiptLineItem = NonNullable<Receipt["items"]>[number]
 
@@ -11,37 +11,16 @@ export interface RefundReceiptPlan {
   collectOldReceipt: boolean
 }
 
-// card + cash → cash-out (handed back in person); online TWINT routes back automatically.
-export function mapRefundMethod(method: RefundMethod): ReceiptRefundMethod {
-  return method === "twint" ? "twint" : "cash-out"
-}
-
-export function buildRefundSlip(args: {
-  refund: Refund
-  items?: ReceiptLineItem[]
-  branding?: ReceiptBranding | null
-}): Receipt {
-  return {
-    kind: "refund",
-    method: mapRefundMethod(args.refund.method),
-    totalCents: args.refund.amountCents,
-    refundCents: args.refund.amountCents,
-    orderId: args.refund.orderId,
-    items: args.items,
-    branding: args.branding ?? undefined,
-  }
-}
-
 export function buildPickupSlip(args: {
   orderId: string
   pickupQr: string
-  method: ReceiptRefundMethod
+  method: Receipt["method"] | ""
   items?: ReceiptLineItem[]
   branding?: ReceiptBranding | null
 }): Receipt {
   return {
     kind: "pickup",
-    method: args.method,
+    method: args.method as Receipt["method"],
     totalCents: 0,
     orderId: args.orderId,
     pickupQr: args.pickupQr,
@@ -53,45 +32,49 @@ export function buildPickupSlip(args: {
 function remainingItems(view: RefundView): ReceiptLineItem[] {
   return view.lines
     .filter((l) => l.refundableQuantity > 0)
-    .map((l) => ({ title: l.title, quantity: l.refundableQuantity, unitPriceCents: l.unitPriceCents }))
+    .map((l) => ({
+      title: l.variantValue ? `${l.title} (${l.variantValue})` : l.title,
+      quantity: l.refundableQuantity,
+      unitPriceCents: l.unitPriceCents,
+    }))
 }
 
+// Refunds themselves are never printed; the only slip we produce is a fresh
+// pickup ticket when a line refund left products to collect under a re-issued QR.
 export function planRefundReceipts(args: {
   action: RefundAction
-  refund: Refund
   // AFTER the action — carries the re-issued/voided QR.
   view: RefundView
   // the QR BEFORE the action, to detect a re-issue.
   previousQr?: string | null
-  refundedItems?: ReceiptLineItem[]
   branding?: ReceiptBranding | null
 }): RefundReceiptPlan {
-  const { action, refund, view, previousQr, refundedItems, branding } = args
+  const { action, view, previousQr, branding } = args
 
   if (action === "cancel") {
-    // Full cancellation: the order is terminal and no products remain for pickup,
-    // so we print only the refund record and collect the now-void old receipt.
-    return { slips: [buildRefundSlip({ refund, branding })], collectOldReceipt: true }
+    // Full cancellation: the order is terminal and its QR is void — collect the old receipt.
+    return { slips: [], collectOldReceipt: true }
   }
 
   if (action === "deposit") {
-    // A deposit return leaves the pickup QR unchanged.
-    return { slips: [buildRefundSlip({ refund, items: refundedItems, branding })], collectOldReceipt: false }
+    // A deposit return leaves the pickup QR unchanged; nothing to reprint.
+    return { slips: [], collectOldReceipt: false }
   }
 
-  // A new pickup slip only when the backend re-signed the QR (un-redeemed
+  // Reprint the pickup ticket only when the backend re-signed the QR (un-redeemed
   // refund); refunding an already-redeemed line leaves the QR untouched.
-  const slips: Receipt[] = [buildRefundSlip({ refund, items: refundedItems, branding })]
   const newQr = view.order.qrPayload
   const reissued = !!newQr && newQr !== (previousQr ?? null)
   const terminal = view.order.status === "cancelled" || view.order.status === "refunded"
   const items = remainingItems(view)
+  const slips: Receipt[] = []
   if (reissued && items.length > 0 && !terminal) {
     slips.push(
       buildPickupSlip({
         orderId: view.order.id,
         pickupQr: newQr,
-        method: mapRefundMethod(refund.method),
+        // Pickup tickets mirror the original sale's payment method, not the refund's.
+        method: (view.order.payments?.[0]?.method ?? "") as Receipt["method"] | "",
         items,
         branding,
       })

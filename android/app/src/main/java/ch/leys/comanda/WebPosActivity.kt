@@ -638,16 +638,17 @@ class WebPosActivity : ComponentActivity() {
 
     private fun startSumUpCheckout(p: PendingPayment) {
         pendingPayment = p
-        val checkoutTitle = (p.title?.takeIf { it.isNotBlank() } ?: "POS ${p.reference}").let {
-            if (it.length > 120) it.substring(0, 119) + "…" else it
-        }
         val payment = try {
             val builder = SumUpPayment.builder()
                 .total(BigDecimal(p.amountCents).divide(BigDecimal(100)))
                 .currency(SumUpPayment.Currency.valueOf(p.currency))
-                .title(checkoutTitle)
                 .foreignTransactionId(p.reference)
                 .skipSuccessScreen()
+            // Only set a title when the POS supplies one; otherwise SumUp labels the
+            // charge with its own unique transaction code, which stays searchable.
+            p.title?.takeIf { it.isNotBlank() }?.let { t ->
+                builder.title(if (t.length > 120) t.substring(0, 119) + "…" else t)
+            }
             p.items?.takeIf { it.isNotBlank() }?.let { info ->
                 builder.addAdditionalInfo("Artikel", if (info.length > 500) info.substring(0, 500) else info)
             }
@@ -978,11 +979,10 @@ class WebPosActivity : ComponentActivity() {
                     }
                 }
 
-                // Footer/commit — add a bit more feed so the final line isn't clipped
+                // Footer/commit — feed just enough for the last line to clear the head
                 out.write(byteArrayOf(
                     0x1B, 0x64, 0x02,  // ESC d 2  feed 2 lines
-                    0x1B, 0x64, 0x02,  // feed 2 more
-                    0x1B, 0x64, 0x02,  // feed 2 more (total ~6)
+                    0x1B, 0x64, 0x02,  // feed 2 more (total ~4)
                     0x1F, 0x11, 0x08,  // commit/print sequence
                     0x1F, 0x11, 0x0E,
                     0x1F, 0x11, 0x07,
@@ -1081,14 +1081,16 @@ class WebPosActivity : ComponentActivity() {
         val padding = 10
         val lineSpacing = 8
         val topPad = 12
-        val bottomPad = 56
-        val qrSize = 360
+        val bottomPad = 16
+        val qrSize = 288
         val logoMaxHeight = 120
 
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
-        val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 22f }
-        val totalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
-        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 18f }
+        // No anti-aliasing: thermal printers are 1-bit, and AA grey edges get thresholded
+        // away, breaking up thin strokes. Aliased text prints solid like the QR.
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
+        val itemPaint = Paint().apply { color = Color.BLACK; textSize = 22f }
+        val totalPaint = Paint().apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
+        val small = Paint().apply { color = Color.BLACK; textSize = 18f }
 
         val currency = branding.currency ?: obj.optString("currency", "CHF")
         val totalCents = obj.optLong("totalCents", -1L)
@@ -1150,14 +1152,14 @@ class WebPosActivity : ComponentActivity() {
         val padding = 10
         val lineSpacing = 8
         val topPad = 12
-        val bottomPad = 56
-        val qrSize = 360
+        val bottomPad = 16
+        val qrSize = 288
         val logoMaxHeight = 120
 
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
-        val itemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 22f }
-        val totalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
-        val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = 18f }
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
+        val itemPaint = Paint().apply { color = Color.BLACK; textSize = 22f }
+        val totalPaint = Paint().apply { color = Color.BLACK; textSize = 26f; isFakeBoldText = true }
+        val small = Paint().apply { color = Color.BLACK; textSize = 18f }
 
         val kind = receiptKind(obj)
         val currency = branding.currency ?: obj.optString("currency", "CHF")

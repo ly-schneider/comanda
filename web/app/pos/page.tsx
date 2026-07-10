@@ -383,12 +383,32 @@ function PosInner() {
 
   const [activeTab, setActiveTab] = useState<string>("kasse")
 
-  const handleInventoryStockUpdated = useCallback((productId: string, newStock: number) => {
-    stockSnapshotRef.current.set(productId, newStock)
+  const handleInventoryStockUpdated = useCallback((productId: string, newStock: number, variantId?: string) => {
+    stockSnapshotRef.current.set(variantId ?? productId, newStock)
     setProducts((prev) => ({
       ...prev,
       items: prev.items.map((p) => {
         if (p.id !== productId) return p
+        if (variantId && p.variants && p.variants.length > 0) {
+          const updatedVariants = p.variants.map((v) =>
+            v.id === variantId
+              ? {
+                  ...v,
+                  stock: newStock,
+                  availableQuantity: newStock,
+                  isAvailable: newStock > 0,
+                  isLowStock: newStock > 0 && newStock <= 5,
+                }
+              : v
+          )
+          const anyActive = updatedVariants.some((v) => v.isActive && v.isAvailable !== false)
+          return {
+            ...p,
+            variants: updatedVariants,
+            isAvailable: anyActive,
+            isLowStock: !anyActive ? false : updatedVariants.some((v) => v.isActive && v.isLowStock === true),
+          }
+        }
         return {
           ...p,
           availableQuantity: newStock,
