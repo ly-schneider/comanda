@@ -18,7 +18,8 @@ describe("TenantPluginsCard", () => {
     render(<TenantPluginsCard tenantId="t1" fetchAuth={fetchAuth} />)
 
     expect(await screen.findByText("Demo Plugin")).toBeInTheDocument()
-    expect(screen.getByText("Nicht konfiguriert")).toBeInTheDocument()
+    // A plugin with no config form shows just the toggle — no configuration status line.
+    expect(screen.queryByText("Nicht konfiguriert")).not.toBeInTheDocument()
     expect(fetchAuth).toHaveBeenCalledWith("/api/v1/platform/tenants/t1/plugins")
   })
 
@@ -44,7 +45,7 @@ describe("TenantPluginsCard", () => {
       headers: { "Content-Type": "application/json", "X-CSRF": "csrf-token" },
       body: JSON.stringify({ enabled: true }),
     })
-    expect(await screen.findByText("Konfiguriert")).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole("switch")).toBeChecked())
   })
 
   it("maps a 403 to a permission error", async () => {

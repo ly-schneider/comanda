@@ -31,9 +31,11 @@ function PluginRow({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium">{plugin.name}</div>
-          <div className="text-muted-foreground text-xs">
-            {plugin.secretsConfiguredAt ? "Konfiguriert" : "Nicht konfiguriert"}
-          </div>
+          {ConfigForm && (
+            <div className="text-muted-foreground text-xs">
+              {plugin.secretsConfiguredAt ? "Konfiguriert" : "Nicht konfiguriert"}
+            </div>
+          )}
         </div>
         <Switch
           checked={plugin.enabled}
