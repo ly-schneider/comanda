@@ -16,9 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/contexts/auth-context"
 import { apiRequest } from "@/lib/api"
 import type { CategoryLike } from "@/lib/categories"
-import type { SlotComponentProps } from "@/plugins/slots"
 import type { CategoryDTO } from "@/types/category"
 import {
   type ArtistVoucher,
@@ -64,8 +64,9 @@ function StatusBadge({ status }: { status: VoucherStatus }) {
   )
 }
 
-export default function ArtistVoucherAdminSettings({ ctx }: SlotComponentProps<"admin.settings.section">) {
-  const { token } = ctx
+export default function ArtistVoucherAdmin() {
+  const { getToken } = useAuth()
+  const token = getToken() ?? ""
   const [categories, setCategories] = useState<CategoryLike[]>([])
   const [vouchers, setVouchers] = useState<ArtistVoucher[]>([])
   const [error, setError] = useState<string | null>(null)

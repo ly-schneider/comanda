@@ -11,6 +11,7 @@ import {
   ReceiptText,
   Settings,
   Smartphone,
+  Sparkles,
   Tag,
   Ticket,
   Undo2,
@@ -81,6 +82,13 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       icon: <Ticket className="size-5" />,
       requiredTier: "staff",
       requiredPlugin: "staff-perks",
+    },
+    {
+      href: "/admin/artist-voucher",
+      label: "Artist Voucher",
+      icon: <Sparkles className="size-5" />,
+      requiredTier: "staff",
+      requiredPlugin: "artist-voucher",
     },
     {
       href: "/admin/settings",

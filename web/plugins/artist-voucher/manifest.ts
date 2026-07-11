@@ -1,12 +1,10 @@
-import dynamic from "next/dynamic"
 import type { PluginManifest } from "@/plugins/registry"
 
+// No slots: artist-voucher renders as a full admin route (app/admin/artist-voucher).
 const manifest: PluginManifest = {
   key: "artist-voucher",
   name: "Artist Voucher",
-  slots: {
-    "admin.settings.section": dynamic(() => import("./admin-settings")),
-  },
+  slots: {},
 }
 
 export default manifest
