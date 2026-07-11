@@ -2,6 +2,7 @@ package app
 
 import (
 	"backend/internal/plugin"
+	"backend/internal/plugin/artistvoucher"
 	"backend/internal/plugin/club100"
 	"backend/internal/plugin/stationqr"
 
@@ -13,6 +14,7 @@ func registeredPlugins() []plugin.Plugin {
 	return []plugin.Plugin{
 		club100.New(),
 		stationqr.New(),
+		artistvoucher.New(),
 	}
 }
 

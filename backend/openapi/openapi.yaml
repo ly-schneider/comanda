@@ -248,6 +248,13 @@ paths:
   /plugins/stationqr/enroll:
     $ref: "paths/plugins/stationqr.yaml#/enroll"
 
+  /plugins/artist-voucher/vouchers:
+    $ref: "paths/plugins/artist-voucher.yaml#/vouchers"
+  /plugins/artist-voucher/vouchers/{voucherId}/revoke:
+    $ref: "paths/plugins/artist-voucher.yaml#/revoke"
+  /plugins/artist-voucher/revocations:
+    $ref: "paths/plugins/artist-voucher.yaml#/revocations"
+
   /branding:
     $ref: "paths/branding.yaml#/collection"
 
