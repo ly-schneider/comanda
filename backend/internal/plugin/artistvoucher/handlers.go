@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"backend/internal/generated/api/generated"
+	nanoid "backend/internal/id"
 	"backend/internal/repository"
 	"backend/internal/response"
 
@@ -59,6 +60,12 @@ func (h *handlers) ArtistVoucherCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
+	for _, cid := range body.CategoryIds {
+		if !nanoid.Valid(cid) {
+			writeError(w, http.StatusBadRequest, "invalid_id", "Invalid category id")
+			return
+		}
+	}
 
 	v, err := h.rt.svc.Create(r.Context(), CreateInput{
 		Label:       body.Label,
@@ -79,6 +86,10 @@ func (h *handlers) ArtistVoucherCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) ArtistVoucherRevoke(w http.ResponseWriter, r *http.Request, voucherId string) {
+	if !nanoid.Valid(voucherId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid voucher id")
+		return
+	}
 	v, err := h.rt.svc.Revoke(r.Context(), voucherId)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
