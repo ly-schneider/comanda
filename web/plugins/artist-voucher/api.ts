@@ -56,6 +56,6 @@ export async function revokeVoucher(token: string, id: string): Promise<ArtistVo
 
 // Opened via window.open, so the backend route authenticates the session cookie
 // (forwarded by the /api proxy), not a Bearer header.
-export function voucherPrintUrl(cols: number): string {
-  return `/api${BASE}/vouchers/print.pdf?cols=${cols}`
+export function voucherPrintUrl(voucherId: string, count: number): string {
+  return `/api${BASE}/vouchers/${encodeURIComponent(voucherId)}/print.pdf?count=${count}`
 }

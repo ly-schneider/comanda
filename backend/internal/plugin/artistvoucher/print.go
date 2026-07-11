@@ -2,55 +2,59 @@ package artistvoucher
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"backend/internal/generated/api/generated"
 	"backend/internal/pdf"
+	"backend/internal/repository"
 
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
-// ArtistVoucherPrint streams a PDF of the tenant's active and scheduled vouchers,
-// one byte-mode QR per cell. GET /plugins/artist-voucher/vouchers/print.pdf?cols=
-func (h *handlers) ArtistVoucherPrint(w http.ResponseWriter, r *http.Request) {
-	cols := pdf.VoucherDefaultCols
-	if v := r.URL.Query().Get("cols"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < pdf.VoucherMinCols || n > pdf.VoucherMaxCols {
-			writeError(w, http.StatusBadRequest, "invalid_cols",
-				fmt.Sprintf("cols must be between %d and %d", pdf.VoucherMinCols, pdf.VoucherMaxCols))
-			return
-		}
-		cols = n
-	}
-
-	vouchers, err := h.rt.svc.List(r.Context())
-	if err != nil {
-		h.rt.logger.Error("artist voucher print list failed", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "artist_voucher_error", "Could not load vouchers")
+// ArtistVoucherPrint streams a PDF of count identical badge-sized slips for one voucher.
+func (h *handlers) ArtistVoucherPrint(w http.ResponseWriter, r *http.Request, voucherId string, params generated.ArtistVoucherPrintParams) {
+	if !nanoid.Valid(voucherId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid voucher id")
 		return
 	}
 
-	slips := make([]pdf.VoucherSlip, 0, len(vouchers))
-	for _, v := range vouchers {
-		if v.Status != StatusActive && v.Status != StatusScheduled {
-			continue
-		}
-		raw, err := base64.RawURLEncoding.DecodeString(v.Token)
-		if err != nil {
-			h.rt.logger.Error("artist voucher token decode failed", zap.String("voucher_id", v.ID), zap.Error(err))
-			writeError(w, http.StatusInternalServerError, "artist_voucher_error", "Could not render voucher")
+	count := pdf.VoucherDefaultCount
+	if params.Count != nil {
+		if n := *params.Count; n < pdf.VoucherMinCount || n > pdf.VoucherMaxCount {
+			writeError(w, http.StatusBadRequest, "invalid_count",
+				fmt.Sprintf("count must be between %d and %d", pdf.VoucherMinCount, pdf.VoucherMaxCount))
 			return
 		}
-		names := make([]string, 0, len(v.Categories))
-		for _, c := range v.Categories {
-			names = append(names, c.Name)
-		}
-		slips = append(slips, pdf.VoucherSlip{Label: v.Label, Categories: names, QRBytes: raw})
+		count = *params.Count
 	}
 
-	body, err := pdf.RenderVoucherSlips(slips, cols)
+	voucher, err := h.rt.svc.Get(r.Context(), voucherId)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "Voucher not found")
+			return
+		}
+		h.rt.logger.Error("artist voucher print get failed", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "artist_voucher_error", "Could not load voucher")
+		return
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(voucher.Token)
+	if err != nil {
+		h.rt.logger.Error("artist voucher token decode failed", zap.String("voucher_id", voucher.ID), zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "artist_voucher_error", "Could not render voucher")
+		return
+	}
+	names := make([]string, 0, len(voucher.Categories))
+	for _, c := range voucher.Categories {
+		names = append(names, c.Name)
+	}
+
+	body, err := pdf.RenderVoucherSlips(pdf.VoucherSlip{Label: voucher.Label, Categories: names, QRBytes: raw}, count)
 	if err != nil {
 		h.rt.logger.Error("render artist voucher slips", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "render_failed", "Could not render vouchers")
@@ -58,7 +62,7 @@ func (h *handlers) ArtistVoucherPrint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `inline; filename="artist-vouchers.pdf"`)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="artist-voucher-%s.pdf"`, voucher.ID))
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
 }

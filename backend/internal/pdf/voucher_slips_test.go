@@ -38,10 +38,10 @@ func TestRenderVoucherSlips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode token: %v", err)
 	}
-	pdfBytes, err := RenderVoucherSlips([]VoucherSlip{
-		{Label: "Live Band", Categories: []string{"Drinks", "Food"}, QRBytes: raw},
-		{Label: "VIP Guest", Categories: []string{"Beer"}, QRBytes: raw},
-	}, VoucherDefaultCols)
+	pdfBytes, err := RenderVoucherSlips(
+		VoucherSlip{Label: "Live Band", Categories: []string{"Drinks", "Food"}, QRBytes: raw},
+		VoucherDefaultCount,
+	)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -50,22 +50,12 @@ func TestRenderVoucherSlips(t *testing.T) {
 	}
 }
 
-func TestRenderVoucherSlipsClampsColumns(t *testing.T) {
+func TestRenderVoucherSlipsClampsCount(t *testing.T) {
 	raw, _ := base64.RawURLEncoding.DecodeString(goldenVoucherToken)
-	slip := []VoucherSlip{{Label: "x", Categories: []string{"y"}, QRBytes: raw}}
-	for _, cols := range []int{-1, 0, 999} {
-		if _, err := RenderVoucherSlips(slip, cols); err != nil {
-			t.Fatalf("cols=%d: %v", cols, err)
+	slip := VoucherSlip{Label: "x", Categories: []string{"y"}, QRBytes: raw}
+	for _, count := range []int{-1, 0, 99999} {
+		if _, err := RenderVoucherSlips(slip, count); err != nil {
+			t.Fatalf("count=%d: %v", count, err)
 		}
-	}
-}
-
-func TestRenderVoucherSlipsEmpty(t *testing.T) {
-	pdfBytes, err := RenderVoucherSlips(nil, VoucherDefaultCols)
-	if err != nil {
-		t.Fatalf("render empty: %v", err)
-	}
-	if !bytes.HasPrefix(pdfBytes, []byte("%PDF")) {
-		t.Fatal("empty output is not a PDF")
 	}
 }

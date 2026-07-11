@@ -237,6 +237,24 @@ func TestRevokeNotFound(t *testing.T) {
 	require.True(t, errors.Is(err, repository.ErrNotFound))
 }
 
+func TestGetNotFound(t *testing.T) {
+	svc, _, _ := newTestService(t, categoryFixtures())
+	_, err := svc.Get(tenantCtx(), "missing12345")
+	require.True(t, errors.Is(err, repository.ErrNotFound))
+}
+
+func TestGetReturnsVoucherWithStatus(t *testing.T) {
+	svc, _, _ := newTestService(t, categoryFixtures())
+	created, err := svc.Create(tenantCtx(), validCreateInput())
+	require.NoError(t, err)
+
+	got, err := svc.Get(tenantCtx(), created.ID)
+	require.NoError(t, err)
+	require.Equal(t, created.ID, got.ID)
+	require.Equal(t, "Live Band", got.Label)
+	require.Equal(t, StatusActive, got.Status)
+}
+
 func TestRevocationsFeedBound(t *testing.T) {
 	svc, repo, _ := newTestService(t, categoryFixtures())
 	now := time.Now()
