@@ -80,14 +80,14 @@ type VoucherScanResult = {
   scanId: string
   kind: "voucher"
   verdict: VoucherVerdictKind
-  message?: string // for an invalid verdict: the specific reason, in German
+  message?: string
   scannedAt: Date
   voucherId?: string
   label?: string
   categories?: string[]
   validFrom?: number // Unix seconds
   validUntil?: number // Unix seconds
-  syncedAt: number | null // when the station last synced its material from the server
+  syncedAt: number | null
 }
 
 type ScanResult = OrderScanResult | VoucherScanResult
@@ -515,8 +515,7 @@ export default function StationPage() {
     setScans((prev) => [scan, ...prev].slice(0, HISTORY_LIMIT))
   }, [])
 
-  // Only order/campaign scans transition (loading → result); a voucher verdict is
-  // computed synchronously and pushed final, so it never needs patching.
+  // Voucher verdicts are pushed final; only order/campaign scans get patched.
   const updateScan = useCallback((key: string, patch: Partial<OrderScanResult>) => {
     setScans((prev) => prev.map((s) => (s.key === key && s.kind !== "voucher" ? { ...s, ...patch } : s)))
   }, [])
@@ -585,9 +584,8 @@ export default function StationPage() {
 
       if (parsed.kind === "voucher") {
         const offline = offlineRef.current
-        // Gate: an artist-voucher QR is only honoured when the plugin is enabled
-        // for this tenant (cached during offline setup). Otherwise it's just an
-        // unrecognised code. The verdict is fully local — no order, no outbox.
+        // Only honour vouchers when the plugin is enabled for this tenant
+        // (cached during offline setup); otherwise it's an unrecognised code.
         if (!offline.voucherEnabled) {
           playScanSound("error")
           setError("Ungültiger QR-Code")

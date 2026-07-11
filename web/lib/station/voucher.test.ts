@@ -43,8 +43,7 @@ function concat(...parts: Uint8Array[]): Uint8Array {
 const seed = hexToBytes(GOLDEN.seedHex)
 const enc = new TextEncoder()
 
-// Encode a 0x10 voucher body (mirrors backend encodeVoucher) so we can mint
-// fresh tokens for the edge cases the golden vector doesn't cover.
+// Mirrors backend encodeVoucher so tests can mint fresh tokens beyond the golden vector.
 function encodeVoucher(p: VoucherPayload): Uint8Array {
   const header = new Uint8Array(1 + 12 + 12 + 4 + 4)
   header[0] = 0x10
@@ -204,7 +203,7 @@ describe("evaluateVoucher", () => {
     ).toEqual({ kind: "invalid", reason: "bad-signature" })
   })
 
-  it("reports revoked (from the T4 predicate) ahead of the window", () => {
+  it("reports revoked (from the predicate) ahead of the window", () => {
     const ctx = {
       publicKey,
       stationTenantId: "tenant_seed1",
@@ -225,9 +224,7 @@ describe("evaluateVoucher", () => {
   })
 })
 
-// The real station pipeline: zxing hands raw QR bytes → parseScan classifies
-// them as a voucher and re-encodes to a base64url token → evaluateVoucher renders
-// the verdict. This ties the scan path end-to-end against the Go-minted bytes.
+// Raw QR bytes → parseScan → evaluateVoucher, end-to-end against the Go-minted bytes.
 describe("scan pipeline (raw bytes → verdict)", () => {
   it("classifies the golden voucher bytes and renders a valid verdict", () => {
     const raw = base64UrlToBytes(GOLDEN.token)! // the exact bytes a 0x10 byte-mode QR carries

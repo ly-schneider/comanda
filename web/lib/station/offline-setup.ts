@@ -133,10 +133,8 @@ async function loadQRConfig(deps: SetupDeps): Promise<QRConfig | null> {
   return cfg
 }
 
-// The host-resolved list of plugins ENABLED for this tenant (key present =
-// enabled). Cached so the offline station can gate voucher scans without a
-// network round-trip; refreshed only by re-running setup, like every other
-// cached material here.
+// Enabled plugin keys for this tenant (key present = enabled), cached so the
+// offline station can gate voucher scans without a network round-trip.
 async function loadPlugins(deps: SetupDeps): Promise<string[] | null> {
   const res = await deps.fetchFn(PLUGINS_URL)
   if (!res.ok) return null
@@ -199,9 +197,8 @@ export async function runOfflineSetup(overrides?: Partial<SetupDeps>): Promise<R
   const swVersion = await deps.sw.version()
 
   // None of these depend on each other, so fire them concurrently. The plugin
-  // list is best-effort — a failure there never blocks readiness (vouchers are
-  // an optional capability); it just leaves the station unable to verify vouchers
-  // until the next successful setup.
+  // list is best-effort — not destructured or in the failure checks below, since
+  // its failure must not block readiness (vouchers are optional).
   const [qrConfig, catalog, assigned] = await Promise.all([
     loadQRConfig(deps).catch(() => null),
     loadCatalog(deps).catch(() => null),

@@ -97,13 +97,10 @@ export function verifyQrToken(token: string, publicKeyB64Url: string | null | un
   return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
 }
 
-// --- Artist-voucher token (0x10) -------------------------------------------
-
 const VER_VOUCHER = 0x10
-// disc + tenant id + voucher id + validFrom(u32) + validUntil(u32) = 33.
 const VOUCHER_HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 4
 
-// label + category names are UTF-8 (the ids above are ASCII nanoids).
+// label + category names are UTF-8; the ids above are ASCII nanoids.
 const utf8 = new TextDecoder()
 
 export interface VoucherPayload {
@@ -112,8 +109,6 @@ export interface VoucherPayload {
   validFrom: number // Unix seconds
   validUntil: number // Unix seconds
   label: string
-  // Human-readable category NAMES snapshotted at issue time; ids never leave the
-  // server, so a scanned voucher reveals only what it displays.
   categories: string[]
 }
 
@@ -142,8 +137,7 @@ function parseVoucher(body: Uint8Array): VoucherPayload | null {
     categories.push(utf8.decode(body.subarray(off, off + n)))
     off += n
   }
-  // Trailing bytes mean the declared lengths didn't consume the whole body.
-  if (off !== body.length) return null
+  if (off !== body.length) return null // declared lengths must consume the whole body
 
   return {
     tenantId: asciiOf(body.subarray(1, 1 + ID_LEN)),
@@ -155,10 +149,9 @@ function parseVoucher(body: Uint8Array): VoucherPayload | null {
   }
 }
 
-// Mirrors verifyQrToken for the 0x10 voucher family. A valid signature only
-// proves *some* tenant signed it — the caller must still enforce tenant scoping
-// and the validity window (see evaluateVoucher). Rejects a 0x02 pickup token as
-// an unsupported version, the same way verifyQrToken rejects a 0x10 voucher.
+// A valid signature only proves *some* tenant signed it — the caller must still
+// enforce tenant scoping and the validity window (see evaluateVoucher). Rejects
+// a 0x02 pickup token as unsupported-version.
 export function verifyVoucherToken(token: string, publicKeyB64Url: string | null | undefined): VoucherVerifyResult {
   if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
   const pub = base64UrlToBytes(publicKeyB64Url)
