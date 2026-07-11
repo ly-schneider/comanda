@@ -111,8 +111,26 @@ describe("redeemScan", () => {
     const result = await redeemScan(token(payload()), deps)
 
     expect(result.kind).toBe("not-for-stand")
+    if (result.kind !== "not-for-stand") return
+    expect(result.orderId).toBe("order_abc123")
     expect(await deps.ledger.list()).toHaveLength(0)
     expect(deps.enqueue).not.toHaveBeenCalled()
+  })
+
+  it("refuses a blocked order id before matching stand lines, writing nothing", async () => {
+    const deps = makeDeps({ blocked: (id) => id === "order_abc123" })
+    const result = await redeemScan(token(payload()), deps)
+
+    expect(result.kind).toBe("blocked")
+    if (result.kind !== "blocked") return
+    expect(result.orderId).toBe("order_abc123")
+    expect(await deps.ledger.list()).toHaveLength(0)
+    expect(deps.enqueue).not.toHaveBeenCalled()
+  })
+
+  it("ignores the block predicate for a different order id", async () => {
+    const deps = makeDeps({ blocked: (id) => id === "order_other1" })
+    expect((await redeemScan(token(payload()), deps)).kind).toBe("redeemed")
   })
 
   it("multi-product: redeeming one product's line leaves the others redeemable at their own stands", async () => {
