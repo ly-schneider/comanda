@@ -3,6 +3,7 @@ import { memoryKVStore } from "@/lib/station/offline-db"
 import {
   CATALOG_KEY,
   collectShellAssets,
+  PLUGINS_KEY,
   QR_CONFIG_KEY,
   READINESS_KEY,
   type ReadinessRecord,
@@ -26,12 +27,14 @@ const PRODUCTS_OK = res(200, {
   ],
 })
 const STATION_ME_OK = res(200, { products: [{ productId: "p1" }] })
+const PLUGINS_OK = res(200, { items: [{ key: "artist-voucher", name: "Artist Voucher", config: {} }] })
 
 function deps(overrides: Partial<SetupDeps> = {}, routes: Record<string, FakeResponse> = {}): SetupDeps {
   const table: Record<string, FakeResponse> = {
     "/api/v1/qr-config": QR_OK,
     "/api/v1/products": PRODUCTS_OK,
     "/api/v1/stations/me": STATION_ME_OK,
+    "/api/v1/plugins": PLUGINS_OK,
     ...routes,
   }
   return {
@@ -88,6 +91,20 @@ describe("runOfflineSetup", () => {
     ])
     const stored = (await d.store.get<ReadinessRecord>(READINESS_KEY))!
     expect(stored.ready).toBe(true)
+  })
+
+  it("caches the enabled plugin keys for the offline voucher gate", async () => {
+    const d = deps()
+    await runOfflineSetup(d)
+    expect(await d.store.get(PLUGINS_KEY)).toEqual(["artist-voucher"])
+  })
+
+  it("stays ready and caches nothing when the plugin list can't be loaded (vouchers optional)", async () => {
+    const d = deps({}, { "/api/v1/plugins": res(500, {}) })
+    const record = await runOfflineSetup(d)
+    expect(record.ready).toBe(true)
+    expect(record.failures).not.toContain("/api/v1/plugins")
+    expect(await d.store.get(PLUGINS_KEY)).toBeNull()
   })
 
   it("caches the station session so the scanner can render offline after setup", async () => {

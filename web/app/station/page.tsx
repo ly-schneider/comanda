@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, CheckCircle2, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
+import { AlertCircle, Ban, CheckCircle2, Clock, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
@@ -22,12 +22,20 @@ import { useDeviceFetch } from "@/hooks/use-device-fetch"
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
 import { idbLedger, type StationLedger } from "@/lib/station/ledger"
 import { idbKVStore } from "@/lib/station/offline-db"
-import { CATALOG_KEY, type CatalogEntry, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
+import {
+  CATALOG_KEY,
+  type CatalogEntry,
+  getReadiness,
+  PLUGINS_KEY,
+  QR_CONFIG_KEY,
+  type QRConfig,
+} from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
 import { flushOutbox } from "@/lib/station/sync"
 import { idbOutbox, type StationOutbox } from "@/lib/station/sync-queue"
 import { useStationSession } from "@/lib/station/use-station-session"
+import { ARTIST_VOUCHER_PLUGIN_KEY, evaluateVoucher, type VoucherVerdict } from "@/lib/station/voucher"
 import { parseScan } from "@/lib/station-scan"
 
 const SCAN_RESUME_DELAY_MS = 1400
@@ -54,7 +62,7 @@ type OrderLine = {
 
 type ScanStatus = "loading" | "success" | "already-redeemed" | "no-items" | "error"
 
-type ScanResult = {
+type OrderScanResult = {
   key: string
   scanId: string
   kind: "order" | "campaign"
@@ -64,6 +72,25 @@ type ScanResult = {
   orderId?: string
   lines: OrderLine[]
 }
+
+type VoucherVerdictKind = VoucherVerdict["kind"]
+
+type VoucherScanResult = {
+  key: string
+  scanId: string
+  kind: "voucher"
+  verdict: VoucherVerdictKind
+  message?: string
+  scannedAt: Date
+  voucherId?: string
+  label?: string
+  categories?: string[]
+  validFrom?: number // Unix seconds
+  validUntil?: number // Unix seconds
+  syncedAt: number | null
+}
+
+type ScanResult = OrderScanResult | VoucherScanResult
 
 type LineGroup = { key: string; parent: OrderLine; children: OrderLine[] }
 
@@ -172,6 +199,97 @@ const STATUS_STYLES: Record<ScanStatus, StatusMeta> = {
   },
 }
 
+type VoucherMeta = { label: string; text: string; bg: string; dot: string; icon: typeof CheckCircle2 }
+
+const VOUCHER_STYLES: Record<VoucherVerdictKind, VoucherMeta> = {
+  valid: { label: "Gültig", text: "text-success", bg: "bg-success/10", dot: "bg-success", icon: CheckCircle2 },
+  scheduled: {
+    label: "Noch nicht gültig",
+    text: "text-muted-foreground",
+    bg: "bg-card",
+    dot: "bg-muted-foreground/50",
+    icon: Clock,
+  },
+  expired: {
+    label: "Abgelaufen",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: AlertCircle,
+  },
+  revoked: { label: "Gesperrt", text: "text-destructive", bg: "bg-destructive/10", dot: "bg-destructive", icon: Ban },
+  invalid: {
+    label: "Ungültig",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: XCircle,
+  },
+}
+
+function voucherInvalidMessage(verdict: VoucherVerdict): string | undefined {
+  if (verdict.kind !== "invalid") return undefined
+  switch (verdict.reason) {
+    case "not-ready":
+      return "Offline-Einrichtung erforderlich"
+    case "wrong-tenant":
+      return "Falscher Event"
+    default:
+      return "Ungültiger Code"
+  }
+}
+
+function voucherScanResult(
+  key: string,
+  token: string,
+  verdict: VoucherVerdict,
+  syncedAt: number | null
+): VoucherScanResult {
+  const base: VoucherScanResult = {
+    key,
+    scanId: token,
+    kind: "voucher",
+    verdict: verdict.kind,
+    scannedAt: new Date(),
+    syncedAt,
+  }
+  if (verdict.kind === "invalid") return { ...base, message: voucherInvalidMessage(verdict) }
+  const v = verdict.voucher
+  return {
+    ...base,
+    voucherId: v.voucherId,
+    label: v.label,
+    categories: v.categories,
+    validFrom: v.validFrom,
+    validUntil: v.validUntil,
+  }
+}
+
+function voucherSound(kind: VoucherVerdictKind): "success" | "warning" | "error" {
+  if (kind === "valid") return "success"
+  if (kind === "invalid") return "error"
+  return "warning"
+}
+
+function formatVoucherTime(unixSec: number): string {
+  return new Date(unixSec * 1000).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })
+}
+
+function formatSyncAge(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) return `${s} Sek.`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} Min.`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} Std.`
+  return `${Math.floor(h / 24)} Tg.`
+}
+
+function syncedLabel(syncedAt: number | null, now: number): string {
+  if (syncedAt == null) return "Noch nicht synchronisiert"
+  return `Zuletzt synchronisiert vor ${formatSyncAge(now - syncedAt)}`
+}
+
 export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
@@ -190,7 +308,7 @@ export default function StationPage() {
   const systemDisabled = sessionState.phase === "system-disabled"
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
-  const [detailScan, setDetailScan] = useState<ScanResult | null>(null)
+  const [detailScan, setDetailScan] = useState<OrderScanResult | null>(null)
   const [cameraPermission, setCameraPermission] = useState<"idle" | "pending" | "granted" | "denied">("idle")
   const [scannerActive, setScannerActive] = useState(false)
   const [scannerKey, setScannerKey] = useState(0)
@@ -208,7 +326,9 @@ export default function StationPage() {
     publicKey: string | null
     tenantId: string | null
     catalog: Map<string, CatalogProduct>
-  }>({ publicKey: null, tenantId: null, catalog: new Map() })
+    voucherEnabled: boolean
+    syncedAt: number | null
+  }>({ publicKey: null, tenantId: null, catalog: new Map(), voucherEnabled: false, syncedAt: null })
   const ledgerRef = useRef<StationLedger | null>(null)
   if (!ledgerRef.current) ledgerRef.current = idbLedger()
   const outboxRef = useRef<StationOutbox | null>(null)
@@ -234,14 +354,22 @@ export default function StationPage() {
     let cancelled = false
     void (async () => {
       const store = idbKVStore()
-      const [cfg, catalog] = await Promise.all([
+      const [cfg, catalog, plugins, readiness] = await Promise.all([
         store.get<QRConfig>(QR_CONFIG_KEY).catch(() => null),
         store.get<CatalogEntry[]>(CATALOG_KEY).catch(() => null),
+        store.get<string[]>(PLUGINS_KEY).catch(() => null),
+        getReadiness(store).catch(() => null),
       ])
       if (cancelled) return
       const map = new Map<string, CatalogProduct>()
       for (const entry of catalog ?? []) map.set(entry.id, { name: entry.name, image: entry.image })
-      offlineRef.current = { publicKey: cfg?.publicKey ?? null, tenantId: cfg?.tenantId ?? null, catalog: map }
+      offlineRef.current = {
+        publicKey: cfg?.publicKey ?? null,
+        tenantId: cfg?.tenantId ?? null,
+        catalog: map,
+        voucherEnabled: (plugins ?? []).includes(ARTIST_VOUCHER_PLUGIN_KEY),
+        syncedAt: readiness?.completedAt ?? null,
+      }
     })()
     return () => {
       cancelled = true
@@ -387,8 +515,9 @@ export default function StationPage() {
     setScans((prev) => [scan, ...prev].slice(0, HISTORY_LIMIT))
   }, [])
 
-  const updateScan = useCallback((key: string, patch: Partial<ScanResult>) => {
-    setScans((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)))
+  // Voucher verdicts are pushed final; only order/campaign scans get patched.
+  const updateScan = useCallback((key: string, patch: Partial<OrderScanResult>) => {
+    setScans((prev) => prev.map((s) => (s.key === key && s.kind !== "voucher" ? { ...s, ...patch } : s)))
   }, [])
 
   // Drains queued redemptions to the server. A no-op when offline; the flush
@@ -452,6 +581,28 @@ export default function StationPage() {
 
       setError(null)
       const key = `${parsed.kind}-${now}`
+
+      if (parsed.kind === "voucher") {
+        const offline = offlineRef.current
+        // Only honour vouchers when the plugin is enabled for this tenant
+        // (cached during offline setup); otherwise it's an unrecognised code.
+        if (!offline.voucherEnabled) {
+          playScanSound("error")
+          setError("Ungültiger QR-Code")
+          scheduleResume()
+          return
+        }
+        const verdict = evaluateVoucher(parsed.token, {
+          publicKey: offline.publicKey,
+          stationTenantId: offline.tenantId,
+          now: Date.now(),
+        })
+        pushScan(voucherScanResult(key, parsed.token, verdict, offline.syncedAt))
+        playScanSound(voucherSound(verdict.kind))
+        scheduleResume()
+        return
+      }
+
       pushScan({
         key,
         scanId: parsed.token,
@@ -831,7 +982,8 @@ export default function StationPage() {
   )
 }
 
-function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: ScanResult) => void }) {
+function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
+  if (scan.kind === "voucher") return <VoucherScanCard scan={scan} />
   const meta = STATUS_STYLES[scan.status]
   const Icon = meta.icon
   const matched = scan.lines
@@ -916,7 +1068,8 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
   )
 }
 
-function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: ScanResult) => void }) {
+function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
+  if (scan.kind === "voucher") return <VoucherScanRow scan={scan} />
   const meta = STATUS_STYLES[scan.status]
   const itemCount = scan.lines.reduce((acc, l) => acc + l.quantity, 0)
   const canOpenDetail = !!scan.orderId && !!onOpenDetail
@@ -946,6 +1099,73 @@ function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sca
           </button>
         )}
       </div>
+    </li>
+  )
+}
+
+function VoucherScanCard({ scan }: { scan: VoucherScanResult }) {
+  const meta = VOUCHER_STYLES[scan.verdict]
+  const Icon = meta.icon
+  const isValid = scan.verdict === "valid"
+  return (
+    <div className={`${meta.bg} animate-in fade-in slide-in-from-bottom-1 rounded-2xl duration-300 ease-out`}>
+      <div className="flex flex-col items-center gap-2 px-5 pt-6 pb-5 text-center">
+        <Icon className={`${isValid ? "h-14 w-14" : "h-9 w-9"} ${meta.text}`} aria-hidden />
+        <span className={`font-primary text-2xl leading-none font-semibold tracking-wide uppercase ${meta.text}`}>
+          {meta.label}
+        </span>
+
+        {scan.label && <p className="text-foreground text-lg font-medium">{scan.label}</p>}
+
+        {scan.categories && scan.categories.length > 0 && (
+          <div className="mt-1 flex flex-col items-center gap-1.5">
+            <span className="text-muted-foreground font-primary text-[11px] tracking-[0.08em] uppercase">Deckt ab</span>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {scan.categories.map((c) => (
+                <span key={c} className="border-border text-foreground/80 rounded-lg border px-2 py-0.5 text-sm">
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isValid && scan.validUntil != null && (
+          <p className="text-muted-foreground text-sm">Gültig bis {formatVoucherTime(scan.validUntil)}</p>
+        )}
+        {scan.verdict === "scheduled" && scan.validFrom != null && (
+          <p className="text-muted-foreground text-sm">Gültig ab {formatVoucherTime(scan.validFrom)}</p>
+        )}
+        {scan.verdict === "expired" && scan.validUntil != null && (
+          <p className="text-muted-foreground text-sm">Abgelaufen am {formatVoucherTime(scan.validUntil)}</p>
+        )}
+        {scan.message && <p className={`text-sm ${meta.text}`}>{scan.message}</p>}
+
+        {scan.voucherId && (
+          <p className="text-muted-foreground mt-1 font-mono text-xs tracking-wide">Code: {scan.voucherId}</p>
+        )}
+        <p className="text-muted-foreground mt-1 text-[11px]">{syncedLabel(scan.syncedAt, Date.now())}</p>
+      </div>
+    </div>
+  )
+}
+
+function VoucherScanRow({ scan }: { scan: VoucherScanResult }) {
+  const meta = VOUCHER_STYLES[scan.verdict]
+  return (
+    <li className={`${meta.bg} flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm`}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
+        <span
+          className={`font-primary mt-[2px] shrink-0 text-[11px] leading-none tracking-wide uppercase ${meta.text}`}
+        >
+          {meta.label}
+        </span>
+        {scan.label && <span className="text-muted-foreground truncate text-xs">{scan.label}</span>}
+      </div>
+      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        {scan.scannedAt.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}
+      </span>
     </li>
   )
 }
@@ -1050,7 +1270,7 @@ function OrderDetailDialog({
   bearerToken,
   onClose,
 }: {
-  scan: ScanResult | null
+  scan: OrderScanResult | null
   online: boolean
   bearerToken: string
   onClose: () => void
