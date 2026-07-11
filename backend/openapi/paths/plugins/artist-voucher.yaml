@@ -92,6 +92,9 @@ print:
         required: false
         schema:
           type: integer
+          minimum: 1
+          maximum: 500
+          default: 5
     responses:
       "200":
         description: PDF document of voucher slips
