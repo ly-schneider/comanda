@@ -393,6 +393,13 @@ func (m *TenantMiddleware) Tx(next http.Handler) http.Handler {
 
 		if status := ww.Status(); status == 0 || status < http.StatusBadRequest {
 			if err := tx.Commit(); err != nil {
+				// A canceled request context (client disconnect or deadline) makes
+				// database/sql auto-roll-back the tx, so Commit comes back as
+				// context.Canceled or ErrTxDone. The client is already gone and
+				// nothing was persisted — expected, not an operational error.
+				if errors.Is(err, sql.ErrTxDone) || ctx.Err() != nil {
+					return
+				}
 				m.logger.Error("tenant tx: commit", zap.Error(err))
 				return
 			}

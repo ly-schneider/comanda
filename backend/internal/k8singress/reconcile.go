@@ -72,9 +72,16 @@ func (r *reconciler) reconcileDomains(ctx context.Context, domains []domain) err
 		// Leaving the id out of `live` also makes collectGarbage tear down any
 		// doomed objects a prior reconcile already created for it.
 		if !dnsname.IsPublicFQDN(d.hostname) {
-			r.logger.Warn("k8singress: skipping non-issuable hostname; not requesting a certificate",
-				zap.String("domainId", d.id),
-				zap.String("hostname", d.hostname))
+			// Warn once, on the transition into failed — not every pass. A permanently
+			// non-issuable row (seed data like "localhost"/"127.0.0.1", manual SQL)
+			// stays in the verified set forever, so an unconditional warn here floods
+			// the logs at the reconcile cadence. Gate it on the same changed-status
+			// check writeCertStatus uses so a stuck row goes quiet after the first pass.
+			if d.certStatus != tenantdomain.CertStatusFailed {
+				r.logger.Warn("k8singress: skipping non-issuable hostname; not requesting a certificate",
+					zap.String("domainId", d.id),
+					zap.String("hostname", d.hostname))
+			}
 			if err := r.writeCertStatus(ctx, d, tenantdomain.CertStatusFailed); err != nil {
 				r.logger.Warn("k8singress: cert status write failed",
 					zap.String("domainId", d.id), zap.Error(err))
