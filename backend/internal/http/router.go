@@ -259,14 +259,6 @@ func NewRouter(
 			ops.Post("/devices/pairings/{code}", wrapper.CompleteDevicePairing)
 
 			ops.Get("/events", wrapper.ListEvents)
-
-			ops.Post("/staff-perks", wrapper.CreateVolunteerCampaign)
-			ops.Get("/staff-perks", wrapper.ListVolunteerCampaigns)
-			ops.Get("/staff-perks/{campaignId}", wrapper.GetVolunteerCampaign)
-			ops.Patch("/staff-perks/{campaignId}", wrapper.UpdateVolunteerCampaign)
-			ops.Post("/staff-perks/{campaignId}/end", wrapper.EndVolunteerCampaign)
-			ops.Post("/staff-perks/{campaignId}/rotate-token", wrapper.RotateVolunteerCampaignToken)
-			ops.Get("/staff-perks/{campaignId}/print.pdf", wrapper.PrintStaffPerkSlips)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────

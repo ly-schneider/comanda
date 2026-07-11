@@ -1,0 +1,129 @@
+VolunteerCampaignProductInput:
+  type: object
+  required: [productId, quantity]
+  properties:
+    productId:
+      type: string
+    quantity:
+      type: integer
+
+VolunteerCampaignRedemption:
+  type: object
+  required: [id, orderId, createdAt]
+  properties:
+    id:
+      type: string
+    orderId:
+      type: string
+    createdAt:
+      type: string
+      format: date-time
+
+VolunteerCampaign:
+  type: object
+  required: [id, claimToken, name, accessCode, status, maxRedemptions, redemptionCount, createdAt, updatedAt]
+  properties:
+    id:
+      type: string
+    claimToken:
+      type: string
+    name:
+      type: string
+    accessCode:
+      type: string
+    validFrom:
+      type: string
+      format: date-time
+      nullable: true
+    validUntil:
+      type: string
+      format: date-time
+      nullable: true
+    status:
+      type: string
+    maxRedemptions:
+      type: integer
+    redemptionCount:
+      type: integer
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+VolunteerCampaignDetail:
+  allOf:
+    - $ref: "#/VolunteerCampaign"
+    - type: object
+      required: [products, redemptions]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "../../schemas/staff-perks.yaml#/VolunteerCampaignProduct"
+        redemptions:
+          type: array
+          items:
+            $ref: "#/VolunteerCampaignRedemption"
+
+VolunteerCampaignList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/VolunteerCampaign"
+
+VolunteerCampaignCreate:
+  type: object
+  required: [name, products, maxRedemptions]
+  properties:
+    name:
+      type: string
+    validFrom:
+      type: string
+      format: date-time
+      nullable: true
+    validUntil:
+      type: string
+      format: date-time
+      nullable: true
+    products:
+      type: array
+      items:
+        $ref: "#/VolunteerCampaignProductInput"
+    maxRedemptions:
+      type: integer
+
+VolunteerCampaignUpdate:
+  type: object
+  required: [name, status]
+  properties:
+    name:
+      type: string
+    validFrom:
+      type: string
+      format: date-time
+      nullable: true
+    validUntil:
+      type: string
+      format: date-time
+      nullable: true
+    status:
+      type: string
+    products:
+      type: array
+      items:
+        $ref: "#/VolunteerCampaignProductInput"
+    maxRedemptions:
+      type: integer
+      nullable: true
+
+VolunteerCampaignToken:
+  type: object
+  required: [claimToken]
+  properties:
+    claimToken:
+      type: string

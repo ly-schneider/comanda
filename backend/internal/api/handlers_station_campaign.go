@@ -40,7 +40,7 @@ func (h *Handlers) RedeemCampaignAtStation(w http.ResponseWriter, r *http.Reques
 
 	idemKey := r.Header.Get("Idempotency-Key")
 
-	result, err := h.volunteers.RedeemSharedQR(ctx, token, deviceID, idemKey)
+	result, err := h.claims.RedeemSharedQR(ctx, token, deviceID, idemKey)
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerCampaignNotFound) ||
 			errors.Is(err, service.ErrVolunteerCampaignInactive) ||

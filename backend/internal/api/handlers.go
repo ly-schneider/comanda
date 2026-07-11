@@ -34,7 +34,7 @@ type Handlers struct {
 	email         service.EmailService
 	users         service.UserService
 	devices       service.DeviceService
-	volunteers    service.VolunteerService
+	claims        service.CampaignClaimService
 	androidUpdate service.AndroidUpdateService
 	domains       service.DomainService
 	tenants       service.TenantService
@@ -78,7 +78,7 @@ type HandlersDeps struct {
 	Email         service.EmailService
 	Users         service.UserService
 	Devices       service.DeviceService
-	Volunteers    service.VolunteerService
+	Claims        service.CampaignClaimService
 	AndroidUpdate service.AndroidUpdateService
 	Domains       service.DomainService
 	Tenants       service.TenantService
@@ -112,7 +112,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		email:         deps.Email,
 		users:         deps.Users,
 		devices:       deps.Devices,
-		volunteers:    deps.Volunteers,
+		claims:        deps.Claims,
 		androidUpdate: deps.AndroidUpdate,
 		domains:       deps.Domains,
 		tenants:       deps.Tenants,

@@ -9,6 +9,7 @@ import (
 
 	"backend/internal/database"
 	"backend/internal/generated/ent/order"
+	"backend/internal/plugin/staffperks"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -70,23 +71,27 @@ func TestTenantRequest_VolunteerCreateAndRedeem(t *testing.T) {
 	repos := NewRepositories(client)
 	cfg := TestConfig()
 	stations := service.NewStationService(cfg, client, repos.Device, repos.DeviceProduct, repos.OrderLine, repos.OrderRedemption, repos.Idempotency)
-	svc := service.NewVolunteerService(client, repos.VolunteerCampaign, repos.VolunteerRedeem, repos.Order, repos.OrderLine, repos.OrderPayment, stations)
+	svc := staffperks.NewService(
+		staffperks.NewVolunteerCampaignRepository(client),
+		staffperks.NewVolunteerRedemptionRepository(client),
+		repos.Order, repos.OrderLine, repos.OrderPayment, stations,
+	)
 
-	campaign, err := svc.CreateCampaign(ctx, service.CreateVolunteerCampaignInput{
+	campaign, err := svc.CreateCampaign(ctx, staffperks.CreateCampaignInput{
 		Name:           "Crew Meal",
 		MaxRedemptions: 5,
-		Products:       []repository.VolunteerCampaignProductInput{{ProductID: productIDs[0], Quantity: 1}},
+		Products:       []staffperks.VolunteerCampaignProductInput{{ProductID: productIDs[0], Quantity: 1}},
 	})
 	require.NoError(t, err, "CreateCampaign must not error inside the request tx (no nested tx / RLS block)")
 	require.NotNil(t, campaign)
 
 	// Update must also work (was an H1 site).
 	max := 10
-	_, err = svc.UpdateCampaign(ctx, campaign.ID, service.UpdateVolunteerCampaignInput{
+	_, err = svc.UpdateCampaign(ctx, campaign.ID, staffperks.UpdateCampaignInput{
 		Name:           "Crew Meal v2",
 		Status:         campaign.Status,
 		MaxRedemptions: &max,
-		Products:       []repository.VolunteerCampaignProductInput{{ProductID: productIDs[0], Quantity: 2}},
+		Products:       []staffperks.VolunteerCampaignProductInput{{ProductID: productIDs[0], Quantity: 2}},
 	})
 	require.NoError(t, err, "UpdateCampaign must not error inside the request tx")
 

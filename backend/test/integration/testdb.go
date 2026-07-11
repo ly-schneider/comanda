@@ -224,51 +224,47 @@ func (tdb *TestDB) Close() {
 
 // Repositories holds all repository instances for tests.
 type Repositories struct {
-	Client            *ent.Client
-	Category          pgRepo.CategoryRepository
-	Product           *pgRepo.ProductRepository
-	ProductVariant    pgRepo.ProductVariantRepository
-	Jeton             pgRepo.JetonRepository
-	BundleSlot        pgRepo.BundleSlotRepository
-	BundleSlotOption  pgRepo.BundleSlotOptionRepository
-	Order             pgRepo.OrderRepository
-	OrderLine         pgRepo.OrderLineRepository
-	OrderPayment      pgRepo.OrderPaymentRepository
-	OrderRedemption   pgRepo.OrderLineRedemptionRepository
-	Refund            pgRepo.RefundRepository
-	Inventory         pgRepo.InventoryLedgerRepository
-	Device            pgRepo.DeviceRepository
-	DeviceProduct     pgRepo.DeviceProductRepository
-	DeviceBinding     pgRepo.DeviceBindingRepository
-	Settings          pgRepo.SettingsRepository
-	Idempotency       pgRepo.IdempotencyRepository
-	VolunteerCampaign pgRepo.VolunteerCampaignRepository
-	VolunteerRedeem   pgRepo.VolunteerRedemptionRepository
+	Client           *ent.Client
+	Category         pgRepo.CategoryRepository
+	Product          *pgRepo.ProductRepository
+	ProductVariant   pgRepo.ProductVariantRepository
+	Jeton            pgRepo.JetonRepository
+	BundleSlot       pgRepo.BundleSlotRepository
+	BundleSlotOption pgRepo.BundleSlotOptionRepository
+	Order            pgRepo.OrderRepository
+	OrderLine        pgRepo.OrderLineRepository
+	OrderPayment     pgRepo.OrderPaymentRepository
+	OrderRedemption  pgRepo.OrderLineRedemptionRepository
+	Refund           pgRepo.RefundRepository
+	Inventory        pgRepo.InventoryLedgerRepository
+	Device           pgRepo.DeviceRepository
+	DeviceProduct    pgRepo.DeviceProductRepository
+	DeviceBinding    pgRepo.DeviceBindingRepository
+	Settings         pgRepo.SettingsRepository
+	Idempotency      pgRepo.IdempotencyRepository
 }
 
 // NewRepositories creates all repository instances from an Ent client.
 func NewRepositories(client *ent.Client) *Repositories {
 	return &Repositories{
-		Client:            client,
-		Category:          pgRepo.NewCategoryRepository(client),
-		Product:           pgRepo.NewProductRepository(client),
-		ProductVariant:    pgRepo.NewProductVariantRepository(client),
-		Jeton:             pgRepo.NewJetonRepository(client),
-		BundleSlot:        pgRepo.NewBundleSlotRepository(client),
-		BundleSlotOption:  pgRepo.NewBundleSlotOptionRepository(client),
-		Order:             pgRepo.NewOrderRepository(client),
-		OrderLine:         pgRepo.NewOrderLineRepository(client),
-		OrderPayment:      pgRepo.NewOrderPaymentRepository(client),
-		OrderRedemption:   pgRepo.NewOrderLineRedemptionRepository(client),
-		Refund:            pgRepo.NewRefundRepository(client),
-		Inventory:         pgRepo.NewInventoryLedgerRepository(client),
-		Device:            pgRepo.NewDeviceRepository(client),
-		DeviceProduct:     pgRepo.NewDeviceProductRepository(client),
-		DeviceBinding:     pgRepo.NewCachedDeviceBindingRepository(pgRepo.NewDeviceBindingRepository(client)),
-		Settings:          pgRepo.NewSettingsRepository(client),
-		Idempotency:       pgRepo.NewIdempotencyRepository(client),
-		VolunteerCampaign: pgRepo.NewVolunteerCampaignRepository(client),
-		VolunteerRedeem:   pgRepo.NewVolunteerRedemptionRepository(client),
+		Client:           client,
+		Category:         pgRepo.NewCategoryRepository(client),
+		Product:          pgRepo.NewProductRepository(client),
+		ProductVariant:   pgRepo.NewProductVariantRepository(client),
+		Jeton:            pgRepo.NewJetonRepository(client),
+		BundleSlot:       pgRepo.NewBundleSlotRepository(client),
+		BundleSlotOption: pgRepo.NewBundleSlotOptionRepository(client),
+		Order:            pgRepo.NewOrderRepository(client),
+		OrderLine:        pgRepo.NewOrderLineRepository(client),
+		OrderPayment:     pgRepo.NewOrderPaymentRepository(client),
+		OrderRedemption:  pgRepo.NewOrderLineRedemptionRepository(client),
+		Refund:           pgRepo.NewRefundRepository(client),
+		Inventory:        pgRepo.NewInventoryLedgerRepository(client),
+		Device:           pgRepo.NewDeviceRepository(client),
+		DeviceProduct:    pgRepo.NewDeviceProductRepository(client),
+		DeviceBinding:    pgRepo.NewCachedDeviceBindingRepository(pgRepo.NewDeviceBindingRepository(client)),
+		Settings:         pgRepo.NewSettingsRepository(client),
+		Idempotency:      pgRepo.NewIdempotencyRepository(client),
 	}
 }
 

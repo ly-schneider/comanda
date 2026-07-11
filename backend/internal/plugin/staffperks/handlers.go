@@ -1,24 +1,38 @@
-package api
+package staffperks
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
+	"backend/internal/generated/api/generated"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/volunteercampaign"
-	"backend/internal/repository"
+	"backend/internal/pdf"
 	"backend/internal/response"
-	"backend/internal/service"
+	coreservice "backend/internal/service"
 
 	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
 const (
-	volunteerSessionCookie = "hsclaim_session"
+	printSlipDefaultCount = 30
+	printSlipMinCount     = 1
+	printSlipMaxCount     = 500
 )
+
+type handlers struct {
+	generated.Unimplemented
+	rt *runtime
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
+}
 
 type volunteerCampaignProductPayload struct {
 	ProductID string `json:"productId"`
@@ -40,10 +54,6 @@ type updateVolunteerCampaignRequest struct {
 	Status         string                            `json:"status"`
 	Products       []volunteerCampaignProductPayload `json:"products,omitempty"`
 	MaxRedemptions *int                              `json:"maxRedemptions,omitempty"`
-}
-
-type verifyAccessRequest struct {
-	Code string `json:"code"`
 }
 
 type adminCampaignResponse struct {
@@ -79,34 +89,20 @@ type adminCampaignRedemptionItem struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-type claimCampaignPublic struct {
-	Name       string     `json:"name"`
-	ValidFrom  *time.Time `json:"validFrom,omitempty"`
-	ValidUntil *time.Time `json:"validUntil,omitempty"`
-	Status     string     `json:"status"`
-}
-
-type claimCampaignResponse struct {
-	Campaign  claimCampaignPublic        `json:"campaign"`
-	Products  []adminCampaignProductItem `json:"products"`
-	QRPayload string                     `json:"qrPayload"`
-}
-
-// CreateVolunteerCampaign (POST /v1/staff-perks)
-func (h *Handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
+func (h *handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Request) {
 	var req createVolunteerCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
-	products := make([]repository.VolunteerCampaignProductInput, 0, len(req.Products))
+	products := make([]VolunteerCampaignProductInput, 0, len(req.Products))
 	for _, p := range req.Products {
-		products = append(products, repository.VolunteerCampaignProductInput{
+		products = append(products, VolunteerCampaignProductInput{
 			ProductID: p.ProductID,
 			Quantity:  p.Quantity,
 		})
 	}
-	campaign, err := h.volunteers.CreateCampaign(r.Context(), service.CreateVolunteerCampaignInput{
+	campaign, err := h.rt.svc.CreateCampaign(r.Context(), CreateCampaignInput{
 		Name:           req.Name,
 		ValidFrom:      req.ValidFrom,
 		ValidUntil:     req.ValidUntil,
@@ -114,37 +110,35 @@ func (h *Handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 		MaxRedemptions: req.MaxRedemptions,
 	})
 	if err != nil {
-		h.writeVolunteerError(w, err)
+		h.writeCampaignError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusCreated, campaignToAdminResponse(campaign))
 }
 
-// ListVolunteerCampaigns (GET /v1/staff-perks)
-func (h *Handlers) ListVolunteerCampaigns(w http.ResponseWriter, r *http.Request) {
-	summaries, err := h.volunteers.ListCampaigns(r.Context())
+func (h *handlers) ListVolunteerCampaigns(w http.ResponseWriter, r *http.Request) {
+	campaigns, err := h.rt.svc.ListCampaigns(r.Context())
 	if err != nil {
-		h.logger.Error("list volunteer campaigns", zap.Error(err))
+		h.rt.logger.Error("list volunteer campaigns", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
 		return
 	}
-	items := make([]adminCampaignResponse, 0, len(summaries))
-	for _, s := range summaries {
-		items = append(items, campaignToAdminResponse(s.Campaign))
+	items := make([]adminCampaignResponse, 0, len(campaigns))
+	for _, c := range campaigns {
+		items = append(items, campaignToAdminResponse(c))
 	}
 	response.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-// GetVolunteerCampaign (GET /v1/staff-perks/{campaignId})
-func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+func (h *handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
 	}
-	detail, err := h.volunteers.GetCampaign(r.Context(), id)
+	detail, err := h.rt.svc.GetCampaign(r.Context(), id)
 	if err != nil {
-		h.writeVolunteerError(w, err)
+		h.writeCampaignError(w, err)
 		return
 	}
 	products := make([]adminCampaignProductItem, 0, len(detail.Products))
@@ -172,8 +166,7 @@ func (h *Handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 	response.WriteJSON(w, http.StatusOK, resp)
 }
 
-// UpdateVolunteerCampaign (PATCH /v1/staff-perks/{campaignId})
-func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+func (h *handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
@@ -192,14 +185,14 @@ func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 		}
 		status = volunteercampaign.Status(req.Status)
 	}
-	products := make([]repository.VolunteerCampaignProductInput, 0, len(req.Products))
+	products := make([]VolunteerCampaignProductInput, 0, len(req.Products))
 	for _, p := range req.Products {
-		products = append(products, repository.VolunteerCampaignProductInput{
+		products = append(products, VolunteerCampaignProductInput{
 			ProductID: p.ProductID,
 			Quantity:  p.Quantity,
 		})
 	}
-	campaign, err := h.volunteers.UpdateCampaign(r.Context(), id, service.UpdateVolunteerCampaignInput{
+	campaign, err := h.rt.svc.UpdateCampaign(r.Context(), id, UpdateCampaignInput{
 		Name:           req.Name,
 		ValidFrom:      req.ValidFrom,
 		ValidUntil:     req.ValidUntil,
@@ -208,123 +201,110 @@ func (h *Handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 		MaxRedemptions: req.MaxRedemptions,
 	})
 	if err != nil {
-		h.writeVolunteerError(w, err)
+		h.writeCampaignError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, campaignToAdminResponse(campaign))
 }
 
-// EndVolunteerCampaign (POST /v1/staff-perks/{campaignId}/end)
-func (h *Handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
+func (h *handlers) EndVolunteerCampaign(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
 	}
-	if err := h.volunteers.EndCampaign(r.Context(), id); err != nil {
-		h.writeVolunteerError(w, err)
+	if err := h.rt.svc.EndCampaign(r.Context(), id); err != nil {
+		h.writeCampaignError(w, err)
 		return
 	}
 	response.WriteNoContent(w)
 }
 
-// RotateVolunteerCampaignToken (POST /v1/staff-perks/{campaignId}/rotate-token)
-func (h *Handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.Request, campaignId string) {
+func (h *handlers) RotateVolunteerCampaignToken(w http.ResponseWriter, r *http.Request, campaignId string) {
 	id := campaignId
 	if !nanoid.Valid(id) {
 		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
 	}
-	newToken, err := h.volunteers.RotateClaimToken(r.Context(), id)
+	newToken, err := h.rt.svc.RotateClaimToken(r.Context(), id)
 	if err != nil {
-		h.writeVolunteerError(w, err)
+		h.writeCampaignError(w, err)
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, map[string]any{"claimToken": newToken})
 }
 
-// VerifyClaimAccess (POST /v1/claim/{token}/auth)
-func (h *Handlers) VerifyClaimAccess(w http.ResponseWriter, r *http.Request, token string) {
-	if !nanoid.Valid(token) {
-		writeError(w, http.StatusBadRequest, "invalid_token", "Invalid token")
+// PrintStaffPerkSlips streams a PDF of printable QR slips for a campaign.
+func (h *handlers) PrintStaffPerkSlips(w http.ResponseWriter, r *http.Request, campaignId string) {
+	id := campaignId
+	if !nanoid.Valid(id) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
 		return
 	}
-	var req verifyAccessRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-		return
-	}
-	existing := readSessionCookie(r)
-	sessionID, err := h.volunteers.VerifyAccess(r.Context(), token, req.Code)
-	if err != nil {
-		h.writeVolunteerError(w, err)
-		return
-	}
-	if existing != "" {
-		sessionID = existing
-	}
-	writeSessionCookie(w, r, sessionID)
-	response.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
 
-// GetClaimCampaign (GET /v1/claim/{token})
-func (h *Handlers) GetClaimCampaign(w http.ResponseWriter, r *http.Request, token string) {
-	if !nanoid.Valid(token) {
-		writeError(w, http.StatusBadRequest, "invalid_token", "Invalid token")
-		return
+	count := printSlipDefaultCount
+	if v := r.URL.Query().Get("count"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < printSlipMinCount || n > printSlipMaxCount {
+			writeError(w, http.StatusBadRequest, "invalid_count",
+				fmt.Sprintf("count must be between %d and %d", printSlipMinCount, printSlipMaxCount))
+			return
+		}
+		count = n
 	}
-	if readSessionCookie(r) == "" {
-		writeError(w, http.StatusUnauthorized, "auth_required", "Access code required.")
-		return
-	}
-	view, err := h.volunteers.GetClaimView(r.Context(), token)
+
+	detail, err := h.rt.svc.GetCampaign(r.Context(), id)
 	if err != nil {
-		h.writeVolunteerError(w, err)
+		h.writeCampaignError(w, err)
 		return
 	}
-	products := make([]adminCampaignProductItem, 0, len(view.Products))
-	for _, p := range view.Products {
-		products = append(products, adminCampaignProductItem{
-			ProductID:    p.ProductID,
-			ProductName:  p.ProductName,
-			ProductImage: p.ProductImage,
-			Quantity:     p.Quantity,
+
+	products := make([]pdf.SlipProduct, 0, len(detail.Products))
+	for _, p := range detail.Products {
+		products = append(products, pdf.SlipProduct{
+			Name:     p.ProductName,
+			Quantity: p.Quantity,
 		})
 	}
-	response.WriteJSON(w, http.StatusOK, claimCampaignResponse{
-		Campaign: claimCampaignPublic{
-			Name:       view.Campaign.Name,
-			ValidFrom:  view.Campaign.ValidFrom,
-			ValidUntil: view.Campaign.ValidUntil,
-			Status:     string(view.Campaign.Status),
-		},
-		Products:  products,
-		QRPayload: view.QRPayload,
+
+	body, err := pdf.RenderStaffPerkSlips(pdf.SlipInput{
+		CampaignName: detail.Campaign.Name,
+		QRPayload:    buildQRPayload(detail.Campaign.ClaimToken),
+		Products:     products,
+		Count:        count,
 	})
+	if err != nil {
+		h.rt.logger.Error("render staff perk slips", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "render_failed", err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="staff-perk-%s.pdf"`, detail.Campaign.ID))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	_, _ = w.Write(body)
 }
 
-func (h *Handlers) writeVolunteerError(w http.ResponseWriter, err error) {
+func (h *handlers) writeCampaignError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, service.ErrVolunteerCampaignNotFound):
+	case errors.Is(err, coreservice.ErrVolunteerCampaignNotFound):
 		writeError(w, http.StatusNotFound, "campaign_not_found", "The volunteer campaign does not exist.")
-	case errors.Is(err, service.ErrVolunteerCampaignInactive):
+	case errors.Is(err, coreservice.ErrVolunteerCampaignInactive):
 		writeError(w, http.StatusGone, "campaign_inactive", "This volunteer campaign is no longer active.")
-	case errors.Is(err, service.ErrVolunteerCampaignOutsideValid):
+	case errors.Is(err, coreservice.ErrVolunteerCampaignOutsideValid):
 		writeError(w, http.StatusGone, "campaign_outside_validity", "This volunteer campaign is outside its validity window.")
-	case errors.Is(err, service.ErrVolunteerAccessCodeInvalid):
+	case errors.Is(err, coreservice.ErrVolunteerAccessCodeInvalid):
 		writeError(w, http.StatusUnauthorized, "invalid_access_code", "The access code is incorrect.")
-	case errors.Is(err, service.ErrVolunteerCampaignInvalidAccess):
-		writeError(w, http.StatusBadRequest, "invalid_access_code_format", "Access code must be 4 digits.")
-	case errors.Is(err, service.ErrVolunteerCampaignHasNoProducts):
+	case errors.Is(err, coreservice.ErrVolunteerCampaignHasNoProducts):
 		writeError(w, http.StatusBadRequest, "no_products", "At least one product is required.")
-	case errors.Is(err, service.ErrVolunteerMaxRedemptionsReached):
+	case errors.Is(err, coreservice.ErrVolunteerMaxRedemptionsReached):
 		writeError(w, http.StatusConflict, "max_redemptions_reached", "This campaign has reached its maximum number of redemptions.")
-	case errors.Is(err, service.ErrVolunteerMaxBelowCount):
+	case errors.Is(err, coreservice.ErrVolunteerMaxBelowCount):
 		writeError(w, http.StatusConflict, "max_redemptions_below_count", "New maximum cannot be lower than the current redemption count.")
-	case errors.Is(err, service.ErrVolunteerStationNoMatchingProducts):
+	case errors.Is(err, coreservice.ErrVolunteerStationNoMatchingProducts):
 		writeError(w, http.StatusConflict, "station_no_matching_products", "Diese Station bietet keine Artikel aus diesem Gutschein an.")
 	default:
-		h.logger.Error("volunteer error", zap.Error(err))
+		h.rt.logger.Error("volunteer error", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
 	}
 }
@@ -343,25 +323,4 @@ func campaignToAdminResponse(c *ent.VolunteerCampaign) adminCampaignResponse {
 		CreatedAt:       c.CreatedAt,
 		UpdatedAt:       c.UpdatedAt,
 	}
-}
-
-func readSessionCookie(r *http.Request) string {
-	c, err := r.Cookie(volunteerSessionCookie)
-	if err != nil {
-		return ""
-	}
-	return c.Value
-}
-
-func writeSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string) {
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	http.SetCookie(w, &http.Cookie{
-		Name:     volunteerSessionCookie,
-		Value:    sessionID,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int((24 * time.Hour).Seconds()),
-	})
 }
