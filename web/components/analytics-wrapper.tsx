@@ -5,7 +5,7 @@ import Script from "next/script"
 import { useEffect, useState } from "react"
 import { appEnvFromHost } from "@/lib/tenant"
 
-const UMAMI_WEBSITE_ID = "e910e40b-977e-459e-9f12-6cb95f44fc67"
+const UMAMI_WEBSITE_ID = "3090be94-b431-4787-b053-904fc918e899"
 const EXCLUDED_PATHS = ["/pos", "/station"]
 
 export default function AnalyticsWrapper() {
