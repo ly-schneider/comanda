@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
 import QrScanner, { type QrScannerControls, type QrScanResult } from "@/components/qr-scanner"
+import { StationBlockList, syncedLabel } from "@/components/station/block-list-panel"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
 import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
@@ -20,16 +21,18 @@ import { useBranding } from "@/contexts/branding-context"
 import { useDeviceFetch } from "@/hooks/use-device-fetch"
 
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
+import {
+  addManualBlock,
+  type BlockState,
+  effectiveBlockSet,
+  EMPTY_BLOCK_STATE,
+  loadBlockState,
+  reconcileRevocations,
+  removeManualBlock,
+} from "@/lib/station/block-list"
 import { idbLedger, type StationLedger } from "@/lib/station/ledger"
 import { idbKVStore } from "@/lib/station/offline-db"
-import {
-  CATALOG_KEY,
-  type CatalogEntry,
-  getReadiness,
-  PLUGINS_KEY,
-  QR_CONFIG_KEY,
-  type QRConfig,
-} from "@/lib/station/offline-setup"
+import { CATALOG_KEY, type CatalogEntry, PLUGINS_KEY, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
 import { flushOutbox } from "@/lib/station/sync"
@@ -60,7 +63,7 @@ type OrderLine = {
   childLines?: OrderLine[]
 }
 
-type ScanStatus = "loading" | "success" | "already-redeemed" | "no-items" | "error"
+type ScanStatus = "loading" | "success" | "already-redeemed" | "no-items" | "blocked" | "error"
 
 type OrderScanResult = {
   key: string
@@ -70,6 +73,9 @@ type OrderScanResult = {
   message?: string
   scannedAt: Date
   orderId?: string
+  // Decoded order nanoid the one-tap block acts on; separate from orderId so a
+  // blocked / not-for-stand scan can be blocked without enabling the detail dialog.
+  blockableId?: string
   lines: OrderLine[]
 }
 
@@ -190,6 +196,13 @@ const STATUS_STYLES: Record<ScanStatus, StatusMeta> = {
     dot: "bg-muted-foreground/50",
     icon: PackageOpen,
   },
+  blocked: {
+    label: "Gesperrt",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: Ban,
+  },
   error: {
     label: "Fehler",
     text: "text-destructive",
@@ -275,21 +288,6 @@ function formatVoucherTime(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })
 }
 
-function formatSyncAge(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s} Sek.`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m} Min.`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} Std.`
-  return `${Math.floor(h / 24)} Tg.`
-}
-
-function syncedLabel(syncedAt: number | null, now: number): string {
-  if (syncedAt == null) return "Noch nicht synchronisiert"
-  return `Zuletzt synchronisiert vor ${formatSyncAge(now - syncedAt)}`
-}
-
 export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
@@ -327,8 +325,18 @@ export default function StationPage() {
     tenantId: string | null
     catalog: Map<string, CatalogProduct>
     voucherEnabled: boolean
-    syncedAt: number | null
-  }>({ publicKey: null, tenantId: null, catalog: new Map(), voucherEnabled: false, syncedAt: null })
+  }>({ publicKey: null, tenantId: null, catalog: new Map(), voucherEnabled: false })
+  // Read on the scan hot path through a ref (stable identity → no camera restart);
+  // the BlockState mirror drives the panel UI.
+  const blockSetRef = useRef<Set<string>>(new Set())
+  const blockStateRef = useRef<BlockState>(EMPTY_BLOCK_STATE)
+  const [blockState, setBlockState] = useState<BlockState>(EMPTY_BLOCK_STATE)
+  const [voucherEnabled, setVoucherEnabled] = useState(false)
+  const applyBlockState = useCallback((next: BlockState) => {
+    blockStateRef.current = next
+    blockSetRef.current = effectiveBlockSet(next)
+    setBlockState(next)
+  }, [])
   const ledgerRef = useRef<StationLedger | null>(null)
   if (!ledgerRef.current) ledgerRef.current = idbLedger()
   const outboxRef = useRef<StationOutbox | null>(null)
@@ -347,34 +355,50 @@ export default function StationPage() {
     deviceFetchRef.current = deviceFetch
   }, [deviceFetch])
 
-  // Replay the public key, tenant id, and product catalog cached by the
-  // offline-setup ritual so a scan verifies and renders with zero network.
+  // Best-effort feed pull; no-op when offline or the plugin is off.
+  const triggerReconcile = useCallback(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return
+    if (!offlineRef.current.voucherEnabled) return
+    void reconcileRevocations({
+      fetchFn: (input, init) => fetch(input, init),
+      token: () => tokenRef.current || null,
+      now: () => Date.now(),
+    }).then((server) => {
+      if (server) applyBlockState({ server, manual: [] })
+    })
+  }, [applyBlockState])
+
+  // Replay the public key, tenant id, product catalog, and block list cached by
+  // the offline-setup ritual so a scan verifies and renders with zero network.
   useEffect(() => {
     if (!approved) return
     let cancelled = false
     void (async () => {
       const store = idbKVStore()
-      const [cfg, catalog, plugins, readiness] = await Promise.all([
+      const [cfg, catalog, plugins, blocks] = await Promise.all([
         store.get<QRConfig>(QR_CONFIG_KEY).catch(() => null),
         store.get<CatalogEntry[]>(CATALOG_KEY).catch(() => null),
         store.get<string[]>(PLUGINS_KEY).catch(() => null),
-        getReadiness(store).catch(() => null),
+        loadBlockState(store).catch(() => null),
       ])
       if (cancelled) return
       const map = new Map<string, CatalogProduct>()
       for (const entry of catalog ?? []) map.set(entry.id, { name: entry.name, image: entry.image })
+      const enabled = (plugins ?? []).includes(ARTIST_VOUCHER_PLUGIN_KEY)
       offlineRef.current = {
         publicKey: cfg?.publicKey ?? null,
         tenantId: cfg?.tenantId ?? null,
         catalog: map,
-        voucherEnabled: (plugins ?? []).includes(ARTIST_VOUCHER_PLUGIN_KEY),
-        syncedAt: readiness?.completedAt ?? null,
+        voucherEnabled: enabled,
       }
+      setVoucherEnabled(enabled)
+      if (blocks) applyBlockState(blocks)
+      triggerReconcile()
     })()
     return () => {
       cancelled = true
     }
-  }, [approved])
+  }, [approved, applyBlockState, triggerReconcile])
 
   useEffect(() => {
     if (!approved) {
@@ -533,6 +557,22 @@ export default function StationPage() {
     })
   }, [])
 
+  const handleBlockCode = useCallback(
+    async (id: string) => {
+      const manual = await addManualBlock(id, idbKVStore())
+      applyBlockState({ ...blockStateRef.current, manual })
+    },
+    [applyBlockState]
+  )
+
+  const handleUnblockCode = useCallback(
+    async (id: string) => {
+      const manual = await removeManualBlock(id, idbKVStore())
+      applyBlockState({ ...blockStateRef.current, manual })
+    },
+    [applyBlockState]
+  )
+
   // Queue first (durable before we report success), then flush — immediate when
   // online, deferred to a later trigger when offline.
   const handleEnqueue = useCallback(
@@ -546,14 +586,20 @@ export default function StationPage() {
   useEffect(() => {
     if (!approved) return
     triggerFlush()
-    const onOnline = () => triggerFlush()
+    const onOnline = () => {
+      triggerFlush()
+      triggerReconcile()
+    }
     window.addEventListener("online", onOnline)
-    const interval = setInterval(triggerFlush, 30_000)
+    const interval = setInterval(() => {
+      triggerFlush()
+      triggerReconcile()
+    }, 30_000)
     return () => {
       window.removeEventListener("online", onOnline)
       clearInterval(interval)
     }
-  }, [approved, triggerFlush])
+  }, [approved, triggerFlush, triggerReconcile])
 
   const handleScanned = useCallback(
     async (scan: QrScanResult) => {
@@ -596,8 +642,9 @@ export default function StationPage() {
           publicKey: offline.publicKey,
           stationTenantId: offline.tenantId,
           now: Date.now(),
+          revoked: (id) => blockSetRef.current.has(id),
         })
-        pushScan(voucherScanResult(key, parsed.token, verdict, offline.syncedAt))
+        pushScan(voucherScanResult(key, parsed.token, verdict, blockStateRef.current.server.syncedAt))
         playScanSound(voucherSound(verdict.kind))
         scheduleResume()
         return
@@ -698,6 +745,7 @@ export default function StationPage() {
           catalog: offline.catalog,
           ledger: ledgerRef.current!,
           enqueue: handleEnqueue,
+          blocked: (id) => blockSetRef.current.has(id),
           now: () => Date.now(),
         })
 
@@ -725,14 +773,19 @@ export default function StationPage() {
             updateScan(key, { status: "error", message: "Falscher Event" })
             playScanSound("error")
             break
+          case "blocked":
+            updateScan(key, { status: "blocked", blockableId: result.orderId })
+            playScanSound("error")
+            break
           case "not-for-stand":
-            updateScan(key, { status: "no-items" })
+            updateScan(key, { status: "no-items", blockableId: result.orderId })
             playScanSound("warning")
             break
           case "already-redeemed":
             updateScan(key, {
               status: "already-redeemed",
               orderId: result.orderId,
+              blockableId: result.orderId,
               lines: toLines(result.orderId, result.lines),
             })
             playScanSound("warning")
@@ -741,6 +794,7 @@ export default function StationPage() {
             updateScan(key, {
               status: "success",
               orderId: result.orderId,
+              blockableId: result.orderId,
               lines: toLines(result.orderId, result.lines),
             })
             playScanSound("success")
@@ -795,6 +849,7 @@ export default function StationPage() {
     )
   }
 
+  const blockedIds = effectiveBlockSet(blockState)
   const latest = scans[0] ?? null
   const history = scans.slice(1)
 
@@ -822,6 +877,14 @@ export default function StationPage() {
           <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name || displayName}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {approved && (
+            <StationBlockList
+              blockState={blockState}
+              voucherEnabled={voucherEnabled}
+              onBlock={handleBlockCode}
+              onUnblock={handleUnblockCode}
+            />
+          )}
           {approved && <OfflineReadiness />}
           <InstallPrompt />
           <HardRefreshButton />
@@ -940,7 +1003,12 @@ export default function StationPage() {
 
               <div className="flex w-full flex-col gap-8">
                 {latest ? (
-                  <ScanCard scan={latest} onOpenDetail={setDetailScan} />
+                  <ScanCard
+                    scan={latest}
+                    onOpenDetail={setDetailScan}
+                    blockedIds={blockedIds}
+                    onBlock={handleBlockCode}
+                  />
                 ) : (
                   <div className="text-muted-foreground bg-card rounded-2xl p-8 text-center text-sm">
                     Bereit zum Scannen. Der nächste QR-Code wird automatisch eingelöst.
@@ -982,8 +1050,18 @@ export default function StationPage() {
   )
 }
 
-function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
-  if (scan.kind === "voucher") return <VoucherScanCard scan={scan} />
+function ScanCard({
+  scan,
+  onOpenDetail,
+  blockedIds,
+  onBlock,
+}: {
+  scan: ScanResult
+  onOpenDetail?: (scan: OrderScanResult) => void
+  blockedIds: Set<string>
+  onBlock: (id: string) => void
+}) {
+  if (scan.kind === "voucher") return <VoucherScanCard scan={scan} blockedIds={blockedIds} onBlock={onBlock} />
   const meta = STATUS_STYLES[scan.status]
   const Icon = meta.icon
   const matched = scan.lines
@@ -1040,6 +1118,10 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
         </p>
       )}
 
+      {scan.status === "blocked" && (
+        <p className="text-destructive px-5 pt-1 pb-5 text-sm">Dieser Code wurde gesperrt.</p>
+      )}
+
       {(scan.status === "success" || scan.status === "already-redeemed") && (
         <div className="flex flex-col gap-3 px-5 pb-5">
           {(() => {
@@ -1063,6 +1145,35 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
             )
           })()}
         </div>
+      )}
+
+      {scan.blockableId && (
+        <ScanBlockFooter id={scan.blockableId} blocked={blockedIds.has(scan.blockableId)} onBlock={onBlock} />
+      )}
+    </div>
+  )
+}
+
+// The big status is frozen at scan time; this footer tracks the live block set,
+// so tapping "Sperren" flips it to "Gesperrt" as confirmation.
+function ScanBlockFooter({ id, blocked, onBlock }: { id: string; blocked: boolean; onBlock: (id: string) => void }) {
+  return (
+    <div className="border-border/60 mx-5 mb-4 flex items-center justify-between gap-2 border-t pt-3">
+      <span className="text-muted-foreground truncate font-mono text-xs">{id}</span>
+      {blocked ? (
+        <span className="text-destructive inline-flex shrink-0 items-center gap-1 text-xs font-medium">
+          <Ban className="size-3.5" aria-hidden />
+          Gesperrt
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onBlock(id)}
+          className="text-destructive hover:bg-destructive/10 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors"
+        >
+          <Ban className="size-3.5" aria-hidden />
+          Sperren
+        </button>
       )}
     </div>
   )
@@ -1103,7 +1214,15 @@ function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sca
   )
 }
 
-function VoucherScanCard({ scan }: { scan: VoucherScanResult }) {
+function VoucherScanCard({
+  scan,
+  blockedIds,
+  onBlock,
+}: {
+  scan: VoucherScanResult
+  blockedIds: Set<string>
+  onBlock: (id: string) => void
+}) {
   const meta = VOUCHER_STYLES[scan.verdict]
   const Icon = meta.icon
   const isValid = scan.verdict === "valid"
@@ -1142,7 +1261,24 @@ function VoucherScanCard({ scan }: { scan: VoucherScanResult }) {
         {scan.message && <p className={`text-sm ${meta.text}`}>{scan.message}</p>}
 
         {scan.voucherId && (
-          <p className="text-muted-foreground mt-1 font-mono text-xs tracking-wide">Code: {scan.voucherId}</p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-muted-foreground font-mono text-xs tracking-wide">{scan.voucherId}</span>
+            {blockedIds.has(scan.voucherId) ? (
+              <span className="text-destructive inline-flex items-center gap-1 text-xs font-medium">
+                <Ban className="size-3.5" aria-hidden />
+                Gesperrt
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onBlock(scan.voucherId as string)}
+                className="text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors"
+              >
+                <Ban className="size-3.5" aria-hidden />
+                Sperren
+              </button>
+            )}
+          </div>
         )}
         <p className="text-muted-foreground mt-1 text-[11px]">{syncedLabel(scan.syncedAt, Date.now())}</p>
       </div>
