@@ -1,0 +1,138 @@
+vouchers:
+  get:
+    tags: [Plugins]
+    summary: List artist vouchers
+    description: Returns the tenant's artist vouchers with a computed status per voucher.
+    operationId: artistVoucherList
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Vouchers
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherListResponse"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  post:
+    tags: [Plugins]
+    summary: Create an artist voucher
+    description: >
+      Snapshots the chosen categories and signs a durable display token bound to
+      the tenant's key, so a scanned voucher verifies fully offline.
+    operationId: artistVoucherCreate
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherCreateRequest"
+    responses:
+      "201":
+        description: Voucher created
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucher"
+      "400":
+        description: Invalid voucher input
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+revoke:
+  parameters:
+    - name: voucherId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Plugins]
+    summary: Revoke an artist voucher
+    description: Marks the voucher revoked. Idempotent — revoking an already-revoked voucher is a no-op.
+    operationId: artistVoucherRevoke
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Revoked voucher
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucher"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Voucher not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+revocations:
+  get:
+    tags: [Plugins]
+    summary: Poll the voucher revocation feed
+    description: >
+      Returns the ids of revoked vouchers that have not yet expired, so a station
+      can block them offline. Expired vouchers drop out; they are already rejected
+      by their validity window.
+    operationId: artistVoucherRevocations
+    security:
+      - deviceAuth: []
+    responses:
+      "200":
+        description: Revocation feed
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherRevocations"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Wrong device type
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"

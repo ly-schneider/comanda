@@ -31,6 +31,7 @@ import (
 	"backend/internal/generated/ent/volunteercampaign"
 	"backend/internal/generated/ent/volunteercampaignproduct"
 	"backend/internal/generated/ent/volunteerredemption"
+	"backend/internal/generated/ent/voucher"
 )
 
 const tenantColumnName = "tenant_id"
@@ -64,6 +65,7 @@ var typeToTable = map[string]string{
 	"RefundLine":               refundline.Table,
 	"TenantPlugin":             tenantplugin.Table,
 	"StationEnrollToken":       stationenrolltoken.Table,
+	"Voucher":                  voucher.Table,
 }
 
 // TestScopedTypesMatchSchema asserts the Go-layer guard set (scopedTypes)

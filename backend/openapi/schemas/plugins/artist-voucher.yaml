@@ -1,0 +1,81 @@
+ArtistVoucherCategory:
+  type: object
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+
+ArtistVoucher:
+  type: object
+  required: [id, label, validFrom, validUntil, categories, token, status, createdAt]
+  properties:
+    id:
+      type: string
+    label:
+      type: string
+    validFrom:
+      type: string
+      format: date-time
+    validUntil:
+      type: string
+      format: date-time
+    revokedAt:
+      type: string
+      format: date-time
+      nullable: true
+    categories:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherCategory"
+    token:
+      type: string
+      description: Signed display token encoded into the printable voucher QR
+    status:
+      type: string
+      enum: [scheduled, active, expired, revoked]
+    createdAt:
+      type: string
+      format: date-time
+
+ArtistVoucherListResponse:
+  type: object
+  required: [vouchers]
+  properties:
+    vouchers:
+      type: array
+      items:
+        $ref: "#/ArtistVoucher"
+
+ArtistVoucherCreateRequest:
+  type: object
+  required: [label, validFrom, validUntil, categoryIds]
+  properties:
+    label:
+      type: string
+      minLength: 1
+      maxLength: 80
+    validFrom:
+      type: string
+      format: date-time
+    validUntil:
+      type: string
+      format: date-time
+    categoryIds:
+      type: array
+      minItems: 1
+      items:
+        type: string
+
+ArtistVoucherRevocations:
+  type: object
+  required: [revokedIds, asOf]
+  properties:
+    revokedIds:
+      type: array
+      items:
+        type: string
+    asOf:
+      type: string
+      format: date-time
