@@ -44,7 +44,7 @@ func (Voucher) Fields() []ent.Field {
 		// issue time, so a later rename never mutates a printed voucher.
 		field.JSON("categories", json.RawMessage{}).
 			Immutable(),
-		// Signed 0x03 display token (see internal/qrsign); persisted at creation
+		// Signed 0x10 display token (see internal/qrsign); persisted at creation
 		// so the PDF is a pure re-read.
 		field.Text("token").
 			Immutable(),

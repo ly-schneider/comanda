@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-// Canonical cross-language golden vector for the 0x03 voucher token. The T2 PDF
-// generator and the T3 web/Android readers reproduce these exact bytes; any
+// Canonical cross-language golden vector for the 0x10 voucher token. The PDF
+// generator and the web/Android readers reproduce these exact bytes; any
 // change here is a coordinated wire-format change for every reader.
 const (
-	goldenVoucherBodyHex = "0374656e616e745f73656564315663683741623243643945666553f10065554280094c6976652042616e6402064472696e6b7304466f6f64"
-	goldenVoucherToken   = "A3RlbmFudF9zZWVkMVZjaDdBYjJDZDlFZmVT8QBlVUKACUxpdmUgQmFuZAIGRHJpbmtzBEZvb2TH4AGX7HcCpJhi9jyPGtvcBUo-msnzH93OROcqiRhqKvVx2dnJCg_SSDzAh4GgoP5zxVKsBzGKP0sSZsE7eFsM"
+	goldenVoucherBodyHex = "1074656e616e745f73656564315663683741623243643945666553f10065554280094c6976652042616e6402064472696e6b7304466f6f64"
+	goldenVoucherToken   = "EHRlbmFudF9zZWVkMVZjaDdBYjJDZDlFZmVT8QBlVUKACUxpdmUgQmFuZAIGRHJpbmtzBEZvb2S8kQe39D7m2BieSGN4fzWqDHyN18POcyqGizisVN_jU_bQ3r3EMF-OkMRl9WSPaAhWksbXZX7nOXKY_vgLgxYL"
 )
 
 func goldenVoucher() VoucherPayload {
@@ -40,7 +40,7 @@ func sampleVoucher() VoucherPayload {
 func TestVoucherGoldenVector(t *testing.T) {
 	pub, priv := goldenKey(t)
 
-	body, err := encodeV3(goldenVoucher())
+	body, err := encodeVoucher(goldenVoucher())
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestVoucherTamperedFails(t *testing.T) {
 	}
 }
 
-// A 0x02 pickup token must not decode as a voucher, and a 0x03 voucher token
+// A 0x02 pickup token must not decode as a voucher, and a 0x10 voucher token
 // must not decode as a pickup token — the discriminator keeps them disjoint.
 func TestVoucherCrossDiscriminatorRejected(t *testing.T) {
 	pub, priv := mustKey(t)
@@ -194,6 +194,18 @@ func TestVoucherCrossDiscriminatorRejected(t *testing.T) {
 	}
 	if _, err := Verify(pub, voucher); err != ErrUnsupportedVersion {
 		t.Fatalf("voucher token via Verify: expected ErrUnsupportedVersion, got %v", err)
+	}
+}
+
+func TestVoucherWrongPublicKeyFails(t *testing.T) {
+	_, priv := mustKey(t)
+	otherPub, _ := mustKey(t)
+	token, err := SignVoucher(priv, sampleVoucher())
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if _, err := VerifyVoucher(otherPub, token); err != ErrBadSignature {
+		t.Fatalf("expected ErrBadSignature, got %v", err)
 	}
 }
 

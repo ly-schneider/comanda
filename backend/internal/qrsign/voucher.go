@@ -8,7 +8,11 @@ import (
 	"math"
 )
 
-const verV3 = 0x03
+// Discriminator allocation (body[0]): the pickup-order token family owns the low
+// range — 0x02 today, with 0x03..0x0F reserved for future pickup versions. The
+// voucher is a distinct format, so it starts a separate range at 0x10 to leave
+// that headroom.
+const verVoucher = 0x10
 
 const (
 	// disc + tenant id + voucher id + validFrom(u32) + validUntil(u32) = 33.
@@ -31,9 +35,9 @@ type VoucherPayload struct {
 }
 
 // SignVoucher signs a voucher payload with the tenant's Ed25519 key, producing a
-// base64url-nopad token whose first body byte is the 0x03 discriminator.
+// base64url-nopad token whose first body byte is the 0x10 discriminator.
 func SignVoucher(priv ed25519.PrivateKey, p VoucherPayload) (string, error) {
-	body, err := encodeV3(p)
+	body, err := encodeVoucher(p)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +48,7 @@ func SignVoucher(priv ed25519.PrivateKey, p VoucherPayload) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(token), nil
 }
 
-func encodeV3(p VoucherPayload) ([]byte, error) {
+func encodeVoucher(p VoucherPayload) ([]byte, error) {
 	if len(p.TenantID) != idLen {
 		return nil, fmt.Errorf("%w: tenant id must be %d bytes, got %d", ErrBadPayload, idLen, len(p.TenantID))
 	}
@@ -65,7 +69,7 @@ func encodeV3(p VoucherPayload) ([]byte, error) {
 	}
 
 	body := make([]byte, 0, voucherHeaderLen+1+len(p.Label)+1)
-	body = append(body, verV3)
+	body = append(body, verVoucher)
 	body = append(body, p.TenantID...)
 	body = append(body, p.VoucherID...)
 	body = binary.BigEndian.AppendUint32(body, uint32(p.ValidFrom))
@@ -84,7 +88,7 @@ func encodeV3(p VoucherPayload) ([]byte, error) {
 }
 
 // VerifyVoucher checks the signature over the literal decoded bytes and parses a
-// voucher payload. It rejects any token whose discriminator is not 0x03, so a
+// voucher payload. It rejects any token whose discriminator is not 0x10, so a
 // pickup (0x02) token verified here fails as an unsupported version.
 func VerifyVoucher(pub ed25519.PublicKey, token string) (VoucherPayload, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
@@ -104,13 +108,13 @@ func VerifyVoucher(pub ed25519.PublicKey, token string) (VoucherPayload, error) 
 		return VoucherPayload{}, ErrBadSignature
 	}
 
-	if body[0] != verV3 {
+	if body[0] != verVoucher {
 		return VoucherPayload{}, ErrUnsupportedVersion
 	}
-	return decodeV3(body)
+	return decodeVoucher(body)
 }
 
-func decodeV3(body []byte) (VoucherPayload, error) {
+func decodeVoucher(body []byte) (VoucherPayload, error) {
 	if len(body) < voucherHeaderLen+1 {
 		return VoucherPayload{}, ErrBadPayload
 	}

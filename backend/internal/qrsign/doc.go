@@ -49,6 +49,11 @@
 // value is rejected as an unsupported version. (The retired v1 format was
 // canonical JSON, whose body started with '{' = 0x7B.)
 //
+// Discriminator allocation: the pickup-order token owns the low range — 0x02
+// today, with 0x03..0x0F reserved for future pickup versions. The artist
+// voucher token (see voucher.go) is a distinct format and starts a separate
+// range at 0x10; the two verifiers mutually reject each other's discriminator.
+//
 // # Verification
 //
 //  1. base64url-decode the token (when it arrives as text) — or take the raw
