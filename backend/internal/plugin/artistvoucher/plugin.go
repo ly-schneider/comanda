@@ -52,6 +52,7 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
 			gr.Use(mw.RequireTenantRole(auth.TierOps))
 			gr.Use(mw.CSRF)
 			gr.Get("/vouchers", w.ArtistVoucherList)
+			gr.Get("/vouchers/print.pdf", w.ArtistVoucherPrint)
 			gr.Post("/vouchers", w.ArtistVoucherCreate)
 			gr.Post("/vouchers/{voucherId}/revoke", w.ArtistVoucherRevoke)
 		})

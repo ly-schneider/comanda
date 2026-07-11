@@ -5,8 +5,10 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"backend/internal/generated/ent"
 	"backend/internal/qrsign"
@@ -157,6 +159,17 @@ func TestCreateValidationErrors(t *testing.T) {
 			require.Truef(t, IsValidation(err), "expected validation error, got %v", err)
 		})
 	}
+}
+
+func TestCreateRejectsMultibyteLabelOverByteLimit(t *testing.T) {
+	svc, _, _ := newTestService(t, categoryFixtures())
+	in := validCreateInput()
+	in.Label = strings.Repeat("ä", 41) // 41 runes (≤80), 82 bytes (>80)
+	require.Equal(t, 41, utf8.RuneCountInString(in.Label))
+	require.Equal(t, 82, len(in.Label))
+
+	_, err := svc.Create(tenantCtx(), in)
+	require.True(t, errors.Is(err, ErrLabelTooLong))
 }
 
 func TestCreateSnapshotOrderPreservedAndSigned(t *testing.T) {

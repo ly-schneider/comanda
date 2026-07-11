@@ -17,7 +17,12 @@ import (
 
 const Key = "artist-voucher"
 
-const maxLabelRunes = 80
+// Bounded in runes (user-facing) and bytes: a multibyte label must not pass here
+// only to fail the MaxLen(80) column or the 255-byte token encoder later.
+const (
+	maxLabelRunes = 80
+	maxLabelBytes = 80
+)
 
 var (
 	ErrEmptyLabel      = errors.New("artistvoucher: label is required")
@@ -133,7 +138,7 @@ func (s *service) Create(ctx context.Context, in CreateInput) (Voucher, error) {
 	if utf8.RuneCountInString(in.Label) == 0 {
 		return Voucher{}, ErrEmptyLabel
 	}
-	if utf8.RuneCountInString(in.Label) > maxLabelRunes {
+	if utf8.RuneCountInString(in.Label) > maxLabelRunes || len(in.Label) > maxLabelBytes {
 		return Voucher{}, ErrLabelTooLong
 	}
 	if !in.ValidUntil.After(in.ValidFrom) {
