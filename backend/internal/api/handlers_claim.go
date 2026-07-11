@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
@@ -100,27 +99,12 @@ func (h *Handlers) GetClaimCampaign(w http.ResponseWriter, r *http.Request, toke
 }
 
 func (h *Handlers) writeVolunteerError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, service.ErrVolunteerCampaignNotFound):
-		writeError(w, http.StatusNotFound, "campaign_not_found", "The volunteer campaign does not exist.")
-	case errors.Is(err, service.ErrVolunteerCampaignInactive):
-		writeError(w, http.StatusGone, "campaign_inactive", "This volunteer campaign is no longer active.")
-	case errors.Is(err, service.ErrVolunteerCampaignOutsideValid):
-		writeError(w, http.StatusGone, "campaign_outside_validity", "This volunteer campaign is outside its validity window.")
-	case errors.Is(err, service.ErrVolunteerAccessCodeInvalid):
-		writeError(w, http.StatusUnauthorized, "invalid_access_code", "The access code is incorrect.")
-	case errors.Is(err, service.ErrVolunteerCampaignHasNoProducts):
-		writeError(w, http.StatusBadRequest, "no_products", "At least one product is required.")
-	case errors.Is(err, service.ErrVolunteerMaxRedemptionsReached):
-		writeError(w, http.StatusConflict, "max_redemptions_reached", "This campaign has reached its maximum number of redemptions.")
-	case errors.Is(err, service.ErrVolunteerMaxBelowCount):
-		writeError(w, http.StatusConflict, "max_redemptions_below_count", "New maximum cannot be lower than the current redemption count.")
-	case errors.Is(err, service.ErrVolunteerStationNoMatchingProducts):
-		writeError(w, http.StatusConflict, "station_no_matching_products", "Diese Station bietet keine Artikel aus diesem Gutschein an.")
-	default:
-		h.logger.Error("volunteer error", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+	if status, code, msg, ok := service.VolunteerErrorResponse(err); ok {
+		writeError(w, status, code, msg)
+		return
 	}
+	h.logger.Error("volunteer error", zap.Error(err))
+	writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
 }
 
 func readSessionCookie(r *http.Request) string {

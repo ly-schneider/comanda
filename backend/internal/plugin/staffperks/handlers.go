@@ -2,7 +2,6 @@ package staffperks
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -97,10 +96,7 @@ func (h *handlers) CreateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 	}
 	products := make([]VolunteerCampaignProductInput, 0, len(req.Products))
 	for _, p := range req.Products {
-		products = append(products, VolunteerCampaignProductInput{
-			ProductID: p.ProductID,
-			Quantity:  p.Quantity,
-		})
+		products = append(products, VolunteerCampaignProductInput(p))
 	}
 	campaign, err := h.rt.svc.CreateCampaign(r.Context(), CreateCampaignInput{
 		Name:           req.Name,
@@ -152,11 +148,7 @@ func (h *handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 	}
 	redemptions := make([]adminCampaignRedemptionItem, 0, len(detail.Redemptions))
 	for _, rv := range detail.Redemptions {
-		redemptions = append(redemptions, adminCampaignRedemptionItem{
-			ID:        rv.ID,
-			OrderID:   rv.OrderID,
-			CreatedAt: rv.CreatedAt,
-		})
+		redemptions = append(redemptions, adminCampaignRedemptionItem(rv))
 	}
 	resp := adminCampaignDetailResponse{
 		adminCampaignResponse: campaignToAdminResponse(detail.Campaign),
@@ -187,10 +179,7 @@ func (h *handlers) UpdateVolunteerCampaign(w http.ResponseWriter, r *http.Reques
 	}
 	products := make([]VolunteerCampaignProductInput, 0, len(req.Products))
 	for _, p := range req.Products {
-		products = append(products, VolunteerCampaignProductInput{
-			ProductID: p.ProductID,
-			Quantity:  p.Quantity,
-		})
+		products = append(products, VolunteerCampaignProductInput(p))
 	}
 	campaign, err := h.rt.svc.UpdateCampaign(r.Context(), id, UpdateCampaignInput{
 		Name:           req.Name,
@@ -286,27 +275,12 @@ func (h *handlers) PrintStaffPerkSlips(w http.ResponseWriter, r *http.Request, c
 }
 
 func (h *handlers) writeCampaignError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, coreservice.ErrVolunteerCampaignNotFound):
-		writeError(w, http.StatusNotFound, "campaign_not_found", "The volunteer campaign does not exist.")
-	case errors.Is(err, coreservice.ErrVolunteerCampaignInactive):
-		writeError(w, http.StatusGone, "campaign_inactive", "This volunteer campaign is no longer active.")
-	case errors.Is(err, coreservice.ErrVolunteerCampaignOutsideValid):
-		writeError(w, http.StatusGone, "campaign_outside_validity", "This volunteer campaign is outside its validity window.")
-	case errors.Is(err, coreservice.ErrVolunteerAccessCodeInvalid):
-		writeError(w, http.StatusUnauthorized, "invalid_access_code", "The access code is incorrect.")
-	case errors.Is(err, coreservice.ErrVolunteerCampaignHasNoProducts):
-		writeError(w, http.StatusBadRequest, "no_products", "At least one product is required.")
-	case errors.Is(err, coreservice.ErrVolunteerMaxRedemptionsReached):
-		writeError(w, http.StatusConflict, "max_redemptions_reached", "This campaign has reached its maximum number of redemptions.")
-	case errors.Is(err, coreservice.ErrVolunteerMaxBelowCount):
-		writeError(w, http.StatusConflict, "max_redemptions_below_count", "New maximum cannot be lower than the current redemption count.")
-	case errors.Is(err, coreservice.ErrVolunteerStationNoMatchingProducts):
-		writeError(w, http.StatusConflict, "station_no_matching_products", "Diese Station bietet keine Artikel aus diesem Gutschein an.")
-	default:
-		h.rt.logger.Error("volunteer error", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+	if status, code, msg, ok := coreservice.VolunteerErrorResponse(err); ok {
+		writeError(w, status, code, msg)
+		return
 	}
+	h.rt.logger.Error("volunteer error", zap.Error(err))
+	writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
 }
 
 func campaignToAdminResponse(c *ent.VolunteerCampaign) adminCampaignResponse {
