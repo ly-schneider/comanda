@@ -31,6 +31,11 @@ describe("parseScan", () => {
     expect(parsed).toEqual({ kind: "order", token: bytesToBase64Url(body) })
   })
 
+  it("re-encodes an artist-voucher QR (first byte 0x10) to a base64url voucher token", () => {
+    const body = new Uint8Array([0x10, 9, 8, 7, 6])
+    expect(parseScan("", body)).toEqual({ kind: "voucher", token: bytesToBase64Url(body) })
+  })
+
   it("carries a text order candidate (e.g. the pickup-URL fallback) verbatim", () => {
     const token = "some-non-binary-text_candidate"
     expect(parseScan(`  ${token} `, ascii(token))).toEqual({ kind: "order", token })

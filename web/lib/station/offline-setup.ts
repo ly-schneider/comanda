@@ -18,9 +18,11 @@ import { type PrecacheResult, type StationSWClient, stationSWClient } from "@/li
 export const READINESS_KEY = "readiness"
 export const QR_CONFIG_KEY = "qrConfig"
 export const CATALOG_KEY = "catalog"
+export const PLUGINS_KEY = "plugins"
 
 const QR_CONFIG_URL = "/api/v1/qr-config"
 const CATALOG_URL = "/api/v1/products"
+const PLUGINS_URL = "/api/v1/plugins"
 
 // Same-origin paths whose contents are immutable enough to cache-first and
 // precache: hashed Next.js build output and the static brand assets under
@@ -131,6 +133,19 @@ async function loadQRConfig(deps: SetupDeps): Promise<QRConfig | null> {
   return cfg
 }
 
+// The host-resolved list of plugins ENABLED for this tenant (key present =
+// enabled). Cached so the offline station can gate voucher scans without a
+// network round-trip; refreshed only by re-running setup, like every other
+// cached material here.
+async function loadPlugins(deps: SetupDeps): Promise<string[] | null> {
+  const res = await deps.fetchFn(PLUGINS_URL)
+  if (!res.ok) return null
+  const body = (await res.json()) as { items?: Array<{ key: string }> }
+  const keys = (body.items ?? []).map((p) => p.key)
+  await deps.store.set<string[]>(PLUGINS_KEY, keys)
+  return keys
+}
+
 async function loadCatalog(deps: SetupDeps): Promise<{ entries: CatalogEntry[]; products: ProductDTO[] } | null> {
   const res = await deps.fetchFn(CATALOG_URL)
   if (!res.ok) return null
@@ -183,11 +198,15 @@ export async function runOfflineSetup(overrides?: Partial<SetupDeps>): Promise<R
 
   const swVersion = await deps.sw.version()
 
-  // None of these depend on each other, so fire them concurrently.
+  // None of these depend on each other, so fire them concurrently. The plugin
+  // list is best-effort — a failure there never blocks readiness (vouchers are
+  // an optional capability); it just leaves the station unable to verify vouchers
+  // until the next successful setup.
   const [qrConfig, catalog, assigned] = await Promise.all([
     loadQRConfig(deps).catch(() => null),
     loadCatalog(deps).catch(() => null),
     loadAssignedProductIds(deps).catch(() => ({ ids: [] as string[], ok: false })),
+    loadPlugins(deps).catch(() => null),
   ])
   if (!qrConfig) failures.push(QR_CONFIG_URL)
   if (!catalog) failures.push(CATALOG_URL)

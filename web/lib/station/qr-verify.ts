@@ -1,7 +1,10 @@
 /**
- * Offline verification of the signed pickup-QR token — the sole forgery barrier
- * on the station's offline path. Wire format: `internal/qrsign` doc.go. Pure-JS
- * (@noble/ed25519), not WebCrypto — Safari has no Ed25519 in SubtleCrypto.
+ * Offline verification of the signed station QR tokens — the sole forgery
+ * barrier on the station's offline path. Two token families share the Ed25519
+ * scheme and the tenant's key: the pickup-order token (0x02, `verifyQrToken`)
+ * and the artist-voucher token (0x10, `verifyVoucherToken`). Wire format:
+ * `internal/qrsign` doc.go + voucher.go. Pure-JS (@noble/ed25519), not
+ * WebCrypto — Safari has no Ed25519 in SubtleCrypto.
  */
 
 import * as ed from "@noble/ed25519"
@@ -91,5 +94,92 @@ export function verifyQrToken(token: string, publicKeyB64Url: string | null | un
 
   if (body[0] !== VER_V2) return { ok: false, reason: "unsupported-version" }
   const payload = parseV2(body)
+  return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
+}
+
+// --- Artist-voucher token (0x10) -------------------------------------------
+
+const VER_VOUCHER = 0x10
+// disc + tenant id + voucher id + validFrom(u32) + validUntil(u32) = 33.
+const VOUCHER_HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 4
+
+// label + category names are UTF-8 (the ids above are ASCII nanoids).
+const utf8 = new TextDecoder()
+
+export interface VoucherPayload {
+  tenantId: string
+  voucherId: string
+  validFrom: number // Unix seconds
+  validUntil: number // Unix seconds
+  label: string
+  // Human-readable category NAMES snapshotted at issue time; ids never leave the
+  // server, so a scanned voucher reveals only what it displays.
+  categories: string[]
+}
+
+export type VoucherVerifyResult = { ok: true; payload: VoucherPayload } | { ok: false; reason: VerifyFailure }
+
+function readU32BE(b: Uint8Array, off: number): number {
+  return ((b[off]! << 24) | (b[off + 1]! << 16) | (b[off + 2]! << 8) | b[off + 3]!) >>> 0
+}
+
+function parseVoucher(body: Uint8Array): VoucherPayload | null {
+  if (body.length < VOUCHER_HEADER_LEN + 1) return null
+  const labelLen = body[VOUCHER_HEADER_LEN]!
+  let off = VOUCHER_HEADER_LEN + 1
+  if (body.length < off + labelLen + 1) return null
+  const label = utf8.decode(body.subarray(off, off + labelLen))
+  off += labelLen
+
+  const catCount = body[off]!
+  off += 1
+  const categories: string[] = []
+  for (let k = 0; k < catCount; k++) {
+    if (body.length < off + 1) return null
+    const n = body[off]!
+    off += 1
+    if (body.length < off + n) return null
+    categories.push(utf8.decode(body.subarray(off, off + n)))
+    off += n
+  }
+  // Trailing bytes mean the declared lengths didn't consume the whole body.
+  if (off !== body.length) return null
+
+  return {
+    tenantId: asciiOf(body.subarray(1, 1 + ID_LEN)),
+    voucherId: asciiOf(body.subarray(1 + ID_LEN, 1 + 2 * ID_LEN)),
+    validFrom: readU32BE(body, 1 + 2 * ID_LEN),
+    validUntil: readU32BE(body, 1 + 2 * ID_LEN + 4),
+    label,
+    categories,
+  }
+}
+
+// Mirrors verifyQrToken for the 0x10 voucher family. A valid signature only
+// proves *some* tenant signed it — the caller must still enforce tenant scoping
+// and the validity window (see evaluateVoucher). Rejects a 0x02 pickup token as
+// an unsupported version, the same way verifyQrToken rejects a 0x10 voucher.
+export function verifyVoucherToken(token: string, publicKeyB64Url: string | null | undefined): VoucherVerifyResult {
+  if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
+  const pub = base64UrlToBytes(publicKeyB64Url)
+  if (!pub || pub.length !== PUBLIC_KEY_SIZE) return { ok: false, reason: "bad-signature" }
+
+  const raw = base64UrlToBytes(token.trim())
+  if (!raw || raw.length <= SIGNATURE_SIZE) return { ok: false, reason: "malformed" }
+
+  const split = raw.length - SIGNATURE_SIZE
+  const body = raw.subarray(0, split)
+  const sig = raw.subarray(split)
+
+  let valid: boolean
+  try {
+    valid = ed.verify(sig, body, pub)
+  } catch {
+    return { ok: false, reason: "bad-signature" }
+  }
+  if (!valid) return { ok: false, reason: "bad-signature" }
+
+  if (body[0] !== VER_VOUCHER) return { ok: false, reason: "unsupported-version" }
+  const payload = parseVoucher(body)
   return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
 }
