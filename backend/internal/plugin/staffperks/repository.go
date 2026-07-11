@@ -1,4 +1,4 @@
-package repository
+package staffperks
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"backend/internal/generated/ent/volunteercampaign"
 	"backend/internal/generated/ent/volunteercampaignproduct"
 	"backend/internal/generated/ent/volunteerredemption"
+	"backend/internal/repository"
 
 	nanoid "backend/internal/id"
 	"entgo.io/ent/dialect/sql"
@@ -16,7 +17,6 @@ import (
 type VolunteerCampaignRepository interface {
 	Create(ctx context.Context, name, accessCode string, validFrom, validUntil *time.Time, status volunteercampaign.Status, maxRedemptions int) (*ent.VolunteerCampaign, error)
 	GetByID(ctx context.Context, id string) (*ent.VolunteerCampaign, error)
-	GetByIDWithProducts(ctx context.Context, id string) (*ent.VolunteerCampaign, error)
 	GetByClaimToken(ctx context.Context, token string) (*ent.VolunteerCampaign, error)
 	List(ctx context.Context) ([]*ent.VolunteerCampaign, error)
 	Update(ctx context.Context, id string, name, accessCode string, validFrom, validUntil *time.Time, status volunteercampaign.Status) (*ent.VolunteerCampaign, error)
@@ -61,11 +61,11 @@ func NewVolunteerRedemptionRepository(client *ent.Client) VolunteerRedemptionRep
 }
 
 func (r *volunteerCampaignRepo) ec(ctx context.Context) *ent.Client {
-	return ClientFromContext(ctx, r.client)
+	return repository.ClientFromContext(ctx, r.client)
 }
 
 func (r *volunteerRedemptionRepo) ec(ctx context.Context) *ent.Client {
-	return ClientFromContext(ctx, r.client)
+	return repository.ClientFromContext(ctx, r.client)
 }
 
 func (r *volunteerCampaignRepo) Create(ctx context.Context, name, accessCode string, validFrom, validUntil *time.Time, status volunteercampaign.Status, maxRedemptions int) (*ent.VolunteerCampaign, error) {
@@ -82,7 +82,7 @@ func (r *volunteerCampaignRepo) Create(ctx context.Context, name, accessCode str
 	}
 	created, err := b.Save(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return created, nil
 }
@@ -90,20 +90,7 @@ func (r *volunteerCampaignRepo) Create(ctx context.Context, name, accessCode str
 func (r *volunteerCampaignRepo) GetByID(ctx context.Context, id string) (*ent.VolunteerCampaign, error) {
 	e, err := r.ec(ctx).VolunteerCampaign.Get(ctx, id)
 	if err != nil {
-		return nil, translateError(err)
-	}
-	return e, nil
-}
-
-func (r *volunteerCampaignRepo) GetByIDWithProducts(ctx context.Context, id string) (*ent.VolunteerCampaign, error) {
-	e, err := r.ec(ctx).VolunteerCampaign.Query().
-		Where(volunteercampaign.ID(id)).
-		WithCampaignProducts(func(q *ent.VolunteerCampaignProductQuery) {
-			q.WithProduct()
-		}).
-		Only(ctx)
-	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return e, nil
 }
@@ -113,17 +100,17 @@ func (r *volunteerCampaignRepo) GetByClaimToken(ctx context.Context, token strin
 		Where(volunteercampaign.ClaimTokenEQ(token)).
 		Only(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return e, nil
 }
 
 func (r *volunteerCampaignRepo) List(ctx context.Context) ([]*ent.VolunteerCampaign, error) {
 	rows, err := r.ec(ctx).VolunteerCampaign.Query().
-		Order(volunteercampaign.ByCreatedAt(entDescOpt())).
+		Order(volunteercampaign.ByCreatedAt(sql.OrderDesc())).
 		All(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return rows, nil
 }
@@ -145,7 +132,7 @@ func (r *volunteerCampaignRepo) Update(ctx context.Context, id string, name, acc
 	}
 	updated, err := b.Save(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return updated, nil
 }
@@ -162,14 +149,14 @@ func (r *volunteerCampaignRepo) UpdateMaxRedemptions(ctx context.Context, id str
 		SetMaxRedemptions(newMax).
 		Save(ctx)
 	if err != nil {
-		return nil, false, translateError(err)
+		return nil, false, repository.TranslateError(err)
 	}
 	if n == 0 {
 		return nil, false, nil
 	}
 	updated, err := client.VolunteerCampaign.Get(ctx, id)
 	if err != nil {
-		return nil, false, translateError(err)
+		return nil, false, repository.TranslateError(err)
 	}
 	return updated, true, nil
 }
@@ -180,7 +167,7 @@ func (r *volunteerCampaignRepo) RotateClaimToken(ctx context.Context, id string)
 		SetClaimToken(newToken).
 		Save(ctx)
 	if err != nil {
-		return "", translateError(err)
+		return "", repository.TranslateError(err)
 	}
 	return newToken, nil
 }
@@ -189,7 +176,7 @@ func (r *volunteerCampaignRepo) SetStatus(ctx context.Context, id string, status
 	_, err := r.ec(ctx).VolunteerCampaign.UpdateOneID(id).
 		SetStatus(status).
 		Save(ctx)
-	return translateError(err)
+	return repository.TranslateError(err)
 }
 
 func (r *volunteerCampaignRepo) ReplaceProducts(ctx context.Context, campaignID string, items []VolunteerCampaignProductInput) error {
@@ -198,7 +185,7 @@ func (r *volunteerCampaignRepo) ReplaceProducts(ctx context.Context, campaignID 
 		Where(volunteercampaignproduct.CampaignIDEQ(campaignID)).
 		Exec(ctx)
 	if err != nil {
-		return translateError(err)
+		return repository.TranslateError(err)
 	}
 	if len(items) == 0 {
 		return nil
@@ -211,7 +198,7 @@ func (r *volunteerCampaignRepo) ReplaceProducts(ctx context.Context, campaignID 
 			SetQuantity(it.Quantity)
 	}
 	_, err = client.VolunteerCampaignProduct.CreateBulk(builders...).Save(ctx)
-	return translateError(err)
+	return repository.TranslateError(err)
 }
 
 func (r *volunteerCampaignRepo) ListProducts(ctx context.Context, campaignID string) ([]*ent.VolunteerCampaignProduct, error) {
@@ -220,7 +207,7 @@ func (r *volunteerCampaignRepo) ListProducts(ctx context.Context, campaignID str
 		WithProduct().
 		All(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return rows, nil
 }
@@ -249,7 +236,7 @@ func (r *volunteerCampaignRepo) IncrementRedemptionAtomic(ctx context.Context, c
 		AddRedemptionCount(1).
 		Save(ctx)
 	if err != nil {
-		return false, translateError(err)
+		return false, repository.TranslateError(err)
 	}
 	return n > 0, nil
 }
@@ -266,7 +253,7 @@ func (r *volunteerRedemptionRepo) Create(ctx context.Context, campaignID, orderI
 	}
 	created, err := b.Save(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return created, nil
 }
@@ -279,7 +266,7 @@ func (r *volunteerRedemptionRepo) GetByIdempotencyKey(ctx context.Context, campa
 		).
 		Only(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return row, nil
 }
@@ -287,13 +274,13 @@ func (r *volunteerRedemptionRepo) GetByIdempotencyKey(ctx context.Context, campa
 func (r *volunteerRedemptionRepo) ListByCampaign(ctx context.Context, campaignID string, limit int) ([]*ent.VolunteerRedemption, error) {
 	q := r.ec(ctx).VolunteerRedemption.Query().
 		Where(volunteerredemption.CampaignIDEQ(campaignID)).
-		Order(volunteerredemption.ByCreatedAt(entDescOpt()))
+		Order(volunteerredemption.ByCreatedAt(sql.OrderDesc()))
 	if limit > 0 {
 		q = q.Limit(limit)
 	}
 	rows, err := q.All(ctx)
 	if err != nil {
-		return nil, translateError(err)
+		return nil, repository.TranslateError(err)
 	}
 	return rows, nil
 }

@@ -4,6 +4,7 @@ import (
 	"backend/internal/plugin"
 	"backend/internal/plugin/artistvoucher"
 	"backend/internal/plugin/club100"
+	"backend/internal/plugin/staffperks"
 	"backend/internal/plugin/stationqr"
 
 	"go.uber.org/fx"
@@ -15,6 +16,7 @@ func registeredPlugins() []plugin.Plugin {
 		club100.New(),
 		stationqr.New(),
 		artistvoucher.New(),
+		staffperks.New(),
 	}
 }
 

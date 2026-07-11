@@ -59,7 +59,7 @@ tags:
   - name: OwnerInvites
     description: Owner-invite registration (platform-host invite → tenant owner)
   - name: StaffPerks
-    description: Staff-perk (volunteer) campaigns, claim access, and station redemption
+    description: Public staff-perk claim access (campaign admin lives under the staff-perks plugin)
   - name: Inventory
     description: Real-time inventory stream
   - name: Android
@@ -257,6 +257,17 @@ paths:
   /plugins/artist-voucher/revocations:
     $ref: "paths/plugins/artist-voucher.yaml#/revocations"
 
+  /plugins/staff-perks/campaigns:
+    $ref: "paths/plugins/staff-perks.yaml#/collection"
+  /plugins/staff-perks/campaigns/{campaignId}:
+    $ref: "paths/plugins/staff-perks.yaml#/item"
+  /plugins/staff-perks/campaigns/{campaignId}/end:
+    $ref: "paths/plugins/staff-perks.yaml#/end"
+  /plugins/staff-perks/campaigns/{campaignId}/rotate-token:
+    $ref: "paths/plugins/staff-perks.yaml#/rotate-token"
+  /plugins/staff-perks/campaigns/{campaignId}/print.pdf:
+    $ref: "paths/plugins/staff-perks.yaml#/print"
+
   /branding:
     $ref: "paths/branding.yaml#/collection"
 
@@ -279,17 +290,6 @@ paths:
 
   /events:
     $ref: "paths/events.yaml#/collection"
-
-  /staff-perks:
-    $ref: "paths/staff-perks.yaml#/collection"
-  /staff-perks/{campaignId}:
-    $ref: "paths/staff-perks.yaml#/item"
-  /staff-perks/{campaignId}/end:
-    $ref: "paths/staff-perks.yaml#/end"
-  /staff-perks/{campaignId}/rotate-token:
-    $ref: "paths/staff-perks.yaml#/rotate-token"
-  /staff-perks/{campaignId}/print.pdf:
-    $ref: "paths/staff-perks.yaml#/print"
 
   /claim/{token}:
     $ref: "paths/claim.yaml#/item"

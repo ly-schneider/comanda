@@ -2,6 +2,7 @@ import type { ComponentType } from "react"
 import artistVoucher from "./artist-voucher/manifest"
 import club100 from "./club100/manifest"
 import type { PlatformPluginConfigProps, PluginSlotComponents } from "./slots"
+import staffPerks from "./staff-perks/manifest"
 import stationqr from "./stationqr/manifest"
 
 export type { PluginSlotName } from "./slots"
@@ -12,7 +13,7 @@ export type PluginManifest = {
   slots: PluginSlotComponents
 }
 
-export const registry: PluginManifest[] = [club100, stationqr, artistVoucher]
+export const registry: PluginManifest[] = [club100, stationqr, artistVoucher, staffPerks]
 
 export function getPluginManifest(key: string): PluginManifest | undefined {
   return registry.find((manifest) => manifest.key === key)
