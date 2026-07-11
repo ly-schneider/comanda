@@ -18,22 +18,28 @@ type VoucherSlip struct {
 }
 
 const (
-	VoucherDefaultCols = 3
-	VoucherMinCols     = 1
-	VoucherMaxCols     = 6
+	VoucherDefaultCount = 5
+	VoucherMinCount     = 1
+	VoucherMaxCount     = 500
 
-	voucherQRSizeMM  = 42.0
+	// Fixed artist-badge credential size, so slips cut out to a consistent size.
+	voucherBadgeWidthMM  = 76.2  // 3 in
+	voucherBadgeHeightMM = 127.0 // 5 in
+	voucherBadgePadMM    = 8.0
+
 	voucherQRPixels  = 1024
-	voucherPaddingMM = 3.0
-	voucherLabelFont = 10.0
-	voucherLabelLH   = 4.0
-	voucherCatFont   = 7.0
-	voucherCatLH     = 3.0
-	voucherHintFont  = 5.5
-	voucherHintLH    = 2.3
+	voucherLabelFont = 11.0
+	voucherLabelLH   = 4.5
+	voucherCatFont   = 8.0
+	voucherCatLH     = 3.4
+	voucherHintFont  = 6.0
+	voucherHintLH    = 2.6
 	voucherHintText  = "An der Station vorzeigen"
 	voucherCatPrefix = "Gültig für: "
-	voucherEmptyText = "Keine aktiven Gutscheine zum Drucken."
+
+	voucherGapQR    = 2.5
+	voucherGapLabel = 2.0
+	voucherGapCat   = 1.5
 )
 
 type renderedVoucher struct {
@@ -42,14 +48,13 @@ type renderedVoucher struct {
 	catLines   []string
 }
 
-// An empty voucher list yields a placeholder page rather than an error, so an
-// admin print with no active vouchers still opens a valid PDF.
-func RenderVoucherSlips(vouchers []VoucherSlip, cols int) ([]byte, error) {
-	if cols < VoucherMinCols {
-		cols = VoucherDefaultCols
+// RenderVoucherSlips prints count identical badge-sized copies of one voucher.
+func RenderVoucherSlips(slip VoucherSlip, count int) ([]byte, error) {
+	if count < VoucherMinCount {
+		count = VoucherDefaultCount
 	}
-	if cols > VoucherMaxCols {
-		cols = VoucherMaxCols
+	if count > VoucherMaxCount {
+		count = VoucherMaxCount
 	}
 
 	pdf := fpdf.New("P", "mm", "A4", "")
@@ -58,139 +63,108 @@ func RenderVoucherSlips(vouchers []VoucherSlip, cols int) ([]byte, error) {
 	pdf.SetTextColor(20, 20, 20)
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 
-	if len(vouchers) == 0 {
-		pdf.AddPage()
-		pdf.SetFont("Helvetica", "I", 12)
-		pdf.SetTextColor(110, 110, 110)
-		pdf.SetXY(pageMarginMM, pageHeight/2)
-		pdf.CellFormat(pageWidth-2*pageMarginMM, 8, tr(voucherEmptyText), "", 0, "C", false, 0, "")
-		return output(pdf)
+	png, err := qrcode.Encode(string(slip.QRBytes), qrcode.Medium, voucherQRPixels)
+	if err != nil {
+		return nil, fmt.Errorf("encode voucher qr: %w", err)
 	}
+	pdf.RegisterImageOptionsReader("vqr", fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
 
-	usableWidth := pageWidth - 2*pageMarginMM
-	slipWidth := (usableWidth - float64(cols-1)*slipHGap) / float64(cols)
-	textWidth := slipWidth - 2*voucherPaddingMM
-
-	qrSize := voucherQRSizeMM
-	if maxQR := textWidth; qrSize > maxQR {
-		qrSize = maxQR
+	textWidth := voucherBadgeWidthMM - 2*voucherBadgePadMM
+	qrSize := textWidth
+	rv := renderedVoucher{
+		qrName:     "vqr",
+		labelLines: wrapTextLines(tr(slip.Label), textWidth, voucherLabelFont, pdf, "B"),
+		catLines:   wrapTextLines(tr(voucherCatPrefix+strings.Join(slip.Categories, ", ")), textWidth, voucherCatFont, pdf, ""),
 	}
-
 	hintLines := wrapTextLines(tr(voucherHintText), textWidth, voucherHintFont, pdf, "I")
 
-	rendered := make([]renderedVoucher, len(vouchers))
-	maxLabelLines, maxCatLines := 1, 1
-	for i, v := range vouchers {
-		png, err := qrcode.Encode(string(v.QRBytes), qrcode.Medium, voucherQRPixels)
-		if err != nil {
-			return nil, fmt.Errorf("encode voucher qr: %w", err)
-		}
-		name := fmt.Sprintf("vqr%d", i)
-		pdf.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
-
-		labelLines := wrapTextLines(tr(v.Label), textWidth, voucherLabelFont, pdf, "B")
-		catLines := wrapTextLines(tr(voucherCatPrefix+strings.Join(v.Categories, ", ")), textWidth, voucherCatFont, pdf, "")
-		if len(labelLines) > maxLabelLines {
-			maxLabelLines = len(labelLines)
-		}
-		if len(catLines) > maxCatLines {
-			maxCatLines = len(catLines)
-		}
-		rendered[i] = renderedVoucher{qrName: name, labelLines: labelLines, catLines: catLines}
+	cellW := voucherBadgeWidthMM + slipHGap
+	cellH := voucherBadgeHeightMM + slipVGap
+	cols := int((pageWidth - 2*pageMarginMM + slipHGap) / cellW)
+	rows := int((pageHeight - 2*pageMarginMM + slipVGap) / cellH)
+	if cols < 1 {
+		cols = 1
 	}
-
-	slipHeight := voucherPaddingMM + qrSize + 1.2 +
-		float64(len(hintLines))*voucherHintLH + 1.5 +
-		float64(maxLabelLines)*voucherLabelLH + 1.2 +
-		float64(maxCatLines)*voucherCatLH + voucherPaddingMM
-
-	maxRows := int((pageHeight - 2*pageMarginMM + slipVGap) / (slipHeight + slipVGap))
-	if maxRows < 1 {
-		maxRows = 1
+	if rows < 1 {
+		rows = 1
 	}
-	perPage := maxRows * cols
+	perPage := cols * rows
 
-	idx := 0
-	for idx < len(rendered) {
+	gridW := float64(cols)*voucherBadgeWidthMM + float64(cols-1)*slipHGap
+	gridH := float64(rows)*voucherBadgeHeightMM + float64(rows-1)*slipVGap
+	offsetX := (pageWidth - gridW) / 2
+	offsetY := (pageHeight - gridH) / 2
+
+	for printed := 0; printed < count; {
 		pdf.AddPage()
 		pageSlips := perPage
-		if remaining := len(rendered) - idx; remaining < pageSlips {
+		if remaining := count - printed; remaining < pageSlips {
 			pageSlips = remaining
 		}
 		for slot := 0; slot < pageSlips; slot++ {
-			row := slot / cols
-			col := slot % cols
-			x := pageMarginMM + float64(col)*(slipWidth+slipHGap)
-			y := pageMarginMM + float64(row)*(slipHeight+slipVGap)
-			drawVoucherSlip(pdf, x, y, slipWidth, qrSize, rendered[idx+slot], hintLines)
+			x := offsetX + float64(slot%cols)*(voucherBadgeWidthMM+slipHGap)
+			y := offsetY + float64(slot/cols)*(voucherBadgeHeightMM+slipVGap)
+			drawVoucherBadge(pdf, x, y, qrSize, rv, hintLines)
 		}
-		drawVoucherCutLines(pdf, slipWidth, slipHeight, cols, pageSlips)
-		idx += pageSlips
+		printed += pageSlips
 	}
 
 	return output(pdf)
 }
 
-func drawVoucherSlip(pdf *fpdf.Fpdf, x, y, w, qrSize float64, v renderedVoucher, hintLines []string) {
-	qrX := x + (w-qrSize)/2
-	qrY := y + voucherPaddingMM
-	pdf.ImageOptions(v.qrName, qrX, qrY, qrSize, qrSize, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+func drawVoucherBadge(pdf *fpdf.Fpdf, x, y, qrSize float64, v renderedVoucher, hintLines []string) {
+	drawVoucherBorder(pdf, x, y)
 
-	textY := qrY + qrSize + 1.2
+	contentH := qrSize + voucherGapQR +
+		float64(len(hintLines))*voucherHintLH + voucherGapLabel +
+		float64(len(v.labelLines))*voucherLabelLH + voucherGapCat +
+		float64(len(v.catLines))*voucherCatLH
+
+	startY := y + (voucherBadgeHeightMM-contentH)/2
+	if minY := y + voucherBadgePadMM; startY < minY {
+		startY = minY
+	}
+
+	innerX := x + voucherBadgePadMM
+	innerW := voucherBadgeWidthMM - 2*voucherBadgePadMM
+
+	pdf.ImageOptions(v.qrName, x+(voucherBadgeWidthMM-qrSize)/2, startY, qrSize, qrSize, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+	textY := startY + qrSize + voucherGapQR
+
 	pdf.SetFont("Helvetica", "I", voucherHintFont)
 	pdf.SetTextColor(110, 110, 110)
 	for _, line := range hintLines {
-		pdf.SetXY(x+voucherPaddingMM, textY)
-		pdf.CellFormat(w-2*voucherPaddingMM, voucherHintLH, line, "", 0, "C", false, 0, "")
+		pdf.SetXY(innerX, textY)
+		pdf.CellFormat(innerW, voucherHintLH, line, "", 0, "C", false, 0, "")
 		textY += voucherHintLH
 	}
 
-	textY += 1.5
+	textY += voucherGapLabel
 	pdf.SetFont("Helvetica", "B", voucherLabelFont)
 	pdf.SetTextColor(20, 20, 20)
 	for _, line := range v.labelLines {
-		pdf.SetXY(x+voucherPaddingMM, textY)
-		pdf.CellFormat(w-2*voucherPaddingMM, voucherLabelLH, line, "", 0, "C", false, 0, "")
+		pdf.SetXY(innerX, textY)
+		pdf.CellFormat(innerW, voucherLabelLH, line, "", 0, "C", false, 0, "")
 		textY += voucherLabelLH
 	}
 
-	textY += 1.2
+	textY += voucherGapCat
 	pdf.SetFont("Helvetica", "", voucherCatFont)
 	pdf.SetTextColor(90, 90, 90)
 	for _, line := range v.catLines {
-		pdf.SetXY(x+voucherPaddingMM, textY)
-		pdf.CellFormat(w-2*voucherPaddingMM, voucherCatLH, line, "", 0, "C", false, 0, "")
+		pdf.SetXY(innerX, textY)
+		pdf.CellFormat(innerW, voucherCatLH, line, "", 0, "C", false, 0, "")
 		textY += voucherCatLH
 	}
 	pdf.SetTextColor(20, 20, 20)
 }
 
-func drawVoucherCutLines(pdf *fpdf.Fpdf, slipWidth, slipHeight float64, cols, slipsOnPage int) {
+func drawVoucherBorder(pdf *fpdf.Fpdf, x, y float64) {
 	pdf.SetDrawColor(160, 160, 160)
-	pdf.SetLineWidth(0.1)
-	pdf.SetDashPattern([]float64{0.8, 0.8}, 0)
-	defer pdf.SetDashPattern([]float64{}, 0)
-
-	rows := (slipsOnPage-1)/cols + 1
-	topEdge := pageMarginMM - slipVGap/2
-	bottomEdge := pageMarginMM + float64(rows-1)*(slipHeight+slipVGap) + slipHeight + slipVGap/2
-
-	for r := 0; r <= rows; r++ {
-		var yy float64
-		switch r {
-		case 0:
-			yy = topEdge
-		case rows:
-			yy = bottomEdge
-		default:
-			yy = pageMarginMM + float64(r)*(slipHeight+slipVGap) - slipVGap/2
-		}
-		pdf.Line(pageMarginMM-1, yy, pageWidth-pageMarginMM+1, yy)
-	}
-	for c := 1; c < cols; c++ {
-		xx := pageMarginMM + float64(c)*slipWidth + float64(c-1)*slipHGap + slipHGap/2
-		pdf.Line(xx, topEdge, xx, bottomEdge)
-	}
+	pdf.SetLineWidth(0.2)
+	pdf.SetDashPattern([]float64{1.2, 1.0}, 0)
+	pdf.Rect(x, y, voucherBadgeWidthMM, voucherBadgeHeightMM, "D")
+	pdf.SetDashPattern([]float64{}, 0)
 }
 
 func output(pdf *fpdf.Fpdf) ([]byte, error) {

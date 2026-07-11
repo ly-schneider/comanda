@@ -102,6 +102,7 @@ type KeyProvider interface {
 
 type Service interface {
 	List(ctx context.Context) ([]Voucher, error)
+	Get(ctx context.Context, id string) (Voucher, error)
 	Create(ctx context.Context, in CreateInput) (Voucher, error)
 	Revoke(ctx context.Context, id string) (Voucher, error)
 	Revocations(ctx context.Context) (Feed, error)
@@ -201,6 +202,14 @@ func (s *service) Create(ctx context.Context, in CreateInput) (Voucher, error) {
 		Categories: catsJSON,
 		Token:      token,
 	})
+	if err != nil {
+		return Voucher{}, err
+	}
+	return toVoucher(row, time.Now())
+}
+
+func (s *service) Get(ctx context.Context, id string) (Voucher, error) {
+	row, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return Voucher{}, err
 	}

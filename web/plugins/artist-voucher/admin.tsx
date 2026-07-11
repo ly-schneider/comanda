@@ -82,8 +82,8 @@ export default function ArtistVoucherAdmin() {
   const [revokeTarget, setRevokeTarget] = useState<ArtistVoucher | null>(null)
   const [revoking, setRevoking] = useState(false)
 
-  const [printOpen, setPrintOpen] = useState(false)
-  const [printCols, setPrintCols] = useState<number | "">(3)
+  const [printTarget, setPrintTarget] = useState<ArtistVoucher | null>(null)
+  const [printCount, setPrintCount] = useState<number | "">(5)
 
   useEffect(() => {
     if (!token) return
@@ -164,10 +164,16 @@ export default function ArtistVoucherAdmin() {
     }
   }
 
+  function openPrint(v: ArtistVoucher) {
+    setPrintCount(5)
+    setPrintTarget(v)
+  }
+
   function submitPrint() {
-    const cols = Math.max(1, Math.min(6, printCols === "" ? 3 : printCols))
-    window.open(voucherPrintUrl(cols), "_blank")
-    setPrintOpen(false)
+    if (!printTarget) return
+    const count = Math.max(1, Math.min(500, printCount === "" ? 5 : printCount))
+    window.open(voucherPrintUrl(printTarget.id, count), "_blank")
+    setPrintTarget(null)
   }
 
   return (
@@ -181,9 +187,6 @@ export default function ArtistVoucherAdmin() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={() => setPrintOpen(true)}>
-            Drucken
-          </Button>
           <Button onClick={openCreate}>Neuer Gutschein</Button>
         </div>
       </CardHeader>
@@ -212,11 +215,18 @@ export default function ArtistVoucherAdmin() {
                     {fmtDateTime(v.validFrom)} – {fmtDateTime(v.validUntil)}
                   </p>
                 </div>
-                {v.status !== "revoked" && (
-                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setRevokeTarget(v)}>
-                    Widerrufen
-                  </Button>
-                )}
+                <div className="flex shrink-0 gap-2">
+                  {(v.status === "active" || v.status === "scheduled") && (
+                    <Button variant="outline" size="sm" onClick={() => openPrint(v)}>
+                      Drucken
+                    </Button>
+                  )}
+                  {v.status !== "revoked" && (
+                    <Button variant="outline" size="sm" onClick={() => setRevokeTarget(v)}>
+                      Widerrufen
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -300,33 +310,36 @@ export default function ArtistVoucherAdmin() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+      <Dialog open={printTarget !== null} onOpenChange={(open) => !open && setPrintTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Gutscheine drucken</DialogTitle>
+            <DialogTitle>«{printTarget?.label}» drucken</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">
-              Druckt alle aktiven und geplanten Gutscheine als A4-Bogen, einen QR-Code pro Feld.
+              Druckt den QR-Code im Badge-Format (7,6 × 12,7 cm) zum Ausschneiden und Aufkleben – so oft, wie die
+              Artists mit ihrer Crew unterwegs sind.
             </p>
             <div className="space-y-1">
-              <Label htmlFor="voucher-cols">Spalten pro Zeile</Label>
+              <Label htmlFor="voucher-count">Anzahl</Label>
               <Input
-                id="voucher-cols"
+                id="voucher-count"
                 type="number"
                 min={1}
-                max={6}
+                max={500}
                 className="max-w-24 rounded-xl"
-                value={printCols}
-                onChange={(e) => setPrintCols(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                value={printCount}
+                onChange={(e) => setPrintCount(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPrintOpen(false)}>
+            <Button variant="outline" onClick={() => setPrintTarget(null)}>
               Abbrechen
             </Button>
-            <Button onClick={submitPrint}>Drucken</Button>
+            <Button onClick={submitPrint} disabled={printCount === "" || printCount < 1}>
+              Drucken
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

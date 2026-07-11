@@ -250,7 +250,7 @@ paths:
 
   /plugins/artist-voucher/vouchers:
     $ref: "paths/plugins/artist-voucher.yaml#/vouchers"
-  /plugins/artist-voucher/vouchers/print.pdf:
+  /plugins/artist-voucher/vouchers/{voucherId}/print.pdf:
     $ref: "paths/plugins/artist-voucher.yaml#/print"
   /plugins/artist-voucher/vouchers/{voucherId}/revoke:
     $ref: "paths/plugins/artist-voucher.yaml#/revoke"

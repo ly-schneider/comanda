@@ -67,18 +67,31 @@ vouchers:
               $ref: "../../schemas/common.yaml#/Error"
 
 print:
+  parameters:
+    - name: voucherId
+      in: path
+      required: true
+      schema:
+        type: string
   get:
     tags: [Plugins]
     summary: Print artist voucher slips
     description: |
-      Streams a printable PDF of the tenant's active and scheduled vouchers, one
-      byte-mode QR per cell. Revoked and expired vouchers are omitted.
+      Streams a printable PDF of `count` identical badge-sized slips for one
+      voucher, each carrying the byte-mode QR, so the artist can hand copies to
+      the people touring with them.
 
-      The optional `cols` query parameter sets the columns per row (1–6, default
-      3); out-of-range values return `400`.
+      The optional `count` query parameter sets how many copies (1–500, default
+      5); out-of-range values return `400`.
     operationId: artistVoucherPrint
     security:
       - sessionAuth: []
+    parameters:
+      - name: count
+        in: query
+        required: false
+        schema:
+          type: integer
     responses:
       "200":
         description: PDF document of voucher slips
@@ -88,7 +101,7 @@ print:
               type: string
               format: binary
       "400":
-        description: Invalid columns
+        description: Invalid voucher id or count
         content:
           application/json:
             schema:
@@ -101,6 +114,12 @@ print:
               $ref: "../../schemas/common.yaml#/Error"
       "403":
         description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Voucher not found
         content:
           application/json:
             schema:
