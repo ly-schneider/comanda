@@ -355,7 +355,6 @@ export default function StationPage() {
     deviceFetchRef.current = deviceFetch
   }, [deviceFetch])
 
-  // Best-effort feed pull; no-op when offline or the plugin is off.
   const triggerReconcile = useCallback(() => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return
     if (!offlineRef.current.voucherEnabled) return
