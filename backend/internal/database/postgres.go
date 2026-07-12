@@ -34,14 +34,19 @@ type AppClient struct {
 	DB     *sql.DB
 }
 
-func openPool(dsn string, cfg config.Config) (*sql.DB, error) {
+// openPool opens a database/sql pool for dsn. maxConns/minConns are passed
+// explicitly so the app and privileged pools can be sized independently: the
+// aggregate across every pod and pool must stay under Postgres max_connections,
+// and keeping idle (minConns) close to maxConns avoids reconnect churn (each
+// reconnect is a full TLS handshake to the managed instance).
+func openPool(dsn string, cfg config.Config, maxConns, minConns int) (*sql.DB, error) {
 	connConfig, err := buildConnConfig(dsn, cfg.Postgres.CAPath)
 	if err != nil {
 		return nil, err
 	}
 	db := stdlib.OpenDB(*connConfig)
-	db.SetMaxOpenConns(cfg.Postgres.MaxConns)
-	db.SetMaxIdleConns(cfg.Postgres.MinConns)
+	db.SetMaxOpenConns(maxConns)
+	db.SetMaxIdleConns(minConns)
 	db.SetConnMaxLifetime(cfg.Postgres.MaxConnLifetime)
 	db.SetConnMaxIdleTime(cfg.Postgres.MaxConnIdleTime)
 	return db, nil
@@ -84,7 +89,7 @@ func buildConnConfig(dsn, caPath string) (*pgx.ConnConfig, error) {
 
 // NewPrivilegedClient opens the owner pool (DATABASE_URL).
 func NewPrivilegedClient(cfg config.Config) (*PrivilegedClient, error) {
-	db, err := openPool(cfg.Postgres.DSN, cfg)
+	db, err := openPool(cfg.Postgres.DSN, cfg, cfg.Postgres.PrivMaxConns, cfg.Postgres.PrivMinConns)
 	if err != nil {
 		zap.L().Error("failed to open privileged database", zap.Error(err))
 		return nil, fmt.Errorf("failed to open privileged database: %w", err)
@@ -120,7 +125,7 @@ func NewAppClient(cfg config.Config) (*AppClient, error) {
 		zap.L().Warn("ALLOW_SINGLE_DSN set; app client falling back to DATABASE_URL — RLS role separation is DISABLED (local dev only)")
 	}
 
-	db, err := openPool(dsn, cfg)
+	db, err := openPool(dsn, cfg, cfg.Postgres.MaxConns, cfg.Postgres.MinConns)
 	if err != nil {
 		zap.L().Error("failed to open app database", zap.Error(err))
 		return nil, fmt.Errorf("failed to open app database: %w", err)

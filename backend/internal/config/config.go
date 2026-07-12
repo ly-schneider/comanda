@@ -118,6 +118,8 @@ type PostgresConfig struct {
 	AllowSingleDSN  bool
 	MaxConns        int
 	MinConns        int
+	PrivMaxConns    int
+	PrivMinConns    int
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
 }
@@ -192,10 +194,12 @@ func Load() Config {
 			AppDSN:          getEnvOptional("DATABASE_URL_APP"),
 			CAPath:          getEnvOptional("DATABASE_CA_PATH"),
 			AllowSingleDSN:  getEnvBoolOptional("ALLOW_SINGLE_DSN"),
-			MaxConns:        75,
-			MinConns:        2,
-			MaxConnLifetime: 1 * time.Hour,
-			MaxConnIdleTime: 5 * time.Minute,
+			MaxConns:        getEnvIntWithDefault("POSTGRES_MAX_CONNS", 25),
+			MinConns:        getEnvIntWithDefault("POSTGRES_MIN_CONNS", 10),
+			PrivMaxConns:    getEnvIntWithDefault("POSTGRES_PRIV_MAX_CONNS", 8),
+			PrivMinConns:    getEnvIntWithDefault("POSTGRES_PRIV_MIN_CONNS", 4),
+			MaxConnLifetime: getEnvDurationWithDefault("POSTGRES_MAX_CONN_LIFETIME", 30*time.Minute),
+			MaxConnIdleTime: getEnvDurationWithDefault("POSTGRES_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		},
 		Logger: LoggerConfig{
 			Level:       getEnv("LOG_LEVEL"),
