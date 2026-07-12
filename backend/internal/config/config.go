@@ -85,9 +85,10 @@ type IngressConfig struct {
 }
 
 type SentryConfig struct {
-	DSN         string
-	Environment string
-	Release     string
+	DSN              string
+	Environment      string
+	Release          string
+	TracesSampleRate float64
 }
 
 type AndroidConfig struct {
@@ -227,9 +228,10 @@ func Load() Config {
 			PublicBaseURL:   getEnvOptional("STORAGE_PUBLIC_URL"),
 		},
 		Sentry: SentryConfig{
-			DSN:         getEnvOptional("SENTRY_DSN"),
-			Environment: getEnvOptional("SENTRY_ENVIRONMENT"),
-			Release:     getEnvOptional("APP_VERSION"),
+			DSN:              getEnvOptional("SENTRY_DSN"),
+			Environment:      getEnvOptional("SENTRY_ENVIRONMENT"),
+			Release:          getEnvOptional("APP_VERSION"),
+			TracesSampleRate: getEnvFloatWithDefault("SENTRY_TRACES_SAMPLE_RATE", 0.2),
 		},
 		Android: AndroidConfig{
 			GitHubRepo:  getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
@@ -362,6 +364,17 @@ func getEnvIntWithDefault(key string, def int) int {
 	if value := os.Getenv(key); value != "" {
 		if n, err := strconv.Atoi(value); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+// getEnvFloatWithDefault parses a float env var (e.g. a 0.0–1.0 sample rate),
+// falling back to def when unset or unparseable.
+func getEnvFloatWithDefault(key string, def float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
 		}
 	}
 	return def

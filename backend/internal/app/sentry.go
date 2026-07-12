@@ -30,7 +30,7 @@ func SetupSentry(lc fx.Lifecycle, cfg config.Config, logger *zap.Logger) {
 				Environment:      cfg.Sentry.Environment,
 				Release:          cfg.Sentry.Release,
 				ServerName:       hostname,
-				TracesSampleRate: 0.2,
+				TracesSampleRate: cfg.Sentry.TracesSampleRate,
 				EnableTracing:    true,
 			})
 			if err != nil {
@@ -38,7 +38,9 @@ func SetupSentry(lc fx.Lifecycle, cfg config.Config, logger *zap.Logger) {
 				return nil
 			}
 
-			logger.Info("sentry initialized", zap.String("environment", cfg.Sentry.Environment))
+			logger.Info("sentry initialized",
+				zap.String("environment", cfg.Sentry.Environment),
+				zap.Float64("traces_sample_rate", cfg.Sentry.TracesSampleRate))
 			return nil
 		},
 		OnStop: func(context.Context) error {

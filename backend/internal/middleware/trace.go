@@ -43,11 +43,21 @@ func LogHTTPErrors(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 		latencyMs := float64(time.Since(start).Microseconds()) / 1000.0
 
+		// Group by the route pattern, not the raw path — otherwise every order id
+		// in /v1/orders/{orderId}/payment spawns its own Sentry issue.
+		route := r.URL.Path
+		if rctx := chi.RouteContext(r.Context()); rctx != nil {
+			if pattern := rctx.RoutePattern(); pattern != "" {
+				route = pattern
+			}
+		}
+
 		reqID := chiMw.GetReqID(r.Context())
 		fields := []zap.Field{
 			zap.Int("status", rec.status),
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
+			zap.String("route", route),
 			zap.Float64("latency_ms", latencyMs),
 			zap.String("remote_ip", r.RemoteAddr),
 			zap.String("request_id", reqID),
@@ -64,8 +74,9 @@ func LogHTTPErrors(next http.Handler) http.Handler {
 				hub.WithScope(func(scope *sentry.Scope) {
 					scope.SetTag("status", fmt.Sprintf("%d", rec.status))
 					scope.SetTag("method", r.Method)
+					scope.SetTag("http.route", route)
 					scope.SetTag("path", r.URL.Path)
-					hub.CaptureMessage(fmt.Sprintf("HTTP %d: %s %s", rec.status, r.Method, r.URL.Path))
+					hub.CaptureMessage(fmt.Sprintf("HTTP %d: %s %s", rec.status, r.Method, route))
 				})
 			}
 		case rec.status >= 400:
