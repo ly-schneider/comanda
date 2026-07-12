@@ -2,6 +2,7 @@ package artistvoucher
 
 import (
 	"backend/internal/auth"
+	"backend/internal/blobstore"
 	"backend/internal/generated/api/generated"
 	"backend/internal/plugin"
 	"backend/internal/repository"
@@ -17,8 +18,10 @@ type Plugin struct {
 }
 
 type runtime struct {
-	svc    Service
-	logger *zap.Logger
+	svc      Service
+	branding coreservice.SettingsService
+	blob     *blobstore.Client
+	logger   *zap.Logger
 }
 
 func New() *Plugin {
@@ -36,8 +39,10 @@ func (p *Plugin) Module() fx.Option {
 			NewVoucherRepository,
 			NewService,
 		),
-		fx.Invoke(func(s Service, logger *zap.Logger) {
+		fx.Invoke(func(s Service, branding coreservice.SettingsService, blob *blobstore.Client, logger *zap.Logger) {
 			p.rt.svc = s
+			p.rt.branding = branding
+			p.rt.blob = blob
 			p.rt.logger = logger
 		}),
 	)

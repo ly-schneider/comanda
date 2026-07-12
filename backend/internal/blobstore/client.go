@@ -79,6 +79,24 @@ func (c *Client) keyFromURL(url string) string {
 	return strings.TrimPrefix(url, prefix)
 }
 
+// Download fetches the bytes of the object referenced by a public URL. URLs
+// that don't belong to this bucket return an error rather than a round-trip.
+func (c *Client) Download(ctx context.Context, url string) ([]byte, error) {
+	key := c.keyFromURL(url)
+	if key == "" {
+		return nil, fmt.Errorf("blobstore: url %q not in bucket", url)
+	}
+	out, err := c.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("blobstore: download failed: %w", err)
+	}
+	defer func() { _ = out.Body.Close() }()
+	return io.ReadAll(out.Body)
+}
+
 // Delete removes the object referenced by a public URL. URLs that don't belong
 // to this bucket are ignored (no error), matching the previous behavior.
 func (c *Client) Delete(ctx context.Context, url string) error {

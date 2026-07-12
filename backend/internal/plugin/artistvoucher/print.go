@@ -1,11 +1,13 @@
 package artistvoucher
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"backend/internal/generated/api/generated"
 	"backend/internal/pdf"
@@ -54,7 +56,15 @@ func (h *handlers) ArtistVoucherPrint(w http.ResponseWriter, r *http.Request, vo
 		names = append(names, c.Name)
 	}
 
-	body, err := pdf.RenderVoucherSlips(pdf.VoucherSlip{Label: voucher.Label, Categories: names, QRBytes: raw}, count)
+	brandName, brandIcon := h.brandHeader(r.Context())
+
+	body, err := pdf.RenderVoucherSlips(pdf.VoucherSlip{
+		Label:        voucher.Label,
+		Categories:   names,
+		QRBytes:      raw,
+		BrandName:    brandName,
+		BrandIconPNG: brandIcon,
+	}, count)
 	if err != nil {
 		h.rt.logger.Error("render artist voucher slips", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "render_failed", "Could not render vouchers")
@@ -65,4 +75,38 @@ func (h *handlers) ArtistVoucherPrint(w http.ResponseWriter, r *http.Request, vo
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="artist-voucher-%s.pdf"`, voucher.ID))
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
+}
+
+// brandHeader resolves the tenant's display name and a PNG-encoded icon (favicon,
+// else logo) for the badge header. Branding is best-effort: any failure degrades
+// to a name-only or bare badge rather than failing the print.
+func (h *handlers) brandHeader(ctx context.Context) (name string, iconPNG []byte) {
+	branding, err := h.rt.branding.GetBranding(ctx)
+	if err != nil {
+		h.rt.logger.Warn("artist voucher print: load branding failed", zap.Error(err))
+		return "", nil
+	}
+	name = branding.DisplayName
+
+	iconURL := ""
+	if branding.FaviconURL != nil && strings.TrimSpace(*branding.FaviconURL) != "" {
+		iconURL = strings.TrimSpace(*branding.FaviconURL)
+	} else if branding.LogoURL != nil {
+		iconURL = strings.TrimSpace(*branding.LogoURL)
+	}
+	if iconURL == "" || h.rt.blob == nil {
+		return name, nil
+	}
+
+	raw, err := h.rt.blob.Download(ctx, iconURL)
+	if err != nil {
+		h.rt.logger.Warn("artist voucher print: download brand icon failed", zap.String("url", iconURL), zap.Error(err))
+		return name, nil
+	}
+	png, err := decodeToPNG(raw)
+	if err != nil {
+		h.rt.logger.Warn("artist voucher print: decode brand icon failed", zap.Error(err))
+		return name, nil
+	}
+	return name, png
 }

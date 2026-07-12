@@ -4,8 +4,26 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 )
+
+func testIconPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			img.Set(x, y, color.RGBA{R: 10, G: 120, B: 220, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode icon: %v", err)
+	}
+	return buf.Bytes()
+}
 
 // 0x10 voucher golden vector (source of truth: backend/internal/qrsign/voucher_test.go).
 const (
@@ -47,6 +65,27 @@ func TestRenderVoucherSlips(t *testing.T) {
 	}
 	if !bytes.HasPrefix(pdfBytes, []byte("%PDF")) {
 		t.Fatal("output is not a PDF")
+	}
+}
+
+func TestRenderVoucherSlipsWithBrandHeader(t *testing.T) {
+	raw, err := base64.RawURLEncoding.DecodeString(goldenVoucherToken)
+	if err != nil {
+		t.Fatalf("decode token: %v", err)
+	}
+	cases := []VoucherSlip{
+		{Label: "Live Band", Categories: []string{"Drinks"}, QRBytes: raw, BrandName: "Kulturfest", BrandIconPNG: testIconPNG(t)},
+		{Label: "Live Band", Categories: []string{"Drinks"}, QRBytes: raw, BrandName: "Name only, no icon"},
+		{Label: "Live Band", Categories: []string{"Drinks"}, QRBytes: raw, BrandIconPNG: testIconPNG(t)},
+	}
+	for i, slip := range cases {
+		pdfBytes, err := RenderVoucherSlips(slip, VoucherDefaultCount)
+		if err != nil {
+			t.Fatalf("case %d render: %v", i, err)
+		}
+		if !bytes.HasPrefix(pdfBytes, []byte("%PDF")) {
+			t.Fatalf("case %d: output is not a PDF", i)
+		}
 	}
 }
 
