@@ -1,22 +1,32 @@
-// Browser-based load test driving the anonymous customer order flow through
-// the Next.js web app, capturing Core Web Vitals per page navigation.
-//
-// Env: WEB_URL (public web host, not API), PROFILE = smoke | baseline | stress
-//
-// Each VU runs one Chromium tab (~200 MB). The baseline profile keeps
-// concurrency conservative for 24 GB machines.
+// Browser load test: anonymous customer flow, capturing Core Web Vitals.
+// Env: WEB_URL (public web host, not API), PROFILE = smoke | baseline | stress.
+// Each VU runs one Chromium tab (~200 MB).
 
 import { browser } from "k6/browser";
 import { check } from "k6";
 import { randomIntBetween } from "https://jslib.k6.io/k6-utils/1.4.0/index.js";
 
-const WEB_URL = (__ENV.WEB_URL || "").replace(/\/$/, "");
-if (!WEB_URL) throw new Error("WEB_URL env var required");
-if (WEB_URL.includes("prod") || /comanda\.(ch|com|net)/.test(WEB_URL)) {
+// Hard-pinned so a run can never hit another tenant on the shared platform.
+const TARGET_HOST = "load-test.staging.comanda.leys.ch";
+
+const WEB_URL = (__ENV.WEB_URL || `https://${TARGET_HOST}`).replace(/\/$/, "");
+const HOST = WEB_URL.replace(/^https?:\/\//, "")
+  .split("/")[0]
+  .toLowerCase();
+if (HOST !== TARGET_HOST) {
   throw new Error(
-    `Refusing to run against suspected production URL: ${WEB_URL}`,
+    `Refusing to run: WEB_URL host '${HOST}' is not the dedicated load-test tenant '${TARGET_HOST}'.`,
   );
 }
+
+// Staging is behind Cloudflare Access; the service token bypasses the login.
+const cfHeaders =
+  __ENV.CF_ACCESS_CLIENT_ID && __ENV.CF_ACCESS_CLIENT_SECRET
+    ? {
+        "CF-Access-Client-Id": __ENV.CF_ACCESS_CLIENT_ID,
+        "CF-Access-Client-Secret": __ENV.CF_ACCESS_CLIENT_SECRET,
+      }
+    : {};
 
 const PROFILE = __ENV.PROFILE || "smoke";
 
@@ -92,16 +102,17 @@ export default async function () {
     userAgent:
       "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     locale: "de-CH",
+    extraHTTPHeaders: cfHeaders,
   });
   const page = await context.newPage();
 
   try {
     let res = await gotoAndWait(
       page,
-      `${WEB_URL}/food`,
+      `${WEB_URL}/`,
       'main [role="button"][aria-disabled="false"]',
     );
-    check(res, { "food page ok": (r) => r && r.ok() });
+    check(res, { "storefront page ok": (r) => r && r.ok() });
 
     const bodyText = await page.evaluate(() => document.body.innerText);
     if (bodyText.includes("Aktuell geschlossen")) {
@@ -155,9 +166,9 @@ export default async function () {
       }
     }
 
-    // Cart-add is best-effort: still measure /food/checkout perf even when
+    // Cart-add is best-effort: still measure /checkout perf even when
     // the click loop failed, just skip the pay step.
-    res = await gotoAndWait(page, `${WEB_URL}/food/checkout`, "main h2");
+    res = await gotoAndWait(page, `${WEB_URL}/checkout`, "main h2");
     check(res, { "checkout page ok": (r) => r && r.ok() });
 
     if ((await readCartSize()) > 0) {

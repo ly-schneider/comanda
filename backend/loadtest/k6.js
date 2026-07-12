@@ -1,33 +1,45 @@
-// k6 load test for the Comanda backend.
-//
-// Env: BASE_URL, PROFILE = smoke | baseline | stress
-//
-// Requires the target env to have: tokens seeded via seed.sql, an approved
-// STATION device with assigned products, and Payrexx unconfigured (so TWINT
-// falls through to MarkOrderPaidDev). See loadtest/README.md.
+// k6 API load test, driven through the tenant's /api proxy (see README).
+// Env: BASE_URL (defaults to the load-test tenant), PROFILE = smoke | baseline | stress
+// Requires the tenant seeded via seed.sql and Payrexx unconfigured.
 
 import http from "k6/http";
 import { check, group, sleep } from "k6";
-import { SharedArray } from "k6/data";
 import {
   randomIntBetween,
   uuidv4,
 } from "https://jslib.k6.io/k6-utils/1.4.0/index.js";
 
-const BASE_URL = (__ENV.BASE_URL || "").replace(/\/$/, "");
-if (!BASE_URL) throw new Error("BASE_URL env var required");
-if (BASE_URL.includes("prod") || BASE_URL.includes("api.comanda")) {
+// Hard-pinned so a run can never hit another tenant on the shared platform.
+const TARGET_HOST = "load-test.staging.comanda.leys.ch";
+
+const BASE_URL = (__ENV.BASE_URL || `https://${TARGET_HOST}`).replace(/\/$/, "");
+const HOST = BASE_URL.replace(/^https?:\/\//, "")
+  .split("/")[0]
+  .toLowerCase();
+if (HOST !== TARGET_HOST) {
   throw new Error(
-    `Refusing to run against suspected production URL: ${BASE_URL}`,
+    `Refusing to run: BASE_URL host '${HOST}' is not the dedicated load-test tenant '${TARGET_HOST}'.`,
   );
 }
+
+// Tenant API traffic goes through the web app's /api proxy, which forwards to
+// the backend with the tenant's X-Forwarded-Host. Bearer auth skips CSRF there.
+const API = `${BASE_URL}/api`;
+
+// Staging is behind Cloudflare Access; the service token bypasses the login.
+const cfHeaders =
+  __ENV.CF_ACCESS_CLIENT_ID && __ENV.CF_ACCESS_CLIENT_SECRET
+    ? {
+        "CF-Access-Client-Id": __ENV.CF_ACCESS_CLIENT_ID,
+        "CF-Access-Client-Secret": __ENV.CF_ACCESS_CLIENT_SECRET,
+      }
+    : {};
 
 const PROFILE = __ENV.PROFILE || "smoke";
 
 const tokens = JSON.parse(open("./tokens.json"));
 
-// `baseline` mirrors the production dinner-rush shape (18:30–22:30), compressed
-// to ~12 minutes. Multiply stage durations to simulate a full evening.
+// `baseline` mirrors the dinner-rush shape compressed to ~12 minutes.
 const profiles = {
   smoke: {
     customer: {
@@ -98,21 +110,54 @@ const profiles = {
     },
   },
 
+  // Find the knee: arrival-rate plateaus climb until error rate / p95 blow up.
+  // Not aborted on threshold breach, so the full saturation curve is captured.
   stress: {
     customer: {
       executor: "ramping-arrival-rate",
       exec: "customer",
-      startRate: 1,
+      startRate: 5,
       timeUnit: "1s",
-      preAllocatedVUs: 50,
-      maxVUs: 200,
+      preAllocatedVUs: 80,
+      maxVUs: 500,
       stages: [
-        { target: 5, duration: "1m" },
-        { target: 20, duration: "3m" },
-        { target: 50, duration: "5m" },
+        { target: 10, duration: "1m" }, // warmup
+        { target: 25, duration: "2m" },
+        { target: 50, duration: "2m" },
+        { target: 100, duration: "2m" },
+        { target: 150, duration: "2m" },
+        { target: 200, duration: "2m" }, // push past the knee
         { target: 0, duration: "1m" },
       ],
       tags: { scenario: "customer" },
+    },
+    station: {
+      executor: "ramping-arrival-rate",
+      exec: "station",
+      startRate: 1,
+      timeUnit: "1s",
+      preAllocatedVUs: 20,
+      maxVUs: 120,
+      stages: [
+        { target: 2, duration: "1m" },
+        { target: 5, duration: "2m" },
+        { target: 10, duration: "2m" },
+        { target: 15, duration: "2m" },
+        { target: 15, duration: "2m" },
+        { target: 20, duration: "2m" },
+        { target: 0, duration: "1m" },
+      ],
+      tags: { scenario: "station" },
+    },
+    admin: {
+      executor: "constant-arrival-rate",
+      exec: "admin",
+      rate: 1,
+      timeUnit: "3s",
+      preAllocatedVUs: 3,
+      maxVUs: 10,
+      duration: "12m",
+      tags: { scenario: "admin" },
     },
   },
 };
@@ -135,7 +180,7 @@ export const options = {
 };
 
 export function setup() {
-  const res = http.get(`${BASE_URL}/v1/products`);
+  const res = http.get(`${API}/v1/products`, { headers: cfHeaders });
   if (res.status !== 200) {
     throw new Error(
       `setup: GET /v1/products returned ${res.status} (${res.body && res.body.slice(0, 200)})`,
@@ -163,15 +208,20 @@ function bearer(token) {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...cfHeaders,
     },
   };
 }
 
-function postJSON(url, token, body, extraHeaders) {
+function postJSON(url, token, body, extraHeaders, name) {
   const opts = bearer(token);
   if (extraHeaders) Object.assign(opts.headers, extraHeaders);
+  // Name tag groups per-order URLs; without it each order id is its own series.
+  if (name) opts.tags = { name };
   return http.post(url, JSON.stringify(body), opts);
 }
+
+const PAYMENT_TAG = "v1/orders/{id}/payment";
 
 function buildCartItems(products) {
   const n = randomIntBetween(1, 3);
@@ -189,14 +239,14 @@ export function customer(data) {
   const sessionToken = pick(tokens.customer_sessions);
 
   group("customer/list-products", () => {
-    const r = http.get(`${BASE_URL}/v1/products`, bearer(sessionToken));
+    const r = http.get(`${API}/v1/products`, bearer(sessionToken));
     check(r, { "products 200": (res) => res.status === 200 });
   });
 
   let orderId;
   group("customer/create-order", () => {
     const r = postJSON(
-      `${BASE_URL}/v1/orders`,
+      `${API}/v1/orders`,
       sessionToken,
       {
         items: buildCartItems(data.products),
@@ -215,19 +265,19 @@ export function customer(data) {
   // Cash instead of TWINT — avoids Payrexx sandbox flakiness masking backend perf.
   group("customer/pay-cash", () => {
     const r = postJSON(
-      `${BASE_URL}/v1/orders/${orderId}/payment`,
+      `${API}/v1/orders/${orderId}/payment`,
       sessionToken,
       { method: "cash" },
       { "Idempotency-Key": uuidv4() },
+      PAYMENT_TAG,
     );
     check(r, { "pay 2xx": (res) => res.status === 200 || res.status === 201 });
   });
 
   group("customer/poll-payment", () => {
-    const r = http.get(
-      `${BASE_URL}/v1/orders/${orderId}/payment`,
-      bearer(sessionToken),
-    );
+    const opts = bearer(sessionToken);
+    opts.tags = { name: PAYMENT_TAG };
+    const r = http.get(`${API}/v1/orders/${orderId}/payment`, opts);
     check(r, { "poll 2xx": (res) => res.status === 200 });
   });
 
@@ -246,8 +296,8 @@ export function admin(data) {
   // Mirrors the parallel fetch in web/app/admin/page.tsx.
   group("admin/dashboard-fetch", () => {
     const responses = http.batch([
-      ["GET", `${BASE_URL}/v1/orders?${qs}`, null, bearer(sessionToken)],
-      ["GET", `${BASE_URL}/v1/products`, null, bearer(sessionToken)],
+      ["GET", `${API}/v1/orders?${qs}`, null, bearer(sessionToken)],
+      ["GET", `${API}/v1/products`, null, bearer(sessionToken)],
     ]);
     check(responses[0], { "orders 200": (r) => r.status === 200 });
     check(responses[1], { "products 200": (r) => r.status === 200 });
@@ -263,7 +313,7 @@ export function station(data) {
   let orderId;
   group("station/pos-create-order", () => {
     const r = postJSON(
-      `${BASE_URL}/v1/orders`,
+      `${API}/v1/orders`,
       posToken,
       { items: buildCartItems(data.products) },
       { "Idempotency-Key": uuidv4() },
@@ -281,10 +331,11 @@ export function station(data) {
 
   group("station/pos-pay-cash", () => {
     const r = postJSON(
-      `${BASE_URL}/v1/orders/${orderId}/payment`,
+      `${API}/v1/orders/${orderId}/payment`,
       posToken,
       { method: "cash" },
       { "Idempotency-Key": uuidv4() },
+      PAYMENT_TAG,
     );
     check(r, {
       "pos pay 2xx": (res) => res.status === 200 || res.status === 201,
@@ -292,14 +343,18 @@ export function station(data) {
   });
 
   group("station/redeem", () => {
-    const r = postJSON(
-      `${BASE_URL}/v1/stations/redeem`,
-      stationToken,
-      { orderId },
-      { "Idempotency-Key": uuidv4() },
+    const opts = bearer(stationToken);
+    opts.headers["Idempotency-Key"] = uuidv4();
+    // Redeem is rate-limited (5 req/10s per station), so 429 is expected here.
+    opts.responseCallback = http.expectedStatuses(200, 201, 429);
+    const r = http.post(
+      `${API}/v1/stations/redeem`,
+      JSON.stringify({ orderId }),
+      opts,
     );
     check(r, {
-      "redeem 2xx": (res) => res.status === 200 || res.status === 201,
+      "redeem ok or rate-limited": (res) =>
+        res.status === 200 || res.status === 201 || res.status === 429,
     });
   });
 }

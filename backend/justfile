@@ -168,63 +168,59 @@ seed:
 
 # ── Load test ──
 
-# Seed loadtest users, sessions, and device bindings into $DATABASE_URL.
-# Pass station_device_id (required for station scenario) and optionally pos_device_id.
+# Seed loadtest users, sessions, and POS/station devices into the load-test
+# tenant (resolved from its verified host). Runs against a PRIVILEGED $DATABASE_URL.
+# Override the tenant with target_host=<host>.
 [group('loadtest')]
-loadtest-seed station_device_id='NULL' pos_device_id='NULL':
-    psql "$DATABASE_URL" \
-        -v station_device_id={{station_device_id}} \
-        -v pos_device_id={{pos_device_id}} \
-        -f loadtest/seed.sql
+loadtest-seed target_host='load-test.staging.comanda.leys.ch':
+    psql "$DATABASE_URL" -v target_host={{target_host}} -f loadtest/seed.sql
 
-# Bump inventory for simple products so a full baseline run can't deplete stock.
-# Re-run any time stock is low; each run adds +50k per product.
+# Bump inventory for the load-test tenant's simple products so a run can't
+# deplete stock. Re-run any time stock is low; each run adds +50k per product.
 [group('loadtest')]
-loadtest-stock:
-    psql "$DATABASE_URL" -f loadtest/stock.sql
+loadtest-stock target_host='load-test.staging.comanda.leys.ch':
+    psql "$DATABASE_URL" -v target_host={{target_host}} -f loadtest/stock.sql
 
-# Remove all loadtest_* rows from $DATABASE_URL
+# Remove all loadtest data (and generated orders) from the load-test tenant.
 [group('loadtest')]
-loadtest-cleanup:
-    psql "$DATABASE_URL" -f loadtest/cleanup.sql
+loadtest-cleanup target_host='load-test.staging.comanda.leys.ch':
+    psql "$DATABASE_URL" -v target_host={{target_host}} -f loadtest/cleanup.sql
 
-# Run the API load test. Required: BASE_URL. Optional: PROFILE (smoke|baseline|stress).
+# Run the API load test. BASE_URL defaults to the load-test tenant.
+# Usage: just loadtest [smoke|baseline|stress]
 [group('loadtest')]
-loadtest:
+loadtest profile='smoke':
     #!/usr/bin/env bash
     set -e
-    if [[ -z "${BASE_URL:-}" ]]; then echo "BASE_URL env var required"; exit 1; fi
-    k6 run -e BASE_URL="$BASE_URL" -e PROFILE="${PROFILE:-smoke}" loadtest/k6.js
+    k6 run ${BASE_URL:+-e BASE_URL="$BASE_URL"} -e PROFILE="{{profile}}" loadtest/k6.js
 
-# Run the browser load test. Required: WEB_URL. Optional: PROFILE (smoke|baseline|stress).
+# Run the browser load test. WEB_URL defaults to the load-test tenant.
+# Usage: just loadtest-browser [smoke|baseline|stress]
 [group('loadtest')]
-loadtest-browser:
+loadtest-browser profile='smoke':
     #!/usr/bin/env bash
     set -e
-    if [[ -z "${WEB_URL:-}" ]]; then echo "WEB_URL env var required"; exit 1; fi
-    k6 run -e WEB_URL="$WEB_URL" -e PROFILE="${PROFILE:-smoke}" loadtest/browser.js
+    k6 run ${WEB_URL:+-e WEB_URL="$WEB_URL"} -e PROFILE="{{profile}}" loadtest/browser.js
 
-# Run API + browser load tests in parallel. Requires BASE_URL and WEB_URL.
+# Run API + browser load tests in parallel (both default to the load-test tenant).
 # Output goes to loadtest/results/{api,browser}-<timestamp>.json for later diffing.
+# Usage: just loadtest-full [smoke|baseline|stress]
 [group('loadtest')]
-loadtest-full:
+loadtest-full profile='baseline':
     #!/usr/bin/env bash
     set -e
-    if [[ -z "${BASE_URL:-}" || -z "${WEB_URL:-}" ]]; then
-      echo "Both BASE_URL and WEB_URL env vars required"; exit 1
-    fi
-    PROFILE="${PROFILE:-baseline}"
+    PROFILE="{{profile}}"
     TS=$(date +%Y%m%d-%H%M%S)
     mkdir -p loadtest/results
-    echo "▶ Starting API load (BASE_URL=$BASE_URL, PROFILE=$PROFILE)..."
+    echo "▶ Starting API load (BASE_URL=${BASE_URL:-<load-test default>}, PROFILE=$PROFILE)..."
     k6 run \
-      -e BASE_URL="$BASE_URL" -e PROFILE="$PROFILE" \
+      ${BASE_URL:+-e BASE_URL="$BASE_URL"} -e PROFILE="$PROFILE" \
       --summary-export "loadtest/results/api-$TS.json" \
       loadtest/k6.js &
     API_PID=$!
-    echo "▶ Starting browser load (WEB_URL=$WEB_URL, PROFILE=$PROFILE)..."
+    echo "▶ Starting browser load (WEB_URL=${WEB_URL:-<load-test default>}, PROFILE=$PROFILE)..."
     k6 run \
-      -e WEB_URL="$WEB_URL" -e PROFILE="$PROFILE" \
+      ${WEB_URL:+-e WEB_URL="$WEB_URL"} -e PROFILE="$PROFILE" \
       --summary-export "loadtest/results/browser-$TS.json" \
       loadtest/browser.js &
     BROWSER_PID=$!
