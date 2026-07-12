@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -24,6 +25,10 @@ func TestInventoryStream_TenantIsolation(t *testing.T) {
 	env.privExec(t, `INSERT INTO product (id, category_id, name, tenant_id) VALUES ($1, $2, 'OnlyA', $3)`, prodA, catA, tenantA)
 
 	hub := inventory.NewHub()
+	// The service now publishes via inventory.Publisher (prod: a pg_notify that a
+	// per-pod listener turns back into hub.Publish). Bridge straight to the hub
+	// here so this test keeps exercising service-publish → hub tenant isolation.
+	pub := inventory.PublisherFunc(func(_ context.Context, u inventory.Update) { hub.Publish(u) })
 	repos := NewRepositories(env.appEntClient())
 	svc := service.NewProductService(
 		repos.Product,
@@ -33,7 +38,7 @@ func TestInventoryStream_TenantIsolation(t *testing.T) {
 		repos.BundleSlotOption,
 		repos.Inventory,
 		repos.Jeton,
-		hub,
+		pub,
 		service.NewCatalogCache(),
 	)
 

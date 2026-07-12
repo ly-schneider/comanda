@@ -29,6 +29,7 @@ func NewServices() fx.Option {
 			service.NewPOSService,
 			refundProviderResolver,
 			service.NewRefundService,
+			fx.Annotate(repository.NewInventoryNotifier, fx.As(new(inventory.Publisher))),
 			repository.NewIdempotencyRepository,
 			service.NewEmailService,
 			service.NewAdminInviteService,

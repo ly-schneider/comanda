@@ -122,7 +122,7 @@ type refundService struct {
 	inventory    repository.InventoryLedgerRepository
 	providers    RefundProviderResolver
 	qrKeys       QRKeyService
-	inventoryHub *inventory.Hub
+	inventoryHub inventory.Publisher
 	logger       *zap.Logger
 }
 
@@ -132,7 +132,7 @@ func NewRefundService(
 	inventoryRepo repository.InventoryLedgerRepository,
 	providers RefundProviderResolver,
 	qrKeys QRKeyService,
-	inventoryHub *inventory.Hub,
+	inventoryHub inventory.Publisher,
 	logger *zap.Logger,
 ) RefundService {
 	return &refundService{
@@ -744,7 +744,7 @@ func (s *refundService) publishInventoryUpdates(ctx context.Context, entries []r
 			update.VariantID = &vid
 			update.NewStock = variantStocks[vid]
 		}
-		s.inventoryHub.Publish(update)
+		s.inventoryHub.Publish(ctx, update)
 	}
 }
 

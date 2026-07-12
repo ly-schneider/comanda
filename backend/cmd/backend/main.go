@@ -73,6 +73,7 @@ func main() {
 			app.StartDomainVerifier,
 			app.StartUnverifiedDomainSweeper,
 			app.StartIngressReconciler,
+			app.StartInventoryListener,
 			app.StartHTTPServer,
 		),
 	).Run()

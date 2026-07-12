@@ -1,164 +1,164 @@
 # Load testing
 
-k6-based load tests for the backend API. Mirrors the four production traffic
-shapes — customer ordering, admin dashboard, POS, and station redeem — at
-weights and durations roughly matching the 18:30–22:30 dinner-rush window from
-production latency graphs.
+k6 load tests that drive **one dedicated tenant** — `load-test.staging.comanda.leys.ch`
+— to find where the staging node saturates and to surface slow paths in Sentry.
+
+Traffic goes through the tenant's **public web host and its `/api` proxy**, not the
+backend ingress directly. That is deliberate: the backend resolves the tenant from
+`X-Forwarded-Host`, which Traefik overwrites on the public `api.staging…` host, so a
+tenant can only be reached through its own web host. It also means a run stresses the
+full real path — Next.js proxy → API → Postgres — exactly what a customer hits.
+
+Everything is pinned to `load-test.staging.comanda.leys.ch`:
+
+- The k6 scripts **refuse to run** against any other host.
+- The seed/stock/cleanup SQL resolve the tenant from that host's verified
+  `tenant_domain` row and scope every write to that tenant's `tenant_id`. No other
+  tenant is ever seeded or cleaned.
+
+> ⚠️ **Shared cluster.** Staging comanda + iglesio share the same K3s node. A `stress`
+> run to saturation will degrade latency for neighbouring staging tenants **while it
+> runs** (data stays isolated; the node's CPU/DB do not). Run stress off-hours and tell
+> anyone using staging.
 
 ## What you need
 
-- **k6** (`brew install k6` or [k6.io/docs/get-started/installation](https://k6.io/docs/get-started/installation/))
-- **psql** with access to the target environment's `DATABASE_URL`
-- A staging deploy that you are sure is not production
-- One approved STATION device in that environment with products assigned (via
-  `/admin/stations`). Without this the redeem scenario will return empty
-  matches and report low latency for the wrong reason.
+- **k6** (`brew install k6`)
+- A **privileged** psql connection to the staging DB (the table owner, so the seed can
+  write across tenant tables with an explicit `tenant_id`). Open your tunnel and export
+  it as `DATABASE_URL`.
+- A **Cloudflare Access service token** — staging sits behind CF Access, so every HTTP
+  request needs `CF-Access-Client-Id` / `CF-Access-Client-Secret` or it 302s to the CF
+  login page. Export both before running (the DB seed goes through the tunnel and does
+  **not** need them):
 
-## One-time setup against staging
+  ```bash
+  export CF_ACCESS_CLIENT_ID='….access'
+  export CF_ACCESS_CLIENT_SECRET='…'
+  ```
 
-```bash
-# 1. Point at staging
-export DATABASE_URL='postgres://…neondb…'           # staging Neon URL
-export BASE_URL='https://api.staging.example.com'   # staging API URL
+  k6 reads them from the environment automatically (both the API and browser tests).
+- The `load-test` tenant must already exist with its domain **verified** and **Payrexx
+  not configured** (so TWINT falls through to the dev mark-paid path instead of hitting
+  the real gateway). If the tenant has no active simple products, the seed creates a
+  10-product test catalog with stock; if it already has a real catalog, it's left alone.
 
-# 2. Find your staging station device ID (paste into next command)
-psql "$DATABASE_URL" -c "SELECT id, name FROM device WHERE type='STATION' AND status='approved';"
-
-# 3. Seed loadtest users, sessions, and device bindings
-psql "$DATABASE_URL" \
-  -v station_device_id=<uuid-from-step-2> \
-  -v pos_device_id=NULL \
-  -f loadtest/seed.sql
-```
-
-The seed creates:
-
-- 20 customer users + sessions (tokens: `loadtest_customer_session_001…020`)
-- 3 admin users + sessions (`loadtest_admin_session_001…003`)
-- 3 STATION device bindings (`loadtest_station_token_001…003`)
-- 2 POS device bindings (`loadtest_pos_token_001…002`)
-
-All rows are tagged with `loadtest_` prefixes or `loadtest+` emails for easy
-cleanup. The seed is idempotent — re-running refreshes session expiry without
-duplicating rows.
-
-## Running
+## Seed (one-time, via the privileged tunnel)
 
 ```bash
-# Quick sanity check (1 VU per scenario, 30s)
-just loadtest BASE_URL="$BASE_URL" PROFILE=smoke
+export DATABASE_URL='postgres://…privileged…@localhost:…/…'   # your tunnel
 
-# Dinner-rush simulation (~12 minutes, ramps to ~10 RPS combined)
-just loadtest BASE_URL="$BASE_URL" PROFILE=baseline
-
-# Stress test (ramps customer scenario to 50 RPS until failures)
-just loadtest BASE_URL="$BASE_URL" PROFILE=stress
+cd backend
+just loadtest-seed         # users, sessions, POS + station devices — all in load-test
+just loadtest-stock        # +50k inventory per simple product so a run can't run dry
 ```
 
-Or invoke k6 directly:
+The seed is idempotent and self-contained — it looks the tenant up by host, auto-provisions
+two approved POS devices and one station device (with every active simple product assigned),
+and aborts if no verified `load-test` domain exists. It creates:
+
+- 20 customer users + sessions (`loadtest_customer_session_001…020`)
+- 3 admin users + sessions + `member` rows (role `staff`)
+- 2 POS device bindings (`loadtest_pos_token_001…002`) → 2 approved POS devices
+- 3 STATION device bindings (`loadtest_station_token_001…003`) → 1 approved station
+- (if the tenant is empty) a `Load Test` category + 10 simple products with stock
+
+Tokens are the plaintext Bearer values in `tokens.json`; the seed stores their sha256
+hashes (device tokens) and exact strings (sessions). Never use them outside loadtest.
+
+## Run
+
+Both scripts default `BASE_URL` / `WEB_URL` to the load-test tenant — no env needed.
 
 ```bash
-k6 run -e BASE_URL="$BASE_URL" -e PROFILE=baseline loadtest/k6.js
+cd backend
+
+# API test — 1 VU/scenario, 30s. Proves the seed + proxy path end-to-end.
+just loadtest smoke
+
+# Dinner-rush shape (~12 min, ramps to ~10 req/s combined).
+just loadtest baseline
+
+# Find the knee — customer ramps 10→200 req/s in plateaus, station 2→20, admin steady.
+just loadtest stress
 ```
 
-## Browser test — end-to-end with real Chromium
+`stress` is **not** aborted on threshold failure: the point is to see the full
+saturation curve. The per-scenario thresholds (below) go red at the knee — that red
+plateau is your answer for "when does it break."
 
-`browser.js` drives the full Next.js → backend customer order flow inside real
-Chromium pages and captures **Core Web Vitals** (LCP, FCP, INP, CLS, TTFB) per
-navigation. Use it alongside the API test to answer "how does the user
-_experience_ the system under load," not just "how fast does the API answer."
+Direct invocation, if you want raw k6 flags:
 
 ```bash
-# Smoke: 1 VU, 3 iterations — verify the script can drive the flow
-WEB_URL="https://staging.example.com" PROFILE=smoke just loadtest-browser
-
-# Baseline: 8 concurrent browsers, 10 min
-WEB_URL="https://staging.example.com" PROFILE=baseline just loadtest-browser
-
-# Stress: ramp to 12 browsers
-WEB_URL="https://staging.example.com" PROFILE=stress just loadtest-browser
-
-# Full-stack: API + browser in parallel — the realistic combined-load picture
-BASE_URL="https://api.staging.example.com" \
-WEB_URL="https://staging.example.com" \
-PROFILE=baseline \
-just loadtest-full
+k6 run -e PROFILE=stress loadtest/k6.js
 ```
 
-`WEB_URL` is the **public Next.js host**, not the backend API host (`BASE_URL`).
+## Browser test — real Chromium + Core Web Vitals
 
-The browser flow opens `/food` (the menu), adds two simple products to cart,
-navigates to `/food/checkout`, clicks "Mit TWINT bezahlen", and waits briefly
-before the next iteration. Mobile viewport (iPhone-sized) by default since most
-real customers are on phones.
+`browser.js` drives the anonymous customer flow (`/` → add 2 products → `/checkout` →
+click "Mit TWINT bezahlen") in real Chromium and captures LCP / FCP / INP / CLS / TTFB
+per navigation. Each VU is one Chromium tab (~150–250 MB); `baseline` = 5 tabs, `stress`
+ramps to 12.
 
-### Resource cost
+```bash
+just loadtest-browser smoke      # 1 VU, 3 iterations
+just loadtest-browser baseline   # 5 tabs, 10 min
 
-Each browser VU runs one Chromium tab — ~150-250 MB resident. On the 24 GB M4
-Pro the `baseline` profile (8 VUs) sits at ~2 GB, the `stress` profile (12 VUs)
-at ~3 GB. Sustained higher concurrency requires monitoring Activity Monitor;
-swapping kills your timing measurements.
+# API + browser together — the realistic combined picture. Writes JSON summaries
+# to loadtest/results/ for later diffing.
+just loadtest-full baseline
+```
 
-### Web Vitals thresholds
+The storefront must be **open** (`system_enabled = true`; the seed sets it). If it shows
+"Aktuell geschlossen" the browser test fails fast. Products with variants pop a picker
+the script can't complete — keep the load-test catalog on simple products.
 
-The browser test enforces these targets (tweak in `browser.js`):
+## Scenarios (`k6.js`)
 
-| Metric | p75    | p95    | Notes                                       |
-| ------ | ------ | ------ | ------------------------------------------- |
-| LCP    | 2.5 s  | 4 s    | Google "good" threshold                     |
-| FCP    | 1.8 s  | 3 s    | Google "good" threshold                     |
-| INP    | 200 ms | 500 ms | Interaction-to-next-paint (post-March 2024) |
-| CLS    | 0.1    | —      | Layout shift                                |
+| Scenario | Auth                 | Flow                                                   | Endpoints (under `/api`)                                       |
+| -------- | -------------------- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| customer | session (Bearer)     | list products → create order → cash pay → poll status  | `/v1/products`, `/v1/orders`, `/v1/orders/{id}/payment`        |
+| admin    | admin session        | parallel fetch (today's orders + products)             | `/v1/orders?date_from=…`, `/v1/products`                       |
+| station  | POS + station device | POS creates+pays an order, station redeems it          | `/v1/orders`, `/v1/orders/{id}/payment`, `/v1/stations/redeem` |
 
-## What the scenarios do
-
-### `k6.js` (API)
-
-| Scenario | Auth                 | Flow                                                             | Endpoints exercised                                            |
-| -------- | -------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
-| customer | session              | list products → create order → TWINT pay → poll status           | `/v1/products`, `/v1/orders`, `/v1/orders/{id}/payment`        |
-| admin    | admin session        | parallel fetch (orders for today + products), like the dashboard | `/v1/orders?date_from=…`, `/v1/products`                       |
-| station  | POS + station device | POS creates+pays an order, station redeems it                    | `/v1/orders`, `/v1/orders/{id}/payment`, `/v1/stations/redeem` |
-
-### `browser.js` (UX)
-
-| Scenario | Viewport              | Flow                                                     |
-| -------- | --------------------- | -------------------------------------------------------- |
-| customer | iPhone-sized (mobile) | open /food → add 2 products → /food/checkout → click pay |
-
-The TWINT path hits `MarkOrderPaidDev` (no real Payrexx call) **only if Payrexx
-is not configured in the target env**. Confirm with the operator that staging
-has no `PAYREXX_INSTANCE` / `PAYREXX_API_SECRET` set, or you will generate real
-gateway requests.
+Payment uses `cash` (not TWINT) to keep the Payrexx sandbox out of the latency picture.
 
 ## Reading the results
 
-k6 prints a summary at the end. The thresholds in `k6.js` will fail the run if:
+k6 prints a summary and fails the run if any threshold is breached:
 
-- `http_req_failed` rate exceeds 2%
-- customer p95 exceeds 1500 ms
-- station p95 exceeds 1000 ms
-- admin p95 exceeds 2000 ms
+- `http_req_failed` rate > 2%
+- customer p95 > 1500 ms · station p95 > 1000 ms · admin p95 > 2000 ms
 
-Use the per-scenario tagged metrics (`http_req_duration{scenario:customer}`) to
-compare against the production latency graph that motivated the optimizations.
+Use the per-scenario tags (`http_req_duration{scenario:customer}`) and the plateau where
+error rate/p95 climb to identify the breaking point.
+
+### Sentry analysis (the "find inefficiencies" half)
+
+While a run is in flight and just after, check the `comanda-api` and `comanda-web` Sentry
+projects (env tag `staging`):
+
+- **Performance → slow transactions** during the run window — the endpoints with the
+  worst p95 under load are your optimisation targets (N+1 queries, missing indexes,
+  per-request work that should be cached).
+- **Issues** spiking during the run — 500s, pool exhaustion, context-cancel storms,
+  `backend-proxy-cold-start` (proxy couldn't reach the API = the API fell over).
+- Correlate the k6 knee timestamp with the Sentry throughput/latency graphs.
 
 ## Cleanup
 
 ```bash
-psql "$DATABASE_URL" -f loadtest/cleanup.sql
+cd backend && just loadtest-cleanup
 ```
 
-Removes all `loadtest_*` users, sessions, device bindings, and any orders with
-`loadtest+…@loadtest.local` contact emails.
+Removes all loadtest users, sessions, members, POS/station devices, inventory bumps, and
+every order generated during runs (customer orders by contact email, POS/station orders
+by their loadtest device) — scoped to the load-test tenant only.
 
 ## Tuning
 
-- `tokens.json` — increase token pool size if you saturate sessions (k6 will
-  start hitting the same session repeatedly under high VU counts). For the
-  in-memory auth cache this is fine; for the underlying DB lookup behaviour you
-  want broader coverage.
-- `profiles.baseline.stages` in `k6.js` — multiply durations to simulate a full
-  evening instead of a compressed 12-minute slice.
-- `thresholds` — tighten as you ship optimizations and want to ratchet up the
-  bar.
+- `profiles.stress.*.stages` in `k6.js` — raise the top `target` if the node shrugs off
+  200 req/s, or add plateaus for finer resolution around the knee.
+- `profiles.baseline.stages` — multiply durations to simulate a full evening.
+- `tokens.json` + the `1..20` / `1..3` loops in `seed.sql` — grow the session pool if you
+  saturate it at high VU counts.
