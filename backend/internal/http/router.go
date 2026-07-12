@@ -38,9 +38,6 @@ func NewRouter(
 	}
 
 	// ── SSE router (minimal middleware to preserve flushing) ──────────
-	// The stream's only DB access is the initial snapshot; it then loops on an
-	// in-memory hub. The tenant tx is held for the stream lifetime — acceptable
-	// for the low number of admin dashboards in P1.
 	sseRouter := chi.NewRouter()
 	sseRouter.Use(securityMw.CORS)
 	// Resolve only, no tenant Tx: a long-lived SSE would pin the tx's pooled

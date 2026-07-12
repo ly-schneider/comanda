@@ -31,14 +31,7 @@ type wirePayload struct {
 }
 
 func MarshalUpdate(u Update) (string, error) {
-	b, err := json.Marshal(wirePayload{
-		TenantID:  u.TenantID,
-		ProductID: u.ProductID,
-		VariantID: u.VariantID,
-		NewStock:  u.NewStock,
-		Delta:     u.Delta,
-		Timestamp: u.Timestamp,
-	})
+	b, err := json.Marshal(wirePayload(u))
 	return string(b), err
 }
 
@@ -47,12 +40,5 @@ func ParseUpdate(payload string) (Update, error) {
 	if err := json.Unmarshal([]byte(payload), &w); err != nil {
 		return Update{}, err
 	}
-	return Update{
-		TenantID:  w.TenantID,
-		ProductID: w.ProductID,
-		VariantID: w.VariantID,
-		NewStock:  w.NewStock,
-		Delta:     w.Delta,
-		Timestamp: w.Timestamp,
-	}, nil
+	return Update(w), nil
 }
