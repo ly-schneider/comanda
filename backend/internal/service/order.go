@@ -40,14 +40,14 @@ type orderService struct {
 	orderRepo     repository.OrderRepository
 	orderLineRepo repository.OrderLineRepository
 	inventoryRepo repository.InventoryLedgerRepository
-	inventoryHub  *inventory.Hub
+	inventoryHub  inventory.Publisher
 }
 
 func NewOrderService(
 	orderRepo repository.OrderRepository,
 	orderLineRepo repository.OrderLineRepository,
 	inventoryRepo repository.InventoryLedgerRepository,
-	inventoryHub *inventory.Hub,
+	inventoryHub inventory.Publisher,
 ) OrderService {
 	return &orderService{
 		orderRepo:     orderRepo,
@@ -190,7 +190,7 @@ func (s *orderService) publishInventoryUpdates(ctx context.Context, entries []re
 	tenantID, _ := repository.TenantIDFromContext(ctx)
 	now := time.Now()
 	for _, productID := range productIDs {
-		s.inventoryHub.Publish(inventory.Update{
+		s.inventoryHub.Publish(ctx, inventory.Update{
 			TenantID:  tenantID,
 			ProductID: productID,
 			NewStock:  stocks[productID],

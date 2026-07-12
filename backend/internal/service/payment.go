@@ -118,7 +118,7 @@ type paymentService struct {
 	products         ProductService
 	bundleSlotRepo   repository.BundleSlotRepository
 	inventoryRepo    repository.InventoryLedgerRepository
-	inventoryHub     *inventory.Hub
+	inventoryHub     inventory.Publisher
 	emailService     EmailService
 	settingsRepo     repository.SettingsRepository
 	tenantDomainRepo repository.TenantDomainRepository
@@ -137,7 +137,7 @@ func NewPaymentService(
 	products ProductService,
 	bundleSlotRepo repository.BundleSlotRepository,
 	inventoryRepo repository.InventoryLedgerRepository,
-	inventoryHub *inventory.Hub,
+	inventoryHub inventory.Publisher,
 	emailService EmailService,
 	settingsRepo repository.SettingsRepository,
 	tenantDomainRepo repository.TenantDomainRepository,
@@ -915,6 +915,7 @@ func (s *paymentService) beginTenantTx(ctx context.Context, tenantID string) (co
 	enttenant.Register(txClient)
 
 	ctx = repository.ContextWithClient(ctx, txClient)
+	ctx = repository.ContextWithRequestTx(ctx, tx)
 	ctx = repository.ContextWithTenantID(ctx, tenantID)
 	ctx = enttenant.WithTenant(ctx, tenantID)
 
@@ -1109,7 +1110,7 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 			vid := key.variantID
 			update.VariantID = &vid
 		}
-		s.inventoryHub.Publish(update)
+		s.inventoryHub.Publish(ctx, update)
 	}
 }
 

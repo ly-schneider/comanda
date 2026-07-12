@@ -48,7 +48,7 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	ctx, finalize, err := h.beginWebhookTenantTx(r.Context(), tenantID)
+	ctx, finalize, err := h.beginTenantTx(r.Context(), tenantID)
 	if err != nil {
 		h.logger.Error("payrexx webhook: begin tenant tx", zap.Error(err))
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to open tenant context")
@@ -170,9 +170,10 @@ func (h *Handlers) resolveWebhookTenant(ctx context.Context, token string) (stri
 	return row.TenantID, nil
 }
 
-// beginWebhookTenantTx mirrors the request tenant-tx middleware so RLS behaves
-// identically on the webhook path.
-func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID string) (context.Context, func(ok bool), error) {
+// beginTenantTx opens a short tenant-scoped tx mirroring the request tenant-tx
+// middleware, so RLS behaves identically off the request path (webhook, SSE
+// snapshot). finalize(true) commits, finalize(false) rolls back.
+func (h *Handlers) beginTenantTx(ctx context.Context, tenantID string) (context.Context, func(ok bool), error) {
 	conn, err := h.appDB.DB.Conn(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -195,6 +196,7 @@ func (h *Handlers) beginWebhookTenantTx(ctx context.Context, tenantID string) (c
 	enttenant.Register(txClient)
 
 	ctx = repository.ContextWithClient(ctx, txClient)
+	ctx = repository.ContextWithRequestTx(ctx, tx)
 	ctx = repository.ContextWithTenantID(ctx, tenantID)
 	ctx = enttenant.WithTenant(ctx, tenantID)
 

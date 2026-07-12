@@ -68,7 +68,7 @@ type productService struct {
 	bundleSlotOptionRepo repository.BundleSlotOptionRepository
 	inventoryRepo        repository.InventoryLedgerRepository
 	jetonRepo            repository.JetonRepository
-	inventoryHub         *inventory.Hub
+	inventoryHub         inventory.Publisher
 	cache                *CatalogCache
 }
 
@@ -80,7 +80,7 @@ func NewProductService(
 	bundleSlotOptionRepo repository.BundleSlotOptionRepository,
 	inventoryRepo repository.InventoryLedgerRepository,
 	jetonRepo repository.JetonRepository,
-	inventoryHub *inventory.Hub,
+	inventoryHub inventory.Publisher,
 	cache *CatalogCache,
 ) ProductService {
 	return &productService{
@@ -429,7 +429,7 @@ func (s *productService) AdjustStock(ctx context.Context, id string, variantID *
 		}
 		if stockErr == nil {
 			tenantID, _ := repository.TenantIDFromContext(ctx)
-			s.inventoryHub.Publish(inventory.Update{
+			s.inventoryHub.Publish(ctx, inventory.Update{
 				TenantID:  tenantID,
 				ProductID: id,
 				VariantID: variantID,
