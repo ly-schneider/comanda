@@ -9,16 +9,23 @@ import {
   uuidv4,
 } from "https://jslib.k6.io/k6-utils/1.4.0/index.js";
 
-// Hard-pinned so a run can never hit another tenant on the shared platform.
-const TARGET_HOST = "load-test.staging.comanda.leys.ch";
+// Hard-pinned allowlist so a run can never hit a real tenant on the shared
+// platform — only the dedicated load-test tenants (staging + prod).
+const ALLOWED_HOSTS = [
+  "load-test.staging.comanda.leys.ch",
+  "load-test.comanda.leys.ch",
+];
 
-const BASE_URL = (__ENV.BASE_URL || `https://${TARGET_HOST}`).replace(/\/$/, "");
+const BASE_URL = (__ENV.BASE_URL || `https://${ALLOWED_HOSTS[0]}`).replace(
+  /\/$/,
+  "",
+);
 const HOST = BASE_URL.replace(/^https?:\/\//, "")
   .split("/")[0]
   .toLowerCase();
-if (HOST !== TARGET_HOST) {
+if (!ALLOWED_HOSTS.includes(HOST)) {
   throw new Error(
-    `Refusing to run: BASE_URL host '${HOST}' is not the dedicated load-test tenant '${TARGET_HOST}'.`,
+    `Refusing to run: BASE_URL host '${HOST}' is not a dedicated load-test tenant (${ALLOWED_HOSTS.join(", ")}).`,
   );
 }
 
@@ -157,6 +164,53 @@ const profiles = {
       preAllocatedVUs: 3,
       maxVUs: 10,
       duration: "12m",
+      tags: { scenario: "admin" },
+    },
+  },
+
+  // `expected` = the realistic dinner-rush peak we sized for: ~7 customer
+  // orders/s sustained (~25k/hr) + 3 station scans/s. Unlike `stress` (which
+  // pushes ~28x to find the knee), this should comfortably PASS the thresholds
+  // — it validates that prod handles real traffic, not the saturation ceiling.
+  expected: {
+    customer: {
+      executor: "ramping-arrival-rate",
+      exec: "customer",
+      startRate: 1,
+      timeUnit: "1s",
+      preAllocatedVUs: 20,
+      maxVUs: 60,
+      stages: [
+        { target: 2, duration: "1m" }, // warmup
+        { target: 7, duration: "2m" }, // ramp to dinner peak
+        { target: 7, duration: "6m" }, // sustained expected peak
+        { target: 0, duration: "1m" },
+      ],
+      tags: { scenario: "customer" },
+    },
+    station: {
+      executor: "ramping-arrival-rate",
+      exec: "station",
+      startRate: 1,
+      timeUnit: "1s",
+      preAllocatedVUs: 8,
+      maxVUs: 24,
+      stages: [
+        { target: 1, duration: "1m" },
+        { target: 3, duration: "2m" },
+        { target: 3, duration: "6m" },
+        { target: 0, duration: "1m" },
+      ],
+      tags: { scenario: "station" },
+    },
+    admin: {
+      executor: "constant-arrival-rate",
+      exec: "admin",
+      rate: 1,
+      timeUnit: "10s",
+      preAllocatedVUs: 2,
+      maxVUs: 5,
+      duration: "10m",
       tags: { scenario: "admin" },
     },
   },
