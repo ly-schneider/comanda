@@ -104,7 +104,9 @@ func (m *DeviceAuthMiddleware) RequireDevice(deviceType DeviceType) func(http.Ha
 			finish()
 
 			if debouncer, ok := m.bindingRepo.(repository.DebouncedLastSeenWriter); ok {
-				debouncer.UpdateLastSeenDebounced(binding.ID, m.logger)
+				if tenantID, ok := GetTenantID(r.Context()); ok {
+					debouncer.UpdateLastSeenDebounced(binding.ID, tenantID, m.logger)
+				}
 			} else {
 				go func(id string) {
 					bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -86,6 +86,12 @@ func (f *fakeBindingRepo) UpdateLastSeen(_ context.Context, _ string) error {
 	return f.lastSeenErr
 }
 
+// directTenantTxRunner runs fn immediately without a real tx, so the cache and
+// debounce behaviour can be exercised without a database.
+func directTenantTxRunner(ctx context.Context, _ string, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func (f *fakeBindingRepo) Revoke(_ context.Context, _ string) error { return nil }
 
 func (f *fakeBindingRepo) ListActiveByDeviceID(_ context.Context, _ string) ([]*ent.DeviceBinding, error) {
@@ -237,7 +243,7 @@ func TestCachedSessionRepo_RefreshSessionAsync_OptimisticUpdatedAtBump(t *testin
 
 func TestCachedBindingRepo_GetByTokenHash_HitAfterMiss(t *testing.T) {
 	inner := &fakeBindingRepo{binding: &ent.DeviceBinding{ID: nanoid.New()}}
-	repo := NewCachedDeviceBindingRepository(inner)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner)
 	ctx := context.Background()
 
 	_, err := repo.GetByTokenHash(ctx, "hash")
@@ -250,7 +256,7 @@ func TestCachedBindingRepo_GetByTokenHash_HitAfterMiss(t *testing.T) {
 
 func TestCachedBindingRepo_GetByTokenHash_NotFoundCachedNegatively(t *testing.T) {
 	inner := &fakeBindingRepo{getErr: ErrNotFound}
-	repo := NewCachedDeviceBindingRepository(inner)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner)
 	ctx := context.Background()
 
 	_, err1 := repo.GetByTokenHash(ctx, "missing")
@@ -265,7 +271,7 @@ func TestCachedBindingRepo_GetByTokenHash_NotFoundCachedNegatively(t *testing.T)
 func TestCachedBindingRepo_Create_PrepopulatesPositiveEntry(t *testing.T) {
 	id := nanoid.New()
 	inner := &fakeBindingRepo{binding: &ent.DeviceBinding{ID: id}}
-	repo := NewCachedDeviceBindingRepository(inner)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner)
 	ctx := context.Background()
 
 	created, err := repo.Create(ctx, devicebinding.DeviceTypePOS, "fresh-hash", "admin-1", nil, nil, nil)
@@ -280,11 +286,11 @@ func TestCachedBindingRepo_Create_PrepopulatesPositiveEntry(t *testing.T) {
 
 func TestCachedBindingRepo_UpdateLastSeenDebounced_FiresOnceWithinWindow(t *testing.T) {
 	inner := &fakeBindingRepo{}
-	repo := NewCachedDeviceBindingRepository(inner).(*cachedDeviceBindingRepo)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner).(*cachedDeviceBindingRepo)
 	id := nanoid.New()
 
 	for i := 0; i < 25; i++ {
-		repo.UpdateLastSeenDebounced(id, zap.NewNop())
+		repo.UpdateLastSeenDebounced(id, "tenant_test1", zap.NewNop())
 	}
 
 	require.Eventually(t, func() bool {
@@ -297,10 +303,10 @@ func TestCachedBindingRepo_UpdateLastSeenDebounced_FiresOnceWithinWindow(t *test
 
 func TestCachedBindingRepo_UpdateLastSeenDebounced_DifferentIDsAllFire(t *testing.T) {
 	inner := &fakeBindingRepo{}
-	repo := NewCachedDeviceBindingRepository(inner).(*cachedDeviceBindingRepo)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner).(*cachedDeviceBindingRepo)
 
 	for i := 0; i < 5; i++ {
-		repo.UpdateLastSeenDebounced(nanoid.New(), zap.NewNop())
+		repo.UpdateLastSeenDebounced(nanoid.New(), "tenant_test1", zap.NewNop())
 	}
 
 	require.Eventually(t, func() bool {
@@ -308,10 +314,27 @@ func TestCachedBindingRepo_UpdateLastSeenDebounced_DifferentIDsAllFire(t *testin
 	}, time.Second, 5*time.Millisecond)
 }
 
+func TestCachedBindingRepo_UpdateLastSeenDebounced_RunsInResolvedTenant(t *testing.T) {
+	inner := &fakeBindingRepo{}
+	var gotTenant atomic.Value
+	runner := func(ctx context.Context, tenantID string, fn func(context.Context) error) error {
+		gotTenant.Store(tenantID)
+		return fn(ctx)
+	}
+	repo := NewCachedDeviceBindingRepository(inner, runner).(*cachedDeviceBindingRepo)
+
+	repo.UpdateLastSeenDebounced(nanoid.New(), "tenant_abc1", zap.NewNop())
+
+	require.Eventually(t, func() bool {
+		return atomic.LoadInt32(&inner.lastSeenCalls) == 1
+	}, time.Second, 5*time.Millisecond)
+	require.Equal(t, "tenant_abc1", gotTenant.Load(), "background last_seen write must run in the resolved tenant's tx")
+}
+
 func TestCachedBindingRepo_Revoke_ClearsCacheEntry(t *testing.T) {
 	id := nanoid.New()
 	inner := &fakeBindingRepo{binding: &ent.DeviceBinding{ID: id}}
-	repo := NewCachedDeviceBindingRepository(inner)
+	repo := NewCachedDeviceBindingRepository(inner, directTenantTxRunner)
 	ctx := context.Background()
 
 	_, _ = repo.GetByTokenHash(ctx, "hash")

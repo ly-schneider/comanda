@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+
+	"backend/internal/database"
 	"backend/internal/generated/ent"
 	"backend/internal/repository"
 
@@ -11,8 +14,11 @@ func newCachedSessionRepository(client *ent.Client) repository.SessionRepository
 	return repository.NewCachedSessionRepository(repository.NewSessionRepository(client))
 }
 
-func newCachedDeviceBindingRepository(client *ent.Client) repository.DeviceBindingRepository {
-	return repository.NewCachedDeviceBindingRepository(repository.NewDeviceBindingRepository(client))
+func newCachedDeviceBindingRepository(client *ent.Client, app *database.AppClient) repository.DeviceBindingRepository {
+	runInTx := func(ctx context.Context, tenantID string, fn func(context.Context) error) error {
+		return repository.RunInTenantTx(ctx, app.DB, tenantID, fn)
+	}
+	return repository.NewCachedDeviceBindingRepository(repository.NewDeviceBindingRepository(client), runInTx)
 }
 
 func NewRepositories() fx.Option {

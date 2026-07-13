@@ -173,20 +173,28 @@ type SessionInvalidator interface {
 	InvalidateUser(userID string)
 }
 
+// TenantTxRunner runs fn inside a transaction bound to tenantID (with the
+// app.tenant_id RLS GUC set). Production wires this to RunInTenantTx over the
+// app pool; the debounced last_seen flush runs on a background goroutine with
+// no request tx, so it needs its own tenant-bound tx or RLS denies the write.
+type TenantTxRunner func(ctx context.Context, tenantID string, fn func(ctx context.Context) error) error
+
 type cachedDeviceBindingRepo struct {
 	inner    DeviceBindingRepository
 	cache    *ttlCache[*ent.DeviceBinding]
 	lastSeen sync.Map
+	runInTx  TenantTxRunner
 }
 
-func NewCachedDeviceBindingRepository(inner DeviceBindingRepository) DeviceBindingRepository {
+func NewCachedDeviceBindingRepository(inner DeviceBindingRepository, runInTx TenantTxRunner) DeviceBindingRepository {
 	return &cachedDeviceBindingRepo{
-		inner: inner,
-		cache: newTTLCache[*ent.DeviceBinding](),
+		inner:   inner,
+		cache:   newTTLCache[*ent.DeviceBinding](),
+		runInTx: runInTx,
 	}
 }
 
-func (r *cachedDeviceBindingRepo) UpdateLastSeenDebounced(id string, logger *zap.Logger) {
+func (r *cachedDeviceBindingRepo) UpdateLastSeenDebounced(id, tenantID string, logger *zap.Logger) {
 	now := time.Now()
 	if prev, ok := r.lastSeen.Load(id); ok {
 		if last, ok := prev.(time.Time); ok && now.Sub(last) < lastSeenDebounce {
@@ -197,14 +205,17 @@ func (r *cachedDeviceBindingRepo) UpdateLastSeenDebounced(id string, logger *zap
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), lastSeenAsyncBudget)
 		defer cancel()
-		if err := r.inner.UpdateLastSeen(ctx, id); err != nil && logger != nil {
+		err := r.runInTx(ctx, tenantID, func(ctx context.Context) error {
+			return r.inner.UpdateLastSeen(ctx, id)
+		})
+		if err != nil && logger != nil {
 			logger.Warn("debounced last_seen update failed", zap.Error(err))
 		}
 	}()
 }
 
 type DebouncedLastSeenWriter interface {
-	UpdateLastSeenDebounced(id string, logger *zap.Logger)
+	UpdateLastSeenDebounced(id, tenantID string, logger *zap.Logger)
 }
 
 func (r *cachedDeviceBindingRepo) GetByID(ctx context.Context, id string) (*ent.DeviceBinding, error) {

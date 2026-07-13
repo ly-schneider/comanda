@@ -262,9 +262,12 @@ func NewRepositories(client *ent.Client) *Repositories {
 		Inventory:        pgRepo.NewInventoryLedgerRepository(client),
 		Device:           pgRepo.NewDeviceRepository(client),
 		DeviceProduct:    pgRepo.NewDeviceProductRepository(client),
-		DeviceBinding:    pgRepo.NewCachedDeviceBindingRepository(pgRepo.NewDeviceBindingRepository(client)),
-		Settings:         pgRepo.NewSettingsRepository(client),
-		Idempotency:      pgRepo.NewIdempotencyRepository(client),
+		DeviceBinding: pgRepo.NewCachedDeviceBindingRepository(
+			pgRepo.NewDeviceBindingRepository(client),
+			func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) },
+		),
+		Settings:    pgRepo.NewSettingsRepository(client),
+		Idempotency: pgRepo.NewIdempotencyRepository(client),
 	}
 }
 
