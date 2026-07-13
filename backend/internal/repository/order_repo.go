@@ -50,8 +50,20 @@ type OrderRepository interface {
 	FindPendingByAttemptID(ctx context.Context, attemptID string) (*ent.Order, error)
 	DeletePendingByAttemptIDExcept(ctx context.Context, attemptID string, except string) (int64, error)
 
+	// ListStalePending returns id + tenant_id for pending orders created before
+	// cutoff, across all tenants. It runs on the passed privileged (RLS-bypassing)
+	// client because the backstop sweeper has no per-request tenant context; the
+	// caller then reclaims each within a tenant-scoped tx.
+	ListStalePending(ctx context.Context, privileged *ent.Client, cutoff time.Time) ([]StalePendingOrder, error)
+
 	// Aggregation
 	GetEventDays(ctx context.Context) ([]EventDay, error)
+}
+
+// StalePendingOrder identifies a pending order eligible for backstop cleanup.
+type StalePendingOrder struct {
+	ID       string
+	TenantID string
 }
 
 type EventDay struct {
@@ -125,6 +137,30 @@ func (r *orderRepo) LockByID(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *orderRepo) ListStalePending(ctx context.Context, privileged *ent.Client, cutoff time.Time) ([]StalePendingOrder, error) {
+	var rows []struct {
+		ID       string `json:"id"`
+		TenantID string `json:"tenant_id"`
+	}
+	err := privileged.Order.Query().
+		Where(
+			order.StatusEQ(order.StatusPending),
+			order.CreatedAtLT(cutoff),
+		).
+		Modify(func(s *sql.Selector) {
+			s.Select(s.C(order.FieldID), s.C(order.FieldTenantID))
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	out := make([]StalePendingOrder, len(rows))
+	for i, row := range rows {
+		out[i] = StalePendingOrder{ID: row.ID, TenantID: row.TenantID}
+	}
+	return out, nil
 }
 
 func (r *orderRepo) GetByIDWithRelations(ctx context.Context, id string) (*ent.Order, error) {

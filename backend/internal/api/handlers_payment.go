@@ -113,6 +113,18 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if !result.IsSuccess {
+		// A failed/expired payment is the terminal signal that this order won't be
+		// paid: release its inventory hold now instead of waiting for the backstop
+		// sweep. Best-effort — still ack 200 so Payrexx doesn't retry.
+		if nanoid.Valid(result.ReferenceID) {
+			if err := h.payments.CleanupPendingOrderByID(ctx, result.ReferenceID); err != nil {
+				h.logger.Warn("payrexx webhook: release on payment failure failed",
+					zap.String("orderId", result.ReferenceID),
+					zap.String("tenantId", tenantID),
+					zap.Error(err),
+				)
+			}
+		}
 		response.WriteJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 		finalize(true)
 		committed = true

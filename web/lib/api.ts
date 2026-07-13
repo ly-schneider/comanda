@@ -13,10 +13,21 @@ export const API_BASE_URL = resolveApiBase()
 export interface ApiError {
   status: number
   message: string
+  code?: string
+  details?: Record<string, unknown>
 }
 
-export function createApiError(status: number, message: string): ApiError {
-  return { status, message }
+export function createApiError(
+  status: number,
+  message: string,
+  code?: string,
+  details?: Record<string, unknown>
+): ApiError {
+  return { status, message, code, details }
+}
+
+export function isApiError(e: unknown): e is ApiError {
+  return typeof e === "object" && e !== null && "status" in e && "message" in e
 }
 
 export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -45,7 +56,12 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
   const response = await fetch(url, { ...options, headers })
 
   if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as { message?: string; detail?: string }
+    const errorData = (await response.json().catch(() => ({}))) as {
+      message?: string
+      detail?: string
+      code?: string
+      details?: Record<string, unknown>
+    }
     try {
       console.error("[api] request failed", {
         method,
@@ -57,7 +73,9 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
     } catch {}
     const error = createApiError(
       response.status,
-      errorData.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+      errorData.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
+      errorData.code,
+      errorData.details
     )
     throw error
   }

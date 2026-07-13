@@ -108,6 +108,30 @@ type CheckoutPreparation struct {
 	QRPayload     string
 }
 
+// InsufficientInventoryError is returned by PrepareAndCreateOrder when one or
+// more requested items lack stock. It carries the offending product/variant ids
+// so the client can flag the exact cart lines rather than showing a generic
+// failure. All violations are reported, not just the first.
+type InsufficientInventoryError struct {
+	Items []InsufficientInventoryItem
+}
+
+type InsufficientInventoryItem struct {
+	ProductID string
+	VariantID string // empty when the product has no variants
+	Name      string
+	Requested int
+	Available int
+}
+
+func (e *InsufficientInventoryError) Error() string {
+	names := make([]string, 0, len(e.Items))
+	for _, it := range e.Items {
+		names = append(names, it.Name)
+	}
+	return "insufficient inventory: " + strings.Join(names, ", ")
+}
+
 type paymentService struct {
 	cfg              config.Config
 	providers        *payment.Factory
@@ -218,6 +242,13 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	if err != nil {
 		return nil, fmt.Errorf("load bundle slots: %w", err)
 	}
+	// Lock the product rows before reading stock so two concurrent checkouts of
+	// the same product can't both pass the availability check below and oversell:
+	// the second checkout blocks on this lock until the first commits, then reads
+	// the already-decremented ledger. Held for the whole request tx.
+	if err := s.products.LockByIDs(ctx, ids); err != nil {
+		return nil, fmt.Errorf("lock products: %w", err)
+	}
 	preloadedStock, err := s.inventoryRepo.GetCurrentStockBatch(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("check inventory: %w", err)
@@ -318,6 +349,7 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		}
 	}
 
+	var soldOut []InsufficientInventoryItem
 	for req, required := range requiredQuantities {
 		available := preloadedStock[req.productID]
 		if req.variantID != "" {
@@ -336,8 +368,17 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 					}
 				}
 			}
-			return nil, fmt.Errorf("insufficient inventory for %s: requested %d, available %d", pName, required, available)
+			soldOut = append(soldOut, InsufficientInventoryItem{
+				ProductID: req.productID,
+				VariantID: req.variantID,
+				Name:      pName,
+				Requested: required,
+				Available: available,
+			})
 		}
+	}
+	if len(soldOut) > 0 {
+		return nil, &InsufficientInventoryError{Items: soldOut}
 	}
 
 	origin := in.Origin
@@ -625,9 +666,29 @@ func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID str
 	trace.Data(ctx, "payment.gateway_id", gatewayID)
 	trace.Data(ctx, "payment.transaction_id", transactionID)
 
+	// Lock the row so a concurrent backstop sweep can't reclaim this order while
+	// we settle it, then re-check status under the lock.
+	if err := s.orderRepo.LockByID(ctx, orderID); err != nil {
+		return fmt.Errorf("lock order: %w", err)
+	}
 	ord, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return fmt.Errorf("order not found: %w", err)
+	}
+	if ord.Status == order.StatusPaid {
+		// Idempotent: a duplicate/retried webhook for an already-settled order.
+		return nil
+	}
+	if ord.Status != order.StatusPending {
+		// The backstop sweep reclaimed this order (closed tab, no terminal
+		// webhook) before a late success arrived. With a TTL far longer than any
+		// real payment window this is effectively impossible; log loudly since
+		// the customer may have been charged for a released order.
+		s.logger.Error("payrexx webhook: paid order no longer pending",
+			zap.String("orderId", orderID),
+			zap.String("status", string(ord.Status)),
+		)
+		return fmt.Errorf("order %s not pending (status %s)", orderID, ord.Status)
 	}
 
 	ce := ord.ContactEmail
@@ -709,6 +770,17 @@ func (s *paymentService) CleanupPendingOrderByID(ctx context.Context, orderID st
 	defer finish()
 	trace.Data(ctx, "cleanup.order_id", orderID)
 
+	// Lock the row and re-check status under the lock: this and a concurrent
+	// MarkOrderPaidByPayrexx serialize, so a payment landing just as the backstop
+	// sweep fires can't be released out from under the customer (whoever takes the
+	// lock first wins; the loser sees the settled status and no-ops).
+	if err := s.orderRepo.LockByID(ctx, orderID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		trace.Err(ctx, err)
+		return err
+	}
 	ord, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		trace.Err(ctx, err)

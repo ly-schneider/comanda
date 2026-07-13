@@ -369,7 +369,11 @@ func TestPaymentService_VariantCheckout(t *testing.T) {
 			},
 		}, nil, nil)
 		require.Error(t, err, "only 1 XL left after the first checkout")
-		require.Contains(t, err.Error(), "insufficient inventory for T-Shirt (XL)")
+		var ins *service.InsufficientInventoryError
+		require.ErrorAs(t, err, &ins)
+		require.Len(t, ins.Items, 1)
+		require.Equal(t, shirt.ID, ins.Items[0].ProductID)
+		require.Equal(t, xl.ID, ins.Items[0].VariantID)
 
 		prep, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
 			Items: []service.CheckoutItemInput{

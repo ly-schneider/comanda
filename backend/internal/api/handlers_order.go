@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -178,6 +179,11 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 	if err != nil {
 		if claimedID != nil {
 			_ = h.idempotency.Discard(ctx, *claimedID)
+		}
+		var soldOut *service.InsufficientInventoryError
+		if errors.As(err, &soldOut) {
+			writeOutOfStockError(w, soldOut)
+			return
 		}
 		writeError(w, http.StatusBadRequest, "order_failed", err.Error())
 		return

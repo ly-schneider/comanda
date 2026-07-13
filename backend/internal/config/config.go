@@ -24,6 +24,21 @@ type Config struct {
 	Android      AndroidConfig
 	CustomDomain CustomDomainConfig
 	Ingress      IngressConfig
+	Inventory    InventoryConfig
+}
+
+// InventoryConfig drives the pending-order reservation backstop. A checkout
+// holds inventory the instant the customer taps pay; an in-flight payment is
+// never reclaimed. This backstop only frees stock from genuinely dead pending
+// orders (closed tab, no terminal webhook), so its TTL must comfortably exceed
+// the real payment window.
+type InventoryConfig struct {
+	// PendingOrderTTL is how long a pending order may hold its reservation before
+	// the backstop sweeper cancels it and releases the stock.
+	PendingOrderTTL time.Duration
+	// PendingSweepInterval is how often the backstop sweeper runs. Set to 0 to
+	// disable the sweeper.
+	PendingSweepInterval time.Duration
 }
 
 // CustomDomainConfig drives bring-your-own custom domains: the DNS records a
@@ -251,6 +266,10 @@ func Load() Config {
 			UnverifiedTTL:    getEnvDurationWithDefault("CUSTOM_DOMAIN_UNVERIFIED_TTL", 7*24*time.Hour),
 			SweepInterval:    getEnvDurationWithDefault("CUSTOM_DOMAIN_SWEEP_INTERVAL", time.Hour),
 			InternalAPIToken: getEnvOptional("INTERNAL_API_TOKEN"),
+		},
+		Inventory: InventoryConfig{
+			PendingOrderTTL:      getEnvDurationWithDefault("INVENTORY_PENDING_TTL", 30*time.Minute),
+			PendingSweepInterval: getEnvDurationWithDefault("INVENTORY_PENDING_SWEEP_INTERVAL", 5*time.Minute),
 		},
 		Ingress: IngressConfig{
 			Enabled:          getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),

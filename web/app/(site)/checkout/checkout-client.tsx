@@ -11,6 +11,7 @@ import { ProductConfigurationModal } from "@/components/cart/product-configurati
 import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
+import { soldOutKey, soldOutMessage, takeSoldOut } from "@/lib/checkout-sold-out"
 import { cartDepositCents } from "@/lib/utils"
 import { CartItem } from "@/types/cart"
 
@@ -19,7 +20,18 @@ export default function CheckoutClient() {
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [soldOut, setSoldOut] = useState<Map<string, string>>(new Map())
   const router = useRouter()
+
+  // Picked up when the payment step bounces back here after a sold-out result.
+  useEffect(() => {
+    const items = takeSoldOut()
+    if (!items.length) return
+    const map = new Map<string, string>()
+    for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available))
+    setSoldOut(map)
+    setError("Ein Artikel ist nicht mehr verfügbar. Bitte passe deinen Warenkorb an.")
+  }, [])
   const sp = useSearchParams()
   const from = sp.get("from")
   const footerRef = useRef<HTMLDivElement>(null)
@@ -94,6 +106,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     )
                   }
@@ -116,6 +129,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     )
                   }
@@ -128,6 +142,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     )
                   }
