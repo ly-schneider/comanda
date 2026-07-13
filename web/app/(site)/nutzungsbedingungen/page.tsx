@@ -19,7 +19,7 @@ export default async function NutzungsbedingungenPage() {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Nutzungsbedingungen</h1>
-      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 25. Juni 2026</p>
+      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 13. Juli 2026</p>
 
       <div className="space-y-8 text-sm leading-relaxed">
         <section>
@@ -68,9 +68,9 @@ export default async function NutzungsbedingungenPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold">4. Registrierung und Benutzerkonto</h2>
           <p>
-            Zur Nutzung der Plattform kann ein Benutzerkonto erstellt werden, entweder mit E-Mail-Adresse und Passwort
-            oder über Google. Sie sind dafür verantwortlich, korrekte Angaben zu machen und Ihre Zugangsdaten
-            vertraulich zu behandeln.
+            Zur Nutzung der Plattform kann ein Benutzerkonto erstellt werden, entweder mit Ihrer E-Mail-Adresse und
+            einem einmaligen Bestätigungscode, den wir Ihnen per E-Mail zusenden, oder über Google. Sie sind dafür
+            verantwortlich, korrekte Angaben zu machen und den Zugriff auf Ihr E-Mail-Konto zu schützen.
           </p>
           <p className="mt-2">
             Bei Verstössen gegen diese Nutzungsbedingungen oder bei missbräuchlicher Nutzung können wir Ihr Konto

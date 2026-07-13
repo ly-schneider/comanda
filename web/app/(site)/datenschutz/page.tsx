@@ -20,7 +20,7 @@ export default async function PrivacyPolicyPage() {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-2 text-2xl font-semibold">Datenschutzerklärung</h1>
-      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 25. Juni 2026</p>
+      <p className="text-muted-foreground mb-8 text-sm">Letzte Aktualisierung: 13. Juli 2026</p>
 
       <div className="space-y-8 text-sm leading-relaxed">
         <section>
@@ -70,8 +70,8 @@ export default async function PrivacyPolicyPage() {
           <p className="mb-2">Wir bearbeiten folgende Kategorien von Personendaten:</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>Kontodaten:</strong> Name, E-Mail-Adresse, Passwort (verschlüsselt), Google-Konto-Informationen
-              bei Anmeldung via Google
+              <strong>Kontodaten:</strong> Name, E-Mail-Adresse, Google-Konto-Informationen bei Anmeldung via Google
+              (die Anmeldung erfolgt per E-Mail-Einmalcode oder über Google, wir speichern kein Passwort)
             </li>
             <li>
               <strong>Bestelldaten:</strong> Bestellte Artikel, Bestellverlauf, Zeitstempel, Bestellstatus
@@ -180,7 +180,7 @@ export default async function PrivacyPolicyPage() {
           <p>
             Wir treffen angemessene technische und organisatorische Massnahmen zum Schutz Ihrer Personendaten gemäss
             Art. 8 nDSG. Dazu gehören insbesondere verschlüsselte Datenübertragung (TLS), Zugangskontrollen,
-            verschlüsselte Passwortspeicherung sowie regelmässige Sicherheitsüberprüfungen.
+            passwortlose Anmeldung per E-Mail-Einmalcode sowie regelmässige Sicherheitsüberprüfungen.
           </p>
         </section>
 
