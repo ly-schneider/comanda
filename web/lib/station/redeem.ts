@@ -17,6 +17,9 @@ import type { VerifyResult } from "@/lib/station/qr-verify"
 
 export interface RedeemLineView {
   productId: string
+  /** undefined for a product with no variant. */
+  variantId?: string
+  variantValue?: string
   title: string
   productImage?: string | null
   quantity: number
@@ -34,6 +37,8 @@ export type RedeemResult =
 export interface CatalogProduct {
   name: string
   image?: string | null
+  /** variantId -> display value (e.g. "XL"). */
+  variants?: Record<string, string>
 }
 
 export interface RedeemDeps {
@@ -67,10 +72,13 @@ export async function redeemScan(token: string, deps: RedeemDeps): Promise<Redee
   const views: RedeemLineView[] = []
   const fresh: typeof matched = []
   for (const line of matched) {
-    const existing = await deps.ledger.get(payload.o, line.p)
+    const variantId = line.v ?? ""
+    const existing = await deps.ledger.get(payload.o, line.p, variantId)
     const product = deps.catalog.get(line.p)
     views.push({
       productId: line.p,
+      variantId: line.v,
+      variantValue: line.v ? product?.variants?.[line.v] : undefined,
       title: product?.name ?? line.p,
       productImage: product?.image ?? null,
       quantity: line.q,
@@ -88,6 +96,7 @@ export async function redeemScan(token: string, deps: RedeemDeps): Promise<Redee
     await deps.ledger.record({
       orderId: payload.o,
       productId: line.p,
+      variantId: line.v ?? "",
       quantity: line.q,
       tenantId: payload.t,
       redeemedAt,

@@ -183,7 +183,7 @@ export default function OrderPageClient() {
           </div>
         )
       }
-      // Signed token → binary v2 QR (byte-mode); the plain pickup URL is the text fallback.
+      // Signed token → binary v3 QR (byte-mode); the plain pickup URL is the text fallback.
       if (serverOrder?.qrPayload) {
         return (
           <QRCode value={serverOrder.qrPayload} binary size={260} className="mx-auto rounded-[11px] border-2 p-1" />

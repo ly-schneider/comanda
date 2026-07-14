@@ -590,10 +590,10 @@ func (s *paymentService) signOrderQR(ctx context.Context, orderID string, lines 
 	for _, l := range lines {
 		switch l.LineType {
 		case orderline.LineTypeSimple, orderline.LineTypeComponent:
-			redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+			redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, VariantID: safeStr(l.VariantID), Quantity: l.Quantity})
 		case orderline.LineTypeBundle:
 			if l.ID == nil || !hasComponents[*l.ID] {
-				redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, Quantity: l.Quantity})
+				redeemable = append(redeemable, qrsign.Line{ProductID: l.ProductID, VariantID: safeStr(l.VariantID), Quantity: l.Quantity})
 			}
 		}
 	}

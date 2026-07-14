@@ -93,6 +93,36 @@ describe("runOfflineSetup", () => {
     expect(stored.ready).toBe(true)
   })
 
+  it("carries product variants into the catalog for offline variant rendering", async () => {
+    const withVariants = res(200, {
+      items: [
+        {
+          id: "p1",
+          name: "Shirt",
+          image: null,
+          variants: [
+            { id: "vrnt_size_xl", value: "XL" },
+            { id: "vrnt_size_m0", value: "M" },
+          ],
+        },
+      ],
+    })
+    const d = deps({}, { "/api/v1/products": withVariants })
+    await runOfflineSetup(d)
+
+    expect(await d.store.get(CATALOG_KEY)).toEqual([
+      {
+        id: "p1",
+        name: "Shirt",
+        image: null,
+        variants: [
+          { id: "vrnt_size_xl", value: "XL" },
+          { id: "vrnt_size_m0", value: "M" },
+        ],
+      },
+    ])
+  })
+
   it("caches the enabled plugin keys for the offline voucher gate", async () => {
     const d = deps()
     await runOfflineSetup(d)

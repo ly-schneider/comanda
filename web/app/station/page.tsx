@@ -122,6 +122,8 @@ function groupRedemptionTime(group: LineGroup): string | undefined {
 
 type ConsolidatedItem = {
   productId: string
+  variantId?: string | null
+  variantValue?: string | null
   title: string
   productImage?: string | null
   quantity: number
@@ -132,7 +134,8 @@ type ConsolidatedItem = {
 function consolidateLines(lines: OrderLine[]): ConsolidatedItem[] {
   const map = new Map<string, ConsolidatedItem>()
   for (const l of lines) {
-    const existing = map.get(l.productId)
+    const key = `${l.productId}:${l.variantId ?? ""}`
+    const existing = map.get(key)
     if (existing) {
       existing.quantity += l.quantity
       if (!l.redemption) existing.redeemed = false
@@ -141,8 +144,10 @@ function consolidateLines(lines: OrderLine[]): ConsolidatedItem[] {
         existing.redemptionTime = t
       }
     } else {
-      map.set(l.productId, {
+      map.set(key, {
         productId: l.productId,
+        variantId: l.variantId,
+        variantValue: l.variantValue,
         title: l.title,
         productImage: l.productImage,
         quantity: l.quantity,
@@ -366,7 +371,12 @@ export default function StationPage() {
       ])
       if (cancelled) return
       const map = new Map<string, CatalogProduct>()
-      for (const entry of catalog ?? []) map.set(entry.id, { name: entry.name, image: entry.image })
+      for (const entry of catalog ?? []) {
+        const variants = entry.variants?.length
+          ? Object.fromEntries(entry.variants.map((v) => [v.id, v.value]))
+          : undefined
+        map.set(entry.id, { name: entry.name, image: entry.image, variants })
+      }
       const enabled = (plugins ?? []).includes(ARTIST_VOUCHER_PLUGIN_KEY)
       offlineRef.current = {
         publicKey: cfg?.publicKey ?? null,
@@ -669,6 +679,8 @@ export default function StationPage() {
                 parentItemId?: string | null
                 bundleSlotId?: string | null
                 bundleSlotName?: string | null
+                variantId?: string | null
+                variantValue?: string | null
               }>
             }
           }
@@ -686,6 +698,8 @@ export default function StationPage() {
             parentLineId: it.parentItemId ?? null,
             bundleSlotId: it.bundleSlotId ?? null,
             bundleSlotName: it.bundleSlotName ?? null,
+            variantId: it.variantId ?? null,
+            variantValue: it.variantValue ?? null,
           }))
           const unredeemed = lines.filter((l) => !l.redemption)
           const allRedeemed = lines.length > 0 && unredeemed.length === 0
@@ -715,19 +729,22 @@ export default function StationPage() {
         })
 
         const toLines = (orderId: string, views: RedeemLineView[]): OrderLine[] =>
-          views.map((v) => ({
-            id: `${orderId}:${v.productId}`,
-            orderId,
-            productId: v.productId,
-            title: v.title,
-            quantity: v.quantity,
-            unitPriceCents: 0,
-            productImage: v.productImage,
-            redemption:
-              v.redeemedAt != null
-                ? { id: `${orderId}:${v.productId}`, redeemedAt: new Date(v.redeemedAt).toISOString() }
-                : null,
-          }))
+          views.map((v) => {
+            const lineId = `${orderId}:${v.productId}:${v.variantId ?? ""}`
+            return {
+              id: lineId,
+              orderId,
+              productId: v.productId,
+              title: v.title,
+              quantity: v.quantity,
+              unitPriceCents: 0,
+              productImage: v.productImage,
+              variantId: v.variantId ?? null,
+              variantValue: v.variantValue ?? null,
+              redemption:
+                v.redeemedAt != null ? { id: lineId, redeemedAt: new Date(v.redeemedAt).toISOString() } : null,
+            }
+          })
 
         switch (result.kind) {
           case "invalid":
@@ -1058,13 +1075,13 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
             return (
               <>
                 {unredeemedItems.map((it) => (
-                  <ConsolidatedItemCard key={it.productId} item={it} redeemed={false} />
+                  <ConsolidatedItemCard key={`${it.productId}:${it.variantId ?? ""}`} item={it} redeemed={false} />
                 ))}
                 {redeemedItems.length > 0 && scan.status === "success" && unredeemedItems.length > 0 && (
                   <div className="text-muted-foreground mt-1 text-xs font-medium">Bereits eingelöst</div>
                 )}
                 {redeemedItems.map((it) => (
-                  <ConsolidatedItemCard key={it.productId} item={it} redeemed />
+                  <ConsolidatedItemCard key={`${it.productId}:${it.variantId ?? ""}`} item={it} redeemed />
                 ))}
               </>
             )
@@ -1163,6 +1180,14 @@ function VoucherScanRow({ scan }: { scan: VoucherScanResult }) {
   )
 }
 
+function VariantPill({ value }: { value: string }) {
+  return (
+    <div className="mt-1 flex flex-row flex-wrap gap-1.5">
+      <span className="text-muted-foreground border-border rounded-lg border px-2 py-0.5 text-xs">{value}</span>
+    </div>
+  )
+}
+
 function ConsolidatedItemCard({ item, redeemed }: { item: ConsolidatedItem; redeemed: boolean }) {
   return (
     <div className="rounded-xl border p-3">
@@ -1187,6 +1212,7 @@ function ConsolidatedItemCard({ item, redeemed }: { item: ConsolidatedItem; rede
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{item.title}</p>
+          {item.variantValue && <VariantPill value={item.variantValue} />}
           {redeemed && item.redemptionTime && (
             <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
               Eingelöst {new Date(item.redemptionTime).toLocaleTimeString("de-CH")}
@@ -1235,6 +1261,8 @@ function LineGroupCard({ group, redeemed }: { group: LineGroup; redeemed: boolea
                 </span>
               ))}
             </div>
+          ) : parent.variantValue ? (
+            <VariantPill value={parent.variantValue} />
           ) : (
             parent.bundleSlotName && (
               <div className="text-muted-foreground mt-0.5 truncate text-xs">{parent.bundleSlotName}</div>

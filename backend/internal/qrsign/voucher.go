@@ -9,7 +9,7 @@ import (
 )
 
 // Discriminator allocation (body[0]): the pickup-order token family owns the low
-// range — 0x02 today, with 0x03..0x0F reserved for future pickup versions. The
+// range — 0x03 today, with 0x04..0x0F reserved for future pickup versions. The
 // voucher is a distinct format, so it starts a separate range at 0x10 to leave
 // that headroom.
 const verVoucher = 0x10
@@ -89,7 +89,7 @@ func encodeVoucher(p VoucherPayload) ([]byte, error) {
 
 // VerifyVoucher checks the signature over the literal decoded bytes and parses a
 // voucher payload. It rejects any token whose discriminator is not 0x10, so a
-// pickup (0x02) token verified here fails as an unsupported version.
+// pickup (0x03) token verified here fails as an unsupported version.
 func VerifyVoucher(pub ed25519.PublicKey, token string) (VoucherPayload, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {

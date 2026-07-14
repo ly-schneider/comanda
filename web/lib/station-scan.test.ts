@@ -24,8 +24,8 @@ describe("parseScan", () => {
     expect(parseScan("CAMP:01937c7a-0000-7000-8000-000000000000")).toBeNull()
   })
 
-  it("re-encodes a v2 binary order QR (first byte 0x02) to a base64url token", () => {
-    const body = new Uint8Array([0x02, 1, 2, 3, 4, 5])
+  it("re-encodes a v3 binary order QR (first byte 0x03) to a base64url token", () => {
+    const body = new Uint8Array([0x03, 1, 2, 3, 4, 5])
     // zxing hands the raw bytes as `.bytes`; `.text` is lossy mojibake and unused here.
     const parsed = parseScan("", body)
     expect(parsed).toEqual({ kind: "order", token: bytesToBase64Url(body) })
