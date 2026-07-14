@@ -276,28 +276,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     return () => window.removeEventListener("comanda:pos:order-server-id", handler as EventListener)
   }, [generatePickupQr])
 
-  const emitInventoryDecrement = useCallback((items: typeof cart.items) => {
-    const decrements = new Map<string, number>()
-    for (const item of items) {
-      if (item.variantId) {
-        decrements.set(item.variantId, (decrements.get(item.variantId) || 0) - item.quantity)
-        decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
-      } else {
-        decrements.set(item.product.id, (decrements.get(item.product.id) || 0) - item.quantity)
-      }
-      if (item.product.type === "bundle" && item.configuration && item.product.bundle?.slots) {
-        for (const [slotId, productId] of Object.entries(item.configuration)) {
-          const slot = item.product.bundle!.slots.find((s) => s.id === slotId)
-          const choice = slot?.options?.find((p) => p.id === productId)
-          if (choice) {
-            decrements.set(productId, (decrements.get(productId) || 0) - item.quantity)
-          }
-        }
-      }
-    }
-    window.dispatchEvent(new CustomEvent("pos:inventory-decrement", { detail: decrements }))
-  }, [])
-
   useEffect(() => {
     const onLock = () => {
       setShowCheckout(false)
@@ -407,8 +385,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
             pluginPayment,
             takeCheckoutOrder()
           )
-          emitInventoryDecrement(cart.items)
-
           setCardProcessing(false)
           setCardSuccess(true)
 
@@ -460,7 +436,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     cart.items,
     submitOrder,
     canPrint,
-    emitInventoryDecrement,
     pluginPayment,
     payableTotal,
     depositCents,
@@ -558,8 +533,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       pluginPayment,
       takeCheckoutOrder()
     )
-    emitInventoryDecrement(cart.items)
-
     if (shouldPrint && canPrint && queued) {
       pendingPrintsRef.current.set(queued.localId, {
         template: {
@@ -596,7 +569,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     clearCart,
     buildPrintItems,
     submitOrder,
-    emitInventoryDecrement,
     pluginPayment,
   ])
 
@@ -623,8 +595,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       pluginPayment,
       takeCheckoutOrder()
     )
-    emitInventoryDecrement(cart.items)
-
     // TWINT is fully digital — no pickup ticket is printed.
     if (jetonMode && queued) {
       setJetonSummary({ items: jetons, orderId: queued.localId, payment: "twint" })
@@ -645,7 +615,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     originalTotal,
     clearCart,
     submitOrder,
-    emitInventoryDecrement,
     pluginPayment,
   ])
 
@@ -756,8 +725,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
         plugin,
         takeCheckoutOrder()
       )
-      emitInventoryDecrement(cart.items)
-
       if (shouldPrint && canPrint && queued) {
         pendingPrintsRef.current.set(queued.localId, {
           template: {
@@ -788,7 +755,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       computeJetonTotals,
       buildPrintItems,
       submitOrder,
-      emitInventoryDecrement,
       clearCart,
     ]
   )

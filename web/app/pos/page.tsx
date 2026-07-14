@@ -263,48 +263,6 @@ function PosInner() {
 
   useInventoryStream({ onUpdate: handleStockUpdate, enabled: status?.approved ?? false })
 
-  // Listen for local optimistic decrements
-  useEffect(() => {
-    const onDecrement = (e: Event) => {
-      const ce = e as CustomEvent<Map<string, number>>
-      // Apply deltas to cached snapshot
-      ce.detail.forEach((delta, key) => {
-        const current = stockSnapshotRef.current.get(key) ?? 0
-        stockSnapshotRef.current.set(key, Math.max(0, current + delta))
-      })
-      // Apply to products
-      setProducts((prev) => ({
-        ...prev,
-        items: prev.items.map((p) => {
-          if (p.variants && p.variants.length > 0) {
-            const updatedVariants = p.variants.map((v) => {
-              const delta = ce.detail.get(v.id)
-              if (!delta) return v
-              const newQty = Math.max(0, (v.availableQuantity ?? 0) + delta)
-              return { ...v, stock: newQty, availableQuantity: newQty, ...stockAvailability(newQty) }
-            })
-            const productDelta = ce.detail.get(p.id)
-            const newProductQty = productDelta
-              ? Math.max(0, (p.availableQuantity ?? 0) + productDelta)
-              : p.availableQuantity
-            return {
-              ...p,
-              variants: updatedVariants,
-              ...variantProductAvailability(updatedVariants),
-              availableQuantity: newProductQty,
-            }
-          }
-          const delta = ce.detail.get(p.id)
-          if (!delta) return p
-          const newQty = Math.max(0, (p.availableQuantity ?? 0) + delta)
-          return { ...p, availableQuantity: newQty, ...stockAvailability(newQty) }
-        }),
-      }))
-    }
-    window.addEventListener("pos:inventory-decrement", onDecrement as EventListener)
-    return () => window.removeEventListener("pos:inventory-decrement", onDecrement as EventListener)
-  }, [])
-
   // Support AdminMainHeader "Aktualisieren" button to refresh POS data
   useEffect(() => {
     const onRefresh = () => {
