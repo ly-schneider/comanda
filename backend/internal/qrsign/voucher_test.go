@@ -175,7 +175,7 @@ func TestVoucherTamperedFails(t *testing.T) {
 	}
 }
 
-// A 0x02 pickup token must not decode as a voucher, and a 0x10 voucher token
+// A 0x03 pickup token must not decode as a voucher, and a 0x10 voucher token
 // must not decode as a pickup token — the discriminator keeps them disjoint.
 func TestVoucherCrossDiscriminatorRejected(t *testing.T) {
 	pub, priv := mustKey(t)

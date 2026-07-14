@@ -153,7 +153,7 @@ func TestLinkedDepositSpecs(t *testing.T) {
 
 func TestRemainingPickupLines(t *testing.T) {
 	lines := []redeemableLine{
-		{OrderLineID: "l_simple", ProductID: "p_simple", LineType: orderline.LineTypeSimple, BoughtQty: 3},
+		{OrderLineID: "l_simple", ProductID: "p_simple", VariantID: "vrnt_size_xl", LineType: orderline.LineTypeSimple, BoughtQty: 3},
 		{OrderLineID: "l_redeemed", ProductID: "p_redeemed", LineType: orderline.LineTypeSimple, BoughtQty: 2, Redeemed: true},
 		{OrderLineID: "l_bundle", ProductID: "p_bundle", LineType: orderline.LineTypeBundle, BoughtQty: 1, HasChildren: true},
 		{OrderLineID: "l_component", ProductID: "p_component", LineType: orderline.LineTypeComponent, BoughtQty: 1},
@@ -169,11 +169,16 @@ func TestRemainingPickupLines(t *testing.T) {
 		t.Fatalf("expected 2 remaining pickup lines, got %d (%+v)", len(got), got)
 	}
 	byProduct := map[string]int{}
+	variantByProduct := map[string]string{}
 	for _, l := range got {
 		byProduct[l.ProductID] = l.Quantity
+		variantByProduct[l.ProductID] = l.VariantID
 	}
 	if byProduct["p_simple"] != 2 {
 		t.Fatalf("simple line should have 2 remaining, got %d", byProduct["p_simple"])
+	}
+	if variantByProduct["p_simple"] != "vrnt_size_xl" {
+		t.Fatalf("re-issued pickup line must carry the variant, got %q", variantByProduct["p_simple"])
 	}
 	if byProduct["p_component"] != 1 {
 		t.Fatalf("component line should have 1 remaining, got %d", byProduct["p_component"])

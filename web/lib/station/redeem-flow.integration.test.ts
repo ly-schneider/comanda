@@ -21,41 +21,11 @@ import * as ed from "@noble/ed25519"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { bytesToBase64Url } from "@/lib/base64url"
 import { idbLedger } from "./ledger"
+import { signV3 } from "./qr-test-helpers"
 import { type QrPayload, verifyQrToken } from "./qr-verify"
 import { type RedeemDeps, redeemScan } from "./redeem"
 import { flushOutbox } from "./sync"
 import { idbOutbox } from "./sync-queue"
-
-// Encode a v2 binary body (mirrors backend encodeV2). Ids are the fixed 12 ASCII
-// bytes the format requires, so the real production verifier accepts the token.
-function encodeV2(p: QrPayload): Uint8Array {
-  const enc = new TextEncoder()
-  const out = new Uint8Array(30 + p.l.length * 13)
-  out[0] = 0x02
-  out.set(enc.encode(p.t), 1)
-  out.set(enc.encode(p.o), 13)
-  out[25] = (p.i >>> 24) & 0xff
-  out[26] = (p.i >>> 16) & 0xff
-  out[27] = (p.i >>> 8) & 0xff
-  out[28] = p.i & 0xff
-  out[29] = p.l.length
-  let off = 30
-  for (const l of p.l) {
-    out.set(enc.encode(l.p), off)
-    out[off + 12] = l.q
-    off += 13
-  }
-  return out
-}
-
-function mintToken(payload: QrPayload, sk: Uint8Array): string {
-  const body = encodeV2(payload)
-  const sig = ed.sign(body, sk)
-  const out = new Uint8Array(body.length + sig.length)
-  out.set(body, 0)
-  out.set(sig, body.length)
-  return bytesToBase64Url(out)
-}
 
 // Real keypair — verify is never mocked in this suite.
 const kp = ed.keygen()
@@ -66,7 +36,7 @@ const ORDER = "order_flow_1"
 const PROD = "prod_pommes1"
 
 function basePayload(over: Partial<QrPayload> = {}): QrPayload {
-  return { v: 2, t: TENANT, o: ORDER, i: 1_700_000_000, l: [{ p: PROD, q: 2 }], ...over }
+  return { v: 3, t: TENANT, o: ORDER, i: 1_700_000_000, l: [{ p: PROD, q: 2 }], ...over }
 }
 
 describe("offline redemption flow (integration)", () => {
@@ -96,7 +66,7 @@ describe("offline redemption flow (integration)", () => {
   }
 
   it("signed scan → redeemed, enqueued in outbox, ledger persists", async () => {
-    const token = mintToken(basePayload(), kp.secretKey)
+    const token = signV3(basePayload(), kp.secretKey)
     const result = await redeemScan(token, deps())
 
     expect(result.kind).toBe("redeemed")
@@ -106,8 +76,8 @@ describe("offline redemption flow (integration)", () => {
       expect.objectContaining({ productId: PROD, title: "Pommes Frites", quantity: 2, redeemedAt: 9000 }),
     ])
 
-    expect(await ledger.has(ORDER, PROD)).toBe(true)
-    expect(await ledger.get(ORDER, PROD)).toMatchObject({ quantity: 2, tenantId: TENANT, redeemedAt: 9000 })
+    expect(await ledger.has(ORDER, PROD, "")).toBe(true)
+    expect(await ledger.get(ORDER, PROD, "")).toMatchObject({ quantity: 2, tenantId: TENANT, redeemedAt: 9000 })
 
     const items = await outbox.list()
     expect(items).toHaveLength(1)
@@ -115,7 +85,7 @@ describe("offline redemption flow (integration)", () => {
   })
 
   it("rescan same token → already-redeemed, outbox not re-queued", async () => {
-    const token = mintToken(basePayload(), kp.secretKey)
+    const token = signV3(basePayload(), kp.secretKey)
     await redeemScan(token, deps())
     // Drain the outbox so we can clearly see whether a re-queue happened.
     await outbox.clear()
@@ -129,7 +99,7 @@ describe("offline redemption flow (integration)", () => {
   })
 
   it("wrong-tenant token → wrong-event, nothing written to ledger or outbox", async () => {
-    const token = mintToken(basePayload({ t: "tenant_othr1" }), kp.secretKey)
+    const token = signV3(basePayload({ t: "tenant_othr1" }), kp.secretKey)
     const result = await redeemScan(token, deps())
 
     expect(result.kind).toBe("wrong-event")
@@ -138,7 +108,7 @@ describe("offline redemption flow (integration)", () => {
   })
 
   it("offline enqueue → outbox row → flush calls server once with Idempotency-Key → outbox drained", async () => {
-    const token = mintToken(basePayload(), kp.secretKey)
+    const token = signV3(basePayload(), kp.secretKey)
     await redeemScan(token, deps())
 
     expect(await outbox.list()).toHaveLength(1)
@@ -174,17 +144,17 @@ describe("offline redemption flow (integration)", () => {
   })
 
   it("ledger survives a simulated reload (independent raw IDB connection)", async () => {
-    const token = mintToken(basePayload(), kp.secretKey)
+    const token = signV3(basePayload(), kp.secretKey)
     await redeemScan(token, deps())
 
     // Open a raw IDB connection that bypasses the module's cached handle to
     // confirm the entry is durably stored, not just in process memory.
     const fromDisk = await new Promise<unknown>((resolve, reject) => {
-      const req = indexedDB.open("comanda-station", 3)
+      const req = indexedDB.open("comanda-station", 4)
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("ledger", "readonly")
-        const get = tx.objectStore("ledger").get([ORDER, PROD])
+        const get = tx.objectStore("ledger").get([ORDER, PROD, ""])
         get.onsuccess = () => {
           resolve(get.result)
           db.close()

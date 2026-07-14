@@ -1,7 +1,7 @@
 /**
  * Offline verification of the signed station QR tokens — the sole forgery
  * barrier on the station's offline path. Two token families share the Ed25519
- * scheme and the tenant's key: the pickup-order token (0x02, `verifyQrToken`)
+ * scheme and the tenant's key: the pickup-order token (0x03, `verifyQrToken`)
  * and the artist-voucher token (0x10, `verifyVoucherToken`). Wire format:
  * `internal/qrsign` doc.go + voucher.go. Pure-JS (@noble/ed25519), not
  * WebCrypto — Safari has no Ed25519 in SubtleCrypto.
@@ -14,19 +14,21 @@ import { base64UrlToBytes } from "@/lib/base64url"
 // noble v3 only exposes the synchronous verify once a sync SHA-512 is wired in.
 if (!ed.hashes.sha512) ed.hashes.sha512 = sha512
 
-export const QR_PAYLOAD_VERSION = 2
+export const QR_PAYLOAD_VERSION = 3
 
 const SIGNATURE_SIZE = 64
 const PUBLIC_KEY_SIZE = 32
 
-// v2 binary layout (see qrsign/doc.go).
-const VER_V2 = 0x02
+// v3 binary layout (see qrsign/doc.go). The pickup (0x03) and voucher (0x10)
+// discriminators are exported so the scan dispatcher routes on the same bytes.
+export const VER_V3 = 0x03
 const ID_LEN = 12
 const HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 1 // 30
-const LINE_LEN = ID_LEN + 1 // 13
+const LINE_LEN = ID_LEN + ID_LEN + 1 // product + variant + qty = 25
 
 export interface QrLine {
   p: string // product id
+  v?: string // variant id; undefined for a product with no variant
   q: number // quantity (>= 1)
 }
 
@@ -52,7 +54,12 @@ function asciiOf(bytes: Uint8Array): string {
   return s
 }
 
-function parseV2(body: Uint8Array): QrPayload | null {
+function isAllZero(bytes: Uint8Array): boolean {
+  for (let i = 0; i < bytes.length; i++) if (bytes[i] !== 0) return false
+  return true
+}
+
+function parseV3(body: Uint8Array): QrPayload | null {
   if (body.length < HEADER_LEN) return null
   const count = body[HEADER_LEN - 1]!
   if (body.length !== HEADER_LEN + count * LINE_LEN) return null
@@ -63,10 +70,16 @@ function parseV2(body: Uint8Array): QrPayload | null {
   const l: QrLine[] = []
   let off = HEADER_LEN
   for (let k = 0; k < count; k++) {
-    l.push({ p: asciiOf(body.subarray(off, off + ID_LEN)), q: body[off + ID_LEN]! })
+    const variantBytes = body.subarray(off + ID_LEN, off + 2 * ID_LEN)
+    l.push({
+      p: asciiOf(body.subarray(off, off + ID_LEN)),
+      // An all-zero variant id is the "no variant" sentinel (see qrsign/doc.go).
+      v: isAllZero(variantBytes) ? undefined : asciiOf(variantBytes),
+      q: body[off + 2 * ID_LEN]!,
+    })
     off += LINE_LEN
   }
-  return { v: 2, t, o, i, l }
+  return { v: 3, t, o, i, l }
 }
 
 // A valid signature alone is never enough — the caller must still enforce tenant
@@ -92,12 +105,12 @@ export function verifyQrToken(token: string, publicKeyB64Url: string | null | un
   }
   if (!valid) return { ok: false, reason: "bad-signature" }
 
-  if (body[0] !== VER_V2) return { ok: false, reason: "unsupported-version" }
-  const payload = parseV2(body)
+  if (body[0] !== VER_V3) return { ok: false, reason: "unsupported-version" }
+  const payload = parseV3(body)
   return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
 }
 
-const VER_VOUCHER = 0x10
+export const VER_VOUCHER = 0x10
 const VOUCHER_HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 4
 
 // label + category names are UTF-8; the ids above are ASCII nanoids.
@@ -151,7 +164,7 @@ function parseVoucher(body: Uint8Array): VoucherPayload | null {
 
 // A valid signature only proves *some* tenant signed it — the caller must still
 // enforce tenant scoping and the validity window (see evaluateVoucher). Rejects
-// a 0x02 pickup token as unsupported-version.
+// a 0x03 pickup token as unsupported-version.
 export function verifyVoucherToken(token: string, publicKeyB64Url: string | null | undefined): VoucherVerifyResult {
   if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
   const pub = base64UrlToBytes(publicKeyB64Url)

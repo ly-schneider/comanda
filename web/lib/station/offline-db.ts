@@ -5,13 +5,13 @@
  * Everything here must survive service worker upgrades — the SW wipes Cache
  * Storage on every version bump — so it lives in IndexedDB, which the SW never
  * touches. The KV store holds the signed-QR public key and the lightweight
- * catalog; the ledger holds the append-only (orderId, productId) redemptions;
- * the outbox holds redemptions still pending an idempotent server write.
- * Product image bytes go to the SW cache instead (see the precache ritual).
+ * catalog; the ledger holds the append-only (orderId, productId, variantId)
+ * redemptions; the outbox holds redemptions still pending an idempotent server
+ * write. Product image bytes go to the SW cache instead (see the precache ritual).
  */
 
 const DB_NAME = "comanda-station"
-const DB_VERSION = 3
+const DB_VERSION = 4
 const KV_STORE = "kv"
 export const LEDGER_STORE = "ledger"
 export const OUTBOX_STORE = "outbox"
@@ -30,15 +30,18 @@ function hasIndexedDB(): boolean {
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result
       if (!db.objectStoreNames.contains(KV_STORE)) {
         db.createObjectStore(KV_STORE)
       }
-      if (!db.objectStoreNames.contains(LEDGER_STORE)) {
-        // Compound key (orderId, productId): the dedup identity of a redemption,
-        // and what makes the store inherently append-once per item.
-        db.createObjectStore(LEDGER_STORE, { keyPath: ["orderId", "productId"] })
+      // A compound key path can't be altered in place, so the v4 variantId
+      // addition drops and recreates the ledger store. Scoped to this migration
+      // so a later bump can't re-wipe it; losing queued ledger rows here is
+      // acceptable because the outbox is the durable server-sync path.
+      if (event.oldVersion < 4) {
+        if (db.objectStoreNames.contains(LEDGER_STORE)) db.deleteObjectStore(LEDGER_STORE)
+        db.createObjectStore(LEDGER_STORE, { keyPath: ["orderId", "productId", "variantId"] })
       }
       if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
         // Keyed by orderId: the server redeems every station-assigned line of an

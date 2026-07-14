@@ -223,6 +223,8 @@ func toPublicOrderLines(lines []*ent.OrderLine) []map[string]any {
 			"parentItemId":   parentID,
 			"bundleSlotId":   msID,
 			"bundleSlotName": line.BundleSlotName,
+			"variantId":      line.VariantID,
+			"variantValue":   line.VariantValue,
 		})
 	}
 	return out

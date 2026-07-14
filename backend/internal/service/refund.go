@@ -856,6 +856,7 @@ const (
 type redeemableLine struct {
 	OrderLineID string
 	ProductID   string
+	VariantID   string
 	LineType    orderline.LineType
 	HasChildren bool
 	Redeemed    bool
@@ -924,7 +925,7 @@ func remainingPickupLines(lines []redeemableLine, refundedQty map[string]int) []
 		if remaining <= 0 {
 			continue
 		}
-		out = append(out, qrsign.Line{ProductID: l.ProductID, Quantity: remaining})
+		out = append(out, qrsign.Line{ProductID: l.ProductID, VariantID: l.VariantID, Quantity: remaining})
 	}
 	return out
 }
@@ -944,6 +945,7 @@ func flattenRedeemableLines(ord *ent.Order) []redeemableLine {
 		out = append(out, redeemableLine{
 			OrderLineID: l.ID,
 			ProductID:   l.ProductID,
+			VariantID:   safeStr(l.VariantID),
 			LineType:    l.LineType,
 			HasChildren: hasChildren[l.ID],
 			Redeemed:    l.Edges.Redemption != nil,

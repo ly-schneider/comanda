@@ -13,10 +13,13 @@ import (
 const (
 	goldenSeedHex   = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 	goldenPubB64Url = "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg"
-	goldenBodyHex   = "0274656e616e745f73656564314853373955317948375a64336553f1000270726f645f706f6d6d6573310270726f645f636f6c6130303101"
-	goldenToken     = "AnRlbmFudF9zZWVkMUhTNzlVMXlIN1pkM2VT8QACcHJvZF9wb21tZXMxAnByb2RfY29sYTAwMQHaMq10Re5WTXw5EhrtgeLUbwYKDAj0e4J3qslI-xRrgyJcC60lyKkgDqs911g5tvZRWQnA2B2SGyhK1G_xckUE"
+	goldenBodyHex   = "0374656e616e745f73656564314853373955317948375a64336553f1000270726f645f706f6d6d65733176726e745f73697a655f786c0270726f645f636f6c6130303100000000000000000000000001"
+	goldenToken     = "A3RlbmFudF9zZWVkMUhTNzlVMXlIN1pkM2VT8QACcHJvZF9wb21tZXMxdnJudF9zaXplX3hsAnByb2RfY29sYTAwMQAAAAAAAAAAAAAAAAH-io89pj7lJ4n0DW50ZTd5NU-q3E4FX1v8VUvSkn9XVq1-1uea_qSnTtS8W4XlnIHsbk0yK6ZT94-xQy6RX6QF"
 )
 
+// The golden order mixes a variant line (prod_pommes1 in size XL) and a
+// no-variant line (prod_cola001) so the vector pins both the variant bytes and
+// the all-zero sentinel.
 func goldenPayload() Payload {
 	return Payload{
 		Version:  Version,
@@ -24,7 +27,7 @@ func goldenPayload() Payload {
 		OrderID:  "HS79U1yH7Zd3",
 		IssuedAt: 1_700_000_000,
 		Lines: []Line{
-			{ProductID: "prod_pommes1", Quantity: 2},
+			{ProductID: "prod_pommes1", VariantID: "vrnt_size_xl", Quantity: 2},
 			{ProductID: "prod_cola001", Quantity: 1},
 		},
 	}
@@ -47,7 +50,7 @@ func samplePayload() Payload {
 		OrderID:  "order_xyz789",
 		IssuedAt: 1_700_000_000,
 		Lines: []Line{
-			{ProductID: "prod_aaa1111", Quantity: 2},
+			{ProductID: "prod_aaa1111", VariantID: "vrnt_ccc3333", Quantity: 2},
 			{ProductID: "prod_bbb2222", Quantity: 1},
 		},
 	}
@@ -70,7 +73,7 @@ func TestGoldenVector(t *testing.T) {
 		t.Fatalf("public key drift: got %s want %s", got, goldenPubB64Url)
 	}
 
-	body, err := encodeV2(goldenPayload())
+	body, err := encodeV3(goldenPayload())
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -90,10 +93,10 @@ func TestGoldenVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify golden: %v", err)
 	}
-	if got.Version != 2 || got.TenantID != "tenant_seed1" || got.OrderID != "HS79U1yH7Zd3" || got.IssuedAt != 1_700_000_000 {
+	if got.Version != Version || got.TenantID != "tenant_seed1" || got.OrderID != "HS79U1yH7Zd3" || got.IssuedAt != 1_700_000_000 {
 		t.Fatalf("golden payload mismatch: %+v", got)
 	}
-	if len(got.Lines) != 2 || got.Lines[0] != (Line{"prod_pommes1", 2}) || got.Lines[1] != (Line{"prod_cola001", 1}) {
+	if len(got.Lines) != 2 || got.Lines[0] != (Line{"prod_pommes1", "vrnt_size_xl", 2}) || got.Lines[1] != (Line{"prod_cola001", "", 1}) {
 		t.Fatalf("golden lines mismatch: %+v", got.Lines)
 	}
 }
@@ -134,12 +137,12 @@ func TestBodyLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	// 2 lines: header(30) + 2*13 + sig(64) = 120.
+	// 2 lines: header(30) + 2*25 + sig(64) = 144.
 	if len(raw) != headerLen+2*lineLen+ed25519.SignatureSize {
 		t.Fatalf("unexpected token length: %d", len(raw))
 	}
-	if raw[0] != verV2 {
-		t.Fatalf("first byte = %#x, want v2 discriminator %#x", raw[0], verV2)
+	if raw[0] != verV3 {
+		t.Fatalf("first byte = %#x, want v3 discriminator %#x", raw[0], verV3)
 	}
 }
 
@@ -224,9 +227,19 @@ func signRaw(priv ed25519.PrivateKey, body []byte) string {
 
 func TestVerifyRejectsUnknownVersion(t *testing.T) {
 	pub, priv := mustKey(t)
-	// A validly-signed body whose first byte is neither v2 (0x02) nor v1 ('{').
+	// A validly-signed body whose first byte is neither v3 (0x03) nor v1 ('{').
 	token := signRaw(priv, []byte{0x09, 0xAA, 0xBB})
 	if _, err := Verify(pub, token); err != ErrUnsupportedVersion {
+		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
+	}
+}
+
+func TestVerifyRejectsRetiredV2(t *testing.T) {
+	pub, priv := mustKey(t)
+	// The retired v2 format was the same fixed binary without the per-line
+	// variant id; its leading byte is 0x02, which the v3-only verifier rejects.
+	v2Body := []byte{0x02, 0xAA, 0xBB, 0xCC}
+	if _, err := Verify(pub, signRaw(priv, v2Body)); err != ErrUnsupportedVersion {
 		t.Fatalf("expected ErrUnsupportedVersion, got %v", err)
 	}
 }
@@ -247,6 +260,7 @@ func TestEncodeRejectsBadIDLength(t *testing.T) {
 		{TenantID: "short", OrderID: "order_xyz789", Lines: []Line{{ProductID: "prod_aaa1111", Quantity: 1}}},
 		{TenantID: "tenant_abc12", OrderID: "toolong_order_id", Lines: []Line{{ProductID: "prod_aaa1111", Quantity: 1}}},
 		{TenantID: "tenant_abc12", OrderID: "order_xyz789", Lines: []Line{{ProductID: "short", Quantity: 1}}},
+		{TenantID: "tenant_abc12", OrderID: "order_xyz789", Lines: []Line{{ProductID: "prod_aaa1111", VariantID: "short", Quantity: 1}}},
 	}
 	for i, p := range cases {
 		if _, err := Sign(priv, p); err == nil {

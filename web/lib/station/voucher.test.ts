@@ -114,8 +114,8 @@ describe("verifyVoucherToken", () => {
     })
   })
 
-  it("rejects a 0x02 pickup body as unsupported-version", () => {
-    const body = new Uint8Array([0x02, 0xaa, 0xbb])
+  it("rejects a 0x03 pickup body as unsupported-version", () => {
+    const body = new Uint8Array([0x03, 0xaa, 0xbb])
     expect(verifyVoucherToken(bytesToBase64Url(concat(body, ed.sign(body, seed))), publicKey)).toEqual({
       ok: false,
       reason: "unsupported-version",

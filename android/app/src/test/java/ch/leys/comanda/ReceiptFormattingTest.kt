@@ -57,24 +57,28 @@ class ReceiptFormattingTest {
     }
 
     // Byte-exact golden vector — identical to backend/internal/qrsign
-    // (TestGoldenVector) and the web qr-verify test. Seed = 0x00..0x1f.
+    // (TestGoldenVector) and the web qr-verify test. Seed = 0x00..0x1f. The order
+    // mixes a variant line (prod_pommes1 / vrnt_size_xl) and a no-variant line.
     private val goldenToken =
-        "AnRlbmFudF9zZWVkMUhTNzlVMXlIN1pkM2VT8QACcHJvZF9wb21tZXMxAnByb2RfY29sYTAwMQHaMq10Re5WTXw5EhrtgeLUbwYKDAj0e4J3qslI-xRrgyJcC60lyKkgDqs911g5tvZRWQnA2B2SGyhK1G_xckUE"
+        "A3RlbmFudF9zZWVkMUhTNzlVMXlIN1pkM2VT8QACcHJvZF9wb21tZXMxdnJudF9zaXplX3hsAnByb2RfY29sYTAwMQAAAAAAAAAAAAAAAAH-io89pj7lJ4n0DW50ZTd5NU-q3E4FX1v8VUvSkn9XVq1-1uea_qSnTtS8W4XlnIHsbk0yK6ZT94-xQy6RX6QF"
 
-    @Test fun decodesV2PickupTokenToRawBytes() {
+    @Test fun decodesV3PickupTokenToRawBytes() {
         val bytes = decodePickupTokenBytes(goldenToken)
         assertNotNull(bytes)
-        // 30-byte header + 2 lines × 13 + 64-byte signature = 120.
-        assertEquals(120, bytes!!.size)
-        assertEquals(0x02.toByte(), bytes[0])
+        // 30-byte header + 2 lines × 25 + 64-byte signature = 144.
+        assertEquals(144, bytes!!.size)
+        assertEquals(0x03.toByte(), bytes[0])
         assertEquals("tenant_seed1", String(bytes, 1, 12, Charsets.ISO_8859_1))
         assertEquals("HS79U1yH7Zd3", String(bytes, 13, 12, Charsets.ISO_8859_1))
+        // First line: product id then its variant id.
+        assertEquals("prod_pommes1", String(bytes, 30, 12, Charsets.ISO_8859_1))
+        assertEquals("vrnt_size_xl", String(bytes, 42, 12, Charsets.ISO_8859_1))
     }
 
-    @Test fun nonV2TokensAreNotByteMode() {
+    @Test fun nonV3TokensAreNotByteMode() {
         // Pickup-URL fallback: invalid base64url → text QR.
         assertNull(decodePickupTokenBytes("https://acme.comanda.leys.ch/o/HS79U1yH7Zd3"))
-        // A non-v2 payload whose first byte isn't 0x02 (here base64url of "{...}").
+        // A non-v3 payload whose first byte isn't 0x03 (here base64url of "{...}").
         assertNull(decodePickupTokenBytes("eyJ2IjoxfQ"))
     }
 }
