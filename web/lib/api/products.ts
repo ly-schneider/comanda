@@ -1,5 +1,6 @@
 import type { ListResponse, ProductDTO, ProductSummaryDTO, ProductVariantDTO } from "@/types"
 import { apiRequest } from "../api"
+import { LOW_STOCK_THRESHOLD } from "../variants"
 
 export interface ListProductsParams {
   categoryId?: string
@@ -58,7 +59,7 @@ function normalizeProduct(raw: RawProduct): ProductDTO {
         stock: variantStock,
         availableQuantity: variantStock,
         isAvailable: variantStock === null ? true : variantStock > 0,
-        isLowStock: variantStock !== null && variantStock > 0 && variantStock <= 10,
+        isLowStock: variantStock !== null && variantStock > 0 && variantStock <= LOW_STOCK_THRESHOLD,
       }
     })
     const active = product.variants.filter((v) => v.isActive)
@@ -69,7 +70,7 @@ function normalizeProduct(raw: RawProduct): ProductDTO {
   } else if (!isBundle && typeof stock === "number") {
     product.availableQuantity = stock
     product.isAvailable = stock > 0
-    product.isLowStock = stock > 0 && stock <= 10
+    product.isLowStock = stock > 0 && stock <= LOW_STOCK_THRESHOLD
   }
 
   const bundleSlots = raw.bundleSlots

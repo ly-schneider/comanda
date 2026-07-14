@@ -23,6 +23,7 @@ import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { useMemberTier } from "@/hooks/use-member-tier"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
+import { paymentMethodLabel } from "@/lib/payment-format"
 import {
   ORDER_STATUS_COLORS,
   ORDER_STATUS_LABELS,
@@ -182,7 +183,7 @@ export default function AdminOrderDetailPage() {
             <div className="space-y-1 text-sm">
               <div>
                 <span className="text-muted-foreground">Methode:</span>{" "}
-                <span className="uppercase">{posMethod || "–"}</span>
+                <span>{posMethod ? paymentMethodLabel(posMethod) : "–"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Karte:</span>{" "}

@@ -106,6 +106,10 @@ internal fun prettyPayMethod(method: String, cardLast4: String?): String {
         "twint" -> "TWINT"
         "cash" -> "Bar"
         "card" -> "Karte"
+        "gratis_guest" -> "Gratis (Gast)"
+        "gratis_vip" -> "Gratis (VIP)"
+        "gratis_staff" -> "Gratis (Mitarbeiter)"
+        "gratis_plugin" -> "Gratis"
         else -> if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
     }
     return if (method.equals("card", ignoreCase = true) && !cardLast4.isNullOrBlank()) "$base •••• $cardLast4" else base
@@ -1152,7 +1156,7 @@ class WebPosActivity : ComponentActivity() {
         val padding = 10
         val lineSpacing = 8
         val topPad = 12
-        val bottomPad = 16
+        val bottomPad = 4
         val qrSize = 288
         val logoMaxHeight = 120
 

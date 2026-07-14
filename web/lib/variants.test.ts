@@ -131,11 +131,11 @@ describe("stockAvailability", () => {
 
   it("is available and low within the threshold", () => {
     expect(stockAvailability(3)).toEqual({ isAvailable: true, isLowStock: true })
-    expect(stockAvailability(5)).toEqual({ isAvailable: true, isLowStock: true })
+    expect(stockAvailability(10)).toEqual({ isAvailable: true, isLowStock: true })
   })
 
   it("is available and not low above the threshold", () => {
-    expect(stockAvailability(6)).toEqual({ isAvailable: true, isLowStock: false })
+    expect(stockAvailability(11)).toEqual({ isAvailable: true, isLowStock: false })
   })
 })
 

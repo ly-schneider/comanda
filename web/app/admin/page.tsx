@@ -5,7 +5,9 @@ import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-format"
 import { formatChf } from "@/lib/utils"
+import { LOW_STOCK_THRESHOLD } from "@/lib/variants"
 import { OrdersByOriginChart } from "./_components/orders-by-origin-chart"
 import { OrdersByStatusChart } from "./_components/orders-by-status-chart"
 import { PaymentMethodsChart } from "./_components/payment-methods-chart"
@@ -52,18 +54,6 @@ type EventDay = {
   month: number
   day: number
   orderCount: number
-}
-
-const LOW_STOCK_THRESHOLD = 10
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  CASH: "Bargeld",
-  CARD: "Karte",
-  TWINT: "TWINT",
-  GRATIS_GUEST: "Gratis (Gast)",
-  GRATIS_VIP: "Gratis (VIP)",
-  GRATIS_STAFF: "Gratis (Personal)",
-  GRATIS_PLUGIN: "Gratis (Plugin)",
 }
 
 const ORIGIN_LABELS: Record<string, string> = {

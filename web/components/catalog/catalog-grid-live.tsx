@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react"
 import { useInventoryStream } from "@/hooks/use-inventory-stream"
+import { LOW_STOCK_THRESHOLD } from "@/lib/variants"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 import CatalogGrid from "./catalog-grid"
 
@@ -23,7 +24,7 @@ function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): Prod
                 ...opt,
                 availableQuantity: optStock,
                 isAvailable: optStock > 0,
-                isLowStock: optStock > 0 && optStock <= 10,
+                isLowStock: optStock > 0 && optStock <= LOW_STOCK_THRESHOLD,
               }
             }) ?? null,
         })),
@@ -36,7 +37,7 @@ function applyStockToProduct(p: ProductDTO, stockMap: Map<string, number>): Prod
         ...p,
         availableQuantity: newStock,
         isAvailable: newStock > 0,
-        isLowStock: newStock > 0 && newStock <= 10,
+        isLowStock: newStock > 0 && newStock <= LOW_STOCK_THRESHOLD,
       }
     }
   }
