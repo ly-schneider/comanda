@@ -122,6 +122,7 @@ function groupRedemptionTime(group: LineGroup): string | undefined {
 
 type ConsolidatedItem = {
   productId: string
+  variantId?: string | null
   variantValue?: string | null
   title: string
   productImage?: string | null
@@ -130,7 +131,6 @@ type ConsolidatedItem = {
   redemptionTime?: string
 }
 
-// Keyed by product + variant so same-product variants stay separate.
 function consolidateLines(lines: OrderLine[]): ConsolidatedItem[] {
   const map = new Map<string, ConsolidatedItem>()
   for (const l of lines) {
@@ -146,6 +146,7 @@ function consolidateLines(lines: OrderLine[]): ConsolidatedItem[] {
     } else {
       map.set(key, {
         productId: l.productId,
+        variantId: l.variantId,
         variantValue: l.variantValue,
         title: l.title,
         productImage: l.productImage,
@@ -1074,13 +1075,13 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
             return (
               <>
                 {unredeemedItems.map((it) => (
-                  <ConsolidatedItemCard key={`${it.productId}:${it.variantValue ?? ""}`} item={it} redeemed={false} />
+                  <ConsolidatedItemCard key={`${it.productId}:${it.variantId ?? ""}`} item={it} redeemed={false} />
                 ))}
                 {redeemedItems.length > 0 && scan.status === "success" && unredeemedItems.length > 0 && (
                   <div className="text-muted-foreground mt-1 text-xs font-medium">Bereits eingelöst</div>
                 )}
                 {redeemedItems.map((it) => (
-                  <ConsolidatedItemCard key={`${it.productId}:${it.variantValue ?? ""}`} item={it} redeemed />
+                  <ConsolidatedItemCard key={`${it.productId}:${it.variantId ?? ""}`} item={it} redeemed />
                 ))}
               </>
             )
