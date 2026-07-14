@@ -23,6 +23,31 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
+// writeOutOfStockError returns a 409 carrying the sold-out product/variant ids
+// in details so the cart UI can flag the exact lines. The message stays generic;
+// the web maps the code + item data to localized copy.
+func writeOutOfStockError(w http.ResponseWriter, err *service.InsufficientInventoryError) {
+	items := make([]map[string]any, 0, len(err.Items))
+	for _, it := range err.Items {
+		m := map[string]any{
+			"productId": it.ProductID,
+			"name":      it.Name,
+			"available": it.Available,
+			"requested": it.Requested,
+		}
+		if it.VariantID != "" {
+			m["variantId"] = it.VariantID
+		}
+		items = append(items, m)
+	}
+	details := map[string]any{"items": items}
+	response.WriteJSON(w, http.StatusConflict, generated.Error{
+		Code:    "out_of_stock",
+		Message: "Not enough stock for one or more items.",
+		Details: &details,
+	})
+}
+
 // writeEntError inspects err and maps it to an appropriate HTTP error response.
 //
 // Mapping:

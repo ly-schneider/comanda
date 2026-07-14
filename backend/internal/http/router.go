@@ -159,6 +159,7 @@ func NewRouter(
 			pos.Post("/pos/orders/{orderId}/refunds", wrapper.CreatePosLineRefund)
 			pos.Post("/pos/orders/{orderId}/deposit-returns", wrapper.CreatePosDepositReturn)
 			pos.Post("/pos/orders/{orderId}/cancel", wrapper.CancelPosOrder)
+			pos.Post("/pos/orders/{orderId}/discard", wrapper.DiscardPendingOrder)
 		})
 
 		// ── Orders (anonymous allowed, blocked when disabled) ────

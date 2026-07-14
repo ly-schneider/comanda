@@ -76,11 +76,15 @@ func (e *rlsEnv) configurePayrexxTenant(t *testing.T, enc *crypto.Encryptor, slu
 }
 
 func signedWebhookBody(t *testing.T, orderID string, secret string) ([]byte, string) {
+	return signedWebhookBodyStatus(t, orderID, secret, "confirmed")
+}
+
+func signedWebhookBodyStatus(t *testing.T, orderID, secret, status string) ([]byte, string) {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
 		"transaction": map[string]any{
 			"id":          4242,
-			"status":      "confirmed",
+			"status":      status,
 			"referenceId": orderID,
 			"amount":      1000,
 			"currency":    "CHF",
@@ -142,6 +146,13 @@ func (e *rlsEnv) orderStatus(t *testing.T, orderID string) string {
 	var status string
 	require.NoError(t, e.priv.QueryRow(`SELECT status FROM "order" WHERE id = $1`, orderID).Scan(&status))
 	return status
+}
+
+func (e *rlsEnv) orderExists(t *testing.T, orderID string) bool {
+	t.Helper()
+	var n int
+	require.NoError(t, e.priv.QueryRow(`SELECT COUNT(*) FROM "order" WHERE id = $1`, orderID).Scan(&n))
+	return n == 1
 }
 
 func (e *rlsEnv) payrexxWebhookRecorded(t *testing.T, tenantID string) bool {
@@ -206,6 +217,33 @@ func TestPayrexxWebhook_CrossTenantIsolation(t *testing.T) {
 		rec := postWebhook(t, router, b.webhookToken, body, "deadbeef")
 		require.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 		require.Equal(t, string(order.StatusPending), env.orderStatus(t, b.orderID))
+	})
+}
+
+// TestPayrexxWebhook_HoldRelease covers the webhook's non-success branch: a
+// terminal failure releases the reservation (deletes the pending order), while a
+// non-terminal status must NOT — releasing it mid-flow would strand the later
+// success webhook (the regression the IsFailure gate prevents).
+func TestPayrexxWebhook_HoldRelease(t *testing.T) {
+	env := newRLSEnv(t)
+	enc := newTestEncryptor(t)
+	router := env.buildWebhookRouter(t, enc)
+
+	t.Run("terminal failure releases the hold", func(t *testing.T) {
+		tn := env.configurePayrexxTenant(t, enc, "wh-declined", "inst", "api", "sec-declined")
+		body, sig := signedWebhookBodyStatus(t, tn.orderID, tn.webhookSecret, "declined")
+		rec := postWebhook(t, router, tn.webhookToken, body, sig)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.False(t, env.orderExists(t, tn.orderID), "declined webhook releases the hold by deleting the pending order")
+	})
+
+	t.Run("non-terminal status keeps the hold", func(t *testing.T) {
+		tn := env.configurePayrexxTenant(t, enc, "wh-waiting", "inst", "api", "sec-waiting")
+		body, sig := signedWebhookBodyStatus(t, tn.orderID, tn.webhookSecret, "waiting")
+		rec := postWebhook(t, router, tn.webhookToken, body, sig)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.True(t, env.orderExists(t, tn.orderID), "a still-in-progress payment must keep its hold")
+		require.Equal(t, string(order.StatusPending), env.orderStatus(t, tn.orderID))
 	})
 }
 

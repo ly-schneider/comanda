@@ -113,6 +113,20 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if !result.IsSuccess {
+		// Only a terminal failure (declined/error/cancelled) means this order won't
+		// be paid — release its hold now. Non-terminal statuses (waiting/uncaptured)
+		// also reach here but must NOT release: the payment can still confirm, and
+		// deleting the order mid-flow would strand the later success webhook. The
+		// backstop sweep reclaims genuinely abandoned holds. Best-effort; still 200.
+		if result.IsFailure && nanoid.Valid(result.ReferenceID) {
+			if err := h.payments.CleanupPendingOrderByID(ctx, result.ReferenceID); err != nil {
+				h.logger.Warn("payrexx webhook: release on payment failure failed",
+					zap.String("orderId", result.ReferenceID),
+					zap.String("tenantId", tenantID),
+					zap.Error(err),
+				)
+			}
+		}
 		response.WriteJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 		finalize(true)
 		committed = true

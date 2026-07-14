@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { useCart } from "@/contexts/cart-context"
+import { isApiError } from "@/lib/api"
 import { createOrder, initiatePayment } from "@/lib/api/payments"
+import { extractSoldOutItems, stashSoldOut } from "@/lib/checkout-sold-out"
 import { cartDepositCents, formatChf } from "@/lib/utils"
 
 export function CheckoutClient() {
@@ -66,7 +68,14 @@ export function CheckoutClient() {
         throw new Error("Missing payment redirect URL")
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Fehler beim Erstellen der Zahlung"
+      // Sold out: send the customer back to the cart with the offending lines
+      // flagged, rather than showing a generic error on the payment step.
+      if (isApiError(e) && e.code === "out_of_stock") {
+        stashSoldOut(extractSoldOutItems(e.details))
+        router.push("/checkout")
+        return
+      }
+      const msg = isApiError(e) || e instanceof Error ? e.message : "Fehler beim Erstellen der Zahlung"
       setError(msg)
     } finally {
       setLoading(false)

@@ -74,6 +74,7 @@ func main() {
 			app.StartUnverifiedDomainSweeper,
 			app.StartIngressReconciler,
 			app.StartInventoryListener,
+			app.StartPendingOrderSweeper,
 			app.StartHTTPServer,
 		),
 	).Run()

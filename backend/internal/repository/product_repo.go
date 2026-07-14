@@ -180,6 +180,32 @@ func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.
 	return rows, nil
 }
 
+// LockByIDs takes FOR UPDATE row locks on the given products within the request
+// tx. Checkout locks the products it's about to draw stock from before reading
+// the ledger, so two concurrent checkouts of the same product serialize: the
+// second blocks here, then reads the already-decremented stock and is rejected
+// instead of both overselling. A single locking statement acquires the rows in a
+// consistent scan order for every transaction, so it can't deadlock regardless
+// of the id-list order. The lock is held until the request tx commits/rolls back.
+func (r *ProductRepository) LockByIDs(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	err := r.ec(ctx).Product.Query().
+		Where(product.IDIn(ids...)).
+		Modify(func(s *sql.Selector) {
+			s.Select(s.C(product.FieldID)).ForUpdate()
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return translateError(err)
+	}
+	return nil
+}
+
 func (r *ProductRepository) Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string) (*ent.Product, error) {
 	builder := r.ec(ctx).Product.UpdateOneID(id).
 		SetCategoryID(categoryID).

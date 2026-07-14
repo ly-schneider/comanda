@@ -22,6 +22,9 @@ type ProductService interface {
 	GetAll(ctx context.Context) ([]*ent.Product, error)
 	GetByCategory(ctx context.Context, categoryID string) ([]*ent.Product, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
+	// LockByIDs takes FOR UPDATE row locks on the given products within the
+	// request tx so concurrent checkouts of the same product serialize.
+	LockByIDs(ctx context.Context, ids []string) error
 	Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error)
 	Update(ctx context.Context, id, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error)
 	Delete(ctx context.Context, id string) error
@@ -160,6 +163,10 @@ func (s *productService) GetByIDs(ctx context.Context, ids []string) ([]*ent.Pro
 		result = append(result, fetched...)
 	}
 	return result, nil
+}
+
+func (s *productService) LockByIDs(ctx context.Context, ids []string) error {
+	return s.productRepo.LockByIDs(ctx, ids)
 }
 
 func (s *productService) Create(ctx context.Context, categoryID string, productType product.Type, name string, priceCents, depositCents int64, isActive bool, image *string, description *string, jetonID *string, variantLabel *string, variants []VariantInput) (*ent.Product, error) {

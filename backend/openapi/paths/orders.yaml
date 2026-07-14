@@ -134,6 +134,40 @@ collection:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+discard:
+  parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  post:
+    tags: [Orders]
+    summary: Discard a pending POS order
+    description: |
+      Deletes an unpaid pending POS order and releases its inventory hold. Used
+      when the cashier abandons a checkout before payment. No-op when the order is
+      already gone or no longer pending. Idempotent.
+    operationId: discardPendingOrder
+    security:
+      - deviceAuth: []
+    responses:
+      "204":
+        description: Discarded (or already gone / not pending)
+      "403":
+        description: Not a POS order
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Resource not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 item:
   parameters:
     - name: orderId

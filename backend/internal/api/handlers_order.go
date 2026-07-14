@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"backend/internal/response"
 	"backend/internal/service"
 
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -179,6 +181,11 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 		if claimedID != nil {
 			_ = h.idempotency.Discard(ctx, *claimedID)
 		}
+		var soldOut *service.InsufficientInventoryError
+		if errors.As(err, &soldOut) {
+			writeOutOfStockError(w, soldOut)
+			return
+		}
 		writeError(w, http.StatusBadRequest, "order_failed", err.Error())
 		return
 	}
@@ -274,6 +281,38 @@ func (h *Handlers) UpdateOrderStatus(w http.ResponseWriter, r *http.Request, ord
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, toAPIOrder(updated))
+}
+
+// DiscardPendingOrder deletes an unpaid pending POS order and releases its hold
+// when the cashier abandons a checkout before payment. Idempotent: a missing or
+// already-settled order returns 204. Restricted to POS orders — shop pending
+// orders are reclaimed by the payment-failure webhook / backstop sweeper.
+func (h *Handlers) DiscardPendingOrder(w http.ResponseWriter, r *http.Request, orderId string) {
+	ctx := r.Context()
+
+	if !nanoid.Valid(orderId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
+
+	ord, err := h.orders.GetByID(ctx, orderId)
+	if err != nil {
+		if ent.IsNotFound(err) || errors.Is(err, repository.ErrNotFound) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		writeEntError(w, err)
+		return
+	}
+	if ord.Origin != order.OriginPos {
+		writeError(w, http.StatusForbidden, "forbidden", "Only POS orders can be discarded.")
+		return
+	}
+	if err := h.payments.CleanupPendingOrderByID(ctx, orderId); err != nil {
+		writeEntError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetOrderPayment returns the payment details for an order.
