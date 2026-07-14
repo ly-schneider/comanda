@@ -1,3 +1,4 @@
+import { extractSoldOutItems } from "@/lib/checkout-sold-out"
 import type {
   CardMeta,
   CreateOrderResult,
@@ -131,10 +132,10 @@ export class OrderQueueManager {
         code?: string
         message?: string
         detail?: string
-        details?: { items?: Array<{ productId: string; variantId?: string; available?: number }> }
+        details?: unknown
       }
       if (res.status === 409 && json.code === "out_of_stock") {
-        return { ok: false, code: "out_of_stock", soldOut: json.details?.items ?? [] }
+        return { ok: false, code: "out_of_stock", soldOut: extractSoldOutItems(json.details) }
       }
       if (!res.ok || !json.id) {
         return { ok: false, code: "failed", message: json.message || json.detail }
@@ -147,7 +148,7 @@ export class OrderQueueManager {
 
   async discardOrder(serverId: string): Promise<void> {
     try {
-      await fetch(`/api/v1/orders/${serverId}/discard`, {
+      await fetch(`/api/v1/pos/orders/${serverId}/discard`, {
         method: "POST",
         headers: { Authorization: `Bearer ${this.token}` },
       })

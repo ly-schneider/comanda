@@ -144,7 +144,7 @@ discard:
 
   post:
     tags: [Orders]
-    summary: Discard a pending order
+    summary: Discard a pending POS order
     description: |
       Deletes an unpaid pending POS order and releases its inventory hold. Used
       when the cashier abandons a checkout before payment. No-op when the order is
@@ -152,7 +152,6 @@ discard:
     operationId: discardPendingOrder
     security:
       - deviceAuth: []
-      - sessionAuth: []
     responses:
       "204":
         description: Discarded (or already gone / not pending)

@@ -159,6 +159,7 @@ func NewRouter(
 			pos.Post("/pos/orders/{orderId}/refunds", wrapper.CreatePosLineRefund)
 			pos.Post("/pos/orders/{orderId}/deposit-returns", wrapper.CreatePosDepositReturn)
 			pos.Post("/pos/orders/{orderId}/cancel", wrapper.CancelPosOrder)
+			pos.Post("/pos/orders/{orderId}/discard", wrapper.DiscardPendingOrder)
 		})
 
 		// ── Orders (anonymous allowed, blocked when disabled) ────
@@ -166,7 +167,6 @@ func NewRouter(
 			orders.Use(systemMw.RequireEnabled)
 			orders.Use(betterAuthMw.OptionalAuth())
 			orders.Post("/orders", wrapper.CreateOrder)
-			orders.Post("/orders/{orderId}/discard", wrapper.DiscardPendingOrder)
 			orders.Get("/orders/{orderId}/payment", wrapper.GetOrderPayment)
 			orders.Post("/orders/{orderId}/payment", wrapper.CreateOrderPayment)
 		})

@@ -20,6 +20,14 @@ export function soldOutMessage(available?: number): string {
   return available && available > 0 ? `Nur noch ${available} verfügbar` : "Ausverkauft"
 }
 
+// buildSoldOutMap keys sold-out items by product+variant → localized message, for
+// highlighting the exact cart lines.
+export function buildSoldOutMap(items: SoldOutItem[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available))
+  return map
+}
+
 // extractSoldOutItems reads the `details.items` array off an out_of_stock ApiError.
 export function extractSoldOutItems(details: unknown): SoldOutItem[] {
   if (!details || typeof details !== "object") return []

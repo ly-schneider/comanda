@@ -40,7 +40,7 @@ func writeOutOfStockError(w http.ResponseWriter, err *service.InsufficientInvent
 		}
 		items = append(items, m)
 	}
-	details := map[string]interface{}{"items": items}
+	details := map[string]any{"items": items}
 	response.WriteJSON(w, http.StatusConflict, generated.Error{
 		Code:    "out_of_stock",
 		Message: "Not enough stock for one or more items.",

@@ -75,7 +75,7 @@ export function CheckoutClient() {
         router.push("/checkout")
         return
       }
-      const msg = isApiError(e) ? e.message : e instanceof Error ? e.message : "Fehler beim Erstellen der Zahlung"
+      const msg = isApiError(e) || e instanceof Error ? e.message : "Fehler beim Erstellen der Zahlung"
       setError(msg)
     } finally {
       setLoading(false)

@@ -3,6 +3,7 @@
 import { Minus, Pen, Plus, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { soldOutMessage } from "@/lib/checkout-sold-out"
 import { formatChf } from "@/lib/utils"
 import { findVariant, variantPickerLabel } from "@/lib/variants"
 import { CartItem } from "@/types/cart"
@@ -42,7 +43,7 @@ export function CartItemDisplay({
   // POS carries live stock as maxQuantity; if an item already in the basket now
   // exceeds what's left (another till sold it), flag it without waiting for sync.
   const overStock = maxQuantity != null && item.quantity > maxQuantity
-  const stockError = overStock ? (maxQuantity <= 0 ? "Ausverkauft" : `Nur noch ${maxQuantity} verfügbar`) : undefined
+  const stockError = overStock ? soldOutMessage(maxQuantity ?? 0) : undefined
   const effectiveError = error ?? stockError
 
   return (

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { soldOutKey } from "@/lib/checkout-sold-out"
+import { buildSoldOutMap, soldOutKey } from "@/lib/checkout-sold-out"
 import {
   buildCardCheckoutSummary,
   type CardCheckoutPayload,
@@ -814,14 +814,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     setStartingCheckout(false)
     if (!result.ok) {
       if (result.code === "out_of_stock") {
-        const m = new Map<string, string>()
-        for (const it of result.soldOut) {
-          m.set(
-            soldOutKey(it.productId, it.variantId),
-            it.available && it.available > 0 ? `Nur noch ${it.available} verfügbar` : "Ausverkauft"
-          )
-        }
-        setSoldOut(m)
+        setSoldOut(buildSoldOutMap(result.soldOut))
         setError("Nicht genügend Lager. Bitte Warenkorb anpassen.")
       } else if (result.code === "network") {
         setError("Keine Verbindung. Bitte erneut versuchen.")

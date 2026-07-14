@@ -11,7 +11,7 @@ import { ProductConfigurationModal } from "@/components/cart/product-configurati
 import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
-import { soldOutKey, soldOutMessage, takeSoldOut } from "@/lib/checkout-sold-out"
+import { buildSoldOutMap, soldOutKey, takeSoldOut } from "@/lib/checkout-sold-out"
 import { cartDepositCents } from "@/lib/utils"
 import { CartItem } from "@/types/cart"
 
@@ -27,9 +27,7 @@ export default function CheckoutClient() {
   useEffect(() => {
     const items = takeSoldOut()
     if (!items.length) return
-    const map = new Map<string, string>()
-    for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available))
-    setSoldOut(map)
+    setSoldOut(buildSoldOutMap(items))
     setError("Ein Artikel ist nicht mehr verfügbar. Bitte passe deinen Warenkorb an.")
   }, [])
   const sp = useSearchParams()
