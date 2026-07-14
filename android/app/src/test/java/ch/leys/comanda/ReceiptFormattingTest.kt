@@ -31,6 +31,13 @@ class ReceiptFormattingTest {
         assertEquals("Karte", prettyPayMethod("CARD", null))
     }
 
+    @Test fun gratisMethodsAreLabelled() {
+        assertEquals("Gratis (Gast)", prettyPayMethod("gratis_guest", null))
+        assertEquals("Gratis (VIP)", prettyPayMethod("gratis_vip", null))
+        assertEquals("Gratis (Mitarbeiter)", prettyPayMethod("gratis_staff", null))
+        assertEquals("Gratis (Plugin)", prettyPayMethod("gratis_plugin", null))
+    }
+
     @Test fun unknownMethodIsCapitalized() {
         assertEquals("Voucher", prettyPayMethod("voucher", null))
         assertEquals("", prettyPayMethod("", null))

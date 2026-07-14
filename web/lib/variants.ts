@@ -36,7 +36,7 @@ export function formatPriceAdjustment(cents: number): string {
   return `${sign} ${formatChf(abs)}`
 }
 
-export const LOW_STOCK_THRESHOLD = 5
+export const LOW_STOCK_THRESHOLD = 10
 
 export function stockAvailability(quantity: number): { isAvailable: boolean; isLowStock: boolean } {
   return { isAvailable: quantity > 0, isLowStock: quantity > 0 && quantity <= LOW_STOCK_THRESHOLD }
