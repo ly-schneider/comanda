@@ -154,6 +154,7 @@ export default function CheckoutClient() {
 
       <div ref={footerRef} className="bg-background fixed right-0 bottom-0 left-0 z-50 p-4">
         <div className="mx-auto flex max-w-xl flex-col gap-3">
+          {cart.items.length > 0 && error && <p className="text-sm text-red-600">{error}</p>}
           {cart.items.length > 0 && (
             <div className="py-2">
               <CartTotalSummary
@@ -207,8 +208,6 @@ export default function CheckoutClient() {
               </Button>
             </div>
           )}
-
-          {cart.items.length > 0 && error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </div>
 
