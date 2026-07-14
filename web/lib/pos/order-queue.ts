@@ -111,10 +111,8 @@ export class OrderQueueManager {
     })
   }
 
-  // createOrderNow creates the pending order online, up front (before the tender
-  // modal opens), so the cashier sees an out-of-stock result before taking money
-  // and the inventory hold is placed. The returned order is later handed to
-  // enqueue as preCreated, so the queue only runs the pay step.
+  // Creates the pending order online up front (before the tender modal) so the
+  // cashier sees out-of-stock before taking money; enqueue later runs only the pay step.
   async createOrderNow(items: QueuedOrderItem[]): Promise<CreateOrderResult> {
     const idempotencyKey = generateLocalId()
     try {
@@ -147,7 +145,6 @@ export class OrderQueueManager {
     }
   }
 
-  // discardOrder releases the hold of a pending order abandoned before payment.
   async discardOrder(serverId: string): Promise<void> {
     try {
       await fetch(`/api/v1/orders/${serverId}/discard`, {

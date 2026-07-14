@@ -108,10 +108,8 @@ type CheckoutPreparation struct {
 	QRPayload     string
 }
 
-// InsufficientInventoryError is returned by PrepareAndCreateOrder when one or
-// more requested items lack stock. It carries the offending product/variant ids
-// so the client can flag the exact cart lines rather than showing a generic
-// failure. All violations are reported, not just the first.
+// InsufficientInventoryError carries the sold-out product/variant ids so the client
+// can flag the exact cart lines. All violations are reported, not just the first.
 type InsufficientInventoryError struct {
 	Items []InsufficientInventoryItem
 }

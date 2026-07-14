@@ -20,8 +20,6 @@ export interface CartItemDisplayProps {
   isPOS?: boolean
   discountInfo?: CartItemDiscountInfo
   maxQuantity?: number | null
-  // error overrides any derived stock message (e.g. a sold-out result from the
-  // backend at checkout); when set it forces the red-border error state.
   error?: string
 }
 

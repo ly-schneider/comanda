@@ -485,16 +485,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     setPrintError(null)
   }, [])
 
-  // takeCheckoutOrder hands the pre-created order to a tender (pay step) and clears
-  // it so no abandon path discards it afterwards.
   const takeCheckoutOrder = useCallback((): PreCreatedOrder | undefined => {
     const o = checkoutOrderRef.current
     checkoutOrderRef.current = null
     return o ?? undefined
   }, [])
 
-  // discardCheckoutOrder releases the hold of a pre-created order the cashier
-  // abandoned before paying. No-op once a tender has consumed it.
+  // No-op once a tender has consumed the order, so abandon paths can call it freely.
   const discardCheckoutOrder = useCallback(() => {
     const o = checkoutOrderRef.current
     checkoutOrderRef.current = null
@@ -801,9 +798,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     [completeGratisPayment]
   )
 
-  // Bezahlen: create the pending order online first so stock is checked and held
-  // before any tender. Sold-out is shown on the cart at the counter (no payment
-  // taken); success opens the tender modal (or completes a full plugin comp).
+  // Create the pending order online before any tender, so stock is held and a
+  // sold-out shows at the counter (no payment taken) instead of failing at sync.
   const handleStartCheckout = useCallback(async () => {
     if (startingCheckout) return
     if (jetonMode && hasMissingJeton) {
