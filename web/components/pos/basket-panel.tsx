@@ -101,13 +101,18 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   }
   const isMobile = useIsMobile()
 
+  // True while our own pending order holds stock (Bezahlen pressed, not yet
+  // tendered or discarded). The SSE decrement from that hold would otherwise flag
+  // the cashier's own basket as sold out.
+  const [checkoutInFlight, setCheckoutInFlight] = useState(false)
+
   const getMaxQuantity = useCallback(
     (item: CartItem): number | null => {
-      if (!stockMap || item.product.type === "bundle") return null
+      if (checkoutInFlight || !stockMap || item.product.type === "bundle") return null
       const key = item.variantId ?? item.product.id
       return stockMap.get(key) ?? null
     },
-    [stockMap]
+    [stockMap, checkoutInFlight]
   )
   const { suggestion, contiguous, startIndex, endIndex, dismissSuggestion } = useBestBundleSuggestion()
   const [showCheckout, setShowCheckout] = useState(false)
@@ -300,6 +305,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       setTender(null)
       setEditingItem(null)
       setPluginDiscount(null)
+      setCheckoutInFlight(false)
     }
     window.addEventListener("pos:lock", onLock)
     return () => window.removeEventListener("pos:lock", onLock)
@@ -488,6 +494,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   const takeCheckoutOrder = useCallback((): PreCreatedOrder | undefined => {
     const o = checkoutOrderRef.current
     checkoutOrderRef.current = null
+    setCheckoutInFlight(false)
     return o ?? undefined
   }, [])
 
@@ -495,6 +502,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   const discardCheckoutOrder = useCallback(() => {
     const o = checkoutOrderRef.current
     checkoutOrderRef.current = null
+    setCheckoutInFlight(false)
     if (o) void discardOrder(o.serverId)
   }, [discardOrder])
 
@@ -828,6 +836,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       serverQrPayload: result.serverQrPayload,
       idempotencyKey: result.idempotencyKey,
     }
+    setCheckoutInFlight(true)
     if (pluginDiscount && total <= 0) {
       completeGratisPayment("gratis_plugin", undefined, pluginPayment)
       return
