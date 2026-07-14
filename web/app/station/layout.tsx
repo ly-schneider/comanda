@@ -33,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function StationLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col px-2">
+    <main className="flex min-h-screen flex-col px-2 pt-[env(safe-area-inset-top)]">
       <div className="flex flex-1 flex-col">{children}</div>
       <VersionLabel className="pb-6 text-center text-sm" version={process.env.APP_VERSION} />
       <ServiceWorkerRegister />
