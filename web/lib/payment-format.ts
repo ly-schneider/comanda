@@ -6,7 +6,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   GRATIS_GUEST: "Gratis (Gast)",
   GRATIS_VIP: "Gratis (VIP)",
   GRATIS_STAFF: "Gratis (Mitarbeiter)",
-  GRATIS_PLUGIN: "Gratis (Plugin)",
+  GRATIS_PLUGIN: "Gratis",
 }
 
 export function paymentMethodLabel(method: string): string {

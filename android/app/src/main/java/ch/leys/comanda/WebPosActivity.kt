@@ -109,7 +109,7 @@ internal fun prettyPayMethod(method: String, cardLast4: String?): String {
         "gratis_guest" -> "Gratis (Gast)"
         "gratis_vip" -> "Gratis (VIP)"
         "gratis_staff" -> "Gratis (Mitarbeiter)"
-        "gratis_plugin" -> "Gratis (Plugin)"
+        "gratis_plugin" -> "Gratis"
         else -> if (method.isNotEmpty()) method.substring(0, 1).uppercase() + method.substring(1) else method
     }
     return if (method.equals("card", ignoreCase = true) && !cardLast4.isNullOrBlank()) "$base •••• $cardLast4" else base

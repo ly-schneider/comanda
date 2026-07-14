@@ -698,7 +698,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       case "gratis_staff":
         return "Gratis (Mitarbeiter)"
       case "gratis_plugin":
-        return "Gratis (Plugin)"
+        return "Gratis"
       default:
         return method
     }
