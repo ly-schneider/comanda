@@ -32,7 +32,8 @@ export default function QRCode({ value, size = 220, className, binary = false }:
           margin: 1,
           color: {
             dark: "#000000",
-            light: "#ffffff",
+            // Transparent light modules — the pickup/claim QR always sits on a light surface (no dark themes).
+            light: "#00000000",
           },
         })
         if (!cancelled) setSrc(url)
