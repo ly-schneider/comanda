@@ -27,7 +27,6 @@ export interface RedeemLineView {
 export type RedeemResult =
   | { kind: "invalid" } // bad signature / malformed / unknown version
   | { kind: "wrong-event" } // tenant id ≠ this station's tenant
-  | { kind: "blocked"; orderId: string } // id is in the effective block set
   | { kind: "not-for-stand"; orderId: string } // no payload line for an assigned product
   | { kind: "already-redeemed"; orderId: string; lines: RedeemLineView[] }
   | { kind: "redeemed"; orderId: string; lines: RedeemLineView[] }
@@ -49,8 +48,6 @@ export interface RedeemDeps {
    * flusher's concern, not this orchestration's.
    */
   enqueue: (orderId: string, productIds: string[], tenantId: string) => Promise<void>
-  // Refused before line matching — a blocked code is dead even for this stand.
-  blocked?: (orderId: string) => boolean
   now: () => number
 }
 
@@ -63,8 +60,6 @@ export async function redeemScan(token: string, deps: RedeemDeps): Promise<Redee
   // path there is no server backstop, so the station is the sole enforcer of
   // tenant scoping — reject anything not addressed to our tenant.
   if (!deps.stationTenantId || payload.t !== deps.stationTenantId) return { kind: "wrong-event" }
-
-  if (deps.blocked?.(payload.o)) return { kind: "blocked", orderId: payload.o }
 
   const matched = payload.l.filter((line) => deps.assignedProductIds.has(line.p))
   if (matched.length === 0) return { kind: "not-for-stand", orderId: payload.o }

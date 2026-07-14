@@ -3,6 +3,16 @@
 import { Download, Loader2, Printer, QrCode, RefreshCw } from "lucide-react"
 import QRCode from "qrcode"
 import { useCallback, useEffect, useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -72,6 +82,7 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
   const [busy, setBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmRotateOpen, setConfirmRotateOpen] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -96,8 +107,7 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
       .catch(() => setQrDataUrl(""))
   }, [code?.token])
 
-  const rotate = useCallback(async () => {
-    if (code?.configured && !window.confirm("Neuen Code generieren? Der bisherige Ausdruck wird ungültig.")) return
+  const doRotate = useCallback(async () => {
     setBusy(true)
     setError(null)
     try {
@@ -107,7 +117,15 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
     } finally {
       setBusy(false)
     }
-  }, [token, code?.configured])
+  }, [token])
+
+  const rotate = useCallback(() => {
+    if (code?.configured) {
+      setConfirmRotateOpen(true)
+    } else {
+      void doRotate()
+    }
+  }, [code?.configured, doRotate])
 
   const toggle = useCallback(
     async (active: boolean) => {
@@ -245,6 +263,29 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={confirmRotateOpen} onOpenChange={setConfirmRotateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Neuen Code generieren?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Der bisherige Ausdruck wird ungültig. Stationen müssen anschliessend den neuen Code scannen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmRotateOpen(false)
+                void doRotate()
+              }}
+              disabled={busy}
+            >
+              Neu generieren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

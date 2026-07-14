@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
 import QrScanner, { type QrScannerControls, type QrScanResult } from "@/components/qr-scanner"
-import { StationBlockList, syncedLabel } from "@/components/station/block-list-panel"
 import { FullscreenButton } from "@/components/station/fullscreen-button"
 import { HardRefreshButton } from "@/components/station/hard-refresh-button"
 import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
@@ -21,20 +20,19 @@ import { useBranding } from "@/contexts/branding-context"
 import { useDeviceFetch } from "@/hooks/use-device-fetch"
 
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
-import {
-  addManualBlock,
-  type BlockState,
-  effectiveBlockSet,
-  EMPTY_BLOCK_STATE,
-  loadBlockState,
-  reconcileRevocations,
-  removeManualBlock,
-} from "@/lib/station/block-list"
 import { idbLedger, type StationLedger } from "@/lib/station/ledger"
 import { idbKVStore } from "@/lib/station/offline-db"
 import { CATALOG_KEY, type CatalogEntry, PLUGINS_KEY, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
+import {
+  EMPTY_REVOCATIONS,
+  loadRevocations,
+  reconcileRevocations,
+  revokedIdSet,
+  type ServerRevocations,
+  syncedLabel,
+} from "@/lib/station/revocations"
 import { flushOutbox } from "@/lib/station/sync"
 import { idbOutbox, type StationOutbox } from "@/lib/station/sync-queue"
 import { useStationSession } from "@/lib/station/use-station-session"
@@ -63,7 +61,7 @@ type OrderLine = {
   childLines?: OrderLine[]
 }
 
-type ScanStatus = "loading" | "success" | "already-redeemed" | "no-items" | "blocked" | "error"
+type ScanStatus = "loading" | "success" | "already-redeemed" | "no-items" | "error"
 
 type OrderScanResult = {
   key: string
@@ -73,9 +71,6 @@ type OrderScanResult = {
   message?: string
   scannedAt: Date
   orderId?: string
-  // Decoded order nanoid the one-tap block acts on; separate from orderId so a
-  // blocked / not-for-stand scan can be blocked without enabling the detail dialog.
-  blockableId?: string
   lines: OrderLine[]
 }
 
@@ -195,13 +190,6 @@ const STATUS_STYLES: Record<ScanStatus, StatusMeta> = {
     bg: "bg-card",
     dot: "bg-muted-foreground/50",
     icon: PackageOpen,
-  },
-  blocked: {
-    label: "Gesperrt",
-    text: "text-destructive",
-    bg: "bg-destructive/10",
-    dot: "bg-destructive",
-    icon: Ban,
   },
   error: {
     label: "Fehler",
@@ -326,16 +314,12 @@ export default function StationPage() {
     catalog: Map<string, CatalogProduct>
     voucherEnabled: boolean
   }>({ publicKey: null, tenantId: null, catalog: new Map(), voucherEnabled: false })
-  // Read on the scan hot path through a ref (stable identity → no camera restart);
-  // the BlockState mirror drives the panel UI.
-  const blockSetRef = useRef<Set<string>>(new Set())
-  const blockStateRef = useRef<BlockState>(EMPTY_BLOCK_STATE)
-  const [blockState, setBlockState] = useState<BlockState>(EMPTY_BLOCK_STATE)
-  const [voucherEnabled, setVoucherEnabled] = useState(false)
-  const applyBlockState = useCallback((next: BlockState) => {
-    blockStateRef.current = next
-    blockSetRef.current = effectiveBlockSet(next)
-    setBlockState(next)
+  // Read on the scan hot path through a ref (stable identity → no camera restart).
+  const revokedIdsRef = useRef<Set<string>>(new Set())
+  const revocationsRef = useRef<ServerRevocations>(EMPTY_REVOCATIONS)
+  const applyRevocations = useCallback((next: ServerRevocations) => {
+    revocationsRef.current = next
+    revokedIdsRef.current = revokedIdSet(next)
   }, [])
   const ledgerRef = useRef<StationLedger | null>(null)
   if (!ledgerRef.current) ledgerRef.current = idbLedger()
@@ -363,9 +347,9 @@ export default function StationPage() {
       token: () => tokenRef.current || null,
       now: () => Date.now(),
     }).then((server) => {
-      if (server) applyBlockState({ server, manual: [] })
+      if (server) applyRevocations(server)
     })
-  }, [applyBlockState])
+  }, [applyRevocations])
 
   // Replay the public key, tenant id, product catalog, and block list cached by
   // the offline-setup ritual so a scan verifies and renders with zero network.
@@ -374,11 +358,11 @@ export default function StationPage() {
     let cancelled = false
     void (async () => {
       const store = idbKVStore()
-      const [cfg, catalog, plugins, blocks] = await Promise.all([
+      const [cfg, catalog, plugins, revocations] = await Promise.all([
         store.get<QRConfig>(QR_CONFIG_KEY).catch(() => null),
         store.get<CatalogEntry[]>(CATALOG_KEY).catch(() => null),
         store.get<string[]>(PLUGINS_KEY).catch(() => null),
-        loadBlockState(store).catch(() => null),
+        loadRevocations(store).catch(() => null),
       ])
       if (cancelled) return
       const map = new Map<string, CatalogProduct>()
@@ -390,14 +374,13 @@ export default function StationPage() {
         catalog: map,
         voucherEnabled: enabled,
       }
-      setVoucherEnabled(enabled)
-      if (blocks) applyBlockState(blocks)
+      if (revocations) applyRevocations(revocations)
       triggerReconcile()
     })()
     return () => {
       cancelled = true
     }
-  }, [approved, applyBlockState, triggerReconcile])
+  }, [approved, applyRevocations, triggerReconcile])
 
   useEffect(() => {
     if (!approved) {
@@ -556,22 +539,6 @@ export default function StationPage() {
     })
   }, [])
 
-  const handleBlockCode = useCallback(
-    async (id: string) => {
-      const manual = await addManualBlock(id, idbKVStore())
-      applyBlockState({ ...blockStateRef.current, manual })
-    },
-    [applyBlockState]
-  )
-
-  const handleUnblockCode = useCallback(
-    async (id: string) => {
-      const manual = await removeManualBlock(id, idbKVStore())
-      applyBlockState({ ...blockStateRef.current, manual })
-    },
-    [applyBlockState]
-  )
-
   // Queue first (durable before we report success), then flush — immediate when
   // online, deferred to a later trigger when offline.
   const handleEnqueue = useCallback(
@@ -641,9 +608,9 @@ export default function StationPage() {
           publicKey: offline.publicKey,
           stationTenantId: offline.tenantId,
           now: Date.now(),
-          revoked: (id) => blockSetRef.current.has(id),
+          revoked: (id) => revokedIdsRef.current.has(id),
         })
-        pushScan(voucherScanResult(key, parsed.token, verdict, blockStateRef.current.server.syncedAt))
+        pushScan(voucherScanResult(key, parsed.token, verdict, revocationsRef.current.syncedAt))
         playScanSound(voucherSound(verdict.kind))
         scheduleResume()
         return
@@ -744,7 +711,6 @@ export default function StationPage() {
           catalog: offline.catalog,
           ledger: ledgerRef.current!,
           enqueue: handleEnqueue,
-          blocked: (id) => blockSetRef.current.has(id),
           now: () => Date.now(),
         })
 
@@ -772,19 +738,14 @@ export default function StationPage() {
             updateScan(key, { status: "error", message: "Falscher Event" })
             playScanSound("error")
             break
-          case "blocked":
-            updateScan(key, { status: "blocked", blockableId: result.orderId })
-            playScanSound("error")
-            break
           case "not-for-stand":
-            updateScan(key, { status: "no-items", blockableId: result.orderId })
+            updateScan(key, { status: "no-items" })
             playScanSound("warning")
             break
           case "already-redeemed":
             updateScan(key, {
               status: "already-redeemed",
               orderId: result.orderId,
-              blockableId: result.orderId,
               lines: toLines(result.orderId, result.lines),
             })
             playScanSound("warning")
@@ -793,7 +754,6 @@ export default function StationPage() {
             updateScan(key, {
               status: "success",
               orderId: result.orderId,
-              blockableId: result.orderId,
               lines: toLines(result.orderId, result.lines),
             })
             playScanSound("success")
@@ -848,7 +808,6 @@ export default function StationPage() {
     )
   }
 
-  const blockedIds = effectiveBlockSet(blockState)
   const latest = scans[0] ?? null
   const history = scans.slice(1)
 
@@ -876,14 +835,6 @@ export default function StationPage() {
           <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name || displayName}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {approved && (
-            <StationBlockList
-              blockState={blockState}
-              voucherEnabled={voucherEnabled}
-              onBlock={handleBlockCode}
-              onUnblock={handleUnblockCode}
-            />
-          )}
           {approved && <OfflineReadiness />}
           <InstallPrompt />
           <HardRefreshButton />
@@ -1002,12 +953,7 @@ export default function StationPage() {
 
               <div className="flex w-full flex-col gap-8">
                 {latest ? (
-                  <ScanCard
-                    scan={latest}
-                    onOpenDetail={setDetailScan}
-                    blockedIds={blockedIds}
-                    onBlock={handleBlockCode}
-                  />
+                  <ScanCard scan={latest} onOpenDetail={setDetailScan} />
                 ) : (
                   <div className="text-muted-foreground bg-card rounded-2xl p-8 text-center text-sm">
                     Bereit zum Scannen. Der nächste QR-Code wird automatisch eingelöst.
@@ -1016,9 +962,7 @@ export default function StationPage() {
 
                 {history.length > 0 && (
                   <div>
-                    <div className="text-muted-foreground font-primary mb-3 px-1 text-xs tracking-[0.08em] uppercase">
-                      Frühere Scans
-                    </div>
+                    <div className="text-muted-foreground mb-3 px-1 text-xs font-medium">Frühere Scans</div>
                     <ul className="flex flex-col gap-1.5">
                       {history.map((s) => (
                         <ScanRow key={s.key} scan={s} onOpenDetail={setDetailScan} />
@@ -1049,18 +993,8 @@ export default function StationPage() {
   )
 }
 
-function ScanCard({
-  scan,
-  onOpenDetail,
-  blockedIds,
-  onBlock,
-}: {
-  scan: ScanResult
-  onOpenDetail?: (scan: OrderScanResult) => void
-  blockedIds: Set<string>
-  onBlock: (id: string) => void
-}) {
-  if (scan.kind === "voucher") return <VoucherScanCard scan={scan} blockedIds={blockedIds} onBlock={onBlock} />
+function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
+  if (scan.kind === "voucher") return <VoucherScanCard scan={scan} />
   const meta = STATUS_STYLES[scan.status]
   const Icon = meta.icon
   const matched = scan.lines
@@ -1075,9 +1009,7 @@ function ScanCard({
       <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3.5">
         <div className={`flex min-w-0 items-center gap-2 ${meta.text}`}>
           <Icon className={`h-[18px] w-[18px] shrink-0 ${isLoading ? "animate-spin" : ""}`} aria-hidden />
-          <span className="font-primary mt-[3px] text-sm leading-none tracking-wide whitespace-nowrap uppercase">
-            {meta.label}
-          </span>
+          <span className="font-primary text-sm leading-none font-medium whitespace-nowrap">{meta.label}</span>
         </div>
         {canOpenDetail && (
           <button
@@ -1117,10 +1049,6 @@ function ScanCard({
         </p>
       )}
 
-      {scan.status === "blocked" && (
-        <p className="text-destructive px-5 pt-1 pb-5 text-sm">Dieser Code wurde gesperrt.</p>
-      )}
-
       {(scan.status === "success" || scan.status === "already-redeemed") && (
         <div className="flex flex-col gap-3 px-5 pb-5">
           {(() => {
@@ -1133,9 +1061,7 @@ function ScanCard({
                   <ConsolidatedItemCard key={it.productId} item={it} redeemed={false} />
                 ))}
                 {redeemedItems.length > 0 && scan.status === "success" && unredeemedItems.length > 0 && (
-                  <div className="text-muted-foreground font-primary mt-1 text-[11px] tracking-[0.08em] uppercase">
-                    Bereits eingelöst
-                  </div>
+                  <div className="text-muted-foreground mt-1 text-xs font-medium">Bereits eingelöst</div>
                 )}
                 {redeemedItems.map((it) => (
                   <ConsolidatedItemCard key={it.productId} item={it} redeemed />
@@ -1144,35 +1070,6 @@ function ScanCard({
             )
           })()}
         </div>
-      )}
-
-      {scan.blockableId && (
-        <ScanBlockFooter id={scan.blockableId} blocked={blockedIds.has(scan.blockableId)} onBlock={onBlock} />
-      )}
-    </div>
-  )
-}
-
-// The big status is frozen at scan time; this footer tracks the live block set,
-// so tapping "Sperren" flips it to "Gesperrt" as confirmation.
-function ScanBlockFooter({ id, blocked, onBlock }: { id: string; blocked: boolean; onBlock: (id: string) => void }) {
-  return (
-    <div className="border-border/60 mx-5 mb-4 flex items-center justify-between gap-2 border-t pt-3">
-      <span className="text-muted-foreground truncate font-mono text-xs">{id}</span>
-      {blocked ? (
-        <span className="text-destructive inline-flex shrink-0 items-center gap-1 text-xs font-medium">
-          <Ban className="size-3.5" aria-hidden />
-          Gesperrt
-        </span>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onBlock(id)}
-          className="text-destructive hover:bg-destructive/10 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors"
-        >
-          <Ban className="size-3.5" aria-hidden />
-          Sperren
-        </button>
       )}
     </div>
   )
@@ -1187,11 +1084,7 @@ function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sca
     <li className={`${meta.bg} flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
-        <span
-          className={`font-primary mt-[2px] shrink-0 text-[11px] leading-none tracking-wide uppercase ${meta.text}`}
-        >
-          {meta.label}
-        </span>
+        <span className={`font-primary shrink-0 text-xs leading-none font-medium ${meta.text}`}>{meta.label}</span>
         {itemCount > 0 && (
           <span className="text-muted-foreground truncate text-xs tabular-nums">{itemCount} Artikel</span>
         )}
@@ -1213,74 +1106,43 @@ function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sca
   )
 }
 
-function VoucherScanCard({
-  scan,
-  blockedIds,
-  onBlock,
-}: {
-  scan: VoucherScanResult
-  blockedIds: Set<string>
-  onBlock: (id: string) => void
-}) {
+function VoucherScanCard({ scan }: { scan: VoucherScanResult }) {
   const meta = VOUCHER_STYLES[scan.verdict]
   const Icon = meta.icon
-  const isValid = scan.verdict === "valid"
   return (
-    <div className={`${meta.bg} animate-in fade-in slide-in-from-bottom-1 rounded-2xl duration-300 ease-out`}>
-      <div className="flex flex-col items-center gap-2 px-5 pt-6 pb-5 text-center">
-        <Icon className={`${isValid ? "h-14 w-14" : "h-9 w-9"} ${meta.text}`} aria-hidden />
-        <span className={`font-primary text-2xl leading-none font-semibold tracking-wide uppercase ${meta.text}`}>
-          {meta.label}
-        </span>
-
-        {scan.label && <p className="text-foreground text-lg font-medium">{scan.label}</p>}
-
-        {scan.categories && scan.categories.length > 0 && (
-          <div className="mt-1 flex flex-col items-center gap-1.5">
-            <span className="text-muted-foreground font-primary text-[11px] tracking-[0.08em] uppercase">Deckt ab</span>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {scan.categories.map((c) => (
-                <span key={c} className="border-border text-foreground/80 rounded-lg border px-2 py-0.5 text-sm">
-                  {c}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {isValid && scan.validUntil != null && (
-          <p className="text-muted-foreground text-sm">Gültig bis {formatVoucherTime(scan.validUntil)}</p>
-        )}
-        {scan.verdict === "scheduled" && scan.validFrom != null && (
-          <p className="text-muted-foreground text-sm">Gültig ab {formatVoucherTime(scan.validFrom)}</p>
-        )}
-        {scan.verdict === "expired" && scan.validUntil != null && (
-          <p className="text-muted-foreground text-sm">Abgelaufen am {formatVoucherTime(scan.validUntil)}</p>
-        )}
-        {scan.message && <p className={`text-sm ${meta.text}`}>{scan.message}</p>}
-
-        {scan.voucherId && (
-          <div className="mt-1 flex items-center gap-2">
-            <span className="text-muted-foreground font-mono text-xs tracking-wide">{scan.voucherId}</span>
-            {blockedIds.has(scan.voucherId) ? (
-              <span className="text-destructive inline-flex items-center gap-1 text-xs font-medium">
-                <Ban className="size-3.5" aria-hidden />
-                Gesperrt
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onBlock(scan.voucherId as string)}
-                className="text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors"
-              >
-                <Ban className="size-3.5" aria-hidden />
-                Sperren
-              </button>
-            )}
-          </div>
-        )}
-        <p className="text-muted-foreground mt-1 text-[11px]">{syncedLabel(scan.syncedAt, Date.now())}</p>
+    <div className={`${meta.bg} animate-in fade-in slide-in-from-bottom-1 rounded-2xl p-5 duration-300 ease-out`}>
+      <div className={`flex items-center gap-2.5 ${meta.text}`}>
+        <Icon className="h-8 w-8 shrink-0" aria-hidden />
+        <span className="text-2xl leading-tight font-semibold">{meta.label}</span>
       </div>
+
+      {scan.label && <p className="text-foreground mt-3 text-lg leading-snug font-medium">{scan.label}</p>}
+
+      {scan.categories && scan.categories.length > 0 && (
+        <div className="mt-3">
+          <p className="text-muted-foreground text-xs">Deckt ab</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {scan.categories.map((c) => (
+              <span key={c} className="border-border text-foreground/80 rounded-lg border px-2 py-0.5 text-sm">
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scan.verdict === "valid" && scan.validUntil != null && (
+        <p className="text-muted-foreground mt-3 text-sm">Gültig bis {formatVoucherTime(scan.validUntil)}</p>
+      )}
+      {scan.verdict === "scheduled" && scan.validFrom != null && (
+        <p className="text-muted-foreground mt-3 text-sm">Gültig ab {formatVoucherTime(scan.validFrom)}</p>
+      )}
+      {scan.verdict === "expired" && scan.validUntil != null && (
+        <p className="text-muted-foreground mt-3 text-sm">Abgelaufen am {formatVoucherTime(scan.validUntil)}</p>
+      )}
+      {scan.message && <p className={`mt-3 text-sm ${meta.text}`}>{scan.message}</p>}
+
+      <p className="text-muted-foreground mt-4 text-[11px]">{syncedLabel(scan.syncedAt, Date.now())}</p>
     </div>
   )
 }
@@ -1291,11 +1153,7 @@ function VoucherScanRow({ scan }: { scan: VoucherScanResult }) {
     <li className={`${meta.bg} flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm`}>
       <div className="flex min-w-0 items-center gap-2.5">
         <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
-        <span
-          className={`font-primary mt-[2px] shrink-0 text-[11px] leading-none tracking-wide uppercase ${meta.text}`}
-        >
-          {meta.label}
-        </span>
+        <span className={`font-primary shrink-0 text-xs leading-none font-medium ${meta.text}`}>{meta.label}</span>
         {scan.label && <span className="text-muted-foreground truncate text-xs">{scan.label}</span>}
       </div>
       <span className="text-muted-foreground shrink-0 text-xs tabular-nums">

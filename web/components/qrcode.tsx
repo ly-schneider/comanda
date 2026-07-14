@@ -32,7 +32,7 @@ export default function QRCode({ value, size = 220, className, binary = false }:
           margin: 1,
           color: {
             dark: "#000000",
-            light: "#E9E7E6",
+            light: "#00000000",
           },
         })
         if (!cancelled) setSrc(url)
