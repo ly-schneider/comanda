@@ -116,6 +116,8 @@ paths:
     $ref: "paths/refunds.yaml#/order-refunds-arbitrary"
   /orders/{orderId}/cancel:
     $ref: "paths/refunds.yaml#/order-cancel"
+  /orders/{orderId}/discard:
+    $ref: "paths/orders.yaml#/discard"
   /orders/{orderId}/deposit-returns:
     $ref: "paths/refunds.yaml#/order-deposit-returns"
   /refunds:

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { soldOutKey } from "@/lib/checkout-sold-out"
 import {
   buildCardCheckoutSummary,
   type CardCheckoutPayload,
@@ -31,9 +32,11 @@ import type { CartItem } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type {
   CardMeta,
+  CreateOrderResult,
   GratisInfo,
   PluginPayment,
   PosPaymentMethod,
+  PreCreatedOrder,
   QueuedOrder,
   QueuedOrderItem,
   ReceiptItem,
@@ -77,12 +80,17 @@ interface BasketPanelProps {
     receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
     gratisInfo?: GratisInfo,
     cardMeta?: CardMeta,
-    plugin?: PluginPayment
+    plugin?: PluginPayment,
+    preCreated?: PreCreatedOrder
   ) => QueuedOrder | null
+  // createOrder places the online pending order + hold before the tender modal
+  // opens; discardOrder releases it when the cashier abandons the checkout.
+  createOrder: (items: QueuedOrderItem[]) => Promise<CreateOrderResult>
+  discardOrder: (serverId: string) => Promise<void>
   stockMap?: Map<string, number>
 }
 
-export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketPanelProps) {
+export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discardOrder, stockMap }: BasketPanelProps) {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
   const { displayName, logoUrl, legal, currency } = useBranding()
   const receiptBranding: ReceiptBranding = {
@@ -107,6 +115,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   const [received, setReceived] = useState<string>("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [startingCheckout, setStartingCheckout] = useState(false)
+  const [soldOut, setSoldOut] = useState<Map<string, string>>(new Map())
+  // The online pending order created when Bezahlen is pressed; a tender consumes
+  // it, and any abandon path discards it (releasing the hold). transferringRef
+  // guards the checkout→card / checkout→gratis hand-off from being read as an abandon.
+  const checkoutOrderRef = useRef<PreCreatedOrder | null>(null)
+  const transferringRef = useRef(false)
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -301,6 +316,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
   const cartItemsKey = useMemo(() => cart.items.map((i) => `${i.id}:${i.quantity}`).join(","), [cart.items])
   useEffect(() => {
     setPluginDiscount(null)
+    setSoldOut(new Map())
   }, [cartItemsKey])
 
   // Listen for native print results from the Android WebView bridge
@@ -382,7 +398,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
             { items: printItems, pickupQr: null },
             undefined,
             hasCardMeta ? cardMeta : undefined,
-            pluginPayment
+            pluginPayment,
+            takeCheckoutOrder()
           )
           emitInventoryDecrement(cart.items)
 
@@ -468,8 +485,26 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     setPrintError(null)
   }, [])
 
+  // takeCheckoutOrder hands the pre-created order to a tender (pay step) and clears
+  // it so no abandon path discards it afterwards.
+  const takeCheckoutOrder = useCallback((): PreCreatedOrder | undefined => {
+    const o = checkoutOrderRef.current
+    checkoutOrderRef.current = null
+    return o ?? undefined
+  }, [])
+
+  // discardCheckoutOrder releases the hold of a pre-created order the cashier
+  // abandoned before paying. No-op once a tender has consumed it.
+  const discardCheckoutOrder = useCallback(() => {
+    const o = checkoutOrderRef.current
+    checkoutOrderRef.current = null
+    if (o) void discardOrder(o.serverId)
+  }, [discardOrder])
+
   const openReceipt = useCallback(
     (next: Receipt) => {
+      // This manual-receipt fallback records no payment, so release the hold.
+      discardCheckoutOrder()
       setReceipt(next)
       resetPrintState()
       try {
@@ -478,7 +513,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       setShowCheckout(false)
       setShowReceipt(true)
     },
-    [clearCart, resetPrintState]
+    [clearCart, resetPrintState, discardCheckoutOrder]
   )
 
   const closeReceipt = useCallback(() => {
@@ -515,7 +550,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       { items: printItems, pickupQr: null },
       undefined,
       undefined,
-      pluginPayment
+      pluginPayment,
+      takeCheckoutOrder()
     )
     emitInventoryDecrement(cart.items)
 
@@ -579,7 +615,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       { items: printItems, pickupQr: null },
       undefined,
       undefined,
-      pluginPayment
+      pluginPayment,
+      takeCheckoutOrder()
     )
     emitInventoryDecrement(cart.items)
 
@@ -628,6 +665,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       setCardError(null)
       setCardSuccess(false)
       setCardProcessing(true)
+      transferringRef.current = true
       setShowCheckout(false)
       setShowCard(true)
       try {
@@ -710,7 +748,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
         { items: printItems, pickupQr: null },
         gratisInfo,
         undefined,
-        plugin
+        plugin,
+        takeCheckoutOrder()
       )
       emitInventoryDecrement(cart.items)
 
@@ -762,6 +801,63 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
     [completeGratisPayment]
   )
 
+  // Bezahlen: create the pending order online first so stock is checked and held
+  // before any tender. Sold-out is shown on the cart at the counter (no payment
+  // taken); success opens the tender modal (or completes a full plugin comp).
+  const handleStartCheckout = useCallback(async () => {
+    if (startingCheckout) return
+    if (jetonMode && hasMissingJeton) {
+      setError("Bitte weise allen Produkten einen Jeton zu.")
+      return
+    }
+    setError(null)
+    setSoldOut(new Map())
+    transferringRef.current = false
+    setStartingCheckout(true)
+    const result = await createOrder(buildOrderItems(cart.items))
+    setStartingCheckout(false)
+    if (!result.ok) {
+      if (result.code === "out_of_stock") {
+        const m = new Map<string, string>()
+        for (const it of result.soldOut) {
+          m.set(
+            soldOutKey(it.productId, it.variantId),
+            it.available && it.available > 0 ? `Nur noch ${it.available} verfügbar` : "Ausverkauft"
+          )
+        }
+        setSoldOut(m)
+        setError("Nicht genügend Lager. Bitte Warenkorb anpassen.")
+      } else if (result.code === "network") {
+        setError("Keine Verbindung. Bitte erneut versuchen.")
+      } else {
+        setError(result.message || "Bestellung konnte nicht erstellt werden.")
+      }
+      return
+    }
+    checkoutOrderRef.current = {
+      serverId: result.serverId,
+      serverQrPayload: result.serverQrPayload,
+      idempotencyKey: result.idempotencyKey,
+    }
+    if (pluginDiscount && total <= 0) {
+      completeGratisPayment("gratis_plugin", undefined, pluginPayment)
+      return
+    }
+    setTender(null)
+    setReceived("")
+    setShowCheckout(true)
+  }, [
+    startingCheckout,
+    jetonMode,
+    hasMissingJeton,
+    createOrder,
+    cart.items,
+    pluginDiscount,
+    total,
+    completeGratisPayment,
+    pluginPayment,
+  ])
+
   return (
     <>
       <aside className="bg-card border-border mx-3 flex h-full min-h-0 flex-col rounded-2xl border shadow-md md:sticky md:top-0 md:mr-3 md:mb-3 md:ml-0 md:h-[calc(100%-0.75rem)]">
@@ -791,6 +887,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     </div>
                   )
@@ -818,6 +915,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     </div>
                   )
@@ -833,6 +931,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
+                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
                       />
                     </div>
                   )
@@ -891,23 +990,16 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
           <div className="flex flex-col gap-2">
             <Button
               className="h-12 w-full rounded-xl text-sm"
-              disabled={cartIsEmpty}
-              onClick={() => {
-                if (jetonMode && hasMissingJeton) {
-                  setError("Bitte weise allen Produkten einen Jeton zu.")
-                  return
-                }
-                if (pluginDiscount && total <= 0) {
-                  completeGratisPayment("gratis_plugin", undefined, pluginPayment)
-                  return
-                }
-                setTender(null)
-                setReceived("")
-                setShowCheckout(true)
-              }}
+              disabled={cartIsEmpty || startingCheckout}
+              onClick={handleStartCheckout}
             >
-              {pluginDiscount && total <= 0 ? "Gratis abschliessen" : "Jetzt bezahlen"}
+              {startingCheckout
+                ? "Wird erstellt…"
+                : pluginDiscount && total <= 0
+                  ? "Gratis abschliessen"
+                  : "Jetzt bezahlen"}
             </Button>
+            {error && !showCheckout && <div className="text-sm text-red-600">{error}</div>}
             <Button
               variant="outline"
               className="h-10 w-full rounded-xl text-xs"
@@ -936,6 +1028,10 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
         onOpenChange={(v) => {
           setShowCheckout(v)
           if (!v) {
+            // A user-initiated close abandons the checkout; a hand-off to the
+            // card / gratis flow does not.
+            if (transferringRef.current) transferringRef.current = false
+            else discardCheckoutOrder()
             closeCheckout()
           }
         }}
@@ -999,6 +1095,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                 variant="outline"
                 size="sm"
                 onClick={() => {
+                  transferringRef.current = true
                   setShowCheckout(false)
                   setShowGratisDialog(true)
                 }}
@@ -1146,6 +1243,9 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
         onOpenChange={(v) => {
           setShowCard(v)
           if (!v) {
+            // Closing the card screen without a completed charge abandons the
+            // order (no-op once the SumUp success handler consumed it).
+            discardCheckoutOrder()
             setCardProcessing(false)
             setCardSuccess(false)
             setCardError(null)
@@ -1211,7 +1311,14 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
                   >
                     Erneut versuchen
                   </Button>
-                  <Button variant="outline" className="h-12 rounded-xl text-base" onClick={() => setShowCard(false)}>
+                  <Button
+                    variant="outline"
+                    className="h-12 rounded-xl text-base"
+                    onClick={() => {
+                      discardCheckoutOrder()
+                      setShowCard(false)
+                    }}
+                  >
                     Schliessen
                   </Button>
                 </div>
@@ -1219,7 +1326,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCard(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                discardCheckoutOrder()
+                setShowCard(false)
+              }}
+            >
               Schliessen
             </Button>
           </DialogFooter>
@@ -1391,7 +1504,14 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, stockMap }: BasketP
       </Dialog>
 
       {/* Gratis type selection dialog */}
-      <GratisTypeDialog open={showGratisDialog} onOpenChange={setShowGratisDialog} onSelect={handleGratisTypeSelect} />
+      <GratisTypeDialog
+        open={showGratisDialog}
+        onOpenChange={(v) => {
+          setShowGratisDialog(v)
+          if (!v) discardCheckoutOrder()
+        }}
+        onSelect={handleGratisTypeSelect}
+      />
     </>
   )
 }

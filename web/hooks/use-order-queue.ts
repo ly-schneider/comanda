@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { OrderQueueManager } from "@/lib/pos/order-queue"
 import type {
   CardMeta,
+  CreateOrderResult,
   GratisInfo,
   PluginPayment,
   PosPaymentMethod,
+  PreCreatedOrder,
   QueuedOrder,
   QueuedOrderItem,
   ReceiptItem,
@@ -62,13 +64,32 @@ export function useOrderQueue({ token, deviceId, onOrderSynced, onPaymentError }
       receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
       gratisInfo?: GratisInfo,
       cardMeta?: CardMeta,
-      plugin?: PluginPayment
+      plugin?: PluginPayment,
+      preCreated?: PreCreatedOrder
     ): QueuedOrder | null => {
       if (!managerRef.current) return null
-      return managerRef.current.enqueue(items, totalCents, paymentMethod, receiptData, gratisInfo, cardMeta, plugin)
+      return managerRef.current.enqueue(
+        items,
+        totalCents,
+        paymentMethod,
+        receiptData,
+        gratisInfo,
+        cardMeta,
+        plugin,
+        preCreated
+      )
     },
     []
   )
+
+  const createOrder = useCallback(async (items: QueuedOrderItem[]): Promise<CreateOrderResult> => {
+    if (!managerRef.current) return { ok: false, code: "network" }
+    return managerRef.current.createOrderNow(items)
+  }, [])
+
+  const discardOrder = useCallback(async (serverId: string): Promise<void> => {
+    await managerRef.current?.discardOrder(serverId)
+  }, [])
 
   const retryOrder = useCallback((localId: string) => {
     managerRef.current?.retryOrder(localId)
@@ -95,6 +116,8 @@ export function useOrderQueue({ token, deviceId, onOrderSynced, onPaymentError }
     pendingCount,
     failedOrders,
     submitOrder,
+    createOrder,
+    discardOrder,
     retryOrder,
     deleteOrder,
     getOrder,

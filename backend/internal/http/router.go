@@ -166,6 +166,7 @@ func NewRouter(
 			orders.Use(systemMw.RequireEnabled)
 			orders.Use(betterAuthMw.OptionalAuth())
 			orders.Post("/orders", wrapper.CreateOrder)
+			orders.Post("/orders/{orderId}/discard", wrapper.DiscardPendingOrder)
 			orders.Get("/orders/{orderId}/payment", wrapper.GetOrderPayment)
 			orders.Post("/orders/{orderId}/payment", wrapper.CreateOrderPayment)
 		})

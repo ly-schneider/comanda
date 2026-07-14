@@ -123,12 +123,21 @@ function PosInner() {
     []
   )
 
-  const { isOnline, pendingCount, failedOrders, submitOrder, retryOrder, deleteOrder, changePaymentMethod } =
-    useOrderQueue({
-      token: sessionToken || "",
-      deviceId,
-      onPaymentError: handlePaymentError,
-    })
+  const {
+    isOnline,
+    pendingCount,
+    failedOrders,
+    submitOrder,
+    createOrder,
+    discardOrder,
+    retryOrder,
+    deleteOrder,
+    changePaymentMethod,
+  } = useOrderQueue({
+    token: sessionToken || "",
+    deviceId,
+    onPaymentError: handlePaymentError,
+  })
 
   const handleFailedClick = useCallback(() => setShowStuckOrders(true), [])
 
@@ -455,7 +464,13 @@ function PosInner() {
               />
             </div>
             <div className={cn("min-h-0 overflow-hidden", !showBothPanels && mobileView !== "cart" && "hidden")}>
-              <BasketPanel mode={status?.mode} submitOrder={submitOrder} stockMap={stockSnapshotRef.current} />
+              <BasketPanel
+                mode={status?.mode}
+                submitOrder={submitOrder}
+                createOrder={createOrder}
+                discardOrder={discardOrder}
+                stockMap={stockSnapshotRef.current}
+              />
             </div>
 
             {configProduct && (

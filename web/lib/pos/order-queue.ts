@@ -1,9 +1,11 @@
 import type {
   CardMeta,
+  CreateOrderResult,
   GratisInfo,
   OrderSyncStatus,
   PluginPayment,
   PosPaymentMethod,
+  PreCreatedOrder,
   QueuedOrder,
   QueuedOrderItem,
   ReceiptItem,
@@ -109,6 +111,52 @@ export class OrderQueueManager {
     })
   }
 
+  // createOrderNow creates the pending order online, up front (before the tender
+  // modal opens), so the cashier sees an out-of-stock result before taking money
+  // and the inventory hold is placed. The returned order is later handed to
+  // enqueue as preCreated, so the queue only runs the pay step.
+  async createOrderNow(items: QueuedOrderItem[]): Promise<CreateOrderResult> {
+    const idempotencyKey = generateLocalId()
+    try {
+      const res = await fetch(`/api/v1/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.token}`,
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ items }),
+      })
+      const json = (await res.json().catch(() => ({}))) as {
+        id?: string
+        qrPayload?: string | null
+        code?: string
+        message?: string
+        detail?: string
+        details?: { items?: Array<{ productId: string; variantId?: string; available?: number }> }
+      }
+      if (res.status === 409 && json.code === "out_of_stock") {
+        return { ok: false, code: "out_of_stock", soldOut: json.details?.items ?? [] }
+      }
+      if (!res.ok || !json.id) {
+        return { ok: false, code: "failed", message: json.message || json.detail }
+      }
+      return { ok: true, serverId: json.id, serverQrPayload: json.qrPayload ?? undefined, idempotencyKey }
+    } catch {
+      return { ok: false, code: "network" }
+    }
+  }
+
+  // discardOrder releases the hold of a pending order abandoned before payment.
+  async discardOrder(serverId: string): Promise<void> {
+    try {
+      await fetch(`/api/v1/orders/${serverId}/discard`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}` },
+      })
+    } catch {}
+  }
+
   enqueue(
     items: QueuedOrderItem[],
     totalCents: number,
@@ -116,20 +164,27 @@ export class OrderQueueManager {
     receiptData?: { items: ReceiptItem[]; pickupQr: string | null },
     gratisInfo?: GratisInfo,
     cardMeta?: CardMeta,
-    plugin?: PluginPayment
+    plugin?: PluginPayment,
+    preCreated?: PreCreatedOrder
   ): QueuedOrder {
     const now = Date.now()
     const localId = generateLocalId()
 
     const order: QueuedOrder = {
       localId,
-      idempotencyKey: localId,
+      // Pre-created orders keep their original create key so the derived ":pay"
+      // key stays stable across retries.
+      idempotencyKey: preCreated?.idempotencyKey ?? localId,
       items,
       totalCents,
       paymentMethod,
       gratisInfo,
       cardMeta,
       plugin,
+      serverId: preCreated?.serverId,
+      serverQrPayload: preCreated?.serverQrPayload,
+      // Always "pending" so triggerSync runs it; a present serverId makes
+      // syncOrder skip the create step and only run the pay step.
       status: "pending",
       attemptCount: 0,
       createdAt: now,
@@ -144,6 +199,16 @@ export class OrderQueueManager {
     this.orders.push(order)
     this.saveToStorage()
     this.notifyStateListeners()
+
+    // The create step already happened online, so the print/jeton coordination
+    // (keyed off this event by syncOrder for non-pre-created orders) must still
+    // fire. Defer to a microtask so the caller's pendingPrints entry is set first.
+    if (preCreated && typeof window !== "undefined") {
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent("comanda:pos:order-server-id", { detail: order }))
+      })
+    }
+
     this.triggerSync()
 
     return order
@@ -196,33 +261,38 @@ export class OrderQueueManager {
     this.notifyStateListeners()
 
     try {
-      const resOrder = await fetch(`/api/v1/orders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.token}`,
-          "Idempotency-Key": order.idempotencyKey,
-        },
-        body: JSON.stringify({ items: order.items }),
-      })
+      // Pre-created orders already have a serverId (created online up front); the
+      // queue only runs their pay step. Others create the order here first.
+      let serverId = this.orders[idx]!.serverId
+      if (!serverId) {
+        const resOrder = await fetch(`/api/v1/orders`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.token}`,
+            "Idempotency-Key": order.idempotencyKey,
+          },
+          body: JSON.stringify({ items: order.items }),
+        })
 
-      const orderJson = (await resOrder.json()) as { id?: string; qrPayload?: string | null; detail?: string }
-      if (!resOrder.ok || !orderJson.id) {
-        throw new Error(orderJson.detail || "order_failed")
-      }
+        const orderJson = (await resOrder.json()) as { id?: string; qrPayload?: string | null; detail?: string }
+        if (!resOrder.ok || !orderJson.id) {
+          throw new Error(orderJson.detail || "order_failed")
+        }
 
-      const serverId = orderJson.id
-      this.orders[idx] = {
-        ...this.orders[idx]!,
-        serverId,
-        serverQrPayload: orderJson.qrPayload ?? undefined,
-        status: "synced",
-      }
-      this.saveToStorage()
-      this.notifyStateListeners()
+        serverId = orderJson.id
+        this.orders[idx] = {
+          ...this.orders[idx]!,
+          serverId,
+          serverQrPayload: orderJson.qrPayload ?? undefined,
+          status: "synced",
+        }
+        this.saveToStorage()
+        this.notifyStateListeners()
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("comanda:pos:order-server-id", { detail: this.orders[idx]! }))
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("comanda:pos:order-server-id", { detail: this.orders[idx]! }))
+        }
       }
 
       const paymentKey = `${order.idempotencyKey}:pay`

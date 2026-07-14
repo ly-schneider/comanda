@@ -284,6 +284,33 @@ func (h *Handlers) UpdateOrderStatus(w http.ResponseWriter, r *http.Request, ord
 
 // GetOrderPayment returns the payment details for an order.
 // (GET /orders/{orderId}/payment)
+// DiscardPendingOrder deletes an unpaid pending POS order and releases its hold
+// when the cashier abandons a checkout before payment. Idempotent: a missing or
+// already-settled order returns 204. Restricted to POS orders — shop pending
+// orders are reclaimed by the payment-failure webhook / backstop sweeper.
+func (h *Handlers) DiscardPendingOrder(w http.ResponseWriter, r *http.Request, orderId string) {
+	ctx := r.Context()
+
+	ord, err := h.orders.GetByID(ctx, orderId)
+	if err != nil {
+		if ent.IsNotFound(err) || errors.Is(err, repository.ErrNotFound) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		writeEntError(w, err)
+		return
+	}
+	if ord.Origin != order.OriginPos {
+		writeError(w, http.StatusForbidden, "forbidden", "Only POS orders can be discarded.")
+		return
+	}
+	if err := h.payments.CleanupPendingOrderByID(ctx, orderId); err != nil {
+		writeEntError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handlers) GetOrderPayment(w http.ResponseWriter, r *http.Request, orderId string) {
 	ctx := r.Context()
 
