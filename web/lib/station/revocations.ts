@@ -1,9 +1,5 @@
-/**
- * Server-side artist-voucher revocations, cached in IndexedDB so a fully-offline
- * station still refuses a voucher an admin revoked. A successful feed pull
- * REPLACES the cached set; a missing token / offline / any non-2xx is a no-op that
- * returns null, so the last-known set survives until the server is actually reached.
- */
+// Server-side artist-voucher revocations, cached in IndexedDB so a fully-offline
+// station still refuses a voucher an admin revoked.
 
 import { idbKVStore, type StationKVStore } from "@/lib/station/offline-db"
 
@@ -13,7 +9,6 @@ const REVOCATIONS_ENDPOINT = "/api/v1/plugins/artist-voucher/revocations"
 
 export interface ServerRevocations {
   ids: string[]
-  /** Device epoch ms of the last successful feed pull; null until we reach it. */
   syncedAt: number | null
 }
 
@@ -51,12 +46,9 @@ export interface ReconcileDeps {
   endpoint?: string
 }
 
-/**
- * REPLACE the cached revocation set from the feed. A missing token / offline / any
- * non-2xx is a no-op returning null, so the cache survives until the server is
- * actually reached. Caller passes a plain fetch (not the device-fetch wrapper): a
- * plugin-off 403 here must not clear the device token.
- */
+// No-op returning null on missing token / offline / non-2xx, so the cache survives
+// until the server is reached. Caller passes a plain fetch: a plugin-off 403 here
+// must not clear the device token.
 export async function reconcileRevocations(deps: ReconcileDeps): Promise<ServerRevocations | null> {
   const token = deps.token()
   if (!token) return null

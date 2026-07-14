@@ -315,7 +315,6 @@ export default function StationPage() {
     voucherEnabled: boolean
   }>({ publicKey: null, tenantId: null, catalog: new Map(), voucherEnabled: false })
   // Read on the scan hot path through a ref (stable identity → no camera restart).
-  // Server-revoked voucher ids only; admin "Widerrufen" propagates here via the feed.
   const revokedIdsRef = useRef<Set<string>>(new Set())
   const revocationsRef = useRef<ServerRevocations>(EMPTY_REVOCATIONS)
   const applyRevocations = useCallback((next: ServerRevocations) => {
