@@ -17,6 +17,7 @@ import (
 	"backend/internal/response"
 	"backend/internal/service"
 
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -282,14 +283,17 @@ func (h *Handlers) UpdateOrderStatus(w http.ResponseWriter, r *http.Request, ord
 	response.WriteJSON(w, http.StatusOK, toAPIOrder(updated))
 }
 
-// GetOrderPayment returns the payment details for an order.
-// (GET /orders/{orderId}/payment)
 // DiscardPendingOrder deletes an unpaid pending POS order and releases its hold
 // when the cashier abandons a checkout before payment. Idempotent: a missing or
 // already-settled order returns 204. Restricted to POS orders — shop pending
 // orders are reclaimed by the payment-failure webhook / backstop sweeper.
 func (h *Handlers) DiscardPendingOrder(w http.ResponseWriter, r *http.Request, orderId string) {
 	ctx := r.Context()
+
+	if !nanoid.Valid(orderId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid order id")
+		return
+	}
 
 	ord, err := h.orders.GetByID(ctx, orderId)
 	if err != nil {
@@ -311,6 +315,8 @@ func (h *Handlers) DiscardPendingOrder(w http.ResponseWriter, r *http.Request, o
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetOrderPayment returns the payment details for an order.
+// (GET /orders/{orderId}/payment)
 func (h *Handlers) GetOrderPayment(w http.ResponseWriter, r *http.Request, orderId string) {
 	ctx := r.Context()
 
