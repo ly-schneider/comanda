@@ -37,7 +37,8 @@ func (p *Plugin) Module() fx.Option {
 		fx.Provide(
 			func(s coreservice.DeviceService) DeviceApprover { return s },
 			func(r repository.DeviceRepository) DeviceUpserter { return r },
-			NewEnrollCodeRepository,
+			func(r *repository.ProductRepository) ProductLookup { return r },
+			NewPresetRepository,
 			NewService,
 		),
 		fx.Invoke(func(s Service, logger *zap.Logger) {
@@ -54,14 +55,12 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
 		r.Group(func(gr chi.Router) {
 			gr.Use(mw.RequireAuth())
 			gr.Use(mw.RequireTenantRole(auth.TierOps))
-			gr.Get("/code", w.StationqrGetCode)
-		})
-		r.Group(func(gr chi.Router) {
-			gr.Use(mw.RequireAuth())
-			gr.Use(mw.RequireTenantRole(auth.TierOps))
 			gr.Use(mw.CSRF)
-			gr.Post("/code", w.StationqrRotateCode)
-			gr.Patch("/code", w.StationqrSetCodeState)
+			gr.Get("/presets", w.StationqrListPresets)
+			gr.Post("/presets", w.StationqrCreatePreset)
+			gr.Patch("/presets/{presetId}", w.StationqrUpdatePreset)
+			gr.Delete("/presets/{presetId}", w.StationqrDeletePreset)
+			gr.Post("/presets/{presetId}/rotate", w.StationqrRotatePreset)
 		})
 		r.Group(func(gr chi.Router) {
 			gr.Use(p.limiter.middleware)

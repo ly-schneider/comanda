@@ -66,7 +66,8 @@ var scopedTypes = map[string]struct{}{
 	ent.TypeRefund:                   {},
 	ent.TypeRefundLine:               {},
 	ent.TypeTenantPlugin:             {},
-	ent.TypeStationEnrollToken:       {},
+	ent.TypeStationEnrollPreset:      {},
+	ent.TypeStationPresetProduct:     {},
 	ent.TypeVoucher:                  {},
 }
 

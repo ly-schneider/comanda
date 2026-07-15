@@ -245,8 +245,12 @@ paths:
   /plugins/club100/settings:
     $ref: "paths/plugins/club100.yaml#/settings"
 
-  /plugins/stationqr/code:
-    $ref: "paths/plugins/stationqr.yaml#/code"
+  /plugins/stationqr/presets:
+    $ref: "paths/plugins/stationqr.yaml#/presets"
+  /plugins/stationqr/presets/{presetId}:
+    $ref: "paths/plugins/stationqr.yaml#/preset"
+  /plugins/stationqr/presets/{presetId}/rotate:
+    $ref: "paths/plugins/stationqr.yaml#/rotate"
   /plugins/stationqr/enroll:
     $ref: "paths/plugins/stationqr.yaml#/enroll"
 

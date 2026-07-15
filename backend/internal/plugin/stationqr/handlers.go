@@ -10,6 +10,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/response"
 
+	nanoid "backend/internal/id"
 	"go.uber.org/zap"
 )
 
@@ -22,60 +23,116 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	response.WriteJSON(w, status, generated.Error{Code: code, Message: message})
 }
 
-func toAPICode(c Code) generated.StationqrCode {
-	out := generated.StationqrCode{Configured: c.Configured, Disabled: c.Disabled}
-	if c.Configured && c.Token != "" {
-		t := c.Token
-		out.Token = &t
+func toAPIPreset(p Preset) generated.StationqrPreset {
+	ids := p.ProductIDs
+	if ids == nil {
+		ids = []string{}
 	}
-	return out
+	return generated.StationqrPreset{
+		Id:         p.ID,
+		Name:       p.Name,
+		Disabled:   p.Disabled,
+		Token:      p.Token,
+		ProductIds: ids,
+		CreatedAt:  p.CreatedAt,
+		UpdatedAt:  p.UpdatedAt,
+	}
 }
 
-func (h *handlers) StationqrGetCode(w http.ResponseWriter, r *http.Request) {
-	code, err := h.rt.svc.Get(r.Context())
+func (h *handlers) writePresetError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrNameRequired):
+		writeError(w, http.StatusBadRequest, "name_required", "Preset name is required")
+	case errors.Is(err, ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "Preset not found")
+	default:
+		h.rt.logger.Error("stationqr preset error", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "stationqr_error", "Could not process the preset")
+	}
+}
+
+func (h *handlers) StationqrListPresets(w http.ResponseWriter, r *http.Request) {
+	presets, err := h.rt.svc.ListPresets(r.Context())
 	if err != nil {
-		h.rt.logger.Error("stationqr get code failed", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "stationqr_error", "Could not load enrollment code")
+		h.rt.logger.Error("stationqr list presets failed", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "stationqr_error", "Could not load enrollment presets")
 		return
 	}
+	items := make([]generated.StationqrPreset, 0, len(presets))
+	for _, p := range presets {
+		items = append(items, toAPIPreset(p))
+	}
 	w.Header().Set("Cache-Control", "no-store")
-	response.WriteJSON(w, http.StatusOK, toAPICode(code))
+	response.WriteJSON(w, http.StatusOK, generated.StationqrPresetList{Items: items})
 }
 
-func (h *handlers) StationqrRotateCode(w http.ResponseWriter, r *http.Request) {
+func (h *handlers) StationqrCreatePreset(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserID(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
-	code, err := h.rt.svc.Rotate(r.Context(), userID)
-	if err != nil {
-		h.rt.logger.Error("stationqr rotate code failed", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "stationqr_error", "Could not rotate enrollment code")
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	response.WriteJSON(w, http.StatusOK, toAPICode(code))
-}
-
-func (h *handlers) StationqrSetCodeState(w http.ResponseWriter, r *http.Request) {
-	var body generated.StationqrCodeStateUpdate
+	var body generated.StationqrPresetCreate
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
 		return
 	}
-	code, err := h.rt.svc.SetDisabled(r.Context(), body.Disabled)
+	preset, err := h.rt.svc.CreatePreset(r.Context(), body.Name, deref(body.ProductIds), userID)
 	if err != nil {
-		if errors.Is(err, ErrNotConfigured) {
-			writeError(w, http.StatusBadRequest, "not_configured", "No enrollment code configured")
-			return
-		}
-		h.rt.logger.Error("stationqr set code state failed", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "stationqr_error", "Could not update enrollment code")
+		h.writePresetError(w, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	response.WriteJSON(w, http.StatusOK, toAPICode(code))
+	response.WriteJSON(w, http.StatusCreated, toAPIPreset(preset))
+}
+
+func (h *handlers) StationqrUpdatePreset(w http.ResponseWriter, r *http.Request, presetId string) {
+	if !nanoid.Valid(presetId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
+		return
+	}
+	var body generated.StationqrPresetUpdate
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
+	preset, err := h.rt.svc.UpdatePreset(r.Context(), presetId, UpdatePresetInput{
+		Name:       body.Name,
+		Disabled:   body.Disabled,
+		ProductIDs: body.ProductIds,
+	})
+	if err != nil {
+		h.writePresetError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	response.WriteJSON(w, http.StatusOK, toAPIPreset(preset))
+}
+
+func (h *handlers) StationqrRotatePreset(w http.ResponseWriter, r *http.Request, presetId string) {
+	if !nanoid.Valid(presetId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
+		return
+	}
+	preset, err := h.rt.svc.RotatePreset(r.Context(), presetId)
+	if err != nil {
+		h.writePresetError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	response.WriteJSON(w, http.StatusOK, toAPIPreset(preset))
+}
+
+func (h *handlers) StationqrDeletePreset(w http.ResponseWriter, r *http.Request, presetId string) {
+	if !nanoid.Valid(presetId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid id")
+		return
+	}
+	if err := h.rt.svc.DeletePreset(r.Context(), presetId); err != nil {
+		h.writePresetError(w, err)
+		return
+	}
+	response.WriteNoContent(w)
 }
 
 func (h *handlers) StationqrEnroll(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +154,7 @@ func (h *handlers) StationqrEnroll(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrDisabled):
 			writeError(w, http.StatusForbidden, "enrollment_disabled", "Enrollment is currently disabled")
-		case errors.Is(err, ErrNotConfigured), errors.Is(err, ErrInvalidToken):
+		case errors.Is(err, ErrInvalidToken):
 			writeError(w, http.StatusBadRequest, "invalid_token", "Invalid enrollment code")
 		default:
 			h.rt.logger.Error("stationqr enroll failed", zap.Error(err))
@@ -109,6 +166,13 @@ func (h *handlers) StationqrEnroll(w http.ResponseWriter, r *http.Request) {
 		Token:  res.Token,
 		Device: toAPIDevice(res.Device),
 	})
+}
+
+func deref(s *[]string) []string {
+	if s == nil {
+		return nil
+	}
+	return *s
 }
 
 func strOrEmpty(s *string) string {

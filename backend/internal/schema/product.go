@@ -90,5 +90,8 @@ func (Product) Edges() []ent.Edge {
 		edge.From("volunteer_campaigns", VolunteerCampaign.Type).
 			Ref("products").
 			Through("campaign_products", VolunteerCampaignProduct.Type),
+		edge.From("station_presets", StationEnrollPreset.Type).
+			Ref("products").
+			Through("preset_products", StationPresetProduct.Type),
 	}
 }
