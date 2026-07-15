@@ -17,6 +17,25 @@ if (typeof window !== "undefined") {
 export type QrScanResult = { text: string; bytes: Uint8Array }
 export type QrScannerControls = { pause: () => void; resume: () => void }
 
+// Larger than a thumbnail so soft-focus/small codes keep enough detail; the `decoding`
+// guard self-throttles fps if a device can't keep up at this size.
+const DECODE_MAX_EDGE = 1024
+
+// focusMode isn't in lib.dom's media types yet.
+type FocusCapabilities = MediaTrackCapabilities & { focusMode?: string[] }
+type FocusConstraintSet = MediaTrackConstraintSet & { focusMode?: string }
+
+export async function enableContinuousFocus(track: MediaStreamTrack) {
+  try {
+    const caps = track.getCapabilities?.() as FocusCapabilities | undefined
+    if (!caps?.focusMode?.includes("continuous")) return
+    const focus: FocusConstraintSet = { focusMode: "continuous" }
+    await track.applyConstraints({ advanced: [focus] })
+  } catch {
+    // Focus control varies by device; keep scanning without it.
+  }
+}
+
 type Props = {
   cameraId?: string
   fps?: number
@@ -71,7 +90,7 @@ export default function QrScanner({
       decoding = true
       try {
         // Downscale the long edge; QR detection stays reliable and cheaper.
-        const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight))
+        const scale = Math.min(1, DECODE_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight))
         const w = Math.max(1, Math.round(video.videoWidth * scale))
         const h = Math.max(1, Math.round(video.videoHeight * scale))
         if (canvas.width !== w) canvas.width = w
@@ -91,8 +110,12 @@ export default function QrScanner({
 
     void (async () => {
       try {
+        const source: MediaTrackConstraints = cameraId
+          ? { deviceId: { exact: cameraId } }
+          : { facingMode: "environment" }
+        // Ideals are best-effort (never over-constrain); gives the decoder a sharper source.
         stream = await navigator.mediaDevices.getUserMedia({
-          video: cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "environment" },
+          video: { ...source, width: { ideal: 1920 }, height: { ideal: 1080 } },
         })
         if (cancelled || !video) {
           stream.getTracks().forEach((t) => t.stop())
@@ -105,6 +128,8 @@ export default function QrScanner({
           stop()
           return
         }
+        const [track] = stream.getVideoTracks()
+        if (track) void enableContinuousFocus(track)
         pausedRef.current = false
         interval = setInterval(tick, Math.max(1, Math.round(1000 / fps)))
         onReadyRef.current?.({
