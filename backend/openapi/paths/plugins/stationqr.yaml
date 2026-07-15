@@ -1,20 +1,20 @@
-code:
+presets:
   get:
     tags: [Plugins]
-    summary: Get the station enrollment code
+    summary: List station enrollment presets
     description: >
-      Returns whether a durable station enrollment code is configured and, for
-      ops-tier admins, the raw token so the printable QR can be rendered.
-    operationId: stationqrGetCode
+      Returns the tenant's named enrollment presets. Each preset carries its own
+      raw token (for rendering the printable QR) and its assigned product set.
+    operationId: stationqrListPresets
     security:
       - sessionAuth: []
     responses:
       "200":
-        description: Enrollment code state
+        description: Preset list
         content:
           application/json:
             schema:
-              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPresetList"
       "401":
         description: Authentication required
         content:
@@ -29,36 +29,11 @@ code:
               $ref: "../../schemas/common.yaml#/Error"
   post:
     tags: [Plugins]
-    summary: Create or rotate the station enrollment code
+    summary: Create a station enrollment preset
     description: >
-      Generates a fresh durable code, invalidating any previously printed QR.
-      Also used to create the code the first time.
-    operationId: stationqrRotateCode
-    security:
-      - sessionAuth: []
-    responses:
-      "200":
-        description: Enrollment code (with the new raw token)
-        content:
-          application/json:
-            schema:
-              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
-      "401":
-        description: Authentication required
-        content:
-          application/json:
-            schema:
-              $ref: "../../schemas/common.yaml#/Error"
-      "403":
-        description: Insufficient tier
-        content:
-          application/json:
-            schema:
-              $ref: "../../schemas/common.yaml#/Error"
-  patch:
-    tags: [Plugins]
-    summary: Enable or disable the station enrollment code
-    operationId: stationqrSetCodeState
+      Creates a named preset with a fresh token and an optional product set. A
+      preset with no products enrolls a station without pre-assigning any.
+    operationId: stationqrCreatePreset
     security:
       - sessionAuth: []
     requestBody:
@@ -66,16 +41,16 @@ code:
       content:
         application/json:
           schema:
-            $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCodeStateUpdate"
+            $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPresetCreate"
     responses:
-      "200":
-        description: Updated enrollment code state
+      "201":
+        description: Preset created
         content:
           application/json:
             schema:
-              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrCode"
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPreset"
       "400":
-        description: No code configured
+        description: Invalid request body
         content:
           application/json:
             schema:
@@ -93,15 +68,115 @@ code:
             schema:
               $ref: "../../schemas/common.yaml#/Error"
 
+preset:
+  parameters:
+    - name: presetId
+      in: path
+      required: true
+      schema:
+        type: string
+  patch:
+    tags: [Plugins]
+    summary: Update a station enrollment preset
+    description: >
+      Partial update — rename, toggle the active state, and/or replace the
+      assigned product set. Omitted fields are left untouched; an empty
+      productIds array clears the product set.
+    operationId: stationqrUpdatePreset
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPresetUpdate"
+    responses:
+      "200":
+        description: Updated preset
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPreset"
+      "400":
+        description: Invalid request
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Preset not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  delete:
+    tags: [Plugins]
+    summary: Delete a station enrollment preset
+    operationId: stationqrDeletePreset
+    security:
+      - sessionAuth: []
+    responses:
+      "204":
+        description: Preset deleted
+      "400":
+        description: Invalid id
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Preset not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+rotate:
+  parameters:
+    - name: presetId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Plugins]
+    summary: Rotate a preset's enrollment token
+    description: >
+      Generates a fresh token for the preset, invalidating any previously
+      printed QR. The product set is preserved.
+    operationId: stationqrRotatePreset
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Preset with the new raw token
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/stationqr.yaml#/StationqrPreset"
+      "400":
+        description: Invalid id
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Preset not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
 enroll:
   post:
     tags: [Plugins]
-    summary: Enroll a station with the enrollment token
+    summary: Enroll a station with a preset's enrollment token
     description: >
       Public within the plugin group — the enrollment token is the credential.
-      Verifies the token against the tenant's durable code, then approves and
-      binds a new station, returning its session token immediately. Multi-use.
-      Rate-limited.
+      Resolves the token to one of the tenant's presets, approves and binds a new
+      station, copies the preset's products into the device, and returns its
+      session token immediately. Multi-use. Rate-limited.
     operationId: stationqrEnroll
     security: []
     requestBody:
@@ -118,7 +193,7 @@ enroll:
             schema:
               $ref: "../../schemas/plugins/stationqr.yaml#/StationqrEnrollResponse"
       "400":
-        description: Invalid token or no code configured
+        description: Invalid token
         content:
           application/json:
             schema:

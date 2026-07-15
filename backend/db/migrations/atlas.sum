@@ -1,4 +1,4 @@
-h1:fV4NFzfwsxpTRgSxf7UF/hm7ckKhpVT/l1pejMzMMf4=
+h1:jHSgCkB3bFe1+0gfCEqhbZhbhTAaajX2jsYLi9gNYng=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -40,3 +40,4 @@ h1:fV4NFzfwsxpTRgSxf7UF/hm7ckKhpVT/l1pejMzMMf4=
 20260713000000_menu_to_bundle.sql h1:APLJPRjGmNU+BrnFFTxCDdIwx9hHVK4rhM0G2zqClYE=
 20260714000000_category_subcategories.sql h1:rXraHSwXDnVuojw3V/9B9CtzQzJTJlUE41Y70kDMFZI=
 20260715000000_artist_voucher.sql h1:DonDjJRw15njIIy1F6t0YxGgfMCCJqYqJn+Td7jD0q8=
+20260716000000_station_enroll_preset.sql h1:zY+usdi1GgAiPLfCnI++5c+Saz1owhtin68N24EDhsw=

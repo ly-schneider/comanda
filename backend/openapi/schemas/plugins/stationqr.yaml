@@ -1,24 +1,61 @@
-StationqrCode:
+StationqrPreset:
   type: object
-  required: [configured, disabled]
+  required: [id, name, disabled, token, productIds, createdAt, updatedAt]
   properties:
-    configured:
-      type: boolean
-      description: Whether a durable enrollment code exists for this tenant
+    id:
+      type: string
+    name:
+      type: string
     disabled:
       type: boolean
-      description: When true, the code exists but enrollment is suspended
+      description: When true, the preset exists but enrollment through its QR is suspended
     token:
       type: string
-      nullable: true
-      description: Raw enrollment token to encode into the printable QR; null when not configured
+      description: Raw enrollment token encoded into the printable QR (ops-tier only)
+    productIds:
+      type: array
+      items:
+        type: string
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
 
-StationqrCodeStateUpdate:
+StationqrPresetList:
   type: object
-  required: [disabled]
+  required: [items]
   properties:
+    items:
+      type: array
+      items:
+        $ref: "#/StationqrPreset"
+
+StationqrPresetCreate:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+      maxLength: 60
+    productIds:
+      type: array
+      items:
+        type: string
+
+StationqrPresetUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+      maxLength: 60
     disabled:
       type: boolean
+    productIds:
+      type: array
+      items:
+        type: string
 
 StationqrEnrollRequest:
   type: object
