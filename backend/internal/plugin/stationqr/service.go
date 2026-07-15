@@ -34,6 +34,10 @@ type DeviceUpserter interface {
 	UpsertPendingByDeviceKey(ctx context.Context, name, deviceModel, os, deviceKey string, deviceType device.Type) (*ent.Device, error)
 }
 
+type ProductLookup interface {
+	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
+}
+
 type Preset struct {
 	ID         string
 	Name       string
@@ -70,11 +74,37 @@ type service struct {
 	devices  DeviceUpserter
 	approver DeviceApprover
 	stations coreservice.StationService
+	products ProductLookup
 	enc      *crypto.Encryptor
 }
 
-func NewService(presets PresetRepository, devices DeviceUpserter, approver DeviceApprover, stations coreservice.StationService, enc *crypto.Encryptor) Service {
-	return &service{presets: presets, devices: devices, approver: approver, stations: stations, enc: enc}
+func NewService(presets PresetRepository, devices DeviceUpserter, approver DeviceApprover, stations coreservice.StationService, products ProductLookup, enc *crypto.Encryptor) Service {
+	return &service{presets: presets, devices: devices, approver: approver, stations: stations, products: products, enc: enc}
+}
+
+// existingProductIDs re-resolves caller-supplied product IDs through the
+// RLS-scoped product repo and drops any that don't belong to the tenant —
+// Postgres FK checks bypass RLS, so a raw insert would otherwise link a
+// foreign product's id into the preset.
+func (s *service) existingProductIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return []string{}, nil
+	}
+	products, err := s.products.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("validate products: %w", err)
+	}
+	present := make(map[string]bool, len(products))
+	for _, p := range products {
+		present[p.ID] = true
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if present[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 func generateToken() (string, error) {
@@ -160,6 +190,10 @@ func (s *service) CreatePreset(ctx context.Context, name string, productIDs []st
 	if err != nil {
 		return Preset{}, err
 	}
+	productIDs, err = s.existingProductIDs(ctx, productIDs)
+	if err != nil {
+		return Preset{}, err
+	}
 	row, err := s.presets.Create(ctx, name, blob, issuerUserID)
 	if err != nil {
 		return Preset{}, err
@@ -195,7 +229,11 @@ func (s *service) UpdatePreset(ctx context.Context, id string, in UpdatePresetIn
 		}
 	}
 	if in.ProductIDs != nil {
-		if err := s.presets.ReplaceProducts(ctx, id, *in.ProductIDs); err != nil {
+		ids, err := s.existingProductIDs(ctx, *in.ProductIDs)
+		if err != nil {
+			return Preset{}, err
+		}
+		if err := s.presets.ReplaceProducts(ctx, id, ids); err != nil {
 			return Preset{}, err
 		}
 	}

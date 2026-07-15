@@ -24,6 +24,7 @@ CREATE TABLE station_preset_product (
     PRIMARY KEY (preset_id, product_id)
 );
 
+CREATE INDEX station_preset_product_tenant_id_idx ON station_preset_product (tenant_id);
 CREATE INDEX station_preset_product_product_id_idx ON station_preset_product (product_id);
 
 ALTER TABLE station_enroll_preset ENABLE ROW LEVEL SECURITY;

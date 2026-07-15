@@ -37,6 +37,7 @@ func (p *Plugin) Module() fx.Option {
 		fx.Provide(
 			func(s coreservice.DeviceService) DeviceApprover { return s },
 			func(r repository.DeviceRepository) DeviceUpserter { return r },
+			func(r *repository.ProductRepository) ProductLookup { return r },
 			NewPresetRepository,
 			NewService,
 		),

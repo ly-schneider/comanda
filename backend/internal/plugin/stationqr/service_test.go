@@ -153,6 +153,23 @@ func (f *fakeStations) SetStationProducts(_ context.Context, stationID string, p
 	return nil
 }
 
+// fakeProducts stands in for the RLS-scoped product repo. known == nil treats
+// every requested id as existing; a non-nil set drops ids outside it (a
+// cross-tenant product id).
+type fakeProducts struct {
+	known map[string]bool
+}
+
+func (f *fakeProducts) GetByIDs(_ context.Context, ids []string) ([]*ent.Product, error) {
+	out := make([]*ent.Product, 0, len(ids))
+	for _, id := range ids {
+		if f.known == nil || f.known[id] {
+			out = append(out, &ent.Product{ID: id})
+		}
+	}
+	return out, nil
+}
+
 func newSvc(t *testing.T) (*service, *fakePresetRepo, *fakeUpserter, *fakeApprover, *fakeStations) {
 	t.Helper()
 	key := make([]byte, crypto.KeySize)
@@ -165,7 +182,7 @@ func newSvc(t *testing.T) (*service, *fakePresetRepo, *fakeUpserter, *fakeApprov
 	up := &fakeUpserter{}
 	ap := &fakeApprover{}
 	st := &fakeStations{}
-	return &service{presets: presets, devices: up, approver: ap, stations: st, enc: enc}, presets, up, ap, st
+	return &service{presets: presets, devices: up, approver: ap, stations: st, products: &fakeProducts{}, enc: enc}, presets, up, ap, st
 }
 
 func TestCreatePresetStoresEncryptedAndReturnsToken(t *testing.T) {
@@ -178,6 +195,27 @@ func TestCreatePresetStoresEncryptedAndReturnsToken(t *testing.T) {
 	require.NotEmpty(t, p.Token)
 	require.Equal(t, []string{"prod_1", "prod_2"}, p.ProductIDs)
 	require.NotContains(t, string(repo.rows[p.ID].TokenEnc), p.Token, "raw token must be encrypted at rest")
+}
+
+func TestCreatePresetDropsForeignProducts(t *testing.T) {
+	svc, _, _, _, _ := newSvc(t)
+	svc.products = &fakeProducts{known: map[string]bool{"prod_1": true}}
+
+	p, err := svc.CreatePreset(context.Background(), "Burger", []string{"prod_1", "prod_foreign"}, "u")
+	require.NoError(t, err)
+	require.Equal(t, []string{"prod_1"}, p.ProductIDs, "cross-tenant product id must be dropped")
+}
+
+func TestUpdatePresetDropsForeignProducts(t *testing.T) {
+	svc, _, _, _, _ := newSvc(t)
+	p, err := svc.CreatePreset(context.Background(), "Burger", nil, "u")
+	require.NoError(t, err)
+
+	svc.products = &fakeProducts{known: map[string]bool{"prod_2": true}}
+	replaced := []string{"prod_2", "prod_foreign"}
+	updated, err := svc.UpdatePreset(context.Background(), p.ID, UpdatePresetInput{ProductIDs: &replaced})
+	require.NoError(t, err)
+	require.Equal(t, []string{"prod_2"}, updated.ProductIDs, "cross-tenant product id must be dropped on update")
 }
 
 func TestCreatePresetRequiresName(t *testing.T) {
