@@ -610,7 +610,21 @@ export default function StationPage() {
         // (cached during offline setup); otherwise it's an unrecognised code.
         if (!offline.voucherEnabled) {
           playScanSound("error")
-          setError("Ungültiger QR-Code")
+          // A station never prepared for offline caches neither the plugin flag
+          // nor the verification key, so a real voucher reads as invalid — point
+          // the operator at offline setup instead of implying the code is bad.
+          if (!offline.publicKey || !offline.tenantId) {
+            pushScan(
+              voucherScanResult(
+                key,
+                parsed.token,
+                { kind: "invalid", reason: "not-ready" },
+                revocationsRef.current.syncedAt
+              )
+            )
+          } else {
+            setError("Ungültiger QR-Code")
+          }
           scheduleResume()
           return
         }
