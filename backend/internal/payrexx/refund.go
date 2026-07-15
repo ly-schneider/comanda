@@ -10,6 +10,13 @@ import (
 // RefundTransaction issues a (partial) refund against a confirmed transaction.
 // amountCents is the amount to refund, not the remaining balance.
 func (c *Client) RefundTransaction(ctx context.Context, transactionID int, amountCents int) error {
+	// Give the slow refund endpoint its own longer budget before doRequest would
+	// otherwise clamp it to the 8s DefaultRequestTimeout.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, RefundRequestTimeout)
+		defer cancel()
+	}
 	endpoint := fmt.Sprintf("Transaction/%d/refund/", transactionID)
 	body, err := c.doRequest(ctx, http.MethodPost, endpoint, map[string]any{"amount": amountCents})
 	if err != nil {
