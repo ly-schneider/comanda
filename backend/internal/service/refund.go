@@ -462,6 +462,15 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 	if result == nil || !result.IsRefund {
 		return nil
 	}
+	// Lock first to serialize behind an in-flight synchronous refund (which holds the
+	// order FOR UPDATE across its slow Payrexx call); otherwise we'd read the pre-commit
+	// ledger and record a duplicate reconcile row.
+	if err := s.orders.LockByID(ctx, result.ReferenceID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
 	ord, err := s.orders.GetByID(ctx, result.ReferenceID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
