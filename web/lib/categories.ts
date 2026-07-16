@@ -47,3 +47,21 @@ export function compareByCategory(
   const b = (bCatId ? order.get(bCatId) : undefined) ?? [UNRANKED, UNRANKED]
   return a[0] - b[0] || a[1] - b[1]
 }
+
+export type ProductFilterState = { query: string; activeCat: string; activeSub: string }
+
+type FilterableProduct = {
+  name: string
+  category?: { id?: string; parentId?: string | null } | null
+}
+
+export function matchesProductFilter(
+  product: FilterableProduct,
+  { query, activeCat, activeSub }: ProductFilterState
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (q && !product.name.toLowerCase().includes(q)) return false
+  if (activeCat === "all") return true
+  if (activeSub !== "all") return product.category?.id === activeSub
+  return product.category?.id === activeCat || product.category?.parentId === activeCat
+}

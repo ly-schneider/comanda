@@ -2,14 +2,18 @@
 
 import { Minus, Plus } from "lucide-react"
 import Image from "next/image"
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ProductFilterBar } from "@/components/catalog/product-filter-bar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { useProductFilter } from "@/hooks/use-product-filter"
+import { listCategories } from "@/lib/api/categories"
 import { setProductActive } from "@/lib/api/products"
+import { categoryOrderMap, compareByCategory } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { activeVariants } from "@/lib/variants"
-import type { ListResponse, ProductDTO } from "@/types"
+import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
 type StockUpdatedHandler = (productId: string, newStock: number, variantId?: string) => void
 
@@ -239,8 +243,28 @@ export function InventoryManagement({
   onStockUpdated: StockUpdatedHandler
   onActiveUpdated: (productId: string, isActive: boolean) => void
 }) {
-  const simpleProducts = products.items.filter((p) => p.type !== "bundle")
-  const bundles = products.items.filter((p) => p.type === "bundle")
+  const [categories, setCategories] = useState<CategoryDTO[]>([])
+  const { query, setQuery, activeCat, activeSub, selectCat, setActiveSub, matches } = useProductFilter()
+
+  useEffect(() => {
+    listCategories()
+      .then(setCategories)
+      .catch(() => {})
+  }, [])
+
+  const order = useMemo(() => categoryOrderMap(categories), [categories])
+  const activeCategories = useMemo(() => categories.filter((c) => c.isActive), [categories])
+
+  const byCategory = useCallback(
+    (a: ProductDTO, b: ProductDTO) => {
+      const byCat = compareByCategory(order, a.category?.id, b.category?.id)
+      return byCat !== 0 ? byCat : a.name.localeCompare(b.name, "de")
+    },
+    [order]
+  )
+
+  const simpleProducts = products.items.filter((p) => p.type !== "bundle" && matches(p)).sort(byCategory)
+  const bundles = products.items.filter((p) => p.type === "bundle" && matches(p)).sort(byCategory)
 
   const renderGrid = (items: ProductDTO[]) => (
     <div className="flex flex-col gap-2 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -258,6 +282,16 @@ export function InventoryManagement({
 
   return (
     <div className="h-full space-y-6 overflow-y-auto px-3 pb-4 md:px-4">
+      <ProductFilterBar
+        query={query}
+        onQueryChange={setQuery}
+        categories={activeCategories}
+        activeCat={activeCat}
+        activeSub={activeSub}
+        onSelectCat={selectCat}
+        onSubChange={setActiveSub}
+      />
+
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">Produkte verwalten</h1>
         {simpleProducts.length > 0 ? (

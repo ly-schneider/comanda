@@ -5,6 +5,7 @@ import {
   childrenOf,
   compareByCategory,
   hasChildren,
+  matchesProductFilter,
   topLevelCategories,
 } from "./categories"
 
@@ -72,5 +73,42 @@ describe("compareByCategory", () => {
     expect(compareByCategory(order, "A", "nope")).toBeLessThan(0)
     expect(compareByCategory(order, undefined, "A")).toBeGreaterThan(0)
     expect(compareByCategory(order, "nope", undefined)).toBe(0)
+  })
+})
+
+describe("matchesProductFilter", () => {
+  const product = (name: string, catId?: string, parentId: string | null = null) => ({
+    name,
+    category: catId ? { id: catId, parentId } : null,
+  })
+  const all = { query: "", activeCat: "all", activeSub: "all" }
+
+  it("passes everything when unfiltered", () => {
+    expect(matchesProductFilter(product("Bier", "drinks"), all)).toBe(true)
+    expect(matchesProductFilter(product("Uncategorized"), all)).toBe(true)
+  })
+
+  it("matches names case-insensitively and ignores surrounding whitespace", () => {
+    expect(matchesProductFilter(product("Pommes Frites"), { ...all, query: "  FRIT " })).toBe(true)
+    expect(matchesProductFilter(product("Pommes Frites"), { ...all, query: "cola" })).toBe(false)
+  })
+
+  it("matches a top-level chip against the category and its subcategories", () => {
+    const state = { query: "", activeCat: "food", activeSub: "all" }
+    expect(matchesProductFilter(product("Burger", "food"), state)).toBe(true)
+    expect(matchesProductFilter(product("Fries", "sides", "food"), state)).toBe(true)
+    expect(matchesProductFilter(product("Beer", "drinks"), state)).toBe(false)
+  })
+
+  it("matches a subcategory chip only against that exact subcategory", () => {
+    const state = { query: "", activeCat: "food", activeSub: "sides" }
+    expect(matchesProductFilter(product("Fries", "sides", "food"), state)).toBe(true)
+    expect(matchesProductFilter(product("Burger", "food"), state)).toBe(false)
+  })
+
+  it("combines the name query with the category filter", () => {
+    const state = { query: "fri", activeCat: "food", activeSub: "all" }
+    expect(matchesProductFilter(product("Fries", "sides", "food"), state)).toBe(true)
+    expect(matchesProductFilter(product("Fritz-Cola", "drinks"), state)).toBe(false)
   })
 })

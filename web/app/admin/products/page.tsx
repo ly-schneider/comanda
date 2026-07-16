@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { CategorySelect } from "@/components/admin/category-select"
 import { DepotInfo } from "@/components/admin/depot-info"
 import { ProductImageCrop } from "@/components/admin/product-image-crop"
+import { ProductFilterBar } from "@/components/catalog/product-filter-bar"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
+import { useProductFilter } from "@/hooks/use-product-filter"
 
 import { categoryOrderMap, compareByCategory } from "@/lib/categories"
 import { getCSRFToken } from "@/lib/csrf"
@@ -73,6 +75,7 @@ export default function AdminProductsPage() {
   const [posMode, setPosMode] = useState<PosFulfillmentMode>("QR_CODE")
   const [createOpen, setCreateOpen] = useState(false)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const { query, setQuery, activeCat, activeSub, selectCat, setActiveSub, matches } = useProductFilter()
 
   useEffect(() => {
     let cancelled = false
@@ -347,12 +350,24 @@ export default function AdminProductsPage() {
     [items, categoryOrder]
   )
 
+  const visibleItems = useMemo(() => sortedItems.filter(matches), [sortedItems, matches])
+  const activeCats = useMemo(() => cats.filter((c) => c.isActive), [cats])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Produkte</h1>
         <Button onClick={() => setCreateOpen(true)}>Produkt hinzufügen</Button>
       </div>
+      <ProductFilterBar
+        query={query}
+        onQueryChange={setQuery}
+        categories={activeCats}
+        activeCat={activeCat}
+        activeSub={activeSub}
+        onSelectCat={selectCat}
+        onSubChange={setActiveSub}
+      />
       {error && <div className="text-sm text-red-600">{error}</div>}
       {successMsg && (
         <div role="status" className="rounded bg-green-100 px-3 py-2 text-green-800">
@@ -376,13 +391,15 @@ export default function AdminProductsPage() {
         updateJeton={updateJeton}
         uploadImage={uploadProductImage}
       />
-      {!loading && sortedItems.length === 0 ? (
+      {!loading && visibleItems.length === 0 ? (
         <div className="text-muted-foreground py-12 text-center text-sm">
-          Keine Produkte gefunden. Erstelle dein erstes Produkt.
+          {items.length === 0
+            ? "Keine Produkte gefunden. Erstelle dein erstes Produkt."
+            : "Keine Produkte für diese Suche."}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {sortedItems.map((p) => (
+          {visibleItems.map((p) => (
             <ProductCardEditable
               key={p.id}
               product={p}
