@@ -1,4 +1,4 @@
-h1:tssxSrkuSLWb7SLT2q8wT4cUhFYFrEUC20T+F+7DNUA=
+h1:onUxzjme1fFvQL9Mr8vJF/fBkaKabEzZIX2IujCt5Lk=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -41,3 +41,4 @@ h1:tssxSrkuSLWb7SLT2q8wT4cUhFYFrEUC20T+F+7DNUA=
 20260714000000_category_subcategories.sql h1:rXraHSwXDnVuojw3V/9B9CtzQzJTJlUE41Y70kDMFZI=
 20260715000000_artist_voucher.sql h1:DonDjJRw15njIIy1F6t0YxGgfMCCJqYqJn+Td7jD0q8=
 20260716000000_station_enroll_preset.sql h1:EsJcLEkQlLXi1NFtzbUoJ5RzQQQ+zm8+wkAlUAxchhg=
+20260717000000_settings_station_self_manage_products.sql h1:UhtkSj+ZBlQjUXp7oUJeArKQJgOVYzIFh3pSK6qiP9w=

@@ -33,6 +33,11 @@ Station:
       type: array
       items:
         $ref: "#/StationProduct"
+    selfManageProducts:
+      type: boolean
+      description: >-
+        Whether this station may edit its own product assignments (the
+        stationSelfManageProducts tenant setting). Only populated on /stations/me.
 
 StationProduct:
   type: object

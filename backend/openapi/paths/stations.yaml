@@ -55,6 +55,84 @@ me:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+me-products:
+  get:
+    tags: [Stations]
+    summary: Get current station products
+    description: >-
+      Returns the products assigned to the authenticated station device.
+      Requires the tenant's stationSelfManageProducts setting to be on.
+    operationId: getCurrentStationProducts
+    security:
+      - deviceAuth: []
+    x-device-types: [STATION]
+    responses:
+      "200":
+        description: Product assignments
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/stations.yaml#/StationProductList"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Station self-management disabled for this tenant
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+  put:
+    tags: [Stations]
+    summary: Set current station products
+    description: >-
+      Replaces the product assignments for the authenticated station device
+      (scoped to the device resolved from the token — never another station).
+      Requires the tenant's stationSelfManageProducts setting to be on.
+    operationId: setCurrentStationProducts
+    security:
+      - deviceAuth: []
+    x-device-types: [STATION]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/stations.yaml#/StationProductAssignment"
+          example:
+            productIds:
+              - "spec_______5"
+              - "spec______11"
+    responses:
+      "200":
+        description: Products assigned
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/stations.yaml#/StationProductList"
+      "400":
+        description: Invalid request body
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Station self-management disabled for this tenant
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 redeem:
   post:
     tags: [Stations]

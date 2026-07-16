@@ -36,6 +36,8 @@ func (Settings) Fields() []ent.Field {
 			StorageKey("pos_mode"),
 		field.Bool("system_enabled").
 			Default(true),
+		field.Bool("station_self_manage_products").
+			Default(false),
 		field.String("display_name").
 			MaxLen(100).
 			Optional().

@@ -34,10 +34,11 @@ func (f *fakeSettingsRepo) GetWithProducts(context.Context) (*ent.Settings, erro
 	f.touched = true
 	return f.Get(context.Background())
 }
-func (f *fakeSettingsRepo) Upsert(context.Context, settings.PosMode) error     { return nil }
-func (f *fakeSettingsRepo) IsSystemEnabled(context.Context) (bool, error)      { return true, nil }
-func (f *fakeSettingsRepo) SetSystemEnabled(context.Context, bool) error       { return nil }
-func (f *fakeSettingsRepo) SetOnboardingCompleted(context.Context, bool) error { return nil }
+func (f *fakeSettingsRepo) Upsert(context.Context, settings.PosMode) error           { return nil }
+func (f *fakeSettingsRepo) IsSystemEnabled(context.Context) (bool, error)            { return true, nil }
+func (f *fakeSettingsRepo) SetSystemEnabled(context.Context, bool) error             { return nil }
+func (f *fakeSettingsRepo) SetStationSelfManageProducts(context.Context, bool) error { return nil }
+func (f *fakeSettingsRepo) SetOnboardingCompleted(context.Context, bool) error       { return nil }
 func (f *fakeSettingsRepo) UpdateBranding(_ context.Context, b repository.BrandingUpdate) error {
 	f.branding = &b
 	return nil

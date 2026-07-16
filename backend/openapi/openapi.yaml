@@ -157,6 +157,8 @@ paths:
     $ref: "paths/stations.yaml#/collection"
   /stations/me:
     $ref: "paths/stations.yaml#/me"
+  /stations/me/products:
+    $ref: "paths/stations.yaml#/me-products"
   /stations/redeem:
     $ref: "paths/stations.yaml#/redeem"
   /stations/redeem-campaign:

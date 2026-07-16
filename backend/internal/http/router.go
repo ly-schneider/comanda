@@ -141,6 +141,8 @@ func NewRouter(
 			station.Use(systemMw.RequireEnabled)
 			station.Use(deviceAuthMw.RequireDevice(auth.DeviceTypeStation))
 			station.Get("/stations/me", wrapper.GetCurrentStation)
+			station.Get("/stations/me/products", wrapper.GetCurrentStationProducts)
+			station.Put("/stations/me/products", wrapper.SetCurrentStationProducts)
 			station.Post("/stations/redeem", wrapper.RedeemAtStation)
 			station.Post("/stations/redeem-campaign", wrapper.RedeemCampaignAtStation)
 		})

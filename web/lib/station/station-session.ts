@@ -23,6 +23,7 @@ export interface StationStatus {
   status: StationApprovalStatus
   name?: string
   products?: StationProduct[]
+  selfManageProducts?: boolean
 }
 
 export interface CachedStationSession {
