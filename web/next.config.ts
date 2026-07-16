@@ -43,6 +43,8 @@ const config: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 2592000,
+    // Next 16 blocks optimizing localhost/private-IP images even in remotePatterns; allow in dev only.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
     remotePatterns: [
       { protocol: "http", hostname: "localhost", port: "8080", pathname: "/**" },
       { protocol: "http", hostname: "127.0.0.1", port: "8080", pathname: "/**" },
