@@ -160,11 +160,19 @@ provision:
 set-passwords:
     ./db/provisioning/set-passwords.sh
 
-# Seed dev data
+# Seed the demo catalog into a tenant by slug (default 'default'). Re-points the
+# shared demo set, so one tenant holds it at a time. Branding, plugins and the
+# ops demo (05_settings, 99_ops_demo) are not seeded — those are per-tenant setup.
 [group('db')]
-seed:
+seed slug='default':
     #!/usr/bin/env bash
-    for f in db/seed/*.sql; do echo "  $f..."; psql "$DATABASE_URL" -f "$f"; done
+    set -euo pipefail
+    tid=$(psql "$DATABASE_URL" -tAc "SELECT id FROM tenant WHERE slug = '{{slug}}'")
+    if [ -z "$tid" ]; then echo "no tenant with slug '{{slug}}'"; exit 1; fi
+    echo "seeding catalog into '{{slug}}' ($tid)"
+    for f in db/seed/01_categories.sql db/seed/02_jetons.sql db/seed/03_products.sql db/seed/04_bundles.sql db/seed/06_inventory.sql; do
+      echo "  $f..."; psql "$DATABASE_URL" -v seed_tenant="$tid" -f "$f"
+    done
 
 # ── Load test ──
 

@@ -1,5 +1,5 @@
 -- tenant_id has no DB default; default it to the bootstrap tenant for this seed.
-ALTER TABLE inventory_ledger ALTER COLUMN tenant_id SET DEFAULT 'tenant_seed1';
+ALTER TABLE inventory_ledger ALTER COLUMN tenant_id SET DEFAULT :'seed_tenant';
 
 CREATE OR REPLACE FUNCTION pg_temp.nanoid() RETURNS varchar(12)
 LANGUAGE sql VOLATILE AS $$
@@ -7,6 +7,9 @@ LANGUAGE sql VOLATILE AS $$
                            (floor(random()*53))::int + 1, 1), '')
   FROM generate_series(1, 12)
 $$;
+
+-- Re-point existing opening balances to the seed tenant (moves demo stock).
+UPDATE inventory_ledger SET tenant_id = :'seed_tenant' WHERE reason = 'opening_balance';
 
 -- Add opening balance for Getränke (50 each)
 INSERT INTO inventory_ledger (id, product_id, delta, reason)
