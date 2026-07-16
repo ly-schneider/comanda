@@ -60,9 +60,8 @@ async function postJSON(fetchAuth: ReturnType<typeof useAuthorizedFetch>, url: s
   if (!res.ok) throw new Error(await readErrorMessage(res))
 }
 
-// Payrexx's refund endpoint takes ~20s, so a refund/cancel submit sits in flight
-// long enough to look frozen. Reveal a reassurance line only once a submit has been
-// pending past the delay — instant (cash) actions finish first and stay quiet.
+// Reveal the "still working" hint only once a submit stays pending past the delay,
+// so instant cash refunds stay quiet and only a slow (~20s) Payrexx refund shows it.
 function useSlowPending(busy: boolean, delayMs = 2500): boolean {
   const [slow, setSlow] = useState(false)
   useEffect(() => {
