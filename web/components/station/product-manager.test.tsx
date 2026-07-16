@@ -74,4 +74,20 @@ describe("StationProductManager", () => {
     expect(await screen.findByText("Selbstverwaltung ist nicht mehr aktiviert.")).toBeInTheDocument()
     expect(onSaved).not.toHaveBeenCalled()
   })
+
+  it("keeps in-progress edits across parent re-renders (fresh assignedIds array)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(catalog))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { rerender } = render(<StationProductManager token="tok" assignedIds={["p1", "p2"]} onSaved={vi.fn()} />)
+    fireEvent.click(screen.getByRole("button", { name: "Produkte verwalten" }))
+
+    fireEvent.click(await screen.findByRole("button", { name: "Produkt Prod 1 entfernen" }))
+    expect(screen.queryByText("Prod 1")).not.toBeInTheDocument()
+
+    rerender(<StationProductManager token="tok" assignedIds={["p1", "p2"]} onSaved={vi.fn()} />)
+
+    expect(screen.queryByText("Prod 1")).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

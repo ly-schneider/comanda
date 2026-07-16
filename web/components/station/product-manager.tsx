@@ -1,7 +1,7 @@
 "use client"
 
 import { Boxes, Check, Loader2, X } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -44,16 +44,25 @@ export function StationProductManager({
   const [error, setError] = useState<string | null>(null)
   const [justSaved, setJustSaved] = useState(false)
 
+  // Refs so the effect below depends only on `open`: the parent reallocates
+  // assignedIds every render (live scanning), which would else re-run it and wipe edits.
+  const assignedIdsRef = useRef(assignedIds)
+  const tokenRef = useRef(token)
+  useEffect(() => {
+    assignedIdsRef.current = assignedIds
+    tokenRef.current = token
+  })
+
   useEffect(() => {
     if (!open) return
-    setSelected(new Set(assignedIds))
+    setSelected(new Set(assignedIdsRef.current))
     setError(null)
     setJustSaved(false)
     let cancelled = false
     setLoading(true)
     ;(async () => {
       try {
-        const res = await fetch(`/api/v1/products`, { headers: { Authorization: `Bearer ${token}` } })
+        const res = await fetch(`/api/v1/products`, { headers: { Authorization: `Bearer ${tokenRef.current}` } })
         if (!res.ok) throw new Error(`Fehler ${res.status}`)
         const data = (await res.json()) as { items?: Product[] }
         if (!cancelled) setCatalog((data.items ?? []).map((p) => ({ id: p.id, name: p.name })))
@@ -66,7 +75,7 @@ export function StationProductManager({
     return () => {
       cancelled = true
     }
-  }, [open, assignedIds, token])
+  }, [open])
 
   const nameById = useMemo(() => new Map(catalog.map((p) => [p.id, p.name])), [catalog])
   const assignedProducts = useMemo(
