@@ -103,6 +103,25 @@ func (h *handlers) ArtistVoucherRevoke(w http.ResponseWriter, r *http.Request, v
 	response.WriteJSON(w, http.StatusOK, toAPIVoucher(v))
 }
 
+func (h *handlers) ArtistVoucherDelete(w http.ResponseWriter, r *http.Request, voucherId string) {
+	if !nanoid.Valid(voucherId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid voucher id")
+		return
+	}
+	err := h.rt.svc.Delete(r.Context(), voucherId)
+	switch {
+	case err == nil:
+		response.WriteNoContent(w)
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "Voucher not found")
+	case errors.Is(err, ErrNotExpired):
+		writeError(w, http.StatusConflict, "voucher_not_expired", "Only expired vouchers can be deleted")
+	default:
+		h.rt.logger.Error("artist voucher delete failed", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "artist_voucher_error", "Could not delete voucher")
+	}
+}
+
 func (h *handlers) ArtistVoucherRevocations(w http.ResponseWriter, r *http.Request) {
 	feed, err := h.rt.svc.Revocations(r.Context())
 	if err != nil {

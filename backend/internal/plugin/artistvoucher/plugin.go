@@ -60,6 +60,7 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
 			gr.Get("/vouchers/{voucherId}/print.pdf", w.ArtistVoucherPrint)
 			gr.Post("/vouchers", w.ArtistVoucherCreate)
 			gr.Post("/vouchers/{voucherId}/revoke", w.ArtistVoucherRevoke)
+			gr.Delete("/vouchers/{voucherId}", w.ArtistVoucherDelete)
 		})
 		r.Group(func(gr chi.Router) {
 			gr.Use(mw.RequireDevice(auth.DeviceTypeStation))

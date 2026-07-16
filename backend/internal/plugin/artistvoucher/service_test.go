@@ -23,6 +23,7 @@ type fakeRepo struct {
 	rows        map[string]*ent.Voucher
 	order       []string
 	revokeCalls int
+	deleteCalls int
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[string]*ent.Voucher{}} }
@@ -67,6 +68,21 @@ func (f *fakeRepo) SetRevoked(_ context.Context, id string, at time.Time) (*ent.
 	t := at
 	v.RevokedAt = &t
 	return v, nil
+}
+
+func (f *fakeRepo) Delete(_ context.Context, id string) error {
+	if _, ok := f.rows[id]; !ok {
+		return repository.ErrNotFound
+	}
+	f.deleteCalls++
+	delete(f.rows, id)
+	for i, oid := range f.order {
+		if oid == id {
+			f.order = append(f.order[:i], f.order[i+1:]...)
+			break
+		}
+	}
+	return nil
 }
 
 func (f *fakeRepo) ListActiveRevoked(_ context.Context, now time.Time) ([]*ent.Voucher, error) {
@@ -234,6 +250,63 @@ func TestRevokeIsIdempotent(t *testing.T) {
 func TestRevokeNotFound(t *testing.T) {
 	svc, _, _ := newTestService(t, categoryFixtures())
 	_, err := svc.Revoke(tenantCtx(), "missing12345")
+	require.True(t, errors.Is(err, repository.ErrNotFound))
+}
+
+func seedVoucher(repo *fakeRepo, id string, revoked bool, validUntil time.Time) {
+	now := time.Now()
+	cats, _ := json.Marshal([]Category{{ID: "cat_food0001", Name: "Food"}})
+	v := &ent.Voucher{ID: id, Label: "x", ValidFrom: now.Add(-2 * time.Hour), ValidUntil: validUntil, Categories: cats, CreatedAt: now}
+	if revoked {
+		r := now.Add(-time.Minute)
+		v.RevokedAt = &r
+	}
+	repo.rows[id] = v
+	repo.order = append(repo.order, id)
+}
+
+func TestDeleteRejectsStillValid(t *testing.T) {
+	svc, repo, _ := newTestService(t, categoryFixtures())
+	v, err := svc.Create(tenantCtx(), validCreateInput())
+	require.NoError(t, err)
+
+	err = svc.Delete(tenantCtx(), v.ID)
+	require.True(t, errors.Is(err, ErrNotExpired))
+	require.Equal(t, 0, repo.deleteCalls)
+	_, ok := repo.rows[v.ID]
+	require.True(t, ok, "still-valid voucher must remain")
+}
+
+func TestDeleteRevokedButStillValidRejected(t *testing.T) {
+	svc, repo, _ := newTestService(t, categoryFixtures())
+	seedVoucher(repo, "v_revokedlive", true, time.Now().Add(time.Hour))
+
+	err := svc.Delete(tenantCtx(), "v_revokedlive")
+	require.True(t, errors.Is(err, ErrNotExpired), "deleting a live revocation would un-block it at stations")
+	require.Equal(t, 0, repo.deleteCalls)
+}
+
+func TestDeleteExpiredVoucher(t *testing.T) {
+	svc, repo, _ := newTestService(t, categoryFixtures())
+	seedVoucher(repo, "v_expired0001", false, time.Now().Add(-time.Hour))
+
+	require.NoError(t, svc.Delete(tenantCtx(), "v_expired0001"))
+	require.Equal(t, 1, repo.deleteCalls)
+	_, ok := repo.rows["v_expired0001"]
+	require.False(t, ok, "expired voucher must be removed")
+}
+
+func TestDeleteExpiredRevokedVoucher(t *testing.T) {
+	svc, repo, _ := newTestService(t, categoryFixtures())
+	seedVoucher(repo, "v_expiredrev1", true, time.Now().Add(-time.Hour))
+
+	require.NoError(t, svc.Delete(tenantCtx(), "v_expiredrev1"))
+	require.Equal(t, 1, repo.deleteCalls)
+}
+
+func TestDeleteNotFound(t *testing.T) {
+	svc, _, _ := newTestService(t, categoryFixtures())
+	err := svc.Delete(tenantCtx(), "missing12345")
 	require.True(t, errors.Is(err, repository.ErrNotFound))
 }
 

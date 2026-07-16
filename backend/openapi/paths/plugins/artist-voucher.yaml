@@ -66,6 +66,53 @@ vouchers:
             schema:
               $ref: "../../schemas/common.yaml#/Error"
 
+voucher:
+  parameters:
+    - name: voucherId
+      in: path
+      required: true
+      schema:
+        type: string
+  delete:
+    tags: [Plugins]
+    summary: Delete an artist voucher
+    description: >
+      Permanently removes a voucher so old test or finished entries stop
+      cluttering the list. Only vouchers past their validity window can be
+      deleted; a still-valid one returns 409, because dropping it would un-block
+      it at offline stations and its printed copies stay redeemable regardless.
+      Revoke it first, then delete once it expires.
+    operationId: artistVoucherDelete
+    security:
+      - sessionAuth: []
+    responses:
+      "204":
+        description: Voucher deleted
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Voucher not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "409":
+        description: Voucher is still valid and cannot be deleted
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
 print:
   parameters:
     - name: voucherId

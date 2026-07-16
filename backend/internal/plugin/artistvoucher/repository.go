@@ -25,6 +25,7 @@ type VoucherRepository interface {
 	List(ctx context.Context) ([]*ent.Voucher, error)
 	SetRevoked(ctx context.Context, id string, at time.Time) (*ent.Voucher, error)
 	ListActiveRevoked(ctx context.Context, now time.Time) ([]*ent.Voucher, error)
+	Delete(ctx context.Context, id string) error
 }
 
 type voucherRepo struct {
@@ -80,6 +81,10 @@ func (r *voucherRepo) SetRevoked(ctx context.Context, id string, at time.Time) (
 		return nil, repository.TranslateError(err)
 	}
 	return e, nil
+}
+
+func (r *voucherRepo) Delete(ctx context.Context, id string) error {
+	return repository.TranslateError(r.ec(ctx).Voucher.DeleteOneID(id).Exec(ctx))
 }
 
 func (r *voucherRepo) ListActiveRevoked(ctx context.Context, now time.Time) ([]*ent.Voucher, error) {

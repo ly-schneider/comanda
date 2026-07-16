@@ -1,4 +1,5 @@
-import { apiRequest } from "@/lib/api"
+import { apiRequest, createApiError } from "@/lib/api"
+import { getCSRFToken } from "@/lib/csrf"
 
 export type VoucherStatus = "scheduled" | "active" | "expired" | "revoked"
 
@@ -52,6 +53,17 @@ export async function revokeVoucher(token: string, id: string): Promise<ArtistVo
     method: "POST",
     headers: bearer(token),
   })
+}
+
+// Raw fetch: apiRequest would choke parsing the 204's empty body.
+export async function deleteVoucher(token: string, id: string): Promise<void> {
+  const res = await fetch(`/api${BASE}/vouchers/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { ...bearer(token), "X-CSRF": getCSRFToken() || "" },
+  })
+  if (res.ok || res.status === 204) return
+  const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string }
+  throw createApiError(res.status, body.message || body.code || `HTTP ${res.status}`, body.code)
 }
 
 // Opened via window.open, so the backend route authenticates the session cookie

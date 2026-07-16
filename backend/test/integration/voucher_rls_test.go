@@ -15,13 +15,17 @@ import (
 )
 
 func seedVoucher(t *testing.T, env *rlsEnv, tenantID, id string) {
+	seedVoucherUntil(t, env, tenantID, id, time.Now().Add(24*time.Hour))
+}
+
+func seedVoucherUntil(t *testing.T, env *rlsEnv, tenantID, id string, validUntil time.Time) {
 	t.Helper()
 	cats, err := json.Marshal([]artistvoucher.Category{{ID: "cat_1", Name: "Drinks"}})
 	require.NoError(t, err)
 	env.privExec(t,
 		`INSERT INTO voucher (id, tenant_id, label, valid_from, valid_until, categories, token)
 		 VALUES ($1, $2, 'Live Band', $3, $4, $5, 'tok')`,
-		id, tenantID, time.Now().Add(-time.Hour), time.Now().Add(24*time.Hour), cats,
+		id, tenantID, time.Now().Add(-2*time.Hour), validUntil, cats,
 	)
 }
 
@@ -83,4 +87,43 @@ func TestVoucherRLS_CrossTenantRejected(t *testing.T) {
 			require.Equal(t, 1, count)
 		})
 	})
+
+	t.Run("other tenant cannot delete the voucher", func(t *testing.T) {
+		ctx, client, cleanup := env.appRequestTxRollback(t, tenantB)
+		defer cleanup()
+		repo := artistvoucher.NewVoucherRepository(client)
+
+		err := repo.Delete(ctx, voucherID)
+		require.Truef(t, errors.Is(err, pgRepo.ErrNotFound), "cross-tenant delete must fail, got %v", err)
+
+		idA := tenantA
+		env.withTenant(t, &idA, func(tx *sql.Tx) {
+			var count int
+			require.NoError(t, tx.QueryRow(`SELECT count(*) FROM voucher WHERE id = $1`, voucherID).Scan(&count))
+			require.Equal(t, 1, count, "owner's row must survive a cross-tenant delete")
+		})
+	})
+}
+
+func TestVoucherService_DeleteExpiryGate(t *testing.T) {
+	env := newRLSEnv(t)
+	tenantID := env.seedTenant(t, "vch-del-"+randSuffix())
+
+	liveID := nanoid.New()
+	expiredID := nanoid.New()
+	seedVoucherUntil(t, env, tenantID, liveID, time.Now().Add(time.Hour))
+	seedVoucherUntil(t, env, tenantID, expiredID, time.Now().Add(-time.Hour))
+
+	ctx, client, cleanup := env.appRequestTx(t, tenantID)
+	defer cleanup()
+	svc := artistvoucher.NewService(artistvoucher.NewVoucherRepository(client), nil, nil)
+
+	err := svc.Delete(ctx, liveID)
+	require.Truef(t, errors.Is(err, artistvoucher.ErrNotExpired), "live voucher must not be deletable, got %v", err)
+	_, err = svc.Get(ctx, liveID)
+	require.NoError(t, err, "live voucher must survive a rejected delete")
+
+	require.NoError(t, svc.Delete(ctx, expiredID), "expired voucher must delete")
+	_, err = svc.Get(ctx, expiredID)
+	require.Truef(t, errors.Is(err, pgRepo.ErrNotFound), "expired voucher must be gone, got %v", err)
 }
