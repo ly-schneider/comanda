@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { useMemberTier } from "@/hooks/use-member-tier"
+import { useSlowPending } from "@/hooks/use-slow-pending"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 import { paymentMethodLabel } from "@/lib/payment-format"
@@ -58,21 +59,6 @@ async function postJSON(fetchAuth: ReturnType<typeof useAuthorizedFetch>, url: s
     body: JSON.stringify(body ?? {}),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
-}
-
-// Reveal the "still working" hint only once a submit stays pending past the delay,
-// so instant cash refunds stay quiet and only a slow (~20s) Payrexx refund shows it.
-function useSlowPending(busy: boolean, delayMs = 2500): boolean {
-  const [slow, setSlow] = useState(false)
-  useEffect(() => {
-    if (!busy) {
-      setSlow(false)
-      return
-    }
-    const t = setTimeout(() => setSlow(true), delayMs)
-    return () => clearTimeout(t)
-  }, [busy, delayMs])
-  return slow
 }
 
 function ProcessingHint({ show }: { show: boolean }) {
