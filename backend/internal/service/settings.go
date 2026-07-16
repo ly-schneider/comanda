@@ -129,6 +129,8 @@ type SettingsService interface {
 	SetPosMode(ctx context.Context, mode settings.PosMode) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
+	SetStationSelfManageProducts(ctx context.Context, enabled bool) error
+	StationSelfManageProducts(ctx context.Context) (bool, error)
 	SetOnboardingCompleted(ctx context.Context, completed bool) error
 	UpdateBranding(ctx context.Context, in BrandingInput) error
 	GetBranding(ctx context.Context) (*BrandingView, error)
@@ -217,6 +219,18 @@ func (s *settingsService) SetSystemEnabled(ctx context.Context, enabled bool) er
 		expiresAt: time.Now().Add(systemEnabledCacheTTL),
 	})
 	return nil
+}
+
+func (s *settingsService) SetStationSelfManageProducts(ctx context.Context, enabled bool) error {
+	return s.settings.SetStationSelfManageProducts(ctx, enabled)
+}
+
+func (s *settingsService) StationSelfManageProducts(ctx context.Context) (bool, error) {
+	st, err := s.settings.Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	return st.StationSelfManageProducts, nil
 }
 
 func (s *settingsService) SetOnboardingCompleted(ctx context.Context, completed bool) error {

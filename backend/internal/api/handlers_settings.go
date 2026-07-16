@@ -48,6 +48,13 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if body.StationSelfManageProducts != nil {
+		if err := h.settings.SetStationSelfManageProducts(ctx, *body.StationSelfManageProducts); err != nil {
+			writeError(w, http.StatusInternalServerError, "update_failed", err.Error())
+			return
+		}
+	}
+
 	if body.PosMode != nil {
 		if err := h.settings.SetPosMode(ctx, settings.PosMode(*body.PosMode)); err != nil {
 			var missingErr service.MissingJetonForActiveProductsError
@@ -115,27 +122,28 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 func toAPISettings(e *ent.Settings, missingJetons int) generated.Settings {
 	s := generated.Settings{
-		Id:                     e.ID,
-		SystemEnabled:          e.SystemEnabled,
-		PosMode:                generated.PosFulfillmentMode(e.PosMode),
-		DisplayName:            e.DisplayName,
-		LogoUrl:                e.LogoURL,
-		FaviconUrl:             e.FaviconURL,
-		ColorPrimary:           ptr(e.ColorPrimary),
-		ColorPrimaryForeground: ptr(e.ColorPrimaryForeground),
-		ColorSecondary:         ptr(e.ColorSecondary),
-		ColorBackground:        ptr(e.ColorBackground),
-		ColorForeground:        ptr(e.ColorForeground),
-		FontKey:                ptr(e.FontKey),
-		RadiusKey:              ptr(e.RadiusKey),
-		ContactEmail:           e.ContactEmail,
-		ContactPhone:           e.ContactPhone,
-		LegalName:              e.LegalName,
-		LegalAddress:           e.LegalAddress,
-		Currency:               ptr(e.Currency),
-		PaymentProvider:        ptr(e.PaymentProvider),
-		SumupMerchantCode:      e.SumupMerchantCode,
-		UpdatedAt:              ptr(e.UpdatedAt),
+		Id:                        e.ID,
+		SystemEnabled:             e.SystemEnabled,
+		StationSelfManageProducts: ptr(e.StationSelfManageProducts),
+		PosMode:                   generated.PosFulfillmentMode(e.PosMode),
+		DisplayName:               e.DisplayName,
+		LogoUrl:                   e.LogoURL,
+		FaviconUrl:                e.FaviconURL,
+		ColorPrimary:              ptr(e.ColorPrimary),
+		ColorPrimaryForeground:    ptr(e.ColorPrimaryForeground),
+		ColorSecondary:            ptr(e.ColorSecondary),
+		ColorBackground:           ptr(e.ColorBackground),
+		ColorForeground:           ptr(e.ColorForeground),
+		FontKey:                   ptr(e.FontKey),
+		RadiusKey:                 ptr(e.RadiusKey),
+		ContactEmail:              e.ContactEmail,
+		ContactPhone:              e.ContactPhone,
+		LegalName:                 e.LegalName,
+		LegalAddress:              e.LegalAddress,
+		Currency:                  ptr(e.Currency),
+		PaymentProvider:           ptr(e.PaymentProvider),
+		SumupMerchantCode:         e.SumupMerchantCode,
+		UpdatedAt:                 ptr(e.UpdatedAt),
 	}
 
 	if missingJetons > 0 {

@@ -14,6 +14,7 @@ type PosFulfillmentMode = "QR_CODE" | "JETON" | "HYBRID"
 
 type SettingsResponse = {
   systemEnabled?: boolean
+  stationSelfManageProducts?: boolean
   posMode?: PosFulfillmentMode
   missingJetons?: number
 }
@@ -24,6 +25,7 @@ export default function AdminSettingsPage() {
   const token = getToken() ?? ""
 
   const [systemEnabled, setSystemEnabled] = useState(true)
+  const [stationSelfManageProducts, setStationSelfManageProducts] = useState(false)
   const [posMode, setPosMode] = useState<PosFulfillmentMode>("QR_CODE")
   const [missingJetons, setMissingJetons] = useState(0)
 
@@ -36,6 +38,7 @@ export default function AdminSettingsPage() {
       if (settingsRes.ok) {
         const s = (await settingsRes.json()) as SettingsResponse
         setSystemEnabled(s.systemEnabled ?? true)
+        setStationSelfManageProducts(s.stationSelfManageProducts ?? false)
         setPosMode(s.posMode ?? "QR_CODE")
         setMissingJetons(s.missingJetons ?? 0)
       }
@@ -67,6 +70,7 @@ export default function AdminSettingsPage() {
       }
       const updated = (await res.json()) as SettingsResponse
       setSystemEnabled(updated.systemEnabled ?? systemEnabled)
+      setStationSelfManageProducts(updated.stationSelfManageProducts ?? stationSelfManageProducts)
       setPosMode(updated.posMode ?? posMode)
       setMissingJetons(updated.missingJetons ?? 0)
     } catch (e) {
@@ -100,6 +104,28 @@ export default function AdminSettingsPage() {
               onCheckedChange={(checked) => {
                 setSystemEnabled(checked)
                 updateSettings({ systemEnabled: checked })
+              }}
+              disabled={saving}
+            />
+          </div>
+        </CardHeader>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>Stationen verwalten Produkte selbst</CardTitle>
+              <p className="text-muted-foreground text-sm">
+                Erlaube Stationen, ihre eigenen Produkte direkt am Gerät auszuwählen – ohne Admin. Die Zuweisung hier im
+                Adminbereich bleibt weiterhin möglich.
+              </p>
+            </div>
+            <Switch
+              checked={stationSelfManageProducts}
+              onCheckedChange={(checked) => {
+                setStationSelfManageProducts(checked)
+                updateSettings({ stationSelfManageProducts: checked })
               }}
               disabled={saving}
             />

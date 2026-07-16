@@ -12,6 +12,7 @@ import { InstallHintDrawer } from "@/components/station/install-hint-drawer"
 import { InstallPrompt } from "@/components/station/install-prompt"
 import { OfflineReadiness } from "@/components/station/offline-readiness"
 import { OfflineSetupRequired } from "@/components/station/offline-setup-required"
+import { StationProductManager } from "@/components/station/product-manager"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -22,7 +23,14 @@ import { useDeviceFetch } from "@/hooks/use-device-fetch"
 import { playScanSound, primeScanAudio } from "@/lib/scan-sound"
 import { idbLedger, type StationLedger } from "@/lib/station/ledger"
 import { idbKVStore } from "@/lib/station/offline-db"
-import { CATALOG_KEY, type CatalogEntry, PLUGINS_KEY, QR_CONFIG_KEY, type QRConfig } from "@/lib/station/offline-setup"
+import {
+  CATALOG_KEY,
+  type CatalogEntry,
+  PLUGINS_KEY,
+  QR_CONFIG_KEY,
+  type QRConfig,
+  runOfflineSetup,
+} from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
 import {
@@ -284,10 +292,11 @@ function formatVoucherTime(unixSec: number): string {
 export default function StationPage() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string>("")
-  const { state: sessionState, online, token } = useStationSession()
+  const { state: sessionState, online, token, applyProducts } = useStationSession()
   const { displayName, logoUrl } = useBranding()
   const status = sessionState.phase === "active" ? sessionState.status : null
   const approved = status?.status === "approved"
+  const canSelfManageProducts = status?.selfManageProducts === true
   // Keyed on the stable id list so a resolve that returns a new `status` object
   // with the same assignments doesn't rebuild the set (which would churn the
   // scan callbacks and restart the camera). Product ids are comma-free nanoids.
@@ -296,7 +305,23 @@ export default function StationPage() {
     () => new Set(assignedProductKey ? assignedProductKey.split(",") : []),
     [assignedProductKey]
   )
+  const assignedProductIdList = useMemo(() => Array.from(assignedProductIds), [assignedProductIds])
   const systemDisabled = sessionState.phase === "system-disabled"
+
+  // Bumped after a save so the offline-replay effect re-reads the catalog cache.
+  const [catalogVersion, setCatalogVersion] = useState(0)
+
+  // Apply the new set instantly (live id-filter), then refresh the offline
+  // caches + re-replay the catalog so a just-added product renders offline too.
+  const handleProductsSaved = useCallback(
+    (products: { productId: string; name?: string }[]) => {
+      applyProducts(products)
+      void runOfflineSetup()
+        .catch(() => {})
+        .finally(() => setCatalogVersion((v) => v + 1))
+    },
+    [applyProducts]
+  )
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
   const [detailScan, setDetailScan] = useState<OrderScanResult | null>(null)
@@ -390,7 +415,7 @@ export default function StationPage() {
     return () => {
       cancelled = true
     }
-  }, [approved, applyRevocations, triggerReconcile])
+  }, [approved, applyRevocations, triggerReconcile, catalogVersion])
 
   useEffect(() => {
     if (!approved) {
@@ -866,6 +891,13 @@ export default function StationPage() {
           <p className="min-w-0 truncate text-base font-semibold sm:text-lg">{status?.name || displayName}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {approved && online && canSelfManageProducts && (
+            <StationProductManager
+              token={bearerToken}
+              assignedIds={assignedProductIdList}
+              onSaved={handleProductsSaved}
+            />
+          )}
           {approved && <OfflineReadiness />}
           <InstallPrompt />
           <HardRefreshButton />

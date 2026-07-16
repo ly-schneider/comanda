@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -47,7 +48,129 @@ func (h *Handlers) GetCurrentStation(w http.ResponseWriter, r *http.Request) {
 		writeEntError(w, err)
 		return
 	}
-	response.WriteJSON(w, http.StatusOK, toAPIStation(station))
+
+	selfManage, err := h.settings.StationSelfManageProducts(ctx)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	apiStation := toAPIStation(station)
+	apiStation.SelfManageProducts = ptr(selfManage)
+	response.WriteJSON(w, http.StatusOK, apiStation)
+}
+
+// GetCurrentStationProducts returns the calling station's assigned products.
+// (GET /stations/me/products)
+func (h *Handlers) GetCurrentStationProducts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	deviceID, ok := auth.GetDeviceID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Device authentication required")
+		return
+	}
+	if !h.requireStationSelfManage(w, r) {
+		return
+	}
+
+	station, err := h.stations.GetStationByID(ctx, deviceID)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, generated.StationProductList{
+		Items: stationProductItems(toAPIStation(station)),
+	})
+}
+
+// SetCurrentStationProducts replaces the calling station's own products —
+// scoped to the device from the token, never another station.
+// (PUT /stations/me/products)
+func (h *Handlers) SetCurrentStationProducts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	deviceID, ok := auth.GetDeviceID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Device authentication required")
+		return
+	}
+	if !h.requireStationSelfManage(w, r) {
+		return
+	}
+
+	var body generated.StationProductAssignment
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "Invalid request body")
+		return
+	}
+
+	// Drop ids not belonging to the tenant: an FK check bypasses RLS, so a raw
+	// insert would otherwise link a foreign product to this station.
+	validIDs, err := h.tenantProductIDs(ctx, body.ProductIds)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+
+	if err := h.stations.SetStationProducts(ctx, deviceID, validIDs); err != nil {
+		writeEntError(w, err)
+		return
+	}
+
+	station, err := h.stations.GetStationByID(ctx, deviceID)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, generated.StationProductList{
+		Items: stationProductItems(toAPIStation(station)),
+	})
+}
+
+// requireStationSelfManage 403s unless the tenant enabled stationSelfManageProducts.
+func (h *Handlers) requireStationSelfManage(w http.ResponseWriter, r *http.Request) bool {
+	enabled, err := h.settings.StationSelfManageProducts(r.Context())
+	if err != nil {
+		writeEntError(w, err)
+		return false
+	}
+	if !enabled {
+		writeError(w, http.StatusForbidden, "self_manage_disabled", "Station self-management is disabled")
+		return false
+	}
+	return true
+}
+
+// tenantProductIDs keeps only ids that resolve on the tenant's product repo, order-preserving and deduped.
+func (h *Handlers) tenantProductIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return []string{}, nil
+	}
+	products, err := h.products.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	present := make(map[string]bool, len(products))
+	for _, p := range products {
+		present[p.ID] = true
+	}
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if present[id] && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// stationProductItems returns the station's products as a non-nil slice (empty → []).
+func stationProductItems(s generated.Station) []generated.StationProduct {
+	if s.Products != nil {
+		return *s.Products
+	}
+	return []generated.StationProduct{}
 }
 
 // GetStation returns a specific station by ID.

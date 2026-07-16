@@ -19,6 +19,7 @@ type SettingsRepository interface {
 	Upsert(ctx context.Context, mode settings.PosMode) error
 	IsSystemEnabled(ctx context.Context) (bool, error)
 	SetSystemEnabled(ctx context.Context, enabled bool) error
+	SetStationSelfManageProducts(ctx context.Context, enabled bool) error
 	// SetOnboardingCompleted stamps (completed=true) or clears the onboarding
 	// completion time. Per-step progress is derived elsewhere from real data.
 	SetOnboardingCompleted(ctx context.Context, completed bool) error
@@ -213,6 +214,21 @@ func (r *settingsRepo) SetSystemEnabled(ctx context.Context, enabled bool) error
 	err := create.
 		OnConflictColumns(settings.FieldID).
 		SetSystemEnabled(enabled).
+		Exec(ctx)
+	return translateError(err)
+}
+
+func (r *settingsRepo) SetStationSelfManageProducts(ctx context.Context, enabled bool) error {
+	id := r.settingsID(ctx)
+	create := r.ec(ctx).Settings.Create().
+		SetID(id).
+		SetStationSelfManageProducts(enabled)
+	if tenantID, ok := TenantIDFromContext(ctx); ok {
+		create = create.SetTenantID(tenantID)
+	}
+	err := create.
+		OnConflictColumns(settings.FieldID).
+		Update(func(u *ent.SettingsUpsert) { u.SetStationSelfManageProducts(enabled) }).
 		Exec(ctx)
 	return translateError(err)
 }

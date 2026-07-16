@@ -9,6 +9,10 @@ Settings:
       type: boolean
       default: true
       description: Whether the shop is active for customers
+    stationSelfManageProducts:
+      type: boolean
+      default: false
+      description: Whether stations may edit their own product assignments from /station
     posMode:
       $ref: "pos.yaml#/PosFulfillmentMode"
     missingJetons:
@@ -71,6 +75,8 @@ SettingsUpdate:
   type: object
   properties:
     systemEnabled:
+      type: boolean
+    stationSelfManageProducts:
       type: boolean
     posMode:
       $ref: "pos.yaml#/PosFulfillmentMode"
