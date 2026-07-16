@@ -17,12 +17,12 @@ const apiBaseURL = "https://api.payrexx.com/v1.0/"
 
 const DefaultRequestTimeout = 8 * time.Second
 
-// RefundRequestTimeout is longer than DefaultRequestTimeout because Payrexx's
-// Transaction refund endpoint regularly responds well past 8s. At the default
-// it times out, the request tx rolls back, and the operator sees a 502 even
-// though Payrexx applied the refund (the webhook reconciler then records it out
-// of band). Kept under httpClient.Timeout (30s) so the ctx deadline governs.
-const RefundRequestTimeout = 25 * time.Second
+// RefundRequestTimeout is far longer than DefaultRequestTimeout because Payrexx's
+// Transaction refund endpoint regularly responds well past 20s (observed ~22.7s in
+// prod). At the default 8s it times out, the request tx rolls back, and the operator
+// sees a 502 even though Payrexx applied the refund. Kept under httpClient.Timeout
+// (30s) so the ctx deadline governs and the call never outlives the client's cap.
+const RefundRequestTimeout = 28 * time.Second
 
 type Client struct {
 	instanceName string

@@ -462,6 +462,18 @@ func (s *refundService) ReconcileFromWebhook(ctx context.Context, result *paymen
 	if result == nil || !result.IsRefund {
 		return nil
 	}
+	// Serialize against an in-flight synchronous refund of the same order. That path
+	// holds this row FOR UPDATE across its (slow, ~20s) Payrexx call before committing
+	// its refund row; without taking the same lock we'd read the pre-commit ledger,
+	// miss the refund it is about to record, and insert a duplicate "reconciled from
+	// webhook" entry. Blocking here until it commits (or rolls back) makes the
+	// cumulative-amount comparison below see the true ledger and reconcile to a no-op.
+	if err := s.orders.LockByID(ctx, result.ReferenceID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
 	ord, err := s.orders.GetByID(ctx, result.ReferenceID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {

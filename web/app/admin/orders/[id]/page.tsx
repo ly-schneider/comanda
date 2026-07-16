@@ -1,5 +1,5 @@
 "use client"
-import { Minus, Plus } from "lucide-react"
+import { Loader2, Minus, Plus } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -58,6 +58,32 @@ async function postJSON(fetchAuth: ReturnType<typeof useAuthorizedFetch>, url: s
     body: JSON.stringify(body ?? {}),
   })
   if (!res.ok) throw new Error(await readErrorMessage(res))
+}
+
+// Payrexx's refund endpoint takes ~20s, so a refund/cancel submit sits in flight
+// long enough to look frozen. Reveal a reassurance line only once a submit has been
+// pending past the delay — instant (cash) actions finish first and stay quiet.
+function useSlowPending(busy: boolean, delayMs = 2500): boolean {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!busy) {
+      setSlow(false)
+      return
+    }
+    const t = setTimeout(() => setSlow(true), delayMs)
+    return () => clearTimeout(t)
+  }, [busy, delayMs])
+  return slow
+}
+
+function ProcessingHint({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <p className="text-muted-foreground flex items-center gap-2 text-xs">
+      <Loader2 className="size-3 shrink-0 animate-spin" />
+      Wird verarbeitet – das kann bis zu 30 Sekunden dauern. Bitte das Fenster nicht schliessen.
+    </p>
+  )
 }
 
 export default function AdminOrderDetailPage() {
@@ -391,6 +417,7 @@ function LineRefundSection({
   const [qty, setQty] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const slow = useSlowPending(busy)
 
   const refundable = lines.filter((l) => l.refundableQuantity > 0)
 
@@ -467,6 +494,7 @@ function LineRefundSection({
         })}
       </div>
       {error && <p className="text-destructive text-xs">{error}</p>}
+      <ProcessingHint show={slow} />
       <div className="flex items-center justify-between">
         <span className="text-sm">
           {depositCents > 0 ? (
@@ -481,6 +509,7 @@ function LineRefundSection({
           )}
         </span>
         <Button size="sm" disabled={busy || selected.length === 0} onClick={() => void submit()}>
+          {busy && <Loader2 className="size-4 animate-spin" />}
           {busy ? "Wird erstattet…" : "Ausgewählte erstatten"}
         </Button>
       </div>
@@ -501,6 +530,7 @@ function DepositReturnSection({
   const [qty, setQty] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const slow = useSlowPending(busy)
 
   const returnable = deposits.filter((d) => d.outstandingQuantity > 0)
   const selected = returnable.map((d) => ({ deposit: d, q: qty[d.orderLineId] ?? 0 })).filter((x) => x.q > 0)
@@ -547,11 +577,13 @@ function DepositReturnSection({
         ))}
       </div>
       {error && <p className="text-destructive text-xs">{error}</p>}
+      <ProcessingHint show={slow} />
       <div className="flex items-center justify-between">
         <span className="text-sm">
           Betrag: <span className="font-medium">{formatChf(totalCents)}</span>
         </span>
         <Button size="sm" variant="secondary" disabled={busy || selected.length === 0} onClick={() => void submit()}>
+          {busy && <Loader2 className="size-4 animate-spin" />}
           {busy ? "Wird zurückgenommen…" : "Depot zurücknehmen"}
         </Button>
       </div>
@@ -573,6 +605,7 @@ function ArbitraryRefundSection({
   const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const slow = useSlowPending(busy)
 
   if (maxCents <= 0) return null
 
@@ -631,8 +664,10 @@ function ArbitraryRefundSection({
         </div>
       </div>
       {error && <p className="text-destructive text-xs">{error}</p>}
+      <ProcessingHint show={slow} />
       <div className="flex justify-end">
         <Button size="sm" variant="secondary" disabled={busy || !valid} onClick={() => void submit()}>
+          {busy && <Loader2 className="size-4 animate-spin" />}
           {busy ? "Wird erstattet…" : "Kulanz erstatten"}
         </Button>
       </div>
@@ -645,6 +680,7 @@ function CancelOrderButton({ orderId, onDone }: { orderId: string; onDone: () =>
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const slow = useSlowPending(busy)
 
   async function submit() {
     setBusy(true)
@@ -683,6 +719,7 @@ function CancelOrderButton({ orderId, onDone }: { orderId: string; onDone: () =>
               gemacht werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <ProcessingHint show={slow} />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
@@ -693,6 +730,7 @@ function CancelOrderButton({ orderId, onDone }: { orderId: string; onDone: () =>
                 void submit()
               }}
             >
+              {busy && <Loader2 className="size-4 animate-spin" />}
               {busy ? "Wird storniert…" : "Stornieren"}
             </AlertDialogAction>
           </AlertDialogFooter>
