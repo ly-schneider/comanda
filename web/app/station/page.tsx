@@ -305,6 +305,7 @@ export default function StationPage() {
     () => new Set(assignedProductKey ? assignedProductKey.split(",") : []),
     [assignedProductKey]
   )
+  const assignedProductIdList = useMemo(() => Array.from(assignedProductIds), [assignedProductIds])
   const systemDisabled = sessionState.phase === "system-disabled"
 
   // Bumped after a save so the offline-replay effect re-reads the catalog cache.
@@ -893,7 +894,7 @@ export default function StationPage() {
           {approved && online && canSelfManageProducts && (
             <StationProductManager
               token={bearerToken}
-              assignedIds={Array.from(assignedProductIds)}
+              assignedIds={assignedProductIdList}
               onSaved={handleProductsSaved}
             />
           )}
