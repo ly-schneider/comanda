@@ -1,11 +1,14 @@
 package integration
 
 import (
+	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/refund"
+	"backend/internal/payment"
 	pgRepo "backend/internal/repository"
 	"backend/internal/service"
 
@@ -88,4 +91,106 @@ func TestRefundService_ConcurrentRefundSerialized(t *testing.T) {
 	ord, err := pgRepo.NewOrderRepository(client).GetByID(ctx, orderID)
 	require.NoError(t, err)
 	require.Equal(t, order.StatusRefunded, ord.Status)
+}
+
+// blockingRefundProvider holds provider.Refund open until released, so a test can run the
+// webhook reconcile while a synchronous refund still holds the order lock.
+type blockingRefundProvider struct {
+	*stubRefundProvider
+	inFlight chan struct{}
+	release  chan struct{}
+	once     sync.Once
+}
+
+func (p *blockingRefundProvider) Refund(ctx context.Context, txnID, amount int) error {
+	p.once.Do(func() { close(p.inFlight) })
+	<-p.release
+	return p.stubRefundProvider.Refund(ctx, txnID, amount)
+}
+
+// TestRefundService_WebhookReconcileSerializedWithSyncRefund proves the FOR UPDATE lock
+// in ReconcileFromWebhook serializes it behind an in-flight synchronous refund, so a
+// racing webhook reconcile dedupes to one refund row instead of recording a duplicate.
+func TestRefundService_WebhookReconcileSerializedWithSyncRefund(t *testing.T) {
+	env := newRLSEnv(t)
+	tenant := env.seedTenant(t, "reconcile-race-"+randSuffix())
+
+	orderID := nanoid.New()
+	const txnID = 222
+	env.privExec(t,
+		`INSERT INTO "order" (id, total_cents, status, origin, payrexx_transaction_id, tenant_id)
+		 VALUES ($1, 350, 'paid', 'pos', $2, $3)`,
+		orderID, txnID, tenant,
+	)
+
+	prov := &blockingRefundProvider{
+		stubRefundProvider: &stubRefundProvider{},
+		inFlight:           make(chan struct{}),
+		release:            make(chan struct{}),
+	}
+
+	var wg sync.WaitGroup
+	var syncErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ctx, client, cleanup := env.appRequestTx(t, tenant)
+		defer cleanup()
+		svc := service.NewRefundService(
+			pgRepo.NewOrderRepository(client),
+			pgRepo.NewRefundRepository(client),
+			pgRepo.NewInventoryLedgerRepository(client),
+			stubResolver{p: prov},
+			nil, nil, zap.NewNop(),
+		)
+		_, syncErr = svc.RefundArbitrary(ctx, service.RefundArbitraryInput{
+			OrderID:     orderID,
+			AmountCents: 200,
+			Reason:      "sync",
+			Actor:       service.RefundActor{Type: refund.ActorTypeAdmin, ID: "admin_sync"},
+		})
+	}()
+
+	// Sync refund is now inside provider.Refund, holding the order lock uncommitted.
+	<-prov.inFlight
+
+	var recErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ctx, client, cleanup := env.appRequestTx(t, tenant)
+		defer cleanup()
+		svc := service.NewRefundService(
+			pgRepo.NewOrderRepository(client),
+			pgRepo.NewRefundRepository(client),
+			pgRepo.NewInventoryLedgerRepository(client),
+			stubResolver{p: prov},
+			nil, nil, zap.NewNop(),
+		)
+		recErr = svc.ReconcileFromWebhook(ctx, &payment.WebhookResult{
+			ReferenceID:         orderID,
+			IsRefund:            true,
+			RefundedAmountCents: 200,
+			TransactionID:       txnID,
+		})
+	}()
+
+	// Let the reconcile reach the lock (without the fix: read + insert its duplicate)
+	// before the sync refund commits.
+	time.Sleep(400 * time.Millisecond)
+	close(prov.release)
+
+	wg.Wait()
+	require.NoError(t, syncErr)
+	require.NoError(t, recErr)
+
+	require.Equal(t, 1, prov.callCount(), "the sync refund calls the provider exactly once")
+	require.Equal(t, 1, env.countRefunds(t, orderID),
+		"exactly one refund row — the webhook reconcile must dedupe against the sync refund")
+
+	ctx, client, cleanup := env.appRequestTx(t, tenant)
+	defer cleanup()
+	sum, err := pgRepo.NewRefundRepository(client).SumSucceededByOrder(ctx, orderID)
+	require.NoError(t, err)
+	require.Equal(t, int64(200), sum, "recorded refund must match the sync refund, not double it")
 }
