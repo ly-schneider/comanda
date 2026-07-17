@@ -111,13 +111,15 @@ func TestProductService_GetAllVisible(t *testing.T) {
 	inactiveParent := fixtures.CreateCategory("Food", 3, false)
 	activeChildOfInactive := fixtures.CreateSubCategory("Burgers", 1, true, inactiveParent.ID)
 	activeParent := fixtures.CreateCategory("Drinks", 4, true)
-	activeChild := fixtures.CreateSubCategory("Softdrinks", 1, true, activeParent.ID)
+	inactiveChild := fixtures.CreateSubCategory("Juices", 1, false, activeParent.ID)
+	activeChild := fixtures.CreateSubCategory("Softdrinks", 2, true, activeParent.ID)
 
 	shown := fixtures.CreateProduct("Shown", activeCat.ID, 350, product.TypeSimple, nil)
 	nested := fixtures.CreateProduct("Cola", activeChild.ID, 350, product.TypeSimple, nil)
 	fixtures.CreateInactiveProduct("HiddenProduct", activeCat.ID, 350)
 	fixtures.CreateProduct("HiddenCategory", inactiveCat.ID, 350, product.TypeSimple, nil)
 	fixtures.CreateProduct("HiddenParent", activeChildOfInactive.ID, 900, product.TypeSimple, nil)
+	hiddenSubcat := fixtures.CreateProduct("HiddenSubcat", inactiveChild.ID, 350, product.TypeSimple, nil)
 
 	products, err := svc.GetAllVisible(ctx)
 	require.NoError(t, err)
@@ -129,6 +131,7 @@ func TestProductService_GetAllVisible(t *testing.T) {
 	require.Len(t, products, 2)
 	require.True(t, ids[shown.ID], "active product in active category should be visible")
 	require.True(t, ids[nested.ID], "product under active child of active parent should be visible")
+	require.False(t, ids[hiddenSubcat.ID], "product under an inactive subcategory should be hidden")
 }
 
 func TestProductService_BundleProducts(t *testing.T) {

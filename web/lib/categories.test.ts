@@ -94,6 +94,15 @@ describe("effectivelyActiveCategories", () => {
     const result = effectivelyActiveCategories([c("drinks", true), c("soft", true, "drinks")])
     expect(result.map((x) => x.id)).toEqual(["drinks", "soft"])
   })
+
+  it("drops an inactive child while keeping its active parent and siblings", () => {
+    const result = effectivelyActiveCategories([
+      c("drinks", true),
+      c("juices", false, "drinks"),
+      c("soft", true, "drinks"),
+    ])
+    expect(result.map((x) => x.id)).toEqual(["drinks", "soft"])
+  })
 })
 
 describe("matchesProductFilter", () => {
