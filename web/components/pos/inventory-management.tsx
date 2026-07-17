@@ -193,7 +193,7 @@ const ItemCard = memo(function ItemCard({
             sizes="80px"
             quality={90}
             className="object-cover"
-            unoptimized={product.image.includes("localhost") || product.image.includes("127.0.0.1")}
+            unoptimized
           />
         )}
         {!isActive && (

@@ -64,7 +64,7 @@ export function ProductCardPOS({ product, onConfigure }: { product: ProductDTO; 
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               quality={90}
               className="h-full w-full rounded-[11px] object-cover"
-              unoptimized={product.image.includes("localhost") || product.image.includes("127.0.0.1")}
+              unoptimized
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-zinc-500">Kein Bild</div>

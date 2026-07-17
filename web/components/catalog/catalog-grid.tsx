@@ -59,8 +59,8 @@ export function CatalogGrid({
         <p className="text-muted-foreground py-10 text-center text-sm">Keine Produkte in dieser Kategorie.</p>
       ) : (
         <div className="xs:grid-cols-2 grid grid-cols-1 gap-3 md:gap-5 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((product) => (
-            <CatalogProductCard key={product.id} product={product} />
+          {filtered.map((product, index) => (
+            <CatalogProductCard key={product.id} product={product} priority={index < 4} />
           ))}
         </div>
       )}
@@ -68,7 +68,7 @@ export function CatalogGrid({
   )
 }
 
-function CatalogProductCard({ product }: { product: ProductDTO }) {
+function CatalogProductCard({ product, priority = false }: { product: ProductDTO; priority?: boolean }) {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [isVariantPickerOpen, setIsVariantPickerOpen] = useState(false)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
@@ -130,7 +130,8 @@ function CatalogProductCard({ product }: { product: ProductDTO }) {
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                 quality={90}
                 className="h-full w-full rounded-[11px] object-cover"
-                unoptimized={product.image.includes("localhost") || product.image.includes("127.0.0.1")}
+                unoptimized
+                priority={priority}
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-zinc-500">Kein Bild</div>

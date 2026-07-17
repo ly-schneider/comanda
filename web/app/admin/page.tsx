@@ -447,7 +447,7 @@ export default function AdminDashboard() {
                         fill
                         sizes="40px"
                         quality={90}
-                        unoptimized={p.image.includes("localhost:10000")}
+                        unoptimized
                         className="h-full w-full rounded-lg object-cover"
                       />
                     )}

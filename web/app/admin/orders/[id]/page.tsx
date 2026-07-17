@@ -246,7 +246,7 @@ export default function AdminOrderDetailPage() {
                             fill
                             sizes="64px"
                             quality={90}
-                            unoptimized={parent.productImage.includes("localhost:10000")}
+                            unoptimized
                             className="h-full w-full rounded-[11px] object-cover"
                           />
                         </div>

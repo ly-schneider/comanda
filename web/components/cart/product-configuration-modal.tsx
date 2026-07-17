@@ -171,7 +171,7 @@ function BundleSlotSelector({ slot, selectedProductId, onSelect, showDescription
                           sizes="44px"
                           quality={90}
                           className="h-full w-full object-cover"
-                          unoptimized={item.image.includes("localhost") || item.image.includes("127.0.0.1")}
+                          unoptimized
                         />
                       </div>
                     </div>

@@ -191,11 +191,7 @@ export function ProductImageCrop({
             sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
             quality={90}
             className="object-cover"
-            unoptimized={
-              currentImageUrl.startsWith("blob:") ||
-              currentImageUrl.includes("localhost") ||
-              currentImageUrl.includes("127.0.0.1")
-            }
+            unoptimized
           />
         </div>
         <div className="flex gap-2">

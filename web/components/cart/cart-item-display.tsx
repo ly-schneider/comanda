@@ -63,7 +63,7 @@ export function CartItemDisplay({
                 sizes={isPOS ? "128px" : "160px"}
                 quality={90}
                 className="h-full w-full rounded-[11px] object-cover"
-                unoptimized={item.product.image.includes("localhost") || item.product.image.includes("127.0.0.1")}
+                unoptimized
               />
             </div>
           )}
