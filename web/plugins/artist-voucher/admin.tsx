@@ -17,12 +17,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
-import { apiRequest } from "@/lib/api"
+import { apiRequest, isApiError } from "@/lib/api"
 import type { CategoryLike } from "@/lib/categories"
 import type { CategoryDTO } from "@/types/category"
 import {
   type ArtistVoucher,
   createVoucher,
+  deleteVoucher,
   listVouchers,
   revokeVoucher,
   voucherPrintUrl,
@@ -81,6 +82,9 @@ export default function ArtistVoucherAdmin() {
 
   const [revokeTarget, setRevokeTarget] = useState<ArtistVoucher | null>(null)
   const [revoking, setRevoking] = useState(false)
+
+  const [deleteTarget, setDeleteTarget] = useState<ArtistVoucher | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const [printTarget, setPrintTarget] = useState<ArtistVoucher | null>(null)
   const [printCount, setPrintCount] = useState<number | "">(5)
@@ -164,6 +168,26 @@ export default function ArtistVoucherAdmin() {
     }
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    const target = deleteTarget
+    setDeleting(true)
+    try {
+      await deleteVoucher(token, target.id)
+      setVouchers((prev) => prev.filter((v) => v.id !== target.id))
+      setDeleteTarget(null)
+    } catch (e) {
+      setDeleteTarget(null)
+      setError(
+        isApiError(e) && e.status === 409
+          ? "Nur abgelaufene Gutscheine können gelöscht werden."
+          : "Gutschein konnte nicht gelöscht werden."
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   function openPrint(v: ArtistVoucher) {
     setPrintCount(5)
     setPrintTarget(v)
@@ -175,6 +199,8 @@ export default function ArtistVoucherAdmin() {
     window.open(voucherPrintUrl(printTarget.id, count), "_blank")
     setPrintTarget(null)
   }
+
+  const now = Date.now()
 
   return (
     <Card className="rounded-2xl">
@@ -221,9 +247,19 @@ export default function ArtistVoucherAdmin() {
                       Drucken
                     </Button>
                   )}
-                  {v.status !== "revoked" && (
+                  {(v.status === "active" || v.status === "scheduled") && (
                     <Button variant="outline" size="sm" onClick={() => setRevokeTarget(v)}>
                       Widerrufen
+                    </Button>
+                  )}
+                  {new Date(v.validUntil).getTime() <= now && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setDeleteTarget(v)}
+                    >
+                      Löschen
                     </Button>
                   )}
                 </div>
@@ -305,6 +341,28 @@ export default function ArtistVoucherAdmin() {
             <AlertDialogCancel disabled={revoking}>Abbrechen</AlertDialogCancel>
             <AlertDialogAction onClick={confirmRevoke} disabled={revoking}>
               {revoking ? "Widerrufen …" : "Widerrufen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gutschein löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  «{deleteTarget.label}» ist abgelaufen und wird dauerhaft aus der Liste entfernt. Diese Aktion kann
+                  nicht rückgängig gemacht werden.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
+              {deleting ? "Löschen …" : "Löschen"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

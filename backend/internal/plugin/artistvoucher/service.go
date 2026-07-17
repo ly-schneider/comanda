@@ -32,6 +32,7 @@ var (
 	ErrUnknownCategory = errors.New("artistvoucher: unknown category")
 	ErrInvalidToken    = errors.New("artistvoucher: voucher does not fit the token format")
 	ErrNoTenant        = errors.New("artistvoucher: no tenant in context")
+	ErrNotExpired      = errors.New("artistvoucher: only expired vouchers can be deleted")
 )
 
 // IsValidation reports whether err is a client-input error the handler should
@@ -105,6 +106,7 @@ type Service interface {
 	Get(ctx context.Context, id string) (Voucher, error)
 	Create(ctx context.Context, in CreateInput) (Voucher, error)
 	Revoke(ctx context.Context, id string) (Voucher, error)
+	Delete(ctx context.Context, id string) error
 	Revocations(ctx context.Context) (Feed, error)
 }
 
@@ -230,6 +232,19 @@ func (s *service) Revoke(ctx context.Context, id string) (Voucher, error) {
 		return Voucher{}, err
 	}
 	return toVoucher(updated, now)
+}
+
+// Only expired vouchers may be deleted: removing a still-live one would drop it
+// from the revocation feed and un-block it at offline stations.
+func (s *service) Delete(ctx context.Context, id string) error {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if time.Now().Before(row.ValidUntil) {
+		return ErrNotExpired
+	}
+	return s.repo.Delete(ctx, id)
 }
 
 func (s *service) Revocations(ctx context.Context) (Feed, error) {

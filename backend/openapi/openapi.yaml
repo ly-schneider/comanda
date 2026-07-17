@@ -258,6 +258,8 @@ paths:
 
   /plugins/artist-voucher/vouchers:
     $ref: "paths/plugins/artist-voucher.yaml#/vouchers"
+  /plugins/artist-voucher/vouchers/{voucherId}:
+    $ref: "paths/plugins/artist-voucher.yaml#/voucher"
   /plugins/artist-voucher/vouchers/{voucherId}/print.pdf:
     $ref: "paths/plugins/artist-voucher.yaml#/print"
   /plugins/artist-voucher/vouchers/{voucherId}/revoke:
