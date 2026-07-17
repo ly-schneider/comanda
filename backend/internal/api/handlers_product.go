@@ -25,9 +25,15 @@ func (h *Handlers) ListProducts(w http.ResponseWriter, r *http.Request, params g
 	var products []*ent.Product
 	var err error
 
-	if params.CategoryId != nil {
+	visible := params.Visible != nil && *params.Visible
+	switch {
+	case params.CategoryId != nil && visible:
+		products, err = h.products.GetByCategoryVisible(ctx, string(*params.CategoryId))
+	case params.CategoryId != nil:
 		products, err = h.products.GetByCategory(ctx, string(*params.CategoryId))
-	} else {
+	case visible:
+		products, err = h.products.GetAllVisible(ctx)
+	default:
 		products, err = h.products.GetAll(ctx)
 	}
 	if err != nil {

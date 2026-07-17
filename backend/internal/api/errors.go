@@ -48,6 +48,19 @@ func writeOutOfStockError(w http.ResponseWriter, err *service.InsufficientInvent
 	})
 }
 
+func writeProductUnavailableError(w http.ResponseWriter, err *service.ProductUnavailableError) {
+	items := make([]map[string]any, 0, len(err.Items))
+	for _, it := range err.Items {
+		items = append(items, map[string]any{"productId": it.ProductID, "name": it.Name})
+	}
+	details := map[string]any{"items": items}
+	response.WriteJSON(w, http.StatusConflict, generated.Error{
+		Code:    "product_unavailable",
+		Message: "One or more items are no longer available.",
+		Details: &details,
+	})
+}
+
 // writeEntError inspects err and maps it to an appropriate HTTP error response.
 //
 // Mapping:

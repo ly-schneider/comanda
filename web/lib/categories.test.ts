@@ -4,6 +4,7 @@ import {
   categoryOrderMap,
   childrenOf,
   compareByCategory,
+  effectivelyActiveCategories,
   hasChildren,
   matchesProductFilter,
   topLevelCategories,
@@ -73,6 +74,34 @@ describe("compareByCategory", () => {
     expect(compareByCategory(order, "A", "nope")).toBeLessThan(0)
     expect(compareByCategory(order, undefined, "A")).toBeGreaterThan(0)
     expect(compareByCategory(order, "nope", undefined)).toBe(0)
+  })
+})
+
+describe("effectivelyActiveCategories", () => {
+  const c = (id: string, isActive: boolean, parentId: string | null = null) => ({ id, isActive, parentId })
+
+  it("keeps active top-level categories and drops inactive ones", () => {
+    const result = effectivelyActiveCategories([c("a", true), c("b", false)])
+    expect(result.map((x) => x.id)).toEqual(["a"])
+  })
+
+  it("drops an active child whose parent is inactive", () => {
+    const result = effectivelyActiveCategories([c("food", false), c("burgers", true, "food")])
+    expect(result.map((x) => x.id)).toEqual([])
+  })
+
+  it("keeps an active child whose parent is active", () => {
+    const result = effectivelyActiveCategories([c("drinks", true), c("soft", true, "drinks")])
+    expect(result.map((x) => x.id)).toEqual(["drinks", "soft"])
+  })
+
+  it("drops an inactive child while keeping its active parent and siblings", () => {
+    const result = effectivelyActiveCategories([
+      c("drinks", true),
+      c("juices", false, "drinks"),
+      c("soft", true, "drinks"),
+    ])
+    expect(result.map((x) => x.id)).toEqual(["drinks", "soft"])
   })
 })
 

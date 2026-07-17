@@ -36,7 +36,7 @@ export function useBestBundleSuggestion(products?: ProductDTO[]): BestBundleSugg
     async function ensureProducts() {
       if (allProducts) return
       try {
-        const res = await listProducts()
+        const res = await listProducts({ visible: true })
         if (!cancelled) setAllProducts(res.items)
       } catch {
         if (!cancelled) setAllProducts([])

@@ -7,6 +7,14 @@ export type CategoryLike = {
 
 const UNRANKED = 1_000_000
 
+type ActivatableCategory = { id: string; isActive: boolean; parentId?: string | null }
+
+// A category counts as active only if it and its parent (if any) are active.
+export function effectivelyActiveCategories<T extends ActivatableCategory>(categories: T[]): T[] {
+  const activeTopLevel = new Set(categories.filter((c) => c.isActive && !c.parentId).map((c) => c.id))
+  return categories.filter((c) => c.isActive && (!c.parentId || activeTopLevel.has(c.parentId)))
+}
+
 function byPositionThenName(a: CategoryLike, b: CategoryLike): number {
   return a.position - b.position || a.name.localeCompare(b.name, "de")
 }

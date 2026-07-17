@@ -1,4 +1,4 @@
-import { extractSoldOutItems } from "@/lib/checkout-sold-out"
+import { extractSoldOutItems, extractUnavailableItems } from "@/lib/checkout-sold-out"
 import type {
   CardMeta,
   CreateOrderResult,
@@ -136,6 +136,9 @@ export class OrderQueueManager {
       }
       if (res.status === 409 && json.code === "out_of_stock") {
         return { ok: false, code: "out_of_stock", soldOut: extractSoldOutItems(json.details) }
+      }
+      if (res.status === 409 && json.code === "product_unavailable") {
+        return { ok: false, code: "out_of_stock", soldOut: extractUnavailableItems(json.details) }
       }
       if (!res.ok || !json.id) {
         return { ok: false, code: "failed", message: json.message || json.detail }

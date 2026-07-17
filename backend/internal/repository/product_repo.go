@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/category"
+	"backend/internal/generated/ent/predicate"
 	"backend/internal/generated/ent/product"
 	"backend/internal/generated/ent/productvariant"
 
@@ -12,6 +14,21 @@ import (
 
 func variantsOrdered(q *ent.ProductVariantQuery) {
 	q.Order(productvariant.BySequence(), productvariant.ByValue())
+}
+
+// A product is buyable only when it is active and its category — plus that
+// category's parent, if any — is active.
+func visibleProduct() predicate.Product {
+	return product.And(
+		product.IsActive(true),
+		product.HasCategoryWith(
+			category.IsActive(true),
+			category.Or(
+				category.Not(category.HasParent()),
+				category.HasParentWith(category.IsActive(true)),
+			),
+		),
+	)
 }
 
 type ProductRepository struct {
@@ -101,9 +118,9 @@ func (r *ProductRepository) GetAll(ctx context.Context) ([]*ent.Product, error) 
 	return rows, nil
 }
 
-func (r *ProductRepository) GetAllActive(ctx context.Context) ([]*ent.Product, error) {
+func (r *ProductRepository) GetAllVisible(ctx context.Context) ([]*ent.Product, error) {
 	rows, err := r.ec(ctx).Product.Query().
-		Where(product.IsActive(true)).
+		Where(visibleProduct()).
 		WithCategory().
 		WithJeton().
 		WithVariants(variantsOrdered).
@@ -143,11 +160,11 @@ func (r *ProductRepository) GetByCategory(ctx context.Context, categoryID string
 	return rows, nil
 }
 
-func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID string) ([]*ent.Product, error) {
+func (r *ProductRepository) GetByCategoryVisible(ctx context.Context, categoryID string) ([]*ent.Product, error) {
 	rows, err := r.ec(ctx).Product.Query().
 		Where(
 			product.CategoryIDEQ(categoryID),
-			product.IsActive(true),
+			visibleProduct(),
 		).
 		WithCategory().
 		WithJeton().
@@ -165,6 +182,19 @@ func (r *ProductRepository) GetByCategoryActive(ctx context.Context, categoryID 
 		return nil, translateError(err)
 	}
 	return rows, nil
+}
+
+func (r *ProductRepository) FilterBuyableIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	buyable, err := r.ec(ctx).Product.Query().
+		Where(product.IDIn(ids...), visibleProduct()).
+		IDs(ctx)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return buyable, nil
 }
 
 func (r *ProductRepository) GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error) {

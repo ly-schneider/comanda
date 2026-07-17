@@ -19,6 +19,14 @@ collection:
         description: Filter by category
         schema:
           type: string
+      - name: visible
+        in: query
+        description: |
+          When true, returns only products a customer can buy: active products
+          whose category (and parent category) is active. The storefront and POS
+          pass this; admin/management screens omit it to see the full catalog.
+        schema:
+          type: boolean
     responses:
       "200":
         description: Product list

@@ -156,6 +156,82 @@ func TestPaymentService_PrepareAndCreateOrder(t *testing.T) {
 	})
 }
 
+// Deactivating a product — or its category, or that category's parent — must
+// make it unbuyable at the shared checkout choke point, for the shop and POS.
+func TestPaymentService_DeactivatedProductsRejected(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+	cfg := TestConfig()
+
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
+	ctx := tenantCtx()
+
+	activeCat := fixtures.CreateCategory("Active", 1, true)
+	inactiveCat := fixtures.CreateCategory("Inactive", 2, false)
+
+	// An active child nested under an inactive parent — the cascade case.
+	inactiveParent := fixtures.CreateCategory("Food", 3, false)
+	activeChildOfInactive := fixtures.CreateSubCategory("Burgers", 1, true, inactiveParent.ID)
+
+	// An inactive child under an active parent, and a positive-control active
+	// child under the same parent.
+	activeParent := fixtures.CreateCategory("Drinks", 4, true)
+	inactiveChild := fixtures.CreateSubCategory("Juices", 1, false, activeParent.ID)
+	activeChild := fixtures.CreateSubCategory("Softdrinks", 2, true, activeParent.ID)
+
+	inactiveProduct := fixtures.CreateInactiveProduct("Hidden", activeCat.ID, 350)
+	productInInactiveCat := fixtures.CreateProduct("InCatOff", inactiveCat.ID, 350, product.TypeSimple, nil)
+	productUnderInactiveParent := fixtures.CreateProduct("Burger", activeChildOfInactive.ID, 900, product.TypeSimple, nil)
+	productInInactiveChild := fixtures.CreateProduct("Orangensaft", inactiveChild.ID, 350, product.TypeSimple, nil)
+	buyable := fixtures.CreateProduct("Cola", activeChild.ID, 350, product.TypeSimple, nil)
+
+	for _, id := range []string{inactiveProduct.ID, productInInactiveCat.ID, productUnderInactiveParent.ID, productInInactiveChild.ID, buyable.ID} {
+		fixtures.AddInventory(id, 100, inventoryledger.ReasonOpeningBalance)
+	}
+
+	assertUnavailable := func(t *testing.T, productID string) {
+		t.Helper()
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: productID, Quantity: 1}},
+		}
+		_, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.Error(t, err)
+		var unavailable *service.ProductUnavailableError
+		require.ErrorAs(t, err, &unavailable)
+		require.Len(t, unavailable.Items, 1)
+		require.Equal(t, productID, unavailable.Items[0].ProductID)
+	}
+
+	t.Run("inactive product is rejected", func(t *testing.T) {
+		assertUnavailable(t, inactiveProduct.ID)
+	})
+
+	t.Run("product in an inactive category is rejected", func(t *testing.T) {
+		assertUnavailable(t, productInInactiveCat.ID)
+	})
+
+	t.Run("product under an inactive parent category is rejected", func(t *testing.T) {
+		assertUnavailable(t, productUnderInactiveParent.ID)
+	})
+
+	t.Run("product in an inactive subcategory is rejected", func(t *testing.T) {
+		assertUnavailable(t, productInInactiveChild.ID)
+	})
+
+	t.Run("buyable product under an active category chain succeeds", func(t *testing.T) {
+		input := service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{{ProductID: buyable.ID, Quantity: 1}},
+		}
+		prep, err := svc.PrepareAndCreateOrder(ctx, input, nil, nil)
+		require.NoError(t, err)
+		require.NotEqual(t, "", prep.OrderID)
+	})
+}
+
 func TestPaymentService_BundleCheckout(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()

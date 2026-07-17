@@ -789,7 +789,11 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     if (!result.ok) {
       if (result.code === "out_of_stock") {
         setSoldOut(buildSoldOutMap(result.soldOut))
-        setError("Nicht genügend Lager. Bitte Warenkorb anpassen.")
+        setError(
+          result.soldOut.some((it) => it.unavailable)
+            ? "Ein Artikel ist nicht mehr verfügbar. Bitte Warenkorb anpassen."
+            : "Nicht genügend Lager. Bitte Warenkorb anpassen."
+        )
       } else if (result.code === "network") {
         setError("Keine Verbindung. Bitte erneut versuchen.")
       } else {
