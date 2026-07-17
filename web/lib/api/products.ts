@@ -6,6 +6,8 @@ export interface ListProductsParams {
   categoryId?: string
   limit?: number
   offset?: number
+  // Only products a customer can buy; admin/management views omit it.
+  visible?: boolean
 }
 
 interface RawSlotOption {
@@ -118,6 +120,10 @@ export async function listProducts(
 
   if (params.offset !== undefined) {
     searchParams.append("offset", params.offset.toString())
+  }
+
+  if (params.visible) {
+    searchParams.append("visible", "true")
   }
 
   const queryString = searchParams.toString()

@@ -5,6 +5,7 @@ import { PlatformLanding } from "@/components/landing/platform-landing"
 import { listCategories } from "@/lib/api/categories"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
+import { effectivelyActiveCategories } from "@/lib/categories"
 import { getRequestHost } from "@/lib/server/host"
 import { parseTenantHost } from "@/lib/tenant"
 import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
@@ -49,7 +50,7 @@ export default async function HomePage() {
 
   let products: ListResponse<ProductDTO>
   try {
-    products = await listProducts({}, { headers: hostHeaders })
+    products = await listProducts({ visible: true }, { headers: hostHeaders })
   } catch (error) {
     console.error("Failed to fetch products:", error)
     products = { items: [], count: 0 }
@@ -57,7 +58,7 @@ export default async function HomePage() {
 
   let categories: CategoryDTO[] = []
   try {
-    categories = (await listCategories({ headers: hostHeaders })).filter((c) => c.isActive)
+    categories = effectivelyActiveCategories(await listCategories({ headers: hostHeaders }))
   } catch (error) {
     console.error("Failed to fetch categories:", error)
   }

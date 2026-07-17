@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { CategoryFilter } from "@/components/catalog/category-filter"
 import { ProductCardPOS } from "@/components/pos/product-card-pos"
 import { listCategories } from "@/lib/api/categories"
-import { categoryOrderMap, compareByCategory } from "@/lib/categories"
+import { categoryOrderMap, compareByCategory, effectivelyActiveCategories } from "@/lib/categories"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 
 export function ProductGrid({
@@ -17,16 +17,27 @@ export function ProductGrid({
   const [activeCat, setActiveCat] = useState<string>("all")
   const [activeSub, setActiveSub] = useState<string>("all")
   const [categories, setCategories] = useState<CategoryDTO[]>([])
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false)
 
   useEffect(() => {
     listCategories()
-      .then((cats) => setCategories(cats.filter((c) => c.isActive)))
+      .then((cats) => {
+        setCategories(effectivelyActiveCategories(cats))
+        setCategoriesLoaded(true)
+      })
       .catch(() => {})
   }, [])
 
   const order = useMemo(() => categoryOrderMap(categories), [categories])
+  const activeCategoryIds = useMemo(() => new Set(categories.map((c) => c.id)), [categories])
 
-  const activeItems = products.items.filter((it) => it.isActive !== false)
+  // Until categories load (or if the fetch fails) show all active products; the
+  // backend still blocks deactivated items at checkout.
+  const activeItems = products.items.filter((it) => {
+    if (it.isActive === false) return false
+    if (!categoriesLoaded) return true
+    return it.category?.id != null && activeCategoryIds.has(it.category.id)
+  })
 
   const sortedProducts = [...activeItems].sort((a, b) => {
     const byCat = compareByCategory(order, a.category?.id, b.category?.id)

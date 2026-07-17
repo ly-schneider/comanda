@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useCart } from "@/contexts/cart-context"
 import { isApiError } from "@/lib/api"
 import { createOrder, initiatePayment } from "@/lib/api/payments"
-import { extractSoldOutItems, stashSoldOut } from "@/lib/checkout-sold-out"
+import { extractSoldOutItems, extractUnavailableItems, stashSoldOut } from "@/lib/checkout-sold-out"
 import { cartDepositCents, formatChf } from "@/lib/utils"
 
 export function CheckoutClient() {
@@ -68,10 +68,15 @@ export function CheckoutClient() {
         throw new Error("Missing payment redirect URL")
       }
     } catch (e) {
-      // Sold out: send the customer back to the cart with the offending lines
-      // flagged, rather than showing a generic error on the payment step.
+      // Sold out or deactivated: send the customer back to the cart with the
+      // offending lines flagged, rather than a generic error on the payment step.
       if (isApiError(e) && e.code === "out_of_stock") {
         stashSoldOut(extractSoldOutItems(e.details))
+        router.push("/checkout")
+        return
+      }
+      if (isApiError(e) && e.code === "product_unavailable") {
+        stashSoldOut(extractUnavailableItems(e.details))
         router.push("/checkout")
         return
       }

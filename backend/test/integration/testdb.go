@@ -353,6 +353,15 @@ func (f *Fixtures) CreateCategory(name string, position int, isActive bool) *ent
 	return cat
 }
 
+// CreateSubCategory creates a child category nested under parentID.
+func (f *Fixtures) CreateSubCategory(name string, position int, isActive bool, parentID string) *ent.Category {
+	cat, err := f.repos.Category.Create(f.ctx, name, position, isActive, &parentID)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create sub category: %v", err))
+	}
+	return cat
+}
+
 // CreateJeton creates a test jeton.
 func (f *Fixtures) CreateJeton(name, color string) *ent.Jeton {
 	jeton, err := f.repos.Jeton.Create(f.ctx, name, color)
@@ -367,6 +376,15 @@ func (f *Fixtures) CreateProduct(name string, categoryID string, priceCents int6
 	p, err := f.repos.Product.Create(f.ctx, categoryID, productType, name, priceCents, 0, true, nil, nil, jetonID, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create product: %v", err))
+	}
+	return p
+}
+
+// CreateInactiveProduct creates a simple test product with is_active = false.
+func (f *Fixtures) CreateInactiveProduct(name string, categoryID string, priceCents int64) *ent.Product {
+	p, err := f.repos.Product.Create(f.ctx, categoryID, product.TypeSimple, name, priceCents, 0, false, nil, nil, nil, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create inactive product: %v", err))
 	}
 	return p
 }

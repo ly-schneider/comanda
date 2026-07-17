@@ -10,13 +10,16 @@ export interface SoldOutItem {
   name?: string
   available?: number
   requested?: number
+  // Deactivated rather than out of stock — changes the highlighted message.
+  unavailable?: boolean
 }
 
 export function soldOutKey(productId: string, variantId?: string | null): string {
   return `${productId}::${variantId ?? ""}`
 }
 
-export function soldOutMessage(available?: number): string {
+export function soldOutMessage(available?: number, unavailable?: boolean): string {
+  if (unavailable) return "Nicht mehr verfügbar"
   return available && available > 0 ? `Nur noch ${available} verfügbar` : "Ausverkauft"
 }
 
@@ -24,7 +27,7 @@ export function soldOutMessage(available?: number): string {
 // highlighting the exact cart lines.
 export function buildSoldOutMap(items: SoldOutItem[]): Map<string, string> {
   const map = new Map<string, string>()
-  for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available))
+  for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available, it.unavailable))
   return map
 }
 
@@ -34,6 +37,10 @@ export function extractSoldOutItems(details: unknown): SoldOutItem[] {
   const items = (details as { items?: unknown }).items
   if (!Array.isArray(items)) return []
   return items.filter((it): it is SoldOutItem => typeof it === "object" && it !== null && "productId" in it)
+}
+
+export function extractUnavailableItems(details: unknown): SoldOutItem[] {
+  return extractSoldOutItems(details).map((it) => ({ ...it, unavailable: true }))
 }
 
 export function stashSoldOut(items: SoldOutItem[]): void {

@@ -74,5 +74,15 @@ export interface PreCreatedOrder {
 
 export type CreateOrderResult =
   | ({ ok: true } & PreCreatedOrder)
-  | { ok: false; code: "out_of_stock"; soldOut: Array<{ productId: string; variantId?: string; available?: number }> }
+  | {
+      ok: false
+      code: "out_of_stock"
+      soldOut: Array<{
+        productId: string
+        variantId?: string
+        available?: number
+        name?: string
+        unavailable?: boolean
+      }>
+    }
   | { ok: false; code: "network" | "failed"; message?: string }

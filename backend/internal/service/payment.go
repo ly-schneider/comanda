@@ -130,6 +130,25 @@ func (e *InsufficientInventoryError) Error() string {
 	return "insufficient inventory: " + strings.Join(names, ", ")
 }
 
+// ProductUnavailableError carries the products deactivated (directly or via
+// their category) so the client can flag the exact cart lines.
+type ProductUnavailableError struct {
+	Items []ProductUnavailableItem
+}
+
+type ProductUnavailableItem struct {
+	ProductID string
+	Name      string
+}
+
+func (e *ProductUnavailableError) Error() string {
+	names := make([]string, 0, len(e.Items))
+	for _, it := range e.Items {
+		names = append(names, it.Name)
+	}
+	return "product unavailable: " + strings.Join(names, ", ")
+}
+
 type paymentService struct {
 	cfg              config.Config
 	providers        *payment.Factory
@@ -235,6 +254,21 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 	products, err := s.products.GetByIDs(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("load products: %w", err)
+	}
+	// Reject deactivated products before taking stock locks; missing ids fall
+	// through to the "unknown product" check below.
+	buyable, err := s.products.FilterBuyable(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("check availability: %w", err)
+	}
+	var unavailable []ProductUnavailableItem
+	for _, p := range products {
+		if _, ok := buyable[p.ID]; !ok {
+			unavailable = append(unavailable, ProductUnavailableItem{ProductID: p.ID, Name: p.Name})
+		}
+	}
+	if len(unavailable) > 0 {
+		return nil, &ProductUnavailableError{Items: unavailable}
 	}
 	slots, err := s.bundleSlotRepo.GetByBundleProductIDs(ctx, ids)
 	if err != nil {

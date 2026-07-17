@@ -186,6 +186,11 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 			writeOutOfStockError(w, soldOut)
 			return
 		}
+		var unavailable *service.ProductUnavailableError
+		if errors.As(err, &unavailable) {
+			writeProductUnavailableError(w, unavailable)
+			return
+		}
 		writeError(w, http.StatusBadRequest, "order_failed", err.Error())
 		return
 	}

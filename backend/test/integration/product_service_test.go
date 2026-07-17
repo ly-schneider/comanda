@@ -85,6 +85,52 @@ func TestProductService_ListProducts(t *testing.T) {
 	})
 }
 
+func TestProductService_GetAllVisible(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+
+	svc := service.NewProductService(
+		repos.Product,
+		repos.ProductVariant,
+		repos.Category,
+		repos.BundleSlot,
+		repos.BundleSlotOption,
+		repos.Inventory,
+		repos.Jeton,
+		nil,
+		service.NewCatalogCache(),
+	)
+	ctx := context.Background()
+
+	activeCat := fixtures.CreateCategory("Active", 1, true)
+	inactiveCat := fixtures.CreateCategory("Inactive", 2, false)
+	inactiveParent := fixtures.CreateCategory("Food", 3, false)
+	activeChildOfInactive := fixtures.CreateSubCategory("Burgers", 1, true, inactiveParent.ID)
+	activeParent := fixtures.CreateCategory("Drinks", 4, true)
+	activeChild := fixtures.CreateSubCategory("Softdrinks", 1, true, activeParent.ID)
+
+	shown := fixtures.CreateProduct("Shown", activeCat.ID, 350, product.TypeSimple, nil)
+	nested := fixtures.CreateProduct("Cola", activeChild.ID, 350, product.TypeSimple, nil)
+	fixtures.CreateInactiveProduct("HiddenProduct", activeCat.ID, 350)
+	fixtures.CreateProduct("HiddenCategory", inactiveCat.ID, 350, product.TypeSimple, nil)
+	fixtures.CreateProduct("HiddenParent", activeChildOfInactive.ID, 900, product.TypeSimple, nil)
+
+	products, err := svc.GetAllVisible(ctx)
+	require.NoError(t, err)
+
+	ids := make(map[string]bool, len(products))
+	for _, p := range products {
+		ids[p.ID] = true
+	}
+	require.Len(t, products, 2)
+	require.True(t, ids[shown.ID], "active product in active category should be visible")
+	require.True(t, ids[nested.ID], "product under active child of active parent should be visible")
+}
+
 func TestProductService_BundleProducts(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()

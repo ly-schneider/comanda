@@ -21,7 +21,12 @@ type ProductService interface {
 	GetByIDWithRelations(ctx context.Context, id string) (*ent.Product, error)
 	GetAll(ctx context.Context) ([]*ent.Product, error)
 	GetByCategory(ctx context.Context, categoryID string) ([]*ent.Product, error)
+	GetAllVisible(ctx context.Context) ([]*ent.Product, error)
+	GetByCategoryVisible(ctx context.Context, categoryID string) ([]*ent.Product, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
+	// Read fresh, unlike the cached list methods, so a category deactivated
+	// after the cart was built takes effect at checkout.
+	FilterBuyable(ctx context.Context, ids []string) (map[string]struct{}, error)
 	// LockByIDs takes FOR UPDATE row locks on the given products within the
 	// request tx so concurrent checkouts of the same product serialize.
 	LockByIDs(ctx context.Context, ids []string) error
@@ -132,6 +137,30 @@ func (s *productService) GetByCategory(ctx context.Context, categoryID string) (
 	return s.cache.load(ctx, catalogKeyByCategory(categoryID), func(ctx context.Context) ([]*ent.Product, error) {
 		return s.productRepo.GetByCategory(ctx, categoryID)
 	})
+}
+
+func (s *productService) GetAllVisible(ctx context.Context) ([]*ent.Product, error) {
+	return s.cache.load(ctx, catalogKeyAllVisible(), func(ctx context.Context) ([]*ent.Product, error) {
+		return s.productRepo.GetAllVisible(ctx)
+	})
+}
+
+func (s *productService) GetByCategoryVisible(ctx context.Context, categoryID string) ([]*ent.Product, error) {
+	return s.cache.load(ctx, catalogKeyByCategoryVisible(categoryID), func(ctx context.Context) ([]*ent.Product, error) {
+		return s.productRepo.GetByCategoryVisible(ctx, categoryID)
+	})
+}
+
+func (s *productService) FilterBuyable(ctx context.Context, ids []string) (map[string]struct{}, error) {
+	buyable, err := s.productRepo.FilterBuyableIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]struct{}, len(buyable))
+	for _, id := range buyable {
+		set[id] = struct{}{}
+	}
+	return set, nil
 }
 
 func (s *productService) GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error) {

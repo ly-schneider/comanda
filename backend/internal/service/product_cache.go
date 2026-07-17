@@ -96,3 +96,6 @@ func (c *CatalogCache) load(ctx context.Context, key string, loader func(context
 
 func catalogKeyAll() string                 { return "all" }
 func catalogKeyByCategory(id string) string { return "cat:" + id }
+
+func catalogKeyAllVisible() string                 { return "all:visible" }
+func catalogKeyByCategoryVisible(id string) string { return "cat:" + id + ":visible" }
