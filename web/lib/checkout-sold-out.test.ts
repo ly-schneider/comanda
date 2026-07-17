@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { extractSoldOutItems, soldOutKey, soldOutMessage, stashSoldOut, takeSoldOut } from "./checkout-sold-out"
+import {
+  extractSoldOutItems,
+  extractUnavailableItems,
+  soldOutKey,
+  soldOutMessage,
+  stashSoldOut,
+  takeSoldOut,
+} from "./checkout-sold-out"
 
 describe("checkout-sold-out", () => {
   beforeEach(() => sessionStorage.clear())
@@ -14,6 +21,18 @@ describe("checkout-sold-out", () => {
     expect(soldOutMessage(0)).toBe("Ausverkauft")
     expect(soldOutMessage(undefined)).toBe("Ausverkauft")
     expect(soldOutMessage(3)).toBe("Nur noch 3 verfügbar")
+  })
+
+  it("messages deactivated items independent of stock", () => {
+    expect(soldOutMessage(0, true)).toBe("Nicht mehr verfügbar")
+    expect(soldOutMessage(5, true)).toBe("Nicht mehr verfügbar")
+  })
+
+  it("extracts unavailable items tagged unavailable", () => {
+    expect(extractUnavailableItems({ items: [{ productId: "p1", name: "Cola" }] })).toEqual([
+      { productId: "p1", name: "Cola", unavailable: true },
+    ])
+    expect(extractUnavailableItems(undefined)).toEqual([])
   })
 
   it("extracts only well-formed items from an error's details", () => {
