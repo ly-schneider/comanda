@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, Download, Loader2, Pencil, Plus, Printer, QrCode, RefreshCw, Trash2, X } from "lucide-react"
+import { Check, FileText, Loader2, Pencil, Plus, QrCode, RefreshCw, Trash2, X } from "lucide-react"
 import QRCode from "qrcode"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
@@ -58,35 +58,7 @@ function loadImageDataUrl(url: string): Promise<{ dataUrl: string; w: number; h:
   })
 }
 
-function printQr(dataUrl: string, presetName: string, onBlocked: () => void) {
-  const win = window.open("", "_blank", "width=420,height=560")
-  if (!win) {
-    onBlocked()
-    return
-  }
-  const doc = win.document
-  doc.title = presetName
-  const style = doc.createElement("style")
-  style.textContent =
-    "body{font-family:system-ui,sans-serif;text-align:center;margin:0;padding:32px;color:#111}h1{font-size:20px;margin:0 0 8px}p{color:#555;font-size:14px;margin:4px 0 24px}img{width:340px;height:340px}"
-  doc.head.appendChild(style)
-  const h1 = doc.createElement("h1")
-  h1.textContent = presetName
-  const p = doc.createElement("p")
-  p.textContent = "Auf einem neuen Stationsgerät scannen."
-  const img = doc.createElement("img")
-  img.src = dataUrl
-  img.alt = "Enrollment QR-Code"
-  img.addEventListener("load", () => {
-    win.focus()
-    win.print()
-  })
-  doc.body.appendChild(h1)
-  doc.body.appendChild(img)
-  doc.body.appendChild(p)
-}
-
-async function makePdf(token: string, presetName: string, displayName: string, logoUrl: string | null) {
+async function makePdf(token: string, presetName: string, displayName: string, logoUrl: string | null): Promise<Blob> {
   const [{ jsPDF }, qrPng, logo] = await Promise.all([
     import("jspdf"),
     QRCode.toDataURL(token, { width: 1200, margin: 1 }),
@@ -126,7 +98,7 @@ async function makePdf(token: string, presetName: string, displayName: string, l
   doc.setTextColor(90)
   doc.text("Auf einem neuen Stationsgerät scannen.", cx, y, { align: "center", maxWidth: pageW - 40 })
 
-  doc.save(`${presetName.replace(/[^\w-]+/g, "-").toLowerCase() || "station"}-registrierung.pdf`)
+  return doc.output("blob")
 }
 
 export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps<"admin.stations.actions">) {
@@ -347,11 +319,17 @@ function PresetCard({
     [onError]
   )
 
-  const downloadPdf = useCallback(async () => {
+  const openPdf = useCallback(async () => {
+    // Open the tab inside the click gesture so the pop-up blocker doesn't swallow
+    // it, then point it at the generated PDF once it's ready.
+    const win = window.open("", "_blank")
     setPdfBusy(true)
     try {
-      await makePdf(preset.token, preset.name, displayName, logoUrl)
+      const url = URL.createObjectURL(await makePdf(preset.token, preset.name, displayName, logoUrl))
+      if (win) win.location.href = url
+      else window.open(url, "_blank")
     } catch {
+      win?.close()
       onError("PDF konnte nicht erstellt werden.")
     } finally {
       setPdfBusy(false)
@@ -438,20 +416,9 @@ function PresetCard({
           />
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                printQr(qrDataUrl, preset.name, () => onError("Pop-up blockiert. Bitte Pop-ups erlauben."))
-              }
-              disabled={!qrDataUrl}
-            >
-              <Printer className="mr-2 size-4" />
-              Drucken
-            </Button>
-            <Button variant="outline" size="sm" onClick={downloadPdf} disabled={pdfBusy}>
-              {pdfBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
-              PDF
+            <Button variant="outline" size="sm" onClick={openPdf} disabled={pdfBusy}>
+              {pdfBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileText className="mr-2 size-4" />}
+              PDF öffnen
             </Button>
             <Button variant="outline" size="sm" onClick={() => setConfirmRotate(true)} disabled={busy}>
               <RefreshCw className="mr-2 size-4" />

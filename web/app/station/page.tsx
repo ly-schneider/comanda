@@ -15,8 +15,6 @@ import { OfflineSetupRequired } from "@/components/station/offline-setup-require
 import { StationProductManager } from "@/components/station/product-manager"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useBranding } from "@/contexts/branding-context"
 import { useDeviceFetch } from "@/hooks/use-device-fetch"
 
@@ -290,8 +288,6 @@ function formatVoucherTime(unixSec: number): string {
 }
 
 export default function StationPage() {
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  const [deviceId, setDeviceId] = useState<string>("")
   const { state: sessionState, online, token, applyProducts } = useStationSession()
   const { displayName, logoUrl } = useBranding()
   const status = sessionState.phase === "active" ? sessionState.status : null
@@ -421,24 +417,8 @@ export default function StationPage() {
     if (!approved) {
       setCameraPermission("idle")
       setScannerActive(false)
-      setDevices([])
-      setDeviceId("")
     }
   }, [approved])
-
-  const loadDevices = useCallback(async () => {
-    try {
-      const ds = await navigator.mediaDevices.enumerateDevices()
-      const vids = ds.filter((d) => d.kind === "videoinput")
-      setDevices(vids)
-      const preferred = vids[0]?.deviceId || ""
-      setDeviceId((prev) => prev || preferred)
-      return vids
-    } catch {
-      setError("Kameras konnten nicht geladen werden.")
-      return []
-    }
-  }, [])
 
   useEffect(() => {
     if (!approved) return
@@ -455,12 +435,8 @@ export default function StationPage() {
       }
     }
 
-    const handleChange = async () => {
-      if (!permissionStatus) return
-      applyState(permissionStatus.state)
-      if (permissionStatus.state === "granted") {
-        await loadDevices()
-      }
+    const handleChange = () => {
+      if (permissionStatus) applyState(permissionStatus.state)
     }
 
     const checkPermission = async () => {
@@ -469,9 +445,6 @@ export default function StationPage() {
         permissionStatus = await navigator.permissions.query({ name: "camera" as PermissionName })
         if (cancelled || !permissionStatus) return
         applyState(permissionStatus.state)
-        if (permissionStatus.state === "granted") {
-          await loadDevices()
-        }
         permissionStatus.addEventListener("change", handleChange)
       } catch {
         // ignore; fallback to manual request
@@ -484,7 +457,7 @@ export default function StationPage() {
       cancelled = true
       permissionStatus?.removeEventListener("change", handleChange)
     }
-  }, [loadDevices, approved])
+  }, [approved])
 
   useEffect(() => {
     return () => {
@@ -499,15 +472,14 @@ export default function StationPage() {
     setCameraPermission("pending")
     primeScanAudio()
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-      await loadDevices()
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       setCameraPermission("granted")
       stream.getTracks().forEach((t) => t.stop())
     } catch {
       setCameraPermission("denied")
       setError("Kamerazugriff verweigert oder nicht verfügbar.")
     }
-  }, [loadDevices])
+  }, [])
 
   const handleScannerStartError = useCallback(() => {
     setError("Scanner konnte nicht gestartet werden.")
@@ -524,16 +496,12 @@ export default function StationPage() {
   }, [])
 
   const startScanner = useCallback(() => {
-    if (!deviceId) {
-      setError("Keine Kamera gefunden.")
-      return
-    }
     setError(null)
     primeScanAudio()
     setScannerActive(true)
     setScannerKey((k) => k + 1)
     scanLockedRef.current = false
-  }, [deviceId])
+  }, [])
 
   const resumeScanning = useCallback(() => {
     scanLockedRef.current = false
@@ -951,36 +919,9 @@ export default function StationPage() {
                 )}
 
                 {cameraPermission === "granted" && (
-                  <div className="grid w-full gap-2">
-                    <Label htmlFor="camera" className="text-xs font-medium">
-                      Kamera
-                    </Label>
-                    {devices.length > 0 ? (
-                      <>
-                        <Select value={deviceId} onValueChange={setDeviceId}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Kamera wählen" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {devices.map((d) => (
-                              <SelectItem key={d.deviceId} value={d.deviceId}>
-                                {d.label || `Kamera ${d.deviceId.slice(0, 6)}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          onClick={startScanner}
-                          disabled={cameraPermission !== "granted" || !deviceId}
-                          className="rounded-pill mt-1 h-12 w-full text-base font-medium"
-                        >
-                          Scanner starten
-                        </Button>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground text-sm">Keine Kamera gefunden.</p>
-                    )}
-                  </div>
+                  <Button onClick={startScanner} className="rounded-pill h-12 w-full text-base font-medium">
+                    Scanner starten
+                  </Button>
                 )}
 
                 {cameraPermission === "denied" && (
@@ -998,8 +939,7 @@ export default function StationPage() {
               <div className="flex w-full flex-col items-center">
                 <div className="w-full max-w-[16rem] overflow-hidden rounded-2xl">
                   <QrScanner
-                    key={`${deviceId}-${scannerKey}`}
-                    cameraId={deviceId || undefined}
+                    key={scannerKey}
                     fps={10}
                     maxWidthRem={16}
                     onResult={handleResult}
