@@ -241,6 +241,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
         title,
         quantity: it.quantity,
         unitPriceCents: it.totalPriceCents,
+        depositCents: it.product.depositCents || undefined,
         configuration: cfg.length ? cfg : undefined,
       }
     })
