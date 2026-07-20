@@ -1196,11 +1196,9 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 	}
 }
 
-// buildReceiptItems nests flat order lines into the items the receipt email
-// renders. Deposit lines carry a ParentLineID like bundle/config children, so
-// they nest under their product — but unlike those title-only children they keep
-// their price, rendering as an indented "Depot … CHF x" line (the accumulated
-// deposit for that product) instead of being dropped.
+// buildReceiptItems nests order lines for the receipt email. Deposit lines carry a
+// ParentLineID like config children but keep their price (an indented "Depot" line)
+// rather than collapsing to a title-only child.
 func buildReceiptItems(lines []*ent.OrderLine) []ReceiptLineItem {
 	childrenByParent := make(map[string][]ReceiptLineItem)
 	var roots []*ent.OrderLine

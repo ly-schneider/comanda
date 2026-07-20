@@ -14,9 +14,8 @@ interface OrderScannerProps {
 export function OrderScanner({ open, onOpenChange, onScan }: OrderScannerProps) {
   const lockedRef = useRef(false)
 
-  // Reset on (re)open. The consumer auto-closes via a controlled prop change on a
-  // hit, which never triggers Dialog.onOpenChange, so relying on that to clear the
-  // lock stranded it at true and silently swallowed every subsequent scan.
+  // Auto-close on a hit is a controlled prop change, which never fires
+  // Dialog.onOpenChange — so reset the lock here or it strands at true.
   useEffect(() => {
     if (open) lockedRef.current = false
   }, [open])

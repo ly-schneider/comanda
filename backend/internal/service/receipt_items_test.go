@@ -7,9 +7,8 @@ import (
 	"backend/internal/generated/ent/orderline"
 )
 
-// A deposit line rides as a child (ParentLineID set) of its product line. It must
-// nest under the product as a priced "Depot" sub-line (LEY-430) — not repeat the
-// product name as a top-level line, and not lose its price like config children.
+// Deposit lines carry a ParentLineID like config children but must nest as a
+// priced "Depot" sub-line, not collapse to a title-only child.
 func TestBuildReceiptItemsNestsPricedDeposit(t *testing.T) {
 	product := &ent.OrderLine{ID: "line_beer", Title: "Bier", Quantity: 2, UnitPriceCents: 500, LineType: orderline.LineTypeSimple}
 	deposit := &ent.OrderLine{ID: "line_dep", Title: "Depot — Bier", Quantity: 2, UnitPriceCents: 200, LineType: orderline.LineTypeDeposit, ParentLineID: strptr("line_beer")}

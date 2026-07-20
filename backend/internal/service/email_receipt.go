@@ -42,9 +42,8 @@ func formatOrderDate(t time.Time) string {
 	return fmt.Sprintf("%d. %s %d, %02d:%02d", t.Day(), months[t.Month()-1], t.Year(), t.Hour(), t.Minute())
 }
 
-// receiptLineView holds the pre-formatted, pre-escaped fields embedded directly
-// into the MJML <mj-table> rows. Children with a Price (deposits) render as an
-// indented priced sub-line; those without (config/bundle options) are title-only.
+// Pre-formatted, pre-escaped fields for the MJML <mj-table> rows. A child with an
+// empty Price renders title-only (config lines); a set Price renders a deposit line.
 type receiptChildView struct {
 	Label string
 	Price string

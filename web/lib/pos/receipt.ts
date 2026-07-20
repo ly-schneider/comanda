@@ -27,7 +27,7 @@ export type Receipt = {
     title: string
     quantity: number
     unitPriceCents: number
-    // Per-unit deposit; the slip prints an indented "Depot" line at depositCents × quantity.
+    // Per-unit; the slip prints an indented "Depot" line at depositCents × quantity.
     depositCents?: number
     configuration?: Array<{ slot: string; choice: string }>
   }>
