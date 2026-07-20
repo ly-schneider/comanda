@@ -433,8 +433,14 @@ func (s *refundService) ReturnDeposit(ctx context.Context, in DepositReturnInput
 		return nil, fmt.Errorf("deposit return amount must be positive")
 	}
 
+	reason := in.Reason
+	if reason == nil || strings.TrimSpace(*reason) == "" {
+		def := "Depot-Rückgabe"
+		reason = &def
+	}
+
 	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
-	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, reason, in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
 }
 
 // verifyPickupToken checks a scanned pickup token's signature against the tenant
