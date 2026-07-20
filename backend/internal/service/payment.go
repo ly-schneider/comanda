@@ -1061,29 +1061,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 		return
 	}
 
-	childrenByParent := make(map[string][]ReceiptLineItem)
-	var roots []*ent.OrderLine
-	for _, l := range lines {
-		if l.ParentLineID != nil {
-			childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], ReceiptLineItem{
-				Title:    displayTitle(l.Title, l.VariantValue),
-				Quantity: l.Quantity,
-				Cents:    l.UnitPriceCents,
-			})
-		} else {
-			roots = append(roots, l)
-		}
-	}
-
-	items := make([]ReceiptLineItem, 0, len(roots))
-	for _, r := range roots {
-		items = append(items, ReceiptLineItem{
-			Title:    displayTitle(r.Title, r.VariantValue),
-			Quantity: r.Quantity,
-			Cents:    r.UnitPriceCents,
-			Children: childrenByParent[r.ID],
-		})
-	}
+	items := buildReceiptItems(lines)
 
 	orderURL := s.tenantOrderURL(ctx, orderID)
 
@@ -1216,6 +1194,39 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 		}
 		s.inventoryHub.Publish(ctx, update)
 	}
+}
+
+// buildReceiptItems nests flat order lines into the items the receipt email
+// renders. Deposit lines carry a ParentLineID like bundle/config children, so
+// they nest under their product — but unlike those title-only children they keep
+// their price, rendering as an indented "Depot … CHF x" line (the accumulated
+// deposit for that product) instead of being dropped.
+func buildReceiptItems(lines []*ent.OrderLine) []ReceiptLineItem {
+	childrenByParent := make(map[string][]ReceiptLineItem)
+	var roots []*ent.OrderLine
+	for _, l := range lines {
+		if l.ParentLineID == nil {
+			roots = append(roots, l)
+			continue
+		}
+		child := ReceiptLineItem{Title: displayTitle(l.Title, l.VariantValue), Quantity: l.Quantity}
+		if l.LineType == orderline.LineTypeDeposit {
+			child.Title = "Depot"
+			child.Cents = l.UnitPriceCents
+		}
+		childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], child)
+	}
+
+	items := make([]ReceiptLineItem, 0, len(roots))
+	for _, r := range roots {
+		items = append(items, ReceiptLineItem{
+			Title:    displayTitle(r.Title, r.VariantValue),
+			Quantity: r.Quantity,
+			Cents:    r.UnitPriceCents,
+			Children: childrenByParent[r.ID],
+		})
+	}
+	return items
 }
 
 // The variant value is stored apart from title (varchar(40) can't absorb it).
