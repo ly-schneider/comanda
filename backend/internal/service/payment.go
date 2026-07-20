@@ -1210,9 +1210,12 @@ func buildReceiptItems(lines []*ent.OrderLine) []ReceiptLineItem {
 			continue
 		}
 		child := ReceiptLineItem{Title: displayTitle(l.Title, l.VariantValue), Quantity: l.Quantity}
-		if l.LineType == orderline.LineTypeDeposit {
+		switch {
+		case l.LineType == orderline.LineTypeDeposit:
 			child.Title = "Depot"
 			child.Cents = l.UnitPriceCents
+		case l.BundleSlotName != nil && *l.BundleSlotName != "":
+			child.Title = *l.BundleSlotName + ": " + child.Title
 		}
 		childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], child)
 	}

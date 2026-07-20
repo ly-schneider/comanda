@@ -28,18 +28,18 @@ func TestBuildReceiptItemsNestsPricedDeposit(t *testing.T) {
 	}
 }
 
-// Genuine bundle/config children stay nested as title-only sub-lines.
+// Bundle components stay nested as title-only sub-lines, labelled "<slot>: <choice>".
 func TestBuildReceiptItemsKeepsConfigChildren(t *testing.T) {
-	product := &ent.OrderLine{ID: "line_fries", Title: "Pommes", Quantity: 1, UnitPriceCents: 500, LineType: orderline.LineTypeBundle}
-	extra := &ent.OrderLine{ID: "line_sauce", Title: "Extra Sauce", Quantity: 1, LineType: orderline.LineTypeComponent, ParentLineID: strptr("line_fries")}
+	product := &ent.OrderLine{ID: "line_fries", Title: "Menu", Quantity: 1, UnitPriceCents: 500, LineType: orderline.LineTypeBundle}
+	extra := &ent.OrderLine{ID: "line_sauce", Title: "Extra Sauce", Quantity: 1, LineType: orderline.LineTypeComponent, ParentLineID: strptr("line_fries"), BundleSlotName: strptr("Beilage")}
 
 	items := buildReceiptItems([]*ent.OrderLine{product, extra})
 
 	if len(items) != 1 {
 		t.Fatalf("config child must not become a top-level line; got %d lines", len(items))
 	}
-	if len(items[0].Children) != 1 || items[0].Children[0].Title != "Extra Sauce" {
-		t.Fatalf("config child not nested under parent: %+v", items[0])
+	if len(items[0].Children) != 1 || items[0].Children[0].Title != "Beilage: Extra Sauce" {
+		t.Fatalf("config child should be labelled '<slot>: <choice>': %+v", items[0])
 	}
 	if items[0].Children[0].Cents != 0 {
 		t.Fatalf("config child must stay title-only (no price), got %+v", items[0].Children[0])
