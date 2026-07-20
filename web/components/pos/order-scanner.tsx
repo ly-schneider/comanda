@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import QrScanner, { type QrScanResult } from "@/components/qr-scanner"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -14,6 +14,12 @@ interface OrderScannerProps {
 export function OrderScanner({ open, onOpenChange, onScan }: OrderScannerProps) {
   const lockedRef = useRef(false)
 
+  // Auto-close on a hit is a controlled prop change, which never fires
+  // Dialog.onOpenChange — so reset the lock here or it strands at true.
+  useEffect(() => {
+    if (open) lockedRef.current = false
+  }, [open])
+
   const handleResult = useCallback(
     (result: QrScanResult) => {
       if (lockedRef.current) return
@@ -24,13 +30,7 @@ export function OrderScanner({ open, onOpenChange, onScan }: OrderScannerProps) 
   )
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) lockedRef.current = false
-        onOpenChange(v)
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Bestellung scannen</DialogTitle>

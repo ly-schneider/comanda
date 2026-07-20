@@ -434,7 +434,17 @@ func (s *refundService) ReturnDeposit(ctx context.Context, in DepositReturnInput
 	}
 
 	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
-	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, depositReturnReason(in.Reason), in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
+}
+
+// depositReturnReason defaults a deposit return's reason so the admin refunds list
+// doesn't fill with blank rows; a caller-supplied reason still wins.
+func depositReturnReason(reason *string) *string {
+	if reason == nil || strings.TrimSpace(*reason) == "" {
+		def := "Depot-Rückgabe"
+		return &def
+	}
+	return reason
 }
 
 // verifyPickupToken checks a scanned pickup token's signature against the tenant

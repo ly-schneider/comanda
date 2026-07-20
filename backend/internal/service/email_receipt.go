@@ -42,12 +42,17 @@ func formatOrderDate(t time.Time) string {
 	return fmt.Sprintf("%d. %s %d, %02d:%02d", t.Day(), months[t.Month()-1], t.Year(), t.Hour(), t.Minute())
 }
 
-// receiptLineView holds the pre-formatted, pre-escaped fields embedded directly
-// into the MJML <mj-table> rows.
+// Pre-formatted, pre-escaped fields for the MJML <mj-table> rows. A child with an
+// empty Price renders title-only (config lines); a set Price renders a deposit line.
+type receiptChildView struct {
+	Label string
+	Price string
+}
+
 type receiptLineView struct {
 	Label    string
 	Price    string
-	Children []string
+	Children []receiptChildView
 }
 
 type receiptView struct {
@@ -63,9 +68,13 @@ type receiptView struct {
 func renderReceiptHTML(ctx context.Context, b emailBranding, data ReceiptEmailData) (string, error) {
 	items := make([]receiptLineView, 0, len(data.Items))
 	for _, it := range data.Items {
-		children := make([]string, 0, len(it.Children))
+		children := make([]receiptChildView, 0, len(it.Children))
 		for _, c := range it.Children {
-			children = append(children, html.EscapeString(c.Title))
+			cv := receiptChildView{Label: html.EscapeString(c.Title)}
+			if c.Cents > 0 {
+				cv.Price = formatCHF(c.Cents * int64(c.Quantity))
+			}
+			children = append(children, cv)
 		}
 		items = append(items, receiptLineView{
 			Label:    fmt.Sprintf("%s &times; %d", html.EscapeString(it.Title), it.Quantity),
@@ -117,7 +126,8 @@ const receiptContentMJML = `{{define "content"}}
       </tr>
       {{range .Children}}
       <tr>
-        <td colspan="2" style="padding:0 0 7px 16px;color:#737373;font-size:13px;">{{.}}</td>
+        <td style="padding:0 0 7px 16px;color:#737373;font-size:13px;">{{.Label}}</td>
+        <td align="right" style="padding:0 0 7px 0;color:#737373;font-size:13px;white-space:nowrap;">{{.Price}}</td>
       </tr>
       {{end}}
       {{end}}

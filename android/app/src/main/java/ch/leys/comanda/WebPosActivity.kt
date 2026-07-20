@@ -73,6 +73,7 @@ private data class ReceiptLine(
     val title: String,
     val quantity: Int,
     val unitPriceCents: Long,
+    val depositCents: Long,
     val configuration: List<Pair<String, String>>
 )
 
@@ -143,6 +144,7 @@ private fun parseReceiptLines(obj: JSONObject): List<ReceiptLine> {
                 title = it.optString("title").ifBlank { "Artikel" },
                 quantity = it.optInt("quantity", 1),
                 unitPriceCents = it.optLong("unitPriceCents", -1L),
+                depositCents = it.optLong("depositCents", 0L),
                 configuration = cfg
             )
         )
@@ -1030,12 +1032,12 @@ class WebPosActivity : ComponentActivity() {
             })
         }
 
-        fun twoColRow(left: String, right: String, p: Paint, ellipsizeFn: (String, Paint, Float) -> String) {
+        fun twoColRow(left: String, right: String, p: Paint, ellipsizeFn: (String, Paint, Float) -> String, indent: Float = 0f) {
             val fm = Paint.FontMetrics(); p.getFontMetrics(fm)
             rows.add(Row((fm.bottom - fm.top).toInt() + lineSpacing) { c, y ->
                 val rw = p.measureText(right)
-                val l = ellipsizeFn(left, p, ((width - padding * 2).toFloat() - rw - 8f).coerceAtLeast(0f))
-                c.drawText(l, padding.toFloat(), y - fm.top, p)
+                val l = ellipsizeFn(left, p, ((width - padding * 2).toFloat() - rw - 8f - indent).coerceAtLeast(0f))
+                c.drawText(l, padding.toFloat() + indent, y - fm.top, p)
                 c.drawText(right, width - padding - rw, y - fm.top, p)
             })
         }
@@ -1098,7 +1100,6 @@ class WebPosActivity : ComponentActivity() {
 
         val currency = branding.currency ?: obj.optString("currency", "CHF")
         val totalCents = obj.optLong("totalCents", -1L)
-        val depositCents = obj.optLong("depositCents", -1L)
         val method = obj.optString("method", "card")
         val cardLast4 = obj.optString("cardLast4", "").ifBlank { null }
         val orderId = obj.optString("orderId", "-")
@@ -1119,12 +1120,12 @@ class WebPosActivity : ComponentActivity() {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
             else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
-            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("$slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            if (it.depositCents > 0) b.twoColRow("Depot", moneyStr(currency, it.depositCents * it.quantity), small, ell, indent = 16f)
         }
         b.gap(lineSpacing)
 
         if (totalCents >= 0) b.twoColRow("Total", moneyStr(currency, totalCents), totalPaint, ell)
-        if (depositCents > 0) b.textRow("davon Depot: ${moneyStr(currency, depositCents)}", small, center = false, ellipsizeFn = ell)
         if (method.equals("cash", ignoreCase = true)) {
             val rec = obj.optLong("amountReceivedCents", -1L)
             val chg = obj.optLong("changeCents", -1L)
@@ -1191,7 +1192,8 @@ class WebPosActivity : ComponentActivity() {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
             else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
-            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("$slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            if (it.depositCents > 0) b.twoColRow("Depot", moneyStr(currency, it.depositCents * it.quantity), small, ell, indent = 16f)
         }
         b.gap(lineSpacing)
 

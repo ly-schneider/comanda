@@ -1061,29 +1061,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 		return
 	}
 
-	childrenByParent := make(map[string][]ReceiptLineItem)
-	var roots []*ent.OrderLine
-	for _, l := range lines {
-		if l.ParentLineID != nil {
-			childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], ReceiptLineItem{
-				Title:    displayTitle(l.Title, l.VariantValue),
-				Quantity: l.Quantity,
-				Cents:    l.UnitPriceCents,
-			})
-		} else {
-			roots = append(roots, l)
-		}
-	}
-
-	items := make([]ReceiptLineItem, 0, len(roots))
-	for _, r := range roots {
-		items = append(items, ReceiptLineItem{
-			Title:    displayTitle(r.Title, r.VariantValue),
-			Quantity: r.Quantity,
-			Cents:    r.UnitPriceCents,
-			Children: childrenByParent[r.ID],
-		})
-	}
+	items := buildReceiptItems(lines)
 
 	orderURL := s.tenantOrderURL(ctx, orderID)
 
@@ -1216,6 +1194,40 @@ func (s *paymentService) publishInventoryUpdates(ctx context.Context, entries []
 		}
 		s.inventoryHub.Publish(ctx, update)
 	}
+}
+
+// buildReceiptItems nests order lines for the receipt email. Deposit lines carry a
+// ParentLineID like config children but keep their price (an indented "Depot" line)
+// rather than collapsing to a title-only child.
+func buildReceiptItems(lines []*ent.OrderLine) []ReceiptLineItem {
+	childrenByParent := make(map[string][]ReceiptLineItem)
+	var roots []*ent.OrderLine
+	for _, l := range lines {
+		if l.ParentLineID == nil {
+			roots = append(roots, l)
+			continue
+		}
+		child := ReceiptLineItem{Title: displayTitle(l.Title, l.VariantValue), Quantity: l.Quantity}
+		switch {
+		case l.LineType == orderline.LineTypeDeposit:
+			child.Title = "Depot"
+			child.Cents = l.UnitPriceCents
+		case l.BundleSlotName != nil && *l.BundleSlotName != "":
+			child.Title = *l.BundleSlotName + ": " + child.Title
+		}
+		childrenByParent[*l.ParentLineID] = append(childrenByParent[*l.ParentLineID], child)
+	}
+
+	items := make([]ReceiptLineItem, 0, len(roots))
+	for _, r := range roots {
+		items = append(items, ReceiptLineItem{
+			Title:    displayTitle(r.Title, r.VariantValue),
+			Quantity: r.Quantity,
+			Cents:    r.UnitPriceCents,
+			Children: childrenByParent[r.ID],
+		})
+	}
+	return items
 }
 
 // The variant value is stored apart from title (varchar(40) can't absorb it).

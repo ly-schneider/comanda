@@ -27,6 +27,8 @@ export type Receipt = {
     title: string
     quantity: number
     unitPriceCents: number
+    // Per-unit; the slip prints an indented "Depot" line at depositCents × quantity.
+    depositCents?: number
     configuration?: Array<{ slot: string; choice: string }>
   }>
   pickupQr?: string | null
