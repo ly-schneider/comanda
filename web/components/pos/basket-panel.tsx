@@ -222,30 +222,33 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     }
     return Array.from(totals.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [cart.items, resolveBundleSelections])
-  const buildPrintItems = useCallback((): NonNullable<Receipt["items"]> => {
-    return cart.items.map((it) => {
-      const cfg: Array<{ slot: string; choice: string }> = []
-      if (it.product.type === "bundle" && it.configuration && it.product.bundle?.slots) {
-        for (const [slotId, productId] of Object.entries(it.configuration)) {
-          const slot = it.product.bundle!.slots.find((s) => s.id === slotId)
-          const choice = slot?.options?.find((p) => p.id === productId)
-          if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
+  const buildPrintItems = useCallback(
+    (includeDeposit = true): NonNullable<Receipt["items"]> => {
+      return cart.items.map((it) => {
+        const cfg: Array<{ slot: string; choice: string }> = []
+        if (it.product.type === "bundle" && it.configuration && it.product.bundle?.slots) {
+          for (const [slotId, productId] of Object.entries(it.configuration)) {
+            const slot = it.product.bundle!.slots.find((s) => s.id === slotId)
+            const choice = slot?.options?.find((p) => p.id === productId)
+            if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
+          }
         }
-      }
-      let title = it.product.name
-      if (it.variantId && hasVariants(it.product)) {
-        const variant = findVariant(it.product, it.variantId)
-        if (variant) title = `${title} (${variant.value})`
-      }
-      return {
-        title,
-        quantity: it.quantity,
-        unitPriceCents: it.totalPriceCents,
-        depositCents: it.product.depositCents || undefined,
-        configuration: cfg.length ? cfg : undefined,
-      }
-    })
-  }, [cart.items])
+        let title = it.product.name
+        if (it.variantId && hasVariants(it.product)) {
+          const variant = findVariant(it.product, it.variantId)
+          if (variant) title = `${title} (${variant.value})`
+        }
+        return {
+          title,
+          quantity: it.quantity,
+          unitPriceCents: it.totalPriceCents,
+          depositCents: includeDeposit ? it.product.depositCents || undefined : undefined,
+          configuration: cfg.length ? cfg : undefined,
+        }
+      })
+    },
+    [cart.items]
+  )
   const generatePickupQr = useCallback((order: QueuedOrder) => {
     if (order.serverQrPayload) return order.serverQrPayload
     return `${window.location.origin}/o/${order.serverId}`
@@ -713,7 +716,9 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       }
 
       const items = buildOrderItems(cart.items)
-      const printItems = buildPrintItems()
+      // Gratis comps stay product-only (totalCents: total), so don't print a
+      // Depot line the flow never collects.
+      const printItems = buildPrintItems(false)
       const jetons = computeJetonTotals()
 
       const queued = submitOrder(
