@@ -1120,7 +1120,7 @@ class WebPosActivity : ComponentActivity() {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
             else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
-            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("$slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
             if (it.depositCents > 0) b.twoColRow("Depot", moneyStr(currency, it.depositCents * it.quantity), small, ell, indent = 16f)
         }
         b.gap(lineSpacing)
@@ -1192,7 +1192,7 @@ class WebPosActivity : ComponentActivity() {
             val qtyTitle = "${it.quantity}x ${it.title}"
             if (it.unitPriceCents >= 0) b.twoColRow(qtyTitle, moneyStr(currency, it.unitPriceCents * it.quantity), itemPaint, ell)
             else b.textRow(qtyTitle, itemPaint, center = false, ellipsizeFn = ell)
-            for ((slot, choice) in it.configuration) b.textRow("- $slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
+            for ((slot, choice) in it.configuration) b.textRow("$slot: $choice", small, center = false, indent = 16f, ellipsizeFn = ell)
             if (it.depositCents > 0) b.twoColRow("Depot", moneyStr(currency, it.depositCents * it.quantity), small, ell, indent = 16f)
         }
         b.gap(lineSpacing)
