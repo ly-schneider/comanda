@@ -27,6 +27,7 @@ import {
   PLUGINS_KEY,
   QR_CONFIG_KEY,
   type QRConfig,
+  refreshCatalog,
   runOfflineSetup,
 } from "@/lib/station/offline-setup"
 import { verifyQrToken } from "@/lib/station/qr-verify"
@@ -48,6 +49,7 @@ import { parseScan } from "@/lib/station-scan"
 const SCAN_RESUME_DELAY_MS = 1400
 const DUPLICATE_SCAN_WINDOW_MS = 5000
 const HISTORY_LIMIT = 8
+const CATALOG_REFRESH_INTERVAL_MS = 5 * 60_000
 
 type OrderLine = {
   id: string
@@ -552,23 +554,42 @@ export default function StationPage() {
     [triggerFlush]
   )
 
+  // Scan-card names resolve from the cached catalog, so refresh it whenever the
+  // station is online — otherwise a product created after the last offline-setup
+  // ritual renders as its raw id. Throttled: the station runs as a long-lived
+  // PWA, so the periodic tick matters, but the full product list doesn't need
+  // refetching every 30s.
+  const lastCatalogRefreshRef = useRef(0)
+  const triggerCatalogRefresh = useCallback(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return
+    const now = Date.now()
+    if (now - lastCatalogRefreshRef.current < CATALOG_REFRESH_INTERVAL_MS) return
+    lastCatalogRefreshRef.current = now
+    void refreshCatalog().then((ok) => {
+      if (ok) setCatalogVersion((v) => v + 1)
+    })
+  }, [])
+
   useEffect(() => {
     if (!approved) return
     triggerFlush()
+    triggerCatalogRefresh()
     const onOnline = () => {
       triggerFlush()
       triggerReconcile()
+      triggerCatalogRefresh()
     }
     window.addEventListener("online", onOnline)
     const interval = setInterval(() => {
       triggerFlush()
       triggerReconcile()
+      triggerCatalogRefresh()
     }, 30_000)
     return () => {
       window.removeEventListener("online", onOnline)
       clearInterval(interval)
     }
-  }, [approved, triggerFlush, triggerReconcile])
+  }, [approved, triggerFlush, triggerReconcile, triggerCatalogRefresh])
 
   const handleScanned = useCallback(
     async (scan: QrScanResult) => {

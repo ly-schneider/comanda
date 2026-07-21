@@ -7,6 +7,7 @@ import {
   QR_CONFIG_KEY,
   READINESS_KEY,
   type ReadinessRecord,
+  refreshCatalog,
   runOfflineSetup,
   type SetupDeps,
 } from "@/lib/station/offline-setup"
@@ -217,6 +218,32 @@ describe("runOfflineSetup", () => {
     const d = deps({ collectAssets: () => [] })
     const record = await runOfflineSetup(d)
     expect(record.ready).toBe(false)
+  })
+})
+
+describe("refreshCatalog", () => {
+  it("rewrites only the catalog cache and touches no other endpoint", async () => {
+    const d = deps()
+    const ok = await refreshCatalog(d)
+
+    expect(ok).toBe(true)
+    expect(await d.store.get(CATALOG_KEY)).toEqual([
+      { id: "p1", name: "Pommes", image: "https://r2.example/p1.png" },
+      { id: "p2", name: "Cola", image: null },
+    ])
+    expect(d.fetchFn).toHaveBeenCalledTimes(1)
+    expect(d.sw.precache).not.toHaveBeenCalled()
+    expect(await d.store.get(READINESS_KEY)).toBeNull()
+  })
+
+  it("keeps the previous catalog when the fetch fails", async () => {
+    const d = deps({}, { "/api/v1/products": res(500, {}) })
+    await d.store.set(CATALOG_KEY, [{ id: "p1", name: "Pommes", image: null }])
+
+    const ok = await refreshCatalog(d)
+
+    expect(ok).toBe(false)
+    expect(await d.store.get(CATALOG_KEY)).toEqual([{ id: "p1", name: "Pommes", image: null }])
   })
 })
 
