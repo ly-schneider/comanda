@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"backend/internal/generated/api/generated"
+	nanoid "backend/internal/id"
 	"backend/internal/response"
 	"backend/internal/service"
 )
@@ -106,6 +107,44 @@ func (h *Handlers) UpdateCategory(w http.ResponseWriter, r *http.Request, catego
 	_, setParent := probe["parentId"]
 
 	cat, err := h.categories.Update(r.Context(), categoryId, name, position, isActive, body.ParentId, setParent)
+	if err != nil {
+		writeCategoryError(w, err)
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, toAPICategory(cat))
+}
+
+// SetCategoryActive toggles a category's active flag from a POS device.
+// (PATCH /pos/categories/{categoryId}/active)
+func (h *Handlers) SetCategoryActive(w http.ResponseWriter, r *http.Request, categoryId string) {
+	if !nanoid.Valid(categoryId) {
+		writeError(w, http.StatusBadRequest, "invalid_id", "Invalid category id")
+		return
+	}
+
+	var body struct {
+		IsActive *bool `json:"isActive"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.IsActive == nil {
+		writeError(w, http.StatusBadRequest, "invalid_body", "isActive required")
+		return
+	}
+
+	existing, err := h.categories.GetByID(r.Context(), categoryId)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+
+	cat, err := h.categories.Update(
+		r.Context(),
+		categoryId,
+		existing.Name,
+		existing.Position,
+		*body.IsActive,
+		existing.ParentID,
+		false,
+	)
 	if err != nil {
 		writeCategoryError(w, err)
 		return
