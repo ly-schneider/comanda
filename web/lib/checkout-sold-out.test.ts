@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import {
+  buildSoldOutMap,
   extractSoldOutItems,
   extractUnavailableItems,
+  soldOutErrorForItem,
   soldOutKey,
   soldOutMessage,
   stashSoldOut,
@@ -52,5 +54,42 @@ describe("checkout-sold-out", () => {
   it("does not stash an empty list", () => {
     stashSoldOut([])
     expect(takeSoldOut()).toEqual([])
+  })
+
+  describe("soldOutErrorForItem", () => {
+    const bundleLine = {
+      product: { id: "bundle1" },
+      configuration: { slotA: "crepe1", slotB: "cola1" },
+      configurationVariants: { slotA: { id: "vGross" } },
+    }
+
+    it("matches a simple line on its own product+variant", () => {
+      const map = buildSoldOutMap([{ productId: "shirt1", variantId: "vM", available: 0 }])
+      expect(soldOutErrorForItem(map, { product: { id: "shirt1" }, variantId: "vM" })).toBe("Ausverkauft")
+      expect(soldOutErrorForItem(map, { product: { id: "shirt1" }, variantId: "vL" })).toBeUndefined()
+    })
+
+    it("matches a bundle line via a sold-out component, prefixed with its name", () => {
+      const map = buildSoldOutMap([{ productId: "cola1", name: "Cola", available: 2 }])
+      expect(soldOutErrorForItem(map, bundleLine)).toBe("Cola: Nur noch 2 verfügbar")
+    })
+
+    it("matches a bundle component only on the configured variant", () => {
+      const gross = buildSoldOutMap([{ productId: "crepe1", variantId: "vGross", name: "Crêpe (Gross)", available: 0 }])
+      expect(soldOutErrorForItem(gross, bundleLine)).toBe("Crêpe (Gross): Ausverkauft")
+
+      const klein = buildSoldOutMap([{ productId: "crepe1", variantId: "vKlein", available: 0 }])
+      expect(soldOutErrorForItem(klein, bundleLine)).toBeUndefined()
+    })
+
+    it("marks deactivated components", () => {
+      const map = buildSoldOutMap([{ productId: "cola1", name: "Cola", unavailable: true }])
+      expect(soldOutErrorForItem(map, bundleLine)).toBe("Cola: Nicht mehr verfügbar")
+    })
+
+    it("returns undefined when nothing in the line is affected", () => {
+      const map = buildSoldOutMap([{ productId: "other1", available: 0 }])
+      expect(soldOutErrorForItem(map, bundleLine)).toBeUndefined()
+    })
   })
 })

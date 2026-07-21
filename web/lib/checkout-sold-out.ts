@@ -23,12 +23,40 @@ export function soldOutMessage(available?: number, unavailable?: boolean): strin
   return available && available > 0 ? `Nur noch ${available} verfügbar` : "Ausverkauft"
 }
 
-// buildSoldOutMap keys sold-out items by product+variant → localized message, for
-// highlighting the exact cart lines.
-export function buildSoldOutMap(items: SoldOutItem[]): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const it of items) map.set(soldOutKey(it.productId, it.variantId), soldOutMessage(it.available, it.unavailable))
+export type SoldOutMap = Map<string, SoldOutItem>
+
+// buildSoldOutMap keys sold-out items by product+variant, for highlighting the
+// exact cart lines.
+export function buildSoldOutMap(items: SoldOutItem[]): SoldOutMap {
+  const map: SoldOutMap = new Map()
+  for (const it of items) map.set(soldOutKey(it.productId, it.variantId), it)
   return map
+}
+
+// Resolves the sold-out error for a cart line. A line matches on its own
+// product+variant; a bundle line also matches when any configured component is
+// short — prefixed with the component's name (already variant-qualified by the
+// backend), since the line itself only names the bundle.
+export function soldOutErrorForItem(
+  map: SoldOutMap,
+  item: {
+    product: { id: string }
+    variantId?: string
+    configuration?: Record<string, string>
+    configurationVariants?: Record<string, { id: string }>
+  }
+): string | undefined {
+  const direct = map.get(soldOutKey(item.product.id, item.variantId))
+  if (direct) return soldOutMessage(direct.available, direct.unavailable)
+  if (!item.configuration) return undefined
+  for (const [slotId, productId] of Object.entries(item.configuration)) {
+    const hit = map.get(soldOutKey(productId, item.configurationVariants?.[slotId]?.id))
+    if (hit) {
+      const message = soldOutMessage(hit.available, hit.unavailable)
+      return hit.name ? `${hit.name}: ${message}` : message
+    }
+  }
+  return undefined
 }
 
 // extractSoldOutItems reads the `details.items` array off an out_of_stock ApiError.

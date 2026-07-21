@@ -11,7 +11,7 @@ import { ProductConfigurationModal } from "@/components/cart/product-configurati
 import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
-import { buildSoldOutMap, soldOutKey, takeSoldOut } from "@/lib/checkout-sold-out"
+import { buildSoldOutMap, soldOutErrorForItem, type SoldOutMap, takeSoldOut } from "@/lib/checkout-sold-out"
 import { cartDepositCents } from "@/lib/utils"
 import { CartItem } from "@/types/cart"
 
@@ -20,7 +20,7 @@ export default function CheckoutClient() {
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [soldOut, setSoldOut] = useState<Map<string, string>>(new Map())
+  const [soldOut, setSoldOut] = useState<SoldOutMap>(new Map())
   const router = useRouter()
 
   // Picked up when the payment step bounces back here after a sold-out result.
@@ -104,7 +104,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     )
                   }
@@ -127,7 +127,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     )
                   }
@@ -140,7 +140,7 @@ export default function CheckoutClient() {
                         onUpdateQuantity={(q) => updateQuantity(item.id, q)}
                         onRemove={() => removeFromCart(item.id)}
                         onEdit={() => setEditingItem(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     )
                   }
