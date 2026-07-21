@@ -340,6 +340,108 @@ func TestPaymentService_BundleCheckout(t *testing.T) {
 	})
 }
 
+func TestPaymentService_BundleVariantComponents(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+	cfg := TestConfig()
+
+	svc := NewPaymentSvc(cfg, repos, NewProductSvc(repos))
+	ctx := tenantCtx()
+
+	category := fixtures.CreateCategory("Bundles", 1, true)
+	optionCat := fixtures.CreateCategory("Options", 2, true)
+
+	crepe := fixtures.CreateProduct("Crêpe", optionCat.ID, 700, product.TypeSimple, nil)
+	small := fixtures.CreateVariant(crepe.ID, "Klein", 0, true, 0)
+	large := fixtures.CreateVariant(crepe.ID, "Gross", 200, true, 1)
+	inactive := fixtures.CreateVariant(crepe.ID, "Alt", 0, false, 2)
+	fixtures.AddVariantInventory(crepe.ID, small.ID, 10, inventoryledger.ReasonOpeningBalance)
+	fixtures.AddVariantInventory(crepe.ID, large.ID, 1, inventoryledger.ReasonOpeningBalance)
+
+	bundle := fixtures.CreateProduct("Combo", category.ID, 1500, product.TypeBundle, nil)
+	slot := fixtures.CreateBundleSlot(bundle.ID, "Hauptgang", 1)
+	fixtures.CreateBundleSlotOption(slot.ID, crepe.ID)
+
+	item := func(variantID string) service.CheckoutItemInput {
+		it := service.CheckoutItemInput{
+			ProductID:     bundle.ID,
+			Quantity:      1,
+			Configuration: map[string]string{slot.ID: crepe.ID},
+		}
+		if variantID != "" {
+			it.ConfigurationVariants = map[string]string{slot.ID: variantID}
+		}
+		return it
+	}
+
+	t.Run("variant selection is required for a variant option", func(t *testing.T) {
+		_, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{item("")},
+		}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "variant selection required")
+	})
+
+	t.Run("foreign variant is rejected", func(t *testing.T) {
+		_, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{item(nanoid.New())},
+		}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "variant does not belong")
+	})
+
+	t.Run("inactive variant is rejected", func(t *testing.T) {
+		_, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{item(inactive.ID)},
+		}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "variant not available")
+	})
+
+	t.Run("checkout writes the component variant, ignores its price adjustment, and reserves variant stock", func(t *testing.T) {
+		prep, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{item(large.ID)},
+		}, nil, nil)
+		require.NoError(t, err)
+		// Bundle price only — the +200 adjustment of "Gross" must not apply.
+		require.Equal(t, int64(1500), prep.TotalCents)
+
+		lines, err := repos.OrderLine.GetByOrderID(ctx, prep.OrderID)
+		require.NoError(t, err)
+		var component *ent.OrderLine
+		for _, l := range lines {
+			if l.LineType == orderline.LineTypeComponent {
+				component = l
+			}
+		}
+		require.NotNil(t, component)
+		require.NotNil(t, component.VariantID)
+		require.Equal(t, large.ID, *component.VariantID)
+		require.NotNil(t, component.VariantValue)
+		require.Equal(t, "Gross", *component.VariantValue)
+
+		stocks, err := repos.Inventory.GetCurrentStockByVariantBatch(ctx, []string{crepe.ID})
+		require.NoError(t, err)
+		require.Equal(t, 0, stocks[large.ID])
+	})
+
+	t.Run("sold-out variant fails with the variant id", func(t *testing.T) {
+		_, err := svc.PrepareAndCreateOrder(ctx, service.CreateCheckoutInput{
+			Items: []service.CheckoutItemInput{item(large.ID)},
+		}, nil, nil)
+		require.Error(t, err)
+		var soldOut *service.InsufficientInventoryError
+		require.ErrorAs(t, err, &soldOut)
+		require.Len(t, soldOut.Items, 1)
+		require.Equal(t, crepe.ID, soldOut.Items[0].ProductID)
+		require.Equal(t, large.ID, soldOut.Items[0].VariantID)
+	})
+}
+
 func TestPaymentService_FindPendingOrderByAttemptID(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()

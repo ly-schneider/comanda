@@ -259,16 +259,6 @@ func validateVariantInputs(productType product.Type, variants []VariantInput) er
 }
 
 func (s *productService) reconcileVariants(ctx context.Context, productID string, variants []VariantInput) error {
-	if len(variants) > 0 {
-		usedAsOption, err := s.bundleSlotOptionRepo.CountByOptionProductID(ctx, productID)
-		if err != nil {
-			return err
-		}
-		if usedAsOption > 0 {
-			return fmt.Errorf("products used as bundle options cannot have variants")
-		}
-	}
-
 	existing, err := s.variantRepo.GetByProductID(ctx, productID)
 	if err != nil {
 		return err
@@ -571,13 +561,6 @@ func (s *productService) ReorderBundleSlots(ctx context.Context, bundleID string
 }
 
 func (s *productService) AddSlotOption(ctx context.Context, bundleID, slotID string, productID string) (*ent.BundleSlotOption, error) {
-	hasVariants, err := s.variantRepo.ExistsForProduct(ctx, productID)
-	if err != nil {
-		return nil, err
-	}
-	if hasVariants {
-		return nil, fmt.Errorf("products with variants cannot be bundle options")
-	}
 	opt, err := s.bundleSlotOptionRepo.Create(ctx, slotID, productID)
 	if err == nil {
 		s.cache.invalidate()

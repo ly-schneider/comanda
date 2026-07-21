@@ -94,6 +94,10 @@ type CheckoutItemInput struct {
 	Quantity  int    `json:"quantity"`
 	// Configuration maps slotID -> selected productID for bundle items.
 	Configuration map[string]string `json:"configuration,omitempty"`
+	// ConfigurationVariants maps slotID -> selected variantID; required for each
+	// configured slot whose product defines variants. A component's variant price
+	// adjustment is deliberately ignored — the bundle price stays fixed.
+	ConfigurationVariants map[string]string `json:"configurationVariants,omitempty"`
 	// VariantID selects a variant; required iff the product defines variants.
 	VariantID *string `json:"variantId,omitempty"`
 }
@@ -330,6 +334,53 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 		variantByItem[i] = selected
 	}
 
+	// Resolve each configured component's variant up front so the stock check
+	// below can key on it; slot membership itself is validated later with the
+	// other bundle checks.
+	componentVariants := make(map[int]map[string]*ent.ProductVariant)
+	for i, it := range in.Items {
+		for slotID, childID := range it.Configuration {
+			if childID == "" {
+				continue
+			}
+			childProd, ok := productMap[childID]
+			if !ok {
+				return nil, fmt.Errorf("unknown product: %s", childID)
+			}
+			variantID := it.ConfigurationVariants[slotID]
+			variants := childProd.Edges.Variants
+			if len(variants) == 0 {
+				if variantID != "" {
+					return nil, fmt.Errorf("product has no variants: %s", childProd.Name)
+				}
+				continue
+			}
+			if variantID == "" {
+				return nil, fmt.Errorf("variant selection required for %s", childProd.Name)
+			}
+			if !nanoid.Valid(variantID) {
+				return nil, fmt.Errorf("invalid variantId: %s", variantID)
+			}
+			var selected *ent.ProductVariant
+			for _, v := range variants {
+				if v.ID == variantID {
+					selected = v
+					break
+				}
+			}
+			if selected == nil {
+				return nil, fmt.Errorf("variant does not belong to product: %s", variantID)
+			}
+			if !selected.IsActive {
+				return nil, fmt.Errorf("variant not available: %s (%s)", childProd.Name, selected.Value)
+			}
+			if componentVariants[i] == nil {
+				componentVariants[i] = make(map[string]*ent.ProductVariant)
+			}
+			componentVariants[i][slotID] = selected
+		}
+	}
+
 	slotByID := make(map[string]*ent.BundleSlot, len(slots))
 	allowedBySlot := make(map[string]map[string]struct{}, len(slots))
 	for _, slot := range slots {
@@ -373,11 +424,15 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 			}
 			requiredQuantities[key] += it.Quantity
 		}
-		for _, childID := range it.Configuration {
+		for slotID, childID := range it.Configuration {
 			if childID == "" {
 				continue
 			}
-			requiredQuantities[stockRequirement{productID: childID}] += it.Quantity
+			key := stockRequirement{productID: childID}
+			if v := componentVariants[i][slotID]; v != nil {
+				key.variantID = v.ID
+			}
+			requiredQuantities[key] += it.Quantity
 		}
 	}
 
@@ -506,9 +561,6 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 				}
 
 				childProd := productMap[childProdID]
-				if len(childProd.Edges.Variants) > 0 {
-					return nil, fmt.Errorf("bundle option cannot have variants: %s", childProd.Name)
-				}
 				slotName := slot.Name
 				childLine := repository.OrderLineCreateParams{
 					OrderID:        ord.ID,
@@ -521,16 +573,25 @@ func (s *paymentService) PrepareAndCreateOrder(ctx context.Context, in CreateChe
 					BundleSlotID:   &slotID,
 					BundleSlotName: &slotName,
 				}
+				componentVariant := componentVariants[i][slotID]
+				if componentVariant != nil {
+					childLine.VariantID = &componentVariant.ID
+					childLine.VariantValue = &componentVariant.Value
+				}
 				orderLines = append(orderLines, childLine)
 
 				// Reserve inventory for component
 				if it.Quantity > 0 {
-					inventoryEntries = append(inventoryEntries, repository.InventoryLedgerCreateParams{
+					entry := repository.InventoryLedgerCreateParams{
 						ProductID: childProdID,
 						Delta:     -it.Quantity,
 						Reason:    inventoryledger.ReasonSale,
 						OrderID:   &ord.ID,
-					})
+					}
+					if componentVariant != nil {
+						entry.VariantID = &componentVariant.ID
+					}
+					inventoryEntries = append(inventoryEntries, entry)
 				}
 			}
 		}

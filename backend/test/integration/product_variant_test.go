@@ -181,7 +181,7 @@ func TestProductVariants_CRUD(t *testing.T) {
 	})
 }
 
-func TestProductVariants_BundleInterlock(t *testing.T) {
+func TestProductVariants_BundleOptions(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
 	tdb.Cleanup(t)
@@ -195,25 +195,28 @@ func TestProductVariants_BundleInterlock(t *testing.T) {
 	bundle := fixtures.CreateProduct("Combo", category.ID, 1500, product.TypeBundle, nil)
 	slot := fixtures.CreateBundleSlot(bundle.ID, "Getränk", 0)
 
-	t.Run("variant product cannot become a slot option", func(t *testing.T) {
+	t.Run("variant product can become a slot option", func(t *testing.T) {
 		shirt, err := svc.Create(ctx, category.ID, product.TypeSimple, "T-Shirt", 2500, 0, true, nil, nil, nil,
 			nil, []service.VariantInput{{Value: "M", IsActive: true}})
 		require.NoError(t, err)
 
-		_, err = svc.AddSlotOption(ctx, bundle.ID, slot.ID, shirt.ID)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "cannot be bundle options")
+		opt, err := svc.AddSlotOption(ctx, bundle.ID, slot.ID, shirt.ID)
+		require.NoError(t, err)
+		require.Equal(t, shirt.ID, opt.OptionProductID)
 	})
 
-	t.Run("slot option product cannot gain variants", func(t *testing.T) {
+	t.Run("slot option product can gain variants", func(t *testing.T) {
 		cola := fixtures.CreateProduct("Cola", category.ID, 350, product.TypeSimple, nil)
 		_, err := svc.AddSlotOption(ctx, bundle.ID, slot.ID, cola.ID)
 		require.NoError(t, err)
 
 		_, err = svc.Update(ctx, cola.ID, category.ID, product.TypeSimple, "Cola", 350, 0, true, nil, nil, nil,
 			nil, []service.VariantInput{{Value: "M", IsActive: true}})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "bundle options cannot have variants")
+		require.NoError(t, err)
+
+		variants, err := repos.ProductVariant.GetByProductID(ctx, cola.ID)
+		require.NoError(t, err)
+		require.Len(t, variants, 1)
 	})
 }
 

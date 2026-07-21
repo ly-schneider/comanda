@@ -87,6 +87,10 @@ export function CartItemDisplay({
                           const slotItem = slot?.options?.find((si) => si.id === productId)
 
                           if (slot && slotItem) {
+                            const baseName = slotItem.name.includes(" Burger")
+                              ? slotItem.name.replace(" Burger", "")
+                              : slotItem.name
+                            const variantValue = item.configurationVariants?.[slotId]?.value
                             return (
                               <div
                                 key={slotId}
@@ -95,10 +99,7 @@ export function CartItemDisplay({
                                 }`}
                               >
                                 <p className="font-medium">
-                                  {slot.name}:{" "}
-                                  {slotItem.name.includes(" Burger")
-                                    ? slotItem.name.replace(" Burger", "")
-                                    : slotItem.name}
+                                  {slot.name}: {variantValue ? `${baseName} (${variantValue})` : baseName}
                                 </p>
                               </div>
                             )

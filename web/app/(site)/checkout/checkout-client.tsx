@@ -217,6 +217,7 @@ export default function CheckoutClient() {
           isOpen={true}
           onClose={() => setEditingItem(null)}
           initialConfiguration={editingItem.configuration}
+          initialConfigurationVariants={editingItem.configurationVariants}
           editingItemId={editingItem.id}
         />
       )}

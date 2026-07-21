@@ -134,17 +134,23 @@ export async function listProducts(
 
   // Build stock map from simple products to apply to bundle slot options
   const stockMap = new Map<string, { stock: number; isAvailable: boolean; isLowStock: boolean }>()
+  const simpleById = new Map<string, ProductDTO>()
   for (const p of items) {
-    if (p.type !== "bundle" && typeof p.availableQuantity === "number") {
-      stockMap.set(p.id, {
-        stock: p.availableQuantity,
-        isAvailable: p.isAvailable !== false,
-        isLowStock: p.isLowStock === true,
-      })
+    if (p.type !== "bundle") {
+      simpleById.set(p.id, p)
+      if (typeof p.availableQuantity === "number") {
+        stockMap.set(p.id, {
+          stock: p.availableQuantity,
+          isAvailable: p.isAvailable !== false,
+          isLowStock: p.isLowStock === true,
+        })
+      }
     }
   }
 
-  // Apply stock to bundle slot options
+  // Apply stock + variants to bundle slot options: the option embed from the
+  // backend is minimal, but the full products are in the same list, so the
+  // bundle configurator can offer an option's variants without an extra fetch.
   for (const p of items) {
     if (p.type === "bundle" && p.bundle?.slots) {
       for (const slot of p.bundle.slots) {
@@ -155,6 +161,11 @@ export async function listProducts(
               opt.availableQuantity = stockInfo.stock
               opt.isAvailable = stockInfo.isAvailable
               opt.isLowStock = stockInfo.isLowStock
+            }
+            const full = simpleById.get(opt.id)
+            if (full?.variants?.length) {
+              opt.variants = full.variants
+              opt.variantLabel = full.variantLabel
             }
           }
         }

@@ -28,7 +28,7 @@ import { cartDepositCents, formatChf } from "@/lib/utils"
 import { findVariant, hasVariants } from "@/lib/variants"
 import type { PluginDiscount } from "@/plugins/slots"
 
-import type { CartItem } from "@/types/cart"
+import type { CartItem, CartItemConfigurationVariants } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type {
   CardMeta,
@@ -47,16 +47,20 @@ type Tender = PosPaymentMethod | null
 
 type JetonTotal = { id: string; name: string; color: string; count: number }
 
-function toBundleSelections(config?: Record<string, string>) {
+function toBundleSelections(config?: Record<string, string>, configVariants?: CartItemConfigurationVariants) {
   if (!config) return undefined
-  return Object.entries(config).map(([slotId, productId]) => ({ slotId, productId }))
+  return Object.entries(config).map(([slotId, productId]) => ({
+    slotId,
+    productId,
+    variantId: configVariants?.[slotId]?.id,
+  }))
 }
 
 function buildOrderItems(items: CartItem[]) {
   return items.map((it) => ({
     productId: it.product.id,
     quantity: it.quantity,
-    bundleSelections: toBundleSelections(it.configuration),
+    bundleSelections: toBundleSelections(it.configuration, it.configurationVariants),
     variantId: it.variantId,
   }))
 }
@@ -230,7 +234,10 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           for (const [slotId, productId] of Object.entries(it.configuration)) {
             const slot = it.product.bundle!.slots.find((s) => s.id === slotId)
             const choice = slot?.options?.find((p) => p.id === productId)
-            if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
+            const variantValue = it.configurationVariants?.[slotId]?.value
+            if (slot && choice) {
+              cfg.push({ slot: slot.name, choice: variantValue ? `${choice.name} (${variantValue})` : choice.name })
+            }
           }
         }
         let title = it.product.name
@@ -992,6 +999,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           isOpen={true}
           onClose={() => setEditingItem(null)}
           initialConfiguration={editingItem.configuration}
+          initialConfigurationVariants={editingItem.configurationVariants}
           editingItemId={editingItem.id}
           isPOS
         />
