@@ -3,6 +3,7 @@
 import { AlertCircle, Ban, CheckCircle2, Clock, Info, Loader2, PackageOpen, ScanLine, XCircle } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { DeviceLogoutButton } from "@/components/device/device-logout-button"
 import { PairingCodeDisplay } from "@/components/device/pairing-code-display"
 import { PluginSlot } from "@/components/plugins/plugin-slot"
 import QrScanner, { type QrScannerControls, type QrScanResult } from "@/components/qr-scanner"
@@ -891,6 +892,7 @@ export default function StationPage() {
           <InstallPrompt />
           <HardRefreshButton />
           <FullscreenButton />
+          {approved && <DeviceLogoutButton deviceType="station" />}
         </div>
       </header>
 

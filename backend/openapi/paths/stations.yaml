@@ -55,6 +55,27 @@ me:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+  delete:
+    tags: [Stations]
+    summary: Log out current station
+    description: >-
+      Deregisters the authenticated station device: revokes its authorization
+      and removes it, so the device returns to the enrollment screen ready to
+      register again. Scoped to the calling device — never another station.
+    operationId: logoutCurrentStation
+    security:
+      - deviceAuth: []
+    x-device-types: [STATION]
+    responses:
+      "204":
+        description: Station logged out
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 me-products:
   get:
     tags: [Stations]

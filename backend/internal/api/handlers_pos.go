@@ -45,6 +45,25 @@ func (h *Handlers) GetCurrentPos(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, posDevice)
 }
 
+// LogoutCurrentPos deregisters the calling POS device — revoking its
+// authorization and removing it — scoped to the device resolved from the token.
+// (DELETE /pos/me)
+func (h *Handlers) LogoutCurrentPos(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	deviceID, ok := auth.GetDeviceID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Device authentication required")
+		return
+	}
+
+	if err := h.devices.Remove(ctx, deviceID); err != nil {
+		writeEntError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ListPosDevices returns all POS-type devices with settings.
 // (GET /pos/devices)
 func (h *Handlers) ListPosDevices(w http.ResponseWriter, r *http.Request) {

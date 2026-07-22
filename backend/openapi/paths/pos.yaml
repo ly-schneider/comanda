@@ -21,6 +21,27 @@ me:
             schema:
               $ref: "../schemas/common.yaml#/Error"
 
+  delete:
+    tags: [POS]
+    summary: Log out current POS
+    description: >-
+      Deregisters the authenticated POS device: revokes its authorization and
+      removes it, so the device returns to the pairing screen ready to register
+      again. Scoped to the calling device — never another POS.
+    operationId: logoutCurrentPos
+    security:
+      - deviceAuth: []
+    x-device-types: [POS]
+    responses:
+      "204":
+        description: POS logged out
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 product-active:
   parameters:
     - name: productId

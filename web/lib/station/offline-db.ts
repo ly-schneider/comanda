@@ -86,6 +86,27 @@ export function stationHasIndexedDB(): boolean {
   return hasIndexedDB()
 }
 
+// Wipes all station offline state (KV, ledger, outbox) by dropping the whole
+// database on device logout. The cached connection is closed first, since
+// deleteDatabase blocks while a connection is open. Resolves on every outcome
+// (incl. onblocked from another tab) — logout reloads the page regardless.
+export async function clearStationDatabase(): Promise<void> {
+  if (!hasIndexedDB()) return
+  if (dbPromise) {
+    try {
+      const db = await dbPromise
+      db.close()
+    } catch {}
+    dbPromise = null
+  }
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase(DB_NAME)
+    req.onsuccess = () => resolve()
+    req.onerror = () => resolve()
+    req.onblocked = () => resolve()
+  })
+}
+
 /**
  * Runs `run` inside a single-store transaction and resolves with the request
  * result on commit. The store name is explicit so both the KV store and the
