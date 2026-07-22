@@ -640,6 +640,18 @@ class WebPosActivity : ComponentActivity() {
                 false
             }
         }
+
+        @JavascriptInterface
+        fun getAppVersion(): String =
+            JSONObject()
+                .put("versionName", BuildConfig.VERSION_NAME)
+                .put("versionCode", BuildConfig.VERSION_CODE)
+                .toString()
+
+        @JavascriptInterface
+        fun checkForUpdate() {
+            runOnUiThread { AppUpdateChecker(this@WebPosActivity).checkForUpdate(manual = true) }
+        }
     }
 
     private fun startSumUpCheckout(p: PendingPayment) {

@@ -17,10 +17,12 @@ private const val TAG = "AppUpdateChecker"
 
 class AppUpdateChecker(private val activity: Activity) {
 
-    fun checkForUpdate() {
+    // manual checks surface a result toast; auto-checks on launch stay silent.
+    fun checkForUpdate(manual: Boolean = false) {
         val url = BuildConfig.UPDATE_CHECK_URL
         if (url.isBlank()) {
             Log.w(TAG, "UPDATE_CHECK_URL is blank; skipping update check")
+            if (manual) showToast("Update-Prüfung nicht verfügbar")
             return
         }
 
@@ -38,6 +40,7 @@ class AppUpdateChecker(private val activity: Activity) {
                 if (code != 200) {
                     Log.w(TAG, "Update endpoint returned HTTP $code")
                     conn.disconnect()
+                    if (manual) showToast("Update-Prüfung fehlgeschlagen (HTTP $code)")
                     return@Thread
                 }
 
@@ -60,10 +63,12 @@ class AppUpdateChecker(private val activity: Activity) {
                         TAG,
                         "Remote versionCode $remoteVersionCode <= current ${BuildConfig.VERSION_CODE}; no update"
                     )
+                    if (manual) showToast("Bereits aktuell (Version ${BuildConfig.VERSION_NAME})")
                     return@Thread
                 }
                 if (downloadUrl.isBlank()) {
                     Log.w(TAG, "Remote release missing downloadUrl; skipping")
+                    if (manual) showToast("Update-Prüfung fehlgeschlagen")
                     return@Thread
                 }
 
@@ -80,6 +85,7 @@ class AppUpdateChecker(private val activity: Activity) {
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "Update check failed", t)
+                if (manual) showToast("Update-Prüfung fehlgeschlagen")
             }
         }.start()
     }
