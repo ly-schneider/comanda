@@ -51,6 +51,9 @@ export function InstallHintDrawer() {
     }
     if (!canOffer) return
     if (wasRecentlyDismissed()) return
+    // An enrollment deep-link (?code=) opens its own confirm dialog; the install
+    // hint would stack on top of it. It reappears after enrolling strips the param.
+    if (new URLSearchParams(window.location.search).has("code")) return
     const t = window.setTimeout(() => setOpen(true), 600)
     return () => window.clearTimeout(t)
   }, [installed, canOffer])

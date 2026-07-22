@@ -6,6 +6,7 @@ export interface StationqrPreset {
   name: string
   disabled: boolean
   token: string
+  enrollUrl: string
   productIds: string[]
   createdAt: string
   updatedAt: string
@@ -97,6 +98,15 @@ export interface EnrollRequest {
   os?: string
 }
 
+export class EnrollError extends Error {
+  code?: string
+
+  constructor(message: string, code?: string) {
+    super(message)
+    this.code = code
+  }
+}
+
 export async function enrollDevice(body: EnrollRequest): Promise<EnrollResult> {
   const res = await fetch(`/api/v1/plugins/stationqr/enroll`, {
     method: "POST",
@@ -105,7 +115,7 @@ export async function enrollDevice(body: EnrollRequest): Promise<EnrollResult> {
   })
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { code?: string; message?: string }
-    throw new Error(j.message || j.code || `HTTP ${res.status}`)
+    throw new EnrollError(j.message || j.code || `HTTP ${res.status}`, j.code)
   }
   return res.json() as Promise<EnrollResult>
 }
