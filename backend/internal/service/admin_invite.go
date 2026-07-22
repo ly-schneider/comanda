@@ -326,40 +326,8 @@ func (s *adminInviteService) linkMember(ctx context.Context, userID string, role
 // PublicBaseURL link would silently fail to bind. Falls back to PublicBaseURL
 // only when the tenant has no verified domain yet.
 func (s *adminInviteService) buildInviteURL(ctx context.Context, token string) string {
-	base := strings.TrimRight(s.cfg.App.PublicBaseURL, "/")
-	if base == "" {
-		base = "http://localhost:3000"
-	}
-	if host := s.tenantPrimaryHost(ctx); host != "" {
-		base = "https://" + host
-	}
+	base := TenantBaseURL(ctx, s.tenantDomainRepo, s.cfg.App.PublicBaseURL, s.logger)
 	return fmt.Sprintf("%s/invite/accept?token=%s", base, token)
-}
-
-func (s *adminInviteService) tenantPrimaryHost(ctx context.Context) string {
-	if s.tenantDomainRepo == nil {
-		return ""
-	}
-	domains, err := s.tenantDomainRepo.List(ctx)
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Warn("admin invite: failed to load tenant domains; using platform base", zap.Error(err))
-		}
-		return ""
-	}
-	host := ""
-	for _, d := range domains {
-		if d.VerifiedAt == nil {
-			continue
-		}
-		if d.IsPrimary {
-			return d.Hostname
-		}
-		if host == "" {
-			host = d.Hostname
-		}
-	}
-	return host
 }
 
 // memberRoleLabelDE maps a membership tier to its German display label, matching

@@ -7,14 +7,18 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
+	"backend/internal/config"
 	"backend/internal/crypto"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/device"
 	"backend/internal/repository"
 	coreservice "backend/internal/service"
+
+	"go.uber.org/zap"
 )
 
 const Key = "stationqr"
@@ -38,11 +42,16 @@ type ProductLookup interface {
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
 }
 
+type TenantDomains interface {
+	List(ctx context.Context) ([]*ent.TenantDomain, error)
+}
+
 type Preset struct {
 	ID         string
 	Name       string
 	Disabled   bool
 	Token      string
+	EnrollURL  string
 	IssuedBy   string
 	ProductIDs []string
 	CreatedAt  time.Time
@@ -75,11 +84,25 @@ type service struct {
 	approver DeviceApprover
 	stations coreservice.StationService
 	products ProductLookup
+	domains  TenantDomains
 	enc      *crypto.Encryptor
+	cfg      config.Config
+	logger   *zap.Logger
 }
 
-func NewService(presets PresetRepository, devices DeviceUpserter, approver DeviceApprover, stations coreservice.StationService, products ProductLookup, enc *crypto.Encryptor) Service {
-	return &service{presets: presets, devices: devices, approver: approver, stations: stations, products: products, enc: enc}
+func NewService(presets PresetRepository, devices DeviceUpserter, approver DeviceApprover, stations coreservice.StationService, products ProductLookup, domains TenantDomains, enc *crypto.Encryptor, cfg config.Config, logger *zap.Logger) Service {
+	return &service{presets: presets, devices: devices, approver: approver, stations: stations, products: products, domains: domains, enc: enc, cfg: cfg, logger: logger}
+}
+
+// enrollBase resolves the origin for enrollment deep-links: the tenant's
+// primary verified domain, so a native camera scan opens the station app with
+// the code already applied.
+func (s *service) enrollBase(ctx context.Context) string {
+	return coreservice.TenantBaseURL(ctx, s.domains, s.cfg.App.PublicBaseURL, s.logger)
+}
+
+func enrollURL(base, token string) string {
+	return base + "/station?code=" + url.QueryEscape(token)
 }
 
 // existingProductIDs re-resolves caller-supplied product IDs through the
@@ -133,7 +156,7 @@ func (s *service) decrypt(tokenEnc []byte) (string, error) {
 	return s.enc.DecryptString(string(tokenEnc))
 }
 
-func (s *service) toPreset(row *ent.StationEnrollPreset, productIDs []string) (Preset, error) {
+func (s *service) toPreset(row *ent.StationEnrollPreset, productIDs []string, base string) (Preset, error) {
 	token, err := s.decrypt(row.TokenEnc)
 	if err != nil {
 		return Preset{}, fmt.Errorf("decrypt token: %w", err)
@@ -146,6 +169,7 @@ func (s *service) toPreset(row *ent.StationEnrollPreset, productIDs []string) (P
 		Name:       row.Name,
 		Disabled:   row.DisabledAt != nil,
 		Token:      token,
+		EnrollURL:  enrollURL(base, token),
 		IssuedBy:   row.IssuedBy,
 		ProductIDs: productIDs,
 		CreatedAt:  row.CreatedAt,
@@ -166,9 +190,10 @@ func (s *service) ListPresets(ctx context.Context) ([]Preset, error) {
 	for _, l := range links {
 		byPreset[l.PresetID] = append(byPreset[l.PresetID], l.ProductID)
 	}
+	base := s.enrollBase(ctx)
 	out := make([]Preset, 0, len(rows))
 	for _, row := range rows {
-		p, err := s.toPreset(row, byPreset[row.ID])
+		p, err := s.toPreset(row, byPreset[row.ID], base)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +228,7 @@ func (s *service) CreatePreset(ctx context.Context, name string, productIDs []st
 			return Preset{}, err
 		}
 	}
-	return s.toPreset(row, productIDs)
+	return s.toPreset(row, productIDs, s.enrollBase(ctx))
 }
 
 func (s *service) UpdatePreset(ctx context.Context, id string, in UpdatePresetInput) (Preset, error) {
@@ -283,7 +308,7 @@ func (s *service) loadPreset(ctx context.Context, id string) (Preset, error) {
 	if err != nil {
 		return Preset{}, err
 	}
-	return s.toPreset(row, ids)
+	return s.toPreset(row, ids, s.enrollBase(ctx))
 }
 
 func (s *service) productIDs(ctx context.Context, presetID string) ([]string, error) {

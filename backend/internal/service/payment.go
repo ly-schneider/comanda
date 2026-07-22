@@ -1143,35 +1143,7 @@ func (s *paymentService) sendReceipt(reqCtx context.Context, orderID string, to 
 // Order link must use the tenant's primary verified domain, not the platform
 // apex (which has no tenant context). Runs inside the receipt's tenant tx.
 func (s *paymentService) tenantOrderURL(ctx context.Context, orderID string) string {
-	fallback := strings.TrimRight(s.cfg.App.PublicBaseURL, "/") + "/orders/" + orderID
-	if s.tenantDomainRepo == nil {
-		return fallback
-	}
-
-	domains, err := s.tenantDomainRepo.List(ctx)
-	if err != nil {
-		s.logger.Warn("receipt: failed to load tenant domains; using platform base",
-			zap.Error(err), zap.String("orderId", orderID))
-		return fallback
-	}
-
-	host := ""
-	for _, d := range domains {
-		if d.VerifiedAt == nil {
-			continue
-		}
-		if d.IsPrimary {
-			host = d.Hostname
-			break
-		}
-		if host == "" {
-			host = d.Hostname
-		}
-	}
-	if host == "" {
-		return fallback
-	}
-	return "https://" + host + "/orders/" + orderID
+	return TenantBaseURL(ctx, s.tenantDomainRepo, s.cfg.App.PublicBaseURL, s.logger) + "/orders/" + orderID
 }
 
 func safeStr(p *string) string {

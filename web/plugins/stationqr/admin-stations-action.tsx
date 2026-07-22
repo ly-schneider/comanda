@@ -58,10 +58,15 @@ function loadImageDataUrl(url: string): Promise<{ dataUrl: string; w: number; h:
   })
 }
 
-async function makePdf(token: string, presetName: string, displayName: string, logoUrl: string | null): Promise<Blob> {
+async function makePdf(
+  enrollUrl: string,
+  presetName: string,
+  displayName: string,
+  logoUrl: string | null
+): Promise<Blob> {
   const [{ jsPDF }, qrPng, logo] = await Promise.all([
     import("jspdf"),
-    QRCode.toDataURL(token, { width: 1200, margin: 1 }),
+    QRCode.toDataURL(enrollUrl, { width: 1200, margin: 1 }),
     logoUrl ? loadImageDataUrl(logoUrl) : Promise.resolve(null),
   ])
   const doc = new jsPDF({ unit: "mm", format: "a4" })
@@ -96,7 +101,19 @@ async function makePdf(token: string, presetName: string, displayName: string, l
   doc.setFont("helvetica", "normal")
   doc.setFontSize(12)
   doc.setTextColor(90)
-  doc.text("Auf einem neuen Stationsgerät scannen.", cx, y, { align: "center", maxWidth: pageW - 40 })
+  doc.text("Mit der Kamera des Stationsgeräts scannen — die Anmeldung öffnet sich automatisch.", cx, y, {
+    align: "center",
+    maxWidth: pageW - 40,
+  })
+  y += 8
+  doc.setFontSize(9)
+  doc.setTextColor(140)
+  try {
+    doc.text(`Manuell: ${new URL(enrollUrl).host}/station öffnen und Code scannen`, cx, y, {
+      align: "center",
+      maxWidth: pageW - 40,
+    })
+  } catch {}
 
   return doc.output("blob")
 }
@@ -182,8 +199,9 @@ export default function StationqrAdminStationsAction({ ctx }: SlotComponentProps
         <div>
           <CardTitle>Schnell-Registrierung per QR</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Lege je Station einen QR-Code mit passenden Produkten an. Wird er auf einem neuen Gerät gescannt, meldet
-            sich die Station an und erhält direkt diese Produkte — beliebig oft, ohne Kopplungscode.
+            Lege je Station einen QR-Code mit passenden Produkten an. Wird er mit der Kamera eines neuen Geräts
+            gescannt, öffnet sich die Anmeldung und die Station erhält direkt diese Produkte — beliebig oft, ohne
+            Kopplungscode.
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0">
@@ -300,10 +318,10 @@ function PresetCard({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
-    QRCode.toDataURL(preset.token, { width: 240, margin: 1 })
+    QRCode.toDataURL(preset.enrollUrl, { width: 240, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(""))
-  }, [preset.token])
+  }, [preset.enrollUrl])
 
   const run = useCallback(
     async (fn: () => Promise<void>, fallback: string) => {
@@ -325,7 +343,7 @@ function PresetCard({
     const win = window.open("", "_blank")
     setPdfBusy(true)
     try {
-      const url = URL.createObjectURL(await makePdf(preset.token, preset.name, displayName, logoUrl))
+      const url = URL.createObjectURL(await makePdf(preset.enrollUrl, preset.name, displayName, logoUrl))
       if (win) win.location.href = url
       else window.open(url, "_blank")
     } catch {
@@ -334,7 +352,7 @@ function PresetCard({
     } finally {
       setPdfBusy(false)
     }
-  }, [preset.token, preset.name, displayName, logoUrl, onError])
+  }, [preset.enrollUrl, preset.name, displayName, logoUrl, onError])
 
   return (
     <div className={`bg-card border-border rounded-[11px] border p-3 ${preset.disabled ? "opacity-70" : ""}`}>
