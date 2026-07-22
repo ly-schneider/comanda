@@ -3,7 +3,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useReducer } from "react"
 import { findVariant, variantUnitPrice } from "@/lib/variants"
 import { ProductDTO } from "@/types"
-import { Cart, CartContextType, CartItem, CartItemConfiguration } from "@/types/cart"
+import { Cart, CartContextType, CartItem, CartItemConfiguration, CartItemConfigurationVariants } from "@/types/cart"
 
 const CART_STORAGE_KEY = "comanda-cart"
 
@@ -41,17 +41,38 @@ function loadCartFromStorage(): Cart | null {
 }
 
 type CartAction =
-  | { type: "ADD_TO_CART"; product: ProductDTO; configuration?: CartItemConfiguration; variantId?: string }
+  | {
+      type: "ADD_TO_CART"
+      product: ProductDTO
+      configuration?: CartItemConfiguration
+      variantId?: string
+      configurationVariants?: CartItemConfigurationVariants
+    }
   | { type: "REMOVE_FROM_CART"; itemId: string }
   | { type: "UPDATE_QUANTITY"; itemId: string; quantity: number }
-  | { type: "REPLACE_ITEM"; oldItemId: string; product: ProductDTO; configuration?: CartItemConfiguration }
+  | {
+      type: "REPLACE_ITEM"
+      oldItemId: string
+      product: ProductDTO
+      configuration?: CartItemConfiguration
+      configurationVariants?: CartItemConfigurationVariants
+    }
   | { type: "CLEAR_CART" }
   | { type: "LOAD_FROM_STORAGE"; cart: Cart }
 
-function generateCartItemId(product: ProductDTO, configuration?: CartItemConfiguration, variantId?: string): string {
+function generateCartItemId(
+  product: ProductDTO,
+  configuration?: CartItemConfiguration,
+  variantId?: string,
+  configurationVariants?: CartItemConfigurationVariants
+): string {
   const configStr = configuration ? JSON.stringify(configuration) : ""
   const variantPart = variantId ? `:${variantId}` : ""
-  return `${product.id}-${configStr}${variantPart}`
+  const slotVariantIds = configurationVariants
+    ? Object.entries(configurationVariants).map(([slotId, v]) => `${slotId}=${v.id}`)
+    : []
+  const slotVariantPart = slotVariantIds.length ? `:${slotVariantIds.sort().join(",")}` : ""
+  return `${product.id}-${configStr}${variantPart}${slotVariantPart}`
 }
 
 function calculateItemPrice(product: ProductDTO, variantId?: string): number {
@@ -67,7 +88,12 @@ function cartReducer(state: Cart, action: CartAction): Cart {
 
   switch (action.type) {
     case "ADD_TO_CART": {
-      const itemId = generateCartItemId(action.product, action.configuration, action.variantId)
+      const itemId = generateCartItemId(
+        action.product,
+        action.configuration,
+        action.variantId,
+        action.configurationVariants
+      )
       const existingItemIndex = state.items.findIndex((item) => item.id === itemId)
 
       if (existingItemIndex >= 0) {
@@ -78,6 +104,7 @@ function cartReducer(state: Cart, action: CartAction): Cart {
             id: existingItem.id,
             product: existingItem.product,
             configuration: existingItem.configuration,
+            configurationVariants: existingItem.configurationVariants,
             variantId: existingItem.variantId,
             totalPriceCents: existingItem.totalPriceCents,
             quantity: existingItem.quantity + 1,
@@ -100,6 +127,7 @@ function cartReducer(state: Cart, action: CartAction): Cart {
         product: action.product,
         quantity: 1,
         configuration: action.configuration,
+        configurationVariants: action.configurationVariants,
         variantId: action.variantId,
         totalPriceCents: calculateItemPrice(action.product, action.variantId),
       }
@@ -153,11 +181,21 @@ function cartReducer(state: Cart, action: CartAction): Cart {
       const oldIndex = state.items.findIndex((i) => i.id === action.oldItemId)
       if (oldIndex === -1) {
         // If old item not found, fallback to add behavior
-        return cartReducer(state, { type: "ADD_TO_CART", product: action.product, configuration: action.configuration })
+        return cartReducer(state, {
+          type: "ADD_TO_CART",
+          product: action.product,
+          configuration: action.configuration,
+          configurationVariants: action.configurationVariants,
+        })
       }
 
       const oldItem = state.items[oldIndex]! // exists because oldIndex !== -1
-      const newItemId = generateCartItemId(action.product, action.configuration)
+      const newItemId = generateCartItemId(
+        action.product,
+        action.configuration,
+        undefined,
+        action.configurationVariants
+      )
 
       // Remove old item first
       const itemsWithoutOld = state.items.filter((_, idx) => idx !== oldIndex)
@@ -176,6 +214,7 @@ function cartReducer(state: Cart, action: CartAction): Cart {
           id: newItemId,
           product: action.product,
           configuration: action.configuration,
+          configurationVariants: action.configurationVariants,
           quantity: oldItem.quantity,
           totalPriceCents: calculateItemPrice(action.product),
         }
@@ -237,12 +276,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const addToCart = (product: ProductDTO, configuration?: CartItemConfiguration, variantId?: string) => {
-    dispatch({ type: "ADD_TO_CART", product, configuration, variantId })
+  const addToCart = (
+    product: ProductDTO,
+    configuration?: CartItemConfiguration,
+    variantId?: string,
+    configurationVariants?: CartItemConfigurationVariants
+  ) => {
+    dispatch({ type: "ADD_TO_CART", product, configuration, variantId, configurationVariants })
   }
 
-  const updateItemConfiguration = (oldItemId: string, product: ProductDTO, configuration?: CartItemConfiguration) => {
-    dispatch({ type: "REPLACE_ITEM", oldItemId, product, configuration })
+  const updateItemConfiguration = (
+    oldItemId: string,
+    product: ProductDTO,
+    configuration?: CartItemConfiguration,
+    configurationVariants?: CartItemConfigurationVariants
+  ) => {
+    dispatch({ type: "REPLACE_ITEM", oldItemId, product, configuration, configurationVariants })
   }
 
   const removeFromCart = (itemId: string) => {

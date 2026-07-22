@@ -176,6 +176,8 @@ paths:
     $ref: "paths/pos.yaml#/devices"
   /pos/products/{productId}/active:
     $ref: "paths/pos.yaml#/product-active"
+  /pos/categories/{categoryId}/active:
+    $ref: "paths/pos.yaml#/category-active"
 
   /system/status:
     $ref: "paths/system.yaml#/status"

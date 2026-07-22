@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useCart } from "@/contexts/cart-context"
-import { BundleSlotDTO, CartItemConfiguration, ProductDTO } from "@/types"
+import { activeVariants, findVariant, hasVariants } from "@/lib/variants"
+import { BundleSlotDTO, CartItemConfiguration, CartItemConfigurationVariants, ProductDTO } from "@/types"
 
 interface ProductConfigurationModalProps {
   product: ProductDTO
   isOpen: boolean
   onClose: () => void
   initialConfiguration?: CartItemConfiguration
+  initialConfigurationVariants?: CartItemConfigurationVariants
   editingItemId?: string // when provided, modal acts in edit mode
   isPOS?: boolean
 }
@@ -22,26 +24,43 @@ export function ProductConfigurationModal({
   isOpen,
   onClose,
   initialConfiguration,
+  initialConfigurationVariants,
   editingItemId,
   isPOS = false,
 }: ProductConfigurationModalProps) {
   const { addToCart, updateItemConfiguration } = useCart()
   const [selectedConfiguration, setSelectedConfiguration] = useState<CartItemConfiguration>(initialConfiguration || {})
+  const [selectedVariants, setSelectedVariants] = useState<CartItemConfigurationVariants>(
+    initialConfigurationVariants || {}
+  )
 
   const handleSlotSelection = (slotId: string, productId: string) => {
     setSelectedConfiguration((prev) => ({
       ...prev,
       [slotId]: productId,
     }))
+    // A different product invalidates the slot's previous variant choice.
+    setSelectedVariants((prev) => {
+      if (!(slotId in prev)) return prev
+      const next = { ...prev }
+      delete next[slotId]
+      return next
+    })
+  }
+
+  const handleVariantSelection = (slotId: string, variant: { id: string; value: string }) => {
+    setSelectedVariants((prev) => ({ ...prev, [slotId]: variant }))
   }
 
   const handleSave = () => {
+    const configurationVariants = Object.keys(selectedVariants).length > 0 ? selectedVariants : undefined
     if (editingItemId) {
-      updateItemConfiguration(editingItemId, product, selectedConfiguration)
+      updateItemConfiguration(editingItemId, product, selectedConfiguration, configurationVariants)
     } else {
-      addToCart(product, selectedConfiguration)
+      addToCart(product, selectedConfiguration, undefined, configurationVariants)
     }
     setSelectedConfiguration(initialConfiguration || {})
+    setSelectedVariants(initialConfigurationVariants || {})
     onClose()
   }
 
@@ -49,18 +68,25 @@ export function ProductConfigurationModal({
   React.useEffect(() => {
     if (isOpen) {
       setSelectedConfiguration(initialConfiguration || {})
+      setSelectedVariants(initialConfigurationVariants || {})
     }
-  }, [isOpen, initialConfiguration])
+  }, [isOpen, initialConfiguration, initialConfigurationVariants])
 
   const isConfigurationComplete = () => {
     if (!product.bundle?.slots) return true
 
-    return product.bundle!.slots.every((slot) => selectedConfiguration[slot.id] !== undefined)
+    return product.bundle!.slots.every((slot) => {
+      const sel = selectedConfiguration[slot.id]
+      if (sel === undefined) return false
+      const item = slot.options?.find((it) => it.id === sel)
+      if (item && hasVariants(item)) return selectedVariants[slot.id] !== undefined
+      return true
+    })
   }
 
   const isConfigurationValid = () => {
     if (!product.bundle?.slots) return true
-    // Ensure selected products are still active
+    // Ensure selected products (and their variants) are still active
     return product.bundle!.slots.every((slot) => {
       const sel = selectedConfiguration[slot.id]
       if (!sel) return false
@@ -69,7 +95,12 @@ export function ProductConfigurationModal({
       // must be active and available
       const isActive = item.isActive !== false
       const isAvailable = item.isAvailable !== false
-      return isActive && isAvailable
+      if (!isActive || !isAvailable) return false
+      if (hasVariants(item)) {
+        const chosen = findVariant(item, selectedVariants[slot.id]?.id)
+        if (!chosen || !chosen.isActive || chosen.isAvailable === false) return false
+      }
+      return true
     })
   }
 
@@ -92,7 +123,9 @@ export function ProductConfigurationModal({
                 key={slot.id}
                 slot={slot}
                 selectedProductId={selectedConfiguration[slot.id]}
+                selectedVariantId={selectedVariants[slot.id]?.id}
                 onSelect={(productId) => handleSlotSelection(slot.id, productId)}
+                onSelectVariant={(variant) => handleVariantSelection(slot.id, variant)}
                 showDescription={!isPOS}
               />
             ))}
@@ -117,11 +150,20 @@ export function ProductConfigurationModal({
 interface BundleSlotSelectorProps {
   slot: BundleSlotDTO
   selectedProductId?: string
+  selectedVariantId?: string
   onSelect: (productId: string) => void
+  onSelectVariant: (variant: { id: string; value: string }) => void
   showDescription?: boolean
 }
 
-function BundleSlotSelector({ slot, selectedProductId, onSelect, showDescription = false }: BundleSlotSelectorProps) {
+function BundleSlotSelector({
+  slot,
+  selectedProductId,
+  selectedVariantId,
+  onSelect,
+  onSelectVariant,
+  showDescription = false,
+}: BundleSlotSelectorProps) {
   if (!slot.options) {
     return null
   }
@@ -185,6 +227,32 @@ function BundleSlotSelector({ slot, selectedProductId, onSelect, showDescription
                     )}
                   </div>
                 </div>
+                {isSelected && hasVariants(item) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {activeVariants(item).map((variant) => {
+                      const isVariantSelected = selectedVariantId === variant.id
+                      const isOutOfStock = variant.isAvailable === false
+                      return (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          disabled={isOutOfStock}
+                          onClick={() => onSelectVariant({ id: variant.id, value: variant.value })}
+                          className={[
+                            "rounded-full border px-3 py-1 text-xs font-medium transition-all",
+                            isVariantSelected
+                              ? "bg-primary text-primary-foreground border-transparent"
+                              : "bg-card hover:bg-muted",
+                            isOutOfStock ? "cursor-not-allowed line-through opacity-50" : "cursor-pointer",
+                          ].join(" ")}
+                          aria-pressed={isVariantSelected}
+                        >
+                          {variant.value}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )

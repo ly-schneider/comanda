@@ -153,6 +153,7 @@ func NewRouter(
 			pos.Get("/pos/me", wrapper.GetCurrentPos)
 			pos.Patch("/pos/products/{productId}/inventory", wrapper.AdjustProductInventory)
 			pos.Patch("/pos/products/{productId}/active", wrapper.SetProductActive)
+			pos.Patch("/pos/categories/{categoryId}/active", wrapper.SetCategoryActive)
 
 			// Refunds (operator surface): lookup, view, line refund, deposit
 			// return, cancel. Arbitrary refunds are admin-only and have no POS route.

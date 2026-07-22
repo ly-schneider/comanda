@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { useBranding } from "@/contexts/branding-context"
 import { useCart } from "@/contexts/cart-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { buildSoldOutMap, soldOutKey } from "@/lib/checkout-sold-out"
+import { buildSoldOutMap, soldOutErrorForItem, type SoldOutMap } from "@/lib/checkout-sold-out"
 import {
   buildCardCheckoutSummary,
   type CardCheckoutPayload,
@@ -28,7 +28,7 @@ import { cartDepositCents, formatChf } from "@/lib/utils"
 import { findVariant, hasVariants } from "@/lib/variants"
 import type { PluginDiscount } from "@/plugins/slots"
 
-import type { CartItem } from "@/types/cart"
+import type { CartItem, CartItemConfigurationVariants } from "@/types/cart"
 import type { PosFulfillmentMode } from "@/types/jeton"
 import type {
   CardMeta,
@@ -47,16 +47,20 @@ type Tender = PosPaymentMethod | null
 
 type JetonTotal = { id: string; name: string; color: string; count: number }
 
-function toBundleSelections(config?: Record<string, string>) {
+function toBundleSelections(config?: Record<string, string>, configVariants?: CartItemConfigurationVariants) {
   if (!config) return undefined
-  return Object.entries(config).map(([slotId, productId]) => ({ slotId, productId }))
+  return Object.entries(config).map(([slotId, productId]) => ({
+    slotId,
+    productId,
+    variantId: configVariants?.[slotId]?.id,
+  }))
 }
 
 function buildOrderItems(items: CartItem[]) {
   return items.map((it) => ({
     productId: it.product.id,
     quantity: it.quantity,
-    bundleSelections: toBundleSelections(it.configuration),
+    bundleSelections: toBundleSelections(it.configuration, it.configurationVariants),
     variantId: it.variantId,
   }))
 }
@@ -121,7 +125,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [startingCheckout, setStartingCheckout] = useState(false)
-  const [soldOut, setSoldOut] = useState<Map<string, string>>(new Map())
+  const [soldOut, setSoldOut] = useState<SoldOutMap>(new Map())
   // The online pending order created when Bezahlen is pressed; a tender consumes
   // it, and any abandon path discards it (releasing the hold). transferringRef
   // guards the checkout→card / checkout→gratis hand-off from being read as an abandon.
@@ -230,7 +234,10 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           for (const [slotId, productId] of Object.entries(it.configuration)) {
             const slot = it.product.bundle!.slots.find((s) => s.id === slotId)
             const choice = slot?.options?.find((p) => p.id === productId)
-            if (slot && choice) cfg.push({ slot: slot.name, choice: choice.name })
+            const variantValue = it.configurationVariants?.[slotId]?.value
+            if (slot && choice) {
+              cfg.push({ slot: slot.name, choice: variantValue ? `${choice.name} (${variantValue})` : choice.name })
+            }
           }
         }
         let title = it.product.name
@@ -861,7 +868,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     </div>
                   )
@@ -889,7 +896,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     </div>
                   )
@@ -905,7 +912,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
                         onEdit={() => setEditingItem(item)}
                         isPOS
                         maxQuantity={getMaxQuantity(item)}
-                        error={soldOut.get(soldOutKey(item.product.id, item.variantId))}
+                        error={soldOutErrorForItem(soldOut, item)}
                       />
                     </div>
                   )
@@ -992,6 +999,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           isOpen={true}
           onClose={() => setEditingItem(null)}
           initialConfiguration={editingItem.configuration}
+          initialConfigurationVariants={editingItem.configurationVariants}
           editingItemId={editingItem.id}
           isPOS
         />

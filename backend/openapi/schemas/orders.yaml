@@ -215,6 +215,12 @@ OrderCreate:
                   type: string
                 productId:
                   type: string
+                variantId:
+                  type: string
+                  description: >-
+                    Required when the selected product defines variants; forbidden
+                    otherwise. The variant's price adjustment does not apply inside
+                    a bundle.
     contactEmail:
       type: string
       format: email

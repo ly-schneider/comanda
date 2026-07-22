@@ -147,6 +147,12 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request, params ge
 			ci.Configuration = make(map[string]string, len(*item.BundleSelections))
 			for _, sel := range *item.BundleSelections {
 				ci.Configuration[sel.SlotId] = sel.ProductId
+				if sel.VariantId != nil && *sel.VariantId != "" {
+					if ci.ConfigurationVariants == nil {
+						ci.ConfigurationVariants = make(map[string]string, len(*item.BundleSelections))
+					}
+					ci.ConfigurationVariants[sel.SlotId] = *sel.VariantId
+				}
 			}
 		}
 		checkoutItems = append(checkoutItems, ci)

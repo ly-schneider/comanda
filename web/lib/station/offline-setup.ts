@@ -202,6 +202,19 @@ function buildDefaultDeps(overrides?: Partial<SetupDeps>): SetupDeps {
   }
 }
 
+/**
+ * Refetches just the product catalog into the KV cache. The full setup ritual
+ * is manual, so a product created or renamed after it would otherwise render as
+ * its raw id on the scan card until the operator re-runs "Ready for offline" —
+ * this keeps names fresh whenever the station is online, without re-precaching
+ * the shell or images.
+ */
+export async function refreshCatalog(overrides?: Partial<SetupDeps>): Promise<boolean> {
+  const deps = buildDefaultDeps(overrides)
+  const catalog = await loadCatalog(deps).catch(() => null)
+  return !!catalog
+}
+
 export async function runOfflineSetup(overrides?: Partial<SetupDeps>): Promise<ReadinessRecord> {
   const deps = buildDefaultDeps(overrides)
   const failures: string[] = []

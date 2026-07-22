@@ -32,7 +32,11 @@ export function CheckoutClient() {
         productId: i.product.id,
         quantity: i.quantity,
         bundleSelections: i.configuration
-          ? Object.entries(i.configuration).map(([slotId, productId]) => ({ slotId, productId }))
+          ? Object.entries(i.configuration).map(([slotId, productId]) => ({
+              slotId,
+              productId,
+              variantId: i.configurationVariants?.[slotId]?.id,
+            }))
           : undefined,
         variantId: i.variantId,
       }))

@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { useProductFilter } from "@/hooks/use-product-filter"
-import { listCategories } from "@/lib/api/categories"
+import { listCategories, setCategoryActive } from "@/lib/api/categories"
 import { setProductActive } from "@/lib/api/products"
-import { categoryOrderMap, compareByCategory } from "@/lib/categories"
+import { categoryOrderMap, childrenOf, compareByCategory, topLevelCategories } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { activeVariants } from "@/lib/variants"
 import type { CategoryDTO, ListResponse, ProductDTO } from "@/types"
@@ -166,6 +166,99 @@ function ActiveToggle({
   )
 }
 
+function CategoryRow({
+  category,
+  token,
+  parentInactive,
+  onActiveUpdated,
+}: {
+  category: CategoryDTO
+  token: string
+  parentInactive?: boolean
+  onActiveUpdated: (categoryId: string, isActive: boolean) => void
+}) {
+  const [saving, setSaving] = useState(false)
+
+  const handleChange = useCallback(
+    async (checked: boolean) => {
+      setSaving(true)
+      onActiveUpdated(category.id, checked)
+      try {
+        await setCategoryActive(token, category.id, checked)
+      } catch {
+        onActiveUpdated(category.id, !checked)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [category.id, token, onActiveUpdated]
+  )
+
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 rounded-xl border p-3",
+        (!category.isActive || parentInactive) && "opacity-60"
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <p className="truncate text-sm font-medium">{category.name}</p>
+        {parentInactive && category.isActive && (
+          <span className="text-muted-foreground shrink-0 text-xs">Oberkategorie inaktiv</span>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-muted-foreground text-xs font-medium">Aktiv</span>
+        <Switch checked={category.isActive} disabled={saving} onCheckedChange={handleChange} />
+      </div>
+    </div>
+  )
+}
+
+// Deactivating a category makes every product under it (and its subcategories)
+// unbuyable — same cascade the admin toggle triggers.
+function CategoriesSection({
+  categories,
+  token,
+  onActiveUpdated,
+}: {
+  categories: CategoryDTO[]
+  token: string
+  onActiveUpdated: (categoryId: string, isActive: boolean) => void
+}) {
+  const topLevel = topLevelCategories(categories)
+
+  if (topLevel.length === 0) {
+    return <p className="text-muted-foreground py-4 text-center text-sm">Keine Kategorien gefunden.</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-2 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {topLevel.map((cat) => {
+        const children = childrenOf(categories, cat.id)
+        return (
+          <div key={cat.id} className="flex flex-col gap-2">
+            <CategoryRow category={cat} token={token} onActiveUpdated={onActiveUpdated} />
+            {children.length > 0 && (
+              <div className="flex flex-col gap-2 pl-4">
+                {children.map((child) => (
+                  <CategoryRow
+                    key={child.id}
+                    category={child}
+                    token={token}
+                    parentInactive={!cat.isActive}
+                    onActiveUpdated={onActiveUpdated}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const ItemCard = memo(function ItemCard({
   product,
   token,
@@ -252,6 +345,10 @@ export function InventoryManagement({
       .catch(() => {})
   }, [])
 
+  const handleCategoryActiveUpdated = useCallback((categoryId: string, isActive: boolean) => {
+    setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, isActive } : c)))
+  }, [])
+
   const order = useMemo(() => categoryOrderMap(categories), [categories])
   const activeCategories = useMemo(() => categories.filter((c) => c.isActive), [categories])
 
@@ -308,6 +405,11 @@ export function InventoryManagement({
         ) : (
           <p className="text-muted-foreground py-4 text-center text-sm">Keine Bundles gefunden.</p>
         )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-xl font-semibold">Kategorien verwalten</h2>
+        <CategoriesSection categories={categories} token={token} onActiveUpdated={handleCategoryActiveUpdated} />
       </div>
     </div>
   )

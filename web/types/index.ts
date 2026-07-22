@@ -15,5 +15,5 @@ export type {
 export type { OrderStatus, Order, OrderItemType, OrderItem } from "./order"
 export type { AdminInviteStatus, AdminInvite } from "./admin"
 export type { InventoryReason, InventoryLedger } from "./inventory"
-export type { CartItemConfiguration, CartItem, Cart, CartContextType } from "./cart"
+export type { CartItemConfiguration, CartItemConfigurationVariants, CartItem, Cart, CartContextType } from "./cart"
 export type { Jeton, PosFulfillmentMode, PosSettings } from "./jeton"
