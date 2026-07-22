@@ -95,6 +95,10 @@
   font are likewise overridden per-tenant there.
 */
 :root {
+  /* `only` forbids Chrome Auto Dark Theme / WebView algorithmic darkening from
+     inverting the always-light shop (would break black-on-white pickup QR). */
+  color-scheme: only light;
+
   --radius: 0.625rem;
   --control-radius: var(--radius);
   --surface-radius: calc(var(--radius) * 1.6);
