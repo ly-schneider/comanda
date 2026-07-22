@@ -59,6 +59,25 @@ func (h *Handlers) GetCurrentStation(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, apiStation)
 }
 
+// LogoutCurrentStation deregisters the calling station device — revoking its
+// authorization and removing it — scoped to the device resolved from the token.
+// (DELETE /stations/me)
+func (h *Handlers) LogoutCurrentStation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	deviceID, ok := auth.GetDeviceID(ctx)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "Device authentication required")
+		return
+	}
+
+	if err := h.devices.Remove(ctx, deviceID); err != nil {
+		writeEntError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetCurrentStationProducts returns the calling station's assigned products.
 // (GET /stations/me/products)
 func (h *Handlers) GetCurrentStationProducts(w http.ResponseWriter, r *http.Request) {

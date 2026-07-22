@@ -44,10 +44,11 @@ func newStationHTTPHarness(t *testing.T, env *rlsEnv) *stationHTTPHarness {
 		TestConfig(), staticClient,
 		repos.Device, repos.DeviceProduct, repos.OrderLine, repos.OrderRedemption, repos.Idempotency,
 	)
-	handlers := api.NewStationTestHandlers(settingsSvc, stationSvc, NewProductSvc(repos), zap.NewNop())
-
 	bindingRepo := repository.NewDeviceBindingRepository(staticClient)
 	sessionRepo := repository.NewSessionRepository(staticClient)
+	deviceSvc := service.NewDeviceService(staticClient, repos.Device, repos.DeviceProduct, bindingRepo, sessionRepo)
+	handlers := api.NewStationTestHandlers(settingsSvc, stationSvc, NewProductSvc(repos), deviceSvc, zap.NewNop())
+
 	deviceMw := auth.NewDeviceAuthMiddleware(bindingRepo, sessionRepo, zap.NewNop())
 
 	wrapper := generated.ServerInterfaceWrapper{
@@ -64,6 +65,7 @@ func newStationHTTPHarness(t *testing.T, env *rlsEnv) *stationHTTPHarness {
 		v1.Group(func(station chi.Router) {
 			station.Use(deviceMw.RequireDevice(auth.DeviceTypeStation))
 			station.Get("/stations/me", wrapper.GetCurrentStation)
+			station.Delete("/stations/me", wrapper.LogoutCurrentStation)
 			station.Get("/stations/me/products", wrapper.GetCurrentStationProducts)
 			station.Put("/stations/me/products", wrapper.SetCurrentStationProducts)
 		})
@@ -256,6 +258,40 @@ func TestStationSelfProducts_DeviceScoped(t *testing.T) {
 
 	require.Equal(t, []string{products[0]}, deviceProductIDs(t, env, caller), "caller's own assignment updated")
 	require.Equal(t, []string{products[2]}, deviceProductIDs(t, env, other), "another station must be untouched")
+}
+
+func TestStationSelfLogout_RemovesDeviceRevokesBindingAndScopes(t *testing.T) {
+	env := newRLSEnv(t)
+	tenant, products := env.seedTenantWithProducts(t, "ssl-"+randSuffix(), 2)
+	owner := env.seedUser(t)
+	station, token := env.seedDeviceToken(t, tenant, owner, "STATION")
+	env.privExec(t,
+		`INSERT INTO device_product (device_id, product_id, tenant_id) VALUES ($1, $2, $3)`,
+		station, products[0], tenant,
+	)
+	sibling := env.seedStation(t, tenant, products[1]) // must survive the caller's logout
+
+	h := newStationHTTPHarness(t, env)
+
+	require.Equal(t, http.StatusOK, h.do(t, http.MethodGet, "/v1/stations/me", tenant, token, nil).Code)
+
+	logoutRec := h.do(t, http.MethodDelete, "/v1/stations/me", tenant, token, nil)
+	require.Equal(t, http.StatusNoContent, logoutRec.Code)
+
+	require.Empty(t, deviceProductIDs(t, env, station), "product assignments cleared")
+	var deviceCount int
+	require.NoError(t, env.priv.QueryRow(`SELECT count(*) FROM device WHERE id = $1`, station).Scan(&deviceCount))
+	require.Zero(t, deviceCount, "device row removed")
+
+	var activeBindings int
+	require.NoError(t, env.priv.QueryRow(
+		`SELECT count(*) FROM device_binding WHERE device_id = $1 AND revoked_at IS NULL`, station,
+	).Scan(&activeBindings))
+	require.Zero(t, activeBindings, "binding revoked")
+	require.Equal(t, http.StatusUnauthorized, h.do(t, http.MethodGet, "/v1/stations/me", tenant, token, nil).Code)
+
+	// A different station in the same tenant is untouched.
+	require.Equal(t, []string{products[1]}, deviceProductIDs(t, env, sibling), "sibling station untouched")
 }
 
 func TestStationSelfProducts_ForeignProductDropped(t *testing.T) {
