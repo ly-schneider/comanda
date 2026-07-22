@@ -185,6 +185,45 @@ func newSvc(t *testing.T) (*service, *fakePresetRepo, *fakeUpserter, *fakeApprov
 	return &service{presets: presets, devices: up, approver: ap, stations: st, products: &fakeProducts{}, enc: enc}, presets, up, ap, st
 }
 
+type fakeDomains struct {
+	rows []*ent.TenantDomain
+}
+
+func (f *fakeDomains) List(context.Context) ([]*ent.TenantDomain, error) {
+	return f.rows, nil
+}
+
+func TestPresetEnrollURLUsesPrimaryDomain(t *testing.T) {
+	svc, _, _, _, _ := newSvc(t)
+	now := time.Now()
+	svc.domains = &fakeDomains{rows: []*ent.TenantDomain{
+		{Hostname: "shop.example.ch", IsPrimary: true, VerifiedAt: &now},
+	}}
+
+	p, err := svc.CreatePreset(context.Background(), "Burger", nil, "u")
+	require.NoError(t, err)
+	require.Equal(t, "https://shop.example.ch/station?code="+p.Token, p.EnrollURL)
+
+	list, err := svc.ListPresets(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, p.EnrollURL, list[0].EnrollURL)
+
+	rotated, err := svc.RotatePreset(context.Background(), p.ID)
+	require.NoError(t, err)
+	require.Equal(t, "https://shop.example.ch/station?code="+rotated.Token, rotated.EnrollURL)
+	require.NotEqual(t, p.EnrollURL, rotated.EnrollURL, "rotate must invalidate the printed URL")
+}
+
+func TestPresetEnrollURLFallsBackWithoutVerifiedDomain(t *testing.T) {
+	svc, _, _, _, _ := newSvc(t)
+	svc.domains = &fakeDomains{}
+	svc.cfg.App.PublicBaseURL = "https://comanda.leys.ch"
+
+	p, err := svc.CreatePreset(context.Background(), "Burger", nil, "u")
+	require.NoError(t, err)
+	require.Equal(t, "https://comanda.leys.ch/station?code="+p.Token, p.EnrollURL)
+}
+
 func TestCreatePresetStoresEncryptedAndReturnsToken(t *testing.T) {
 	svc, repo, _, _, _ := newSvc(t)
 

@@ -33,6 +33,7 @@ func toAPIPreset(p Preset) generated.StationqrPreset {
 		Name:       p.Name,
 		Disabled:   p.Disabled,
 		Token:      p.Token,
+		EnrollUrl:  p.EnrollURL,
 		ProductIds: ids,
 		CreatedAt:  p.CreatedAt,
 		UpdatedAt:  p.UpdatedAt,

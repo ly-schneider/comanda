@@ -1,6 +1,6 @@
 StationqrPreset:
   type: object
-  required: [id, name, disabled, token, productIds, createdAt, updatedAt]
+  required: [id, name, disabled, token, enrollUrl, productIds, createdAt, updatedAt]
   properties:
     id:
       type: string
@@ -11,7 +11,10 @@ StationqrPreset:
       description: When true, the preset exists but enrollment through its QR is suspended
     token:
       type: string
-      description: Raw enrollment token encoded into the printable QR (ops-tier only)
+      description: Raw enrollment token (ops-tier only)
+    enrollUrl:
+      type: string
+      description: Enrollment URL on the tenant's primary domain, encoded into the printable QR
     productIds:
       type: array
       items:
