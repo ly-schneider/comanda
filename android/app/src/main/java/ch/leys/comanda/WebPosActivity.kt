@@ -196,6 +196,14 @@ class WebPosActivity : ComponentActivity() {
     }
     private fun loadSelectedPrinter(): String? = prefs.getString("printer_mac", null)
 
+    private fun clearWebCacheOnUpgrade(wv: WebView) {
+        val last = prefs.getInt("last_version_code", -1)
+        if (BuildConfig.VERSION_CODE > last) {
+            wv.clearCache(true)
+            prefs.edit().putInt("last_version_code", BuildConfig.VERSION_CODE).apply()
+        }
+    }
+
     // Bluetooth discovery receiver lifecycle
     private var btReceiver: BroadcastReceiver? = null
     private var discoveryActive: Boolean = false
@@ -328,6 +336,7 @@ class WebPosActivity : ComponentActivity() {
         s.javaScriptCanOpenWindowsAutomatically = false
         s.mediaPlaybackRequiresUserGesture = true
         s.cacheMode = WebSettings.LOAD_DEFAULT
+        clearWebCacheOnUpgrade(wv)
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
             WebSettingsCompat.setSafeBrowsingEnabled(s, true)
