@@ -15,6 +15,8 @@ declare global {
         stopDiscovery?: () => void
         pair?: (address?: string | null) => boolean
         setTenantConfig?: (s: string) => void
+        getAppVersion?: () => string
+        checkForUpdate?: () => void
       }
     | undefined
   // window.BFS shape (optional)

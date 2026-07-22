@@ -4,6 +4,7 @@ import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { DeviceLogoutButton } from "@/components/device/device-logout-button"
+import { AppVersionButton } from "@/components/pos/app-version-button"
 import { PrinterSelector } from "@/components/pos/printer-selector"
 import { SyncStatusIndicator } from "@/components/pos/sync-status-indicator"
 import { Button } from "@/components/ui/button"
@@ -213,6 +214,7 @@ export function POSHeader({ mode, syncStatus, tabSlot }: POSHeaderProps) {
             >
               <Lock className="size-4" />
             </Button>
+            <AppVersionButton />
             <DeviceLogoutButton deviceType="pos" />
           </div>
         </div>

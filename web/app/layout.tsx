@@ -1,5 +1,5 @@
 import "styles/tailwind.css"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import AnalyticsWrapper from "@/components/analytics-wrapper"
 import { PluginProvider } from "@/components/plugins/plugin-provider"
 import { AuthProvider } from "@/contexts/auth-context"
@@ -10,6 +10,8 @@ import { getBranding, isTenantSuspended } from "@/lib/server/branding"
 import { getPlugins } from "@/lib/server/plugins"
 
 export const dynamic = "force-dynamic"
+
+export const viewport: Viewport = { colorScheme: "light" }
 
 // noindex for staging/dev is set at runtime via X-Robots-Tag in proxy.ts.
 export async function generateMetadata(): Promise<Metadata> {
