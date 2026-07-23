@@ -30,10 +30,11 @@ type OrderService interface {
 }
 
 type OrderListParams struct {
-	Status *order.Status
-	From   *string // RFC3339 timestamp
-	To     *string // RFC3339 timestamp
-	Query  *string
+	Status       *order.Status
+	From         *string // RFC3339 timestamp
+	To           *string // RFC3339 timestamp
+	Query        *string
+	IncludeLines bool
 }
 
 type orderService struct {
@@ -89,7 +90,7 @@ func (s *orderService) ListAdmin(ctx context.Context, params OrderListParams) ([
 		}
 	}
 
-	return s.orderRepo.ListAdmin(ctx, params.Status, from, to, params.Query)
+	return s.orderRepo.ListAdmin(ctx, params.Status, from, to, params.Query, params.IncludeLines)
 }
 
 func (s *orderService) UpdateStatus(ctx context.Context, id string, status order.Status) error {

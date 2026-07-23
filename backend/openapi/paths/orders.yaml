@@ -46,6 +46,15 @@ collection:
           and the SumUp card transaction code.
         schema:
           type: string
+      - name: include
+        in: query
+        description: |
+          Opt-in related data to embed. `lines` eager-loads each order's lines
+          (the admin list omits them by default because the join dominates the
+          query cost). The dashboard product breakdown requires it.
+        schema:
+          type: string
+          enum: [lines]
     responses:
       "200":
         description: Order list
