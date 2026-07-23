@@ -32,7 +32,7 @@ type OrderRepository interface {
 	// tenant-scoped, newest first. Powers POS order-id typeahead lookup.
 	FindByIDPrefix(ctx context.Context, prefix string, limit int) ([]*ent.Order, error)
 
-	ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string) ([]*ent.Order, int64, error)
+	ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string, includeLines bool) ([]*ent.Order, int64, error)
 	ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error)
 
 	// POS payment methods - creates payment record and updates order status
@@ -304,7 +304,7 @@ func (r *orderRepo) FindByIDPrefix(ctx context.Context, prefix string, limit int
 	return rows, nil
 }
 
-func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string) ([]*ent.Order, int64, error) {
+func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string, includeLines bool) ([]*ent.Order, int64, error) {
 	applyFilters := func(query *ent.OrderQuery) *ent.OrderQuery {
 		if status != nil {
 			query = query.Where(order.StatusEQ(*status))
@@ -336,9 +336,12 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 	if err != nil {
 		return nil, 0, translateError(err)
 	}
-	// Intentionally no WithLines() — admin list consumers (dashboard + orders table)
-	// only read scalars + payments, and N×lines join is the dominant cost on /v1/orders.
-	rows, err := applyFilters(r.ec(ctx).Order.Query().WithPayments()).
+	// Lines are opt-in: the N×lines join dominates the query cost.
+	query := applyFilters(r.ec(ctx).Order.Query().WithPayments())
+	if includeLines {
+		query = query.WithLines()
+	}
+	rows, err := query.
 		Order(order.ByCreatedAt(entDescOpt())).
 		Limit(adminListHardCap).
 		All(ctx)

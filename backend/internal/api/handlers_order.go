@@ -77,6 +77,9 @@ func (h *Handlers) ListOrders(w http.ResponseWriter, r *http.Request, params gen
 			listParams.Query = &q
 		}
 	}
+	if params.Include != nil && *params.Include == generated.Lines {
+		listParams.IncludeLines = true
+	}
 
 	orders, _, err := h.orders.ListAdmin(ctx, listParams)
 	if err != nil {

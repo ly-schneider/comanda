@@ -196,6 +196,41 @@ func TestOrderService_ListAdmin(t *testing.T) {
 	})
 }
 
+func TestOrderService_ListAdmin_IncludeLines(t *testing.T) {
+	tdb := NewTestDB(t)
+	defer tdb.Close()
+	tdb.Cleanup(t)
+
+	repos := NewRepositories(tdb.Client)
+	fixtures := NewFixtures(repos)
+
+	svc := service.NewOrderService(repos.Order, repos.OrderLine, repos.Inventory, nil)
+	ctx := context.Background()
+
+	category := fixtures.CreateCategory("Drinks", 1, true)
+	product := fixtures.CreateProduct("Cola", category.ID, 350, entProduct.TypeSimple, nil)
+	lineOrder := fixtures.CreateOrder(700, entOrder.StatusPaid, entOrder.OriginShop)
+	fixtures.CreateOrderLine(lineOrder.ID, product.ID, "Cola", 2, 350, orderline.LineTypeSimple)
+
+	t.Run("lines omitted by default", func(t *testing.T) {
+		orders, _, err := svc.ListAdmin(ctx, service.OrderListParams{})
+		require.NoError(t, err)
+		require.Len(t, orders, 1)
+		_, err = orders[0].Edges.LinesOrErr()
+		require.Error(t, err, "lines edge must be unloaded by default")
+	})
+
+	t.Run("lines eager-loaded when opted in", func(t *testing.T) {
+		orders, _, err := svc.ListAdmin(ctx, service.OrderListParams{IncludeLines: true})
+		require.NoError(t, err)
+		require.Len(t, orders, 1)
+		lines, err := orders[0].Edges.LinesOrErr()
+		require.NoError(t, err, "lines edge must be loaded when IncludeLines is set")
+		require.Len(t, lines, 1)
+		require.Equal(t, 2, lines[0].Quantity)
+	})
+}
+
 func TestOrderService_UpdateStatus(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()

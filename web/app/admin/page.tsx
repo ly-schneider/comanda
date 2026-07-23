@@ -123,7 +123,10 @@ export default function AdminDashboard() {
           ? `date_from=${encodeURIComponent(new Date(prevEvent.year, prevEvent.month - 1, prevEvent.day).toISOString())}&date_to=${encodeURIComponent(new Date(prevEvent.year, prevEvent.month - 1, prevEvent.day + 1).toISOString())}`
           : null
 
-        const fetches: Promise<Response>[] = [fetchAuth(`/api/v1/orders?${dateParams}`), fetchAuth("/api/v1/products")]
+        const fetches: Promise<Response>[] = [
+          fetchAuth(`/api/v1/orders?include=lines&${dateParams}`),
+          fetchAuth("/api/v1/products"),
+        ]
         if (prevDateParams) {
           fetches.push(fetchAuth(`/api/v1/orders?status=paid&${prevDateParams}`))
         }
@@ -266,9 +269,7 @@ export default function AdminDashboard() {
         entry.value += line.quantity
       }
     }
-    return Object.values(agg)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 15)
+    return Object.values(agg).sort((a, b) => b.value - a.value)
   }, [paidOrders])
 
   const topProductsByRevenue = useMemo(() => {
@@ -280,9 +281,7 @@ export default function AdminDashboard() {
         entry.value += line.quantity * (line.unitPriceCents || 0)
       }
     }
-    return Object.values(agg)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 15)
+    return Object.values(agg).sort((a, b) => b.value - a.value)
   }, [paidOrders])
 
   const ordersByStatusByHour = useMemo(() => {
