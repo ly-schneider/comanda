@@ -19,35 +19,9 @@ import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { useMemberTier } from "@/hooks/use-member-tier"
 import { type MemberTier, ROLE_LABELS_DE, TIER_RANK } from "@/lib/auth/rbac"
 import { getCSRFToken } from "@/lib/csrf"
-
-type AdminUser = {
-  id: string
-  name: string
-  email: string
-  emailVerified: boolean
-  role?: MemberTier
-  createdAt: string
-  updatedAt: string
-}
+import { type AdminUser, readUserError } from "@/lib/users"
 
 const ALL_ROLES: MemberTier[] = ["owner", "admin", "app_admin", "staff", "catalog"]
-
-const ROLE_ERROR_DE: Record<string, string> = {
-  forbidden_self: "Du kannst deine eigene Rolle nicht ändern oder dich selbst entfernen.",
-  forbidden_role_change: "Für diese Person fehlen dir die Berechtigungen.",
-  forbidden_higher_role: "Du kannst keine Rolle vergeben, die deiner eigenen entspricht oder darüber liegt.",
-  invalid_role: "Ungültige Rolle.",
-  not_found: "Benutzer nicht gefunden.",
-}
-
-async function readRoleError(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { code?: string }
-    const mapped = body.code ? ROLE_ERROR_DE[body.code] : undefined
-    if (mapped) return mapped
-  } catch {}
-  return `Fehler (${res.status})`
-}
 
 export default function AdminUsersPage() {
   const fetchAuth = useAuthorizedFetch()
@@ -65,7 +39,7 @@ export default function AdminUsersPage() {
     ;(async () => {
       try {
         const res = await fetchAuth(`/api/v1/users`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(await readUserError(res))
         const data = (await res.json()) as { items: AdminUser[]; count: number }
         if (!cancelled) setItems(data.items || [])
       } catch (e: unknown) {
@@ -93,7 +67,7 @@ export default function AdminUsersPage() {
         headers: { "Content-Type": "application/json", "X-CSRF": getCSRFToken() || "" },
         body: JSON.stringify({ role }),
       })
-      if (!res.ok) throw new Error(await readRoleError(res))
+      if (!res.ok) throw new Error(await readUserError(res))
       setItems((prev) => prev.map((it) => (it.id === u.id ? { ...it, role } : it)))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Rolle ändern fehlgeschlagen")
@@ -110,7 +84,7 @@ export default function AdminUsersPage() {
         method: "DELETE",
         headers: { "X-CSRF": getCSRFToken() || "" },
       })
-      if (!res.ok) throw new Error(await readRoleError(res))
+      if (!res.ok) throw new Error(await readUserError(res))
       setItems((prev) => prev.filter((it) => it.id !== u.id))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Entfernen fehlgeschlagen")
