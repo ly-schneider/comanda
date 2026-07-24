@@ -25,6 +25,7 @@ type Config struct {
 	CustomDomain CustomDomainConfig
 	Ingress      IngressConfig
 	Inventory    InventoryConfig
+	PaymentSync  PaymentReconcileConfig
 }
 
 // InventoryConfig drives the pending-order reservation backstop. A checkout
@@ -39,6 +40,26 @@ type InventoryConfig struct {
 	// PendingSweepInterval is how often the backstop sweeper runs. Set to 0 to
 	// disable the sweeper.
 	PendingSweepInterval time.Duration
+}
+
+// PaymentReconcileConfig drives the background reconciler that asks the payment
+// provider about orders whose payment never resolved locally. It exists because
+// the webhook is a single delivery attempt against our API: if it is delayed,
+// dropped, or lands mid-rollout, the customer has paid and has no pickup QR.
+// Pulling closes that hole without any customer action.
+type PaymentReconcileConfig struct {
+	// Interval is how often a reconcile pass runs. Set to 0 to disable.
+	Interval time.Duration
+	// MinAge keeps the reconciler off orders that are simply mid-checkout — the
+	// customer is still on the Payrexx page and the webhook has had no chance yet.
+	MinAge time.Duration
+	// MaxAge bounds the window, so an abandoned order is polled a handful of
+	// times rather than once a minute until the backstop sweeper reclaims it.
+	// Orders past this age are still verified once, just before release.
+	MaxAge time.Duration
+	// BatchSize caps how many orders a single pass pulls, bounding the provider
+	// API calls one pass can make.
+	BatchSize int
 }
 
 // CustomDomainConfig drives bring-your-own custom domains: the DNS records a
@@ -270,6 +291,12 @@ func Load() Config {
 		Inventory: InventoryConfig{
 			PendingOrderTTL:      getEnvDurationWithDefault("INVENTORY_PENDING_TTL", 30*time.Minute),
 			PendingSweepInterval: getEnvDurationWithDefault("INVENTORY_PENDING_SWEEP_INTERVAL", 5*time.Minute),
+		},
+		PaymentSync: PaymentReconcileConfig{
+			Interval:  getEnvDurationWithDefault("PAYMENT_RECONCILE_INTERVAL", 60*time.Second),
+			MinAge:    getEnvDurationWithDefault("PAYMENT_RECONCILE_MIN_AGE", 90*time.Second),
+			MaxAge:    getEnvDurationWithDefault("PAYMENT_RECONCILE_MAX_AGE", 15*time.Minute),
+			BatchSize: getEnvIntWithDefault("PAYMENT_RECONCILE_BATCH_SIZE", 100),
 		},
 		Ingress: IngressConfig{
 			Enabled:          getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),

@@ -232,6 +232,12 @@ func (h *Handlers) GetOrder(w http.ResponseWriter, r *http.Request, orderId stri
 		return
 	}
 	apiOrder := toAPIOrder(o)
+	// This route is public: anyone holding the order id gets the details. A
+	// pending order's pickup token is not redeemable-by-right yet, and stations
+	// verify it offline, so it must not leave the server before the money is in.
+	if o.Status == order.StatusPending {
+		apiOrder.QrPayload = nil
+	}
 	if orderReflectsRefunds(o.Status) {
 		if err := h.annotateOrderRefunds(ctx, &apiOrder); err != nil {
 			h.logger.Warn("load refund summary", zap.String("order_id", o.ID), zap.Error(err))
@@ -338,6 +344,22 @@ func (h *Handlers) GetOrderPayment(w http.ResponseWriter, r *http.Request, order
 	if err != nil {
 		writeEntError(w, err)
 		return
+	}
+
+	// The customer waiting on the return page polls this endpoint, so it is the
+	// earliest place a lost webhook can be caught: ask the provider directly
+	// rather than reporting "pending" for a payment that already went through.
+	// Best effort — a provider that is slow, down, or rate-limiting must not
+	// break the status read, and the background reconciler covers what's missed.
+	if o.Status == order.StatusPending && o.PayrexxGatewayID != nil {
+		if res, err := h.payments.TryReconcilePendingOrder(ctx, orderId); err != nil {
+			h.logger.Warn("payment status: reconcile failed",
+				zap.String("orderId", orderId), zap.Error(err))
+		} else if res.Settled {
+			if refreshed, err := h.orders.GetByID(ctx, orderId); err == nil {
+				o = refreshed
+			}
+		}
 	}
 
 	if o.PayrexxGatewayID == nil {

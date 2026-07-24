@@ -70,9 +70,7 @@ func ParseWebhookEvent(body []byte) (*WebhookEvent, error) {
 
 // IsSuccessStatus returns true if the transaction status indicates successful payment.
 func (t *WebhookTransaction) IsSuccessStatus() bool {
-	return t.Status == TransactionStatusConfirmed ||
-		t.Status == TransactionStatusAuthorized ||
-		t.Status == TransactionStatusReserved
+	return isSuccessTransactionStatus(t.Status)
 }
 
 // IsFailedStatus returns true if the transaction status indicates a failed payment.

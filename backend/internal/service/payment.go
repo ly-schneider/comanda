@@ -29,6 +29,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// Terminal outcomes of settling a payment against an order that can no longer
+// accept it. Retrying either is pointless — the money arrived for an order that
+// is gone or already resolved — so callers ack the delivery and escalate.
+var (
+	ErrOrderGone       = errors.New("order no longer exists")
+	ErrOrderNotPending = errors.New("order is not pending")
+)
+
 type PaymentService interface {
 	// IsPaymentConfigured requires the tenant transaction (app.tenant_id set).
 	IsPaymentConfigured(ctx context.Context) bool
@@ -37,7 +45,15 @@ type PaymentService interface {
 	// CreatePaymentCheckout creates a hosted checkout for the prepared order.
 	CreatePaymentCheckout(ctx context.Context, prep *CheckoutPreparation, successURL, failedURL, cancelURL string) (*payment.CheckoutResult, error)
 	// MarkOrderPaidByPayrexx marks an order as paid based on Payrexx webhook data.
+	// Returns ErrOrderGone / ErrOrderNotPending when the order can no longer be
+	// settled — terminal conditions a caller must not retry.
 	MarkOrderPaidByPayrexx(ctx context.Context, orderID string, gatewayID, transactionID int, contactEmail *string) error
+	// ReconcilePendingOrder settles a pending order from the provider's own view
+	// of the checkout, covering webhooks that never arrive.
+	ReconcilePendingOrder(ctx context.Context, orderID string) (ReconcileResult, error)
+	// TryReconcilePendingOrder is the rate-limited request-path variant; it
+	// reports Checked=false instead of pulling when the budget is exhausted.
+	TryReconcilePendingOrder(ctx context.Context, orderID string) (ReconcileResult, error)
 	// MarkOrderPaidDev marks an order as paid in dev mode (no Payrexx gateway/transaction IDs).
 	MarkOrderPaidDev(ctx context.Context, orderID string) error
 	// FindPendingOrderByAttemptID finds a pending order by payment attempt ID.
@@ -169,6 +185,7 @@ type paymentService struct {
 	tenantDomainRepo repository.TenantDomainRepository
 	qrKeys           QRKeyService
 	appDB            *database.AppClient
+	reconcile        *reconcileGuard
 	logger           *zap.Logger
 }
 
@@ -206,6 +223,7 @@ func NewPaymentService(
 		tenantDomainRepo: tenantDomainRepo,
 		qrKeys:           qrKeys,
 		appDB:            appDB,
+		reconcile:        newReconcileGuard(),
 		logger:           logger,
 	}
 }
@@ -762,14 +780,27 @@ func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID str
 	// Lock the row so a concurrent backstop sweep can't reclaim this order while
 	// we settle it, then re-check status under the lock.
 	if err := s.orderRepo.LockByID(ctx, orderID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return fmt.Errorf("%w: %s", ErrOrderGone, orderID)
+		}
 		return fmt.Errorf("lock order: %w", err)
 	}
 	ord, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return fmt.Errorf("%w: %s", ErrOrderGone, orderID)
+		}
 		return fmt.Errorf("order not found: %w", err)
 	}
 	if ord.Status == order.StatusPaid {
-		// Idempotent: a duplicate/retried webhook for an already-settled order.
+		// Idempotent: a duplicate/retried webhook, or a webhook following a
+		// reconcile that already settled this order. Backfill the transaction id
+		// if that earlier settlement couldn't determine one, since refunds need it.
+		if transactionID != 0 && ord.PayrexxTransactionID == nil {
+			if _, err := s.orderRepo.Update(ctx, ord.ID, ord.TotalCents, ord.Status, ord.Origin, ord.CustomerID, ord.ContactEmail, ord.PaymentAttemptID, ord.PayrexxGatewayID, &transactionID); err != nil {
+				return fmt.Errorf("backfill transaction id: %w", err)
+			}
+		}
 		return nil
 	}
 	if ord.Status != order.StatusPending {
@@ -777,11 +808,12 @@ func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID str
 		// webhook) before a late success arrived. With a TTL far longer than any
 		// real payment window this is effectively impossible; log loudly since
 		// the customer may have been charged for a released order.
-		s.logger.Error("payrexx webhook: paid order no longer pending",
+		s.logger.Error("payrexx payment for an order that is no longer pending",
 			zap.String("orderId", orderID),
 			zap.String("status", string(ord.Status)),
+			zap.Int("transactionId", transactionID),
 		)
-		return fmt.Errorf("order %s not pending (status %s)", orderID, ord.Status)
+		return fmt.Errorf("%w: order %s is %s", ErrOrderNotPending, orderID, ord.Status)
 	}
 
 	ce := ord.ContactEmail
@@ -795,7 +827,14 @@ func (s *paymentService) MarkOrderPaidByPayrexx(ctx context.Context, orderID str
 		return fmt.Errorf("create order payment: %w", err)
 	}
 
-	if _, err = s.orderRepo.Update(ctx, ord.ID, ord.TotalCents, order.StatusPaid, ord.Origin, ord.CustomerID, ce, ord.PaymentAttemptID, &gatewayID, &transactionID); err != nil {
+	// A reconcile can confirm payment without recovering a transaction id; store
+	// nil rather than 0 so a later refund fails loudly instead of addressing
+	// transaction zero.
+	var txnID *int
+	if transactionID != 0 {
+		txnID = &transactionID
+	}
+	if _, err = s.orderRepo.Update(ctx, ord.ID, ord.TotalCents, order.StatusPaid, ord.Origin, ord.CustomerID, ce, ord.PaymentAttemptID, &gatewayID, txnID); err != nil {
 		return err
 	}
 

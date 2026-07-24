@@ -75,6 +75,7 @@ func main() {
 			app.StartIngressReconciler,
 			app.StartInventoryListener,
 			app.StartPendingOrderSweeper,
+			app.StartPaymentReconciler,
 			app.StartHTTPServer,
 		),
 	).Run()

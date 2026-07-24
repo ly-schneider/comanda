@@ -20,6 +20,11 @@ import (
 // reclaimed here: the failure webhook releases explicitly, and this TTL is set
 // far longer than any real payment window, so it only ever catches abandonment.
 //
+// Release is destructive (the order row goes away), so each candidate is first
+// verified against the payment provider. An order that turns out to be paid is
+// settled instead of released — the last chance to rescue a customer whose
+// webhook never arrived.
+//
 // It enumerates stale orders across all tenants on the privileged (RLS-bypassing)
 // client, then reclaims each inside its own tenant-scoped tx so a single failure
 // doesn't roll back the rest. Cleanup is idempotent and row-locked, so multiple
@@ -52,9 +57,22 @@ func StartPendingOrderSweeper(
 			logger.Warn("pending sweeper: list stale failed", zap.Error(err))
 			return
 		}
-		var reclaimed int
+		var reclaimed, settled int
 		for _, o := range stale {
+			var wasPaid bool
 			err := repository.RunInTenantTx(ctx, appDB.DB, o.TenantID, func(fctx context.Context) error {
+				// Releasing deletes the order, which would strand a payment that
+				// did go through, so ask the provider first. A provider that can't
+				// answer means we don't know — the error keeps the hold and we
+				// retry next pass rather than delete a possibly-paid order.
+				res, err := payments.ReconcilePendingOrder(fctx, o.ID)
+				if err != nil {
+					return err
+				}
+				if res.Paid {
+					wasPaid = true
+					return nil
+				}
 				return payments.CleanupPendingOrderByID(fctx, o.ID)
 			})
 			if err != nil {
@@ -65,10 +83,17 @@ func StartPendingOrderSweeper(
 				)
 				continue
 			}
+			if wasPaid {
+				settled++
+				continue
+			}
 			reclaimed++
 		}
-		if reclaimed > 0 {
-			logger.Info("reclaimed stale pending orders", zap.Int("count", reclaimed))
+		if reclaimed > 0 || settled > 0 {
+			logger.Info("swept stale pending orders",
+				zap.Int("reclaimed", reclaimed),
+				zap.Int("settledInstead", settled),
+			)
 		}
 	}
 
