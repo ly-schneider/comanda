@@ -10,6 +10,7 @@ import { useCart } from "@/contexts/cart-context"
 import { isApiError } from "@/lib/api"
 import { createOrder, initiatePayment } from "@/lib/api/payments"
 import { extractSoldOutItems, extractUnavailableItems, stashSoldOut } from "@/lib/checkout-sold-out"
+import { addOrder } from "@/lib/orders-storage"
 import { cartDepositCents, formatChf } from "@/lib/utils"
 
 export function CheckoutClient() {
@@ -45,6 +46,11 @@ export function CheckoutClient() {
       const orderRes = await createOrder({ items, contactEmail: email || undefined }, accessToken || undefined)
 
       const returnUrl = `${window.location.origin}/checkout/payment/next?order_id=${encodeURIComponent(orderRes.id)}`
+
+      // Before leaving for Payrexx: customers routinely pay and then close the
+      // TWINT app instead of coming back, and anything stored on return is lost
+      // with that trip.
+      addOrder(orderRes.id)
 
       // Store order ID for success page
       try {

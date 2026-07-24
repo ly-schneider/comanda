@@ -33,6 +33,15 @@ type CheckoutResult struct {
 	Link        string
 	Status      string
 	ReferenceID string
+	// Settlement is populated by GetCheckout only.
+	Settlement CheckoutSettlement
+}
+
+type CheckoutSettlement struct {
+	Paid          bool
+	Failed        bool
+	TransactionID int
+	ContactEmail  string
 }
 
 type WebhookResult struct {
@@ -102,7 +111,19 @@ func (p *payrexxProvider) GetCheckout(ctx context.Context, gatewayID int) (*Chec
 	if err != nil {
 		return nil, err
 	}
-	return &CheckoutResult{GatewayID: gw.ID, Link: gw.Link, Status: gw.Status, ReferenceID: gw.ReferenceID}, nil
+	st := gw.Settle()
+	return &CheckoutResult{
+		GatewayID:   gw.ID,
+		Link:        gw.Link,
+		Status:      gw.Status,
+		ReferenceID: gw.ReferenceID,
+		Settlement: CheckoutSettlement{
+			Paid:          st.Paid,
+			Failed:        st.Failed,
+			TransactionID: st.TransactionID,
+			ContactEmail:  st.ContactEmail,
+		},
+	}, nil
 }
 
 func (p *payrexxProvider) Refund(ctx context.Context, transactionID int, amountCents int) error {

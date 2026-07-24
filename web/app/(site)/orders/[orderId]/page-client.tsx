@@ -162,6 +162,9 @@ export default function OrderPageClient() {
   // A cancelled or fully refunded order has nothing left to hand over, so the
   // backend clears/empties the pickup token and we show no QR.
   const pickupSuppressed = status === "cancelled" || status === "refunded"
+  // The backend withholds the pickup token until the money is in; the poll above
+  // keeps running, so the QR appears on its own.
+  const awaitingPayment = status === "pending"
   const refundedTotalCents = serverOrder?.refundedTotalCents ?? 0
 
   const qrDisplay = (() => {
@@ -172,6 +175,16 @@ export default function OrderPageClient() {
       return <p className="text-red-600">Bestellnummer fehlt.</p>
     }
     if (qrReady) {
+      if (awaitingPayment) {
+        return (
+          <div className="mx-auto flex h-[260px] w-[260px] flex-col items-center justify-center gap-3 rounded-[11px] border-2 border-dashed bg-gray-50 px-6 text-center">
+            <div className="size-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+            <p className="text-muted-foreground text-sm">
+              Wir warten auf die Bestätigung der Zahlung. Dein Abhol-QR-Code erscheint automatisch, sobald sie da ist.
+            </p>
+          </div>
+        )
+      }
       if (pickupSuppressed) {
         return (
           <div className="mx-auto flex h-[260px] w-[260px] flex-col items-center justify-center rounded-[11px] border-2 border-dashed bg-gray-50 px-6 text-center">
@@ -202,7 +215,9 @@ export default function OrderPageClient() {
 
   return (
     <div className="flex flex-col p-4" style={{ paddingBottom: footerHeight ? footerHeight + 16 : 16 }}>
-      <h1 className="mb-2 text-2xl font-semibold">{pickupSuppressed ? "Deine Bestellung" : "Dein Abhol-QR-Code"}</h1>
+      <h1 className="mb-2 text-2xl font-semibold">
+        {awaitingPayment ? "Zahlung wird bestätigt" : pickupSuppressed ? "Deine Bestellung" : "Dein Abhol-QR-Code"}
+      </h1>
       {mounted && status && status !== "paid" && status !== "pending" && (
         <div className="mb-3">
           <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${ORDER_STATUS_COLORS[status]}`}>
@@ -210,17 +225,23 @@ export default function OrderPageClient() {
           </span>
         </div>
       )}
-      {!pickupSuppressed && (
-        <>
-          <p className={`text-muted-foreground text-sm ${from === "success" ? "mb-2" : "mb-6"}`}>
-            Zeigen Sie diesen QR-Code bei der Abholung vor.
-          </p>
-          {from === "success" && (
-            <p className="text-muted-foreground mb-6 text-sm">
-              Du kannst diesen QR-Code jederzeit in deinen Bestellungen finden.
+      {awaitingPayment ? (
+        <p className="text-muted-foreground mb-6 text-sm">
+          Das kann einen Moment dauern. Du kannst die Seite offen lassen oder später unter «Bestellungen» nachschauen.
+        </p>
+      ) : (
+        !pickupSuppressed && (
+          <>
+            <p className={`text-muted-foreground text-sm ${from === "success" ? "mb-2" : "mb-6"}`}>
+              Zeigen Sie diesen QR-Code bei der Abholung vor.
             </p>
-          )}
-        </>
+            {from === "success" && (
+              <p className="text-muted-foreground mb-6 text-sm">
+                Du kannst diesen QR-Code jederzeit in deinen Bestellungen finden.
+              </p>
+            )}
+          </>
+        )
       )}
       {qrDisplay}
 

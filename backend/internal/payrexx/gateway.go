@@ -17,6 +17,69 @@ type Gateway struct {
 	ReferenceID  string    `json:"referenceId"`
 	PaymentMeans []string  `json:"pm"`
 	CreatedAt    time.Time `json:"-"`
+	// Only some responses carry transactionId; otherwise it's inside the invoices.
+	TransactionID *int             `json:"transactionId,omitempty"`
+	Invoices      []GatewayInvoice `json:"invoices,omitempty"`
+}
+
+type GatewayInvoice struct {
+	Transactions []GatewayTransaction `json:"transactions,omitempty"`
+}
+
+type GatewayTransaction struct {
+	ID      int            `json:"id"`
+	Status  string         `json:"status"`
+	Contact WebhookContact `json:"contact,omitempty"`
+}
+
+type Settlement struct {
+	Paid          bool
+	Failed        bool
+	TransactionID int
+	ContactEmail  string
+}
+
+// Settle reads a pulled gateway the way the webhook path reads a pushed
+// transaction. A confirmed gateway with no recoverable transaction id is still
+// Paid — the customer gets their order; refunding it then needs the dashboard.
+func (g *Gateway) Settle() Settlement {
+	s := Settlement{}
+	switch g.Status {
+	case GatewayStatusConfirmed:
+		s.Paid = true
+	case GatewayStatusCancelled, GatewayStatusDeclined, GatewayStatusError, GatewayStatusExpired:
+		s.Failed = true
+	}
+
+	for _, inv := range g.Invoices {
+		for _, txn := range inv.Transactions {
+			if txn.ID == 0 {
+				continue
+			}
+			// A decline followed by a successful retry leaves both on the gateway.
+			if s.TransactionID == 0 || isSuccessTransactionStatus(txn.Status) {
+				s.TransactionID = txn.ID
+				if txn.Contact.Email != "" {
+					s.ContactEmail = txn.Contact.Email
+				}
+			}
+			if isSuccessTransactionStatus(txn.Status) {
+				s.Paid = true
+				s.Failed = false
+			}
+		}
+	}
+
+	if s.TransactionID == 0 && g.TransactionID != nil {
+		s.TransactionID = *g.TransactionID
+	}
+	return s
+}
+
+func isSuccessTransactionStatus(status string) bool {
+	return status == TransactionStatusConfirmed ||
+		status == TransactionStatusAuthorized ||
+		status == TransactionStatusReserved
 }
 
 type InvoiceItem struct {
@@ -124,7 +187,7 @@ func (c *Client) GetGateway(ctx context.Context, id int) (*Gateway, error) {
 	}
 
 	if resp.Status != "success" || len(resp.Data) == 0 {
-		return nil, fmt.Errorf("payrexx: gateway not found: %s", resp.Message)
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, resp.Message)
 	}
 
 	return &resp.Data[0], nil

@@ -56,6 +56,12 @@ type OrderRepository interface {
 	// caller then reclaims each within a tenant-scoped tx.
 	ListStalePending(ctx context.Context, privileged *ent.Client, cutoff time.Time) ([]StalePendingOrder, error)
 
+	// ListPendingForReconcile returns id + tenant_id for pending orders that were
+	// handed to the payment provider (they carry a gateway id) and were created
+	// within (createdAfter, createdBefore). Like ListStalePending it runs on the
+	// privileged client for the background job.
+	ListPendingForReconcile(ctx context.Context, privileged *ent.Client, createdBefore, createdAfter time.Time, limit int) ([]StalePendingOrder, error)
+
 	// Aggregation
 	GetEventDays(ctx context.Context) ([]EventDay, error)
 }
@@ -153,6 +159,35 @@ func (r *orderRepo) ListStalePending(ctx context.Context, privileged *ent.Client
 			s.Select(s.C(order.FieldID), s.C(order.FieldTenantID))
 		}).
 		Scan(ctx, &rows)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	out := make([]StalePendingOrder, len(rows))
+	for i, row := range rows {
+		out[i] = StalePendingOrder{ID: row.ID, TenantID: row.TenantID}
+	}
+	return out, nil
+}
+
+func (r *orderRepo) ListPendingForReconcile(ctx context.Context, privileged *ent.Client, createdBefore, createdAfter time.Time, limit int) ([]StalePendingOrder, error) {
+	var rows []struct {
+		ID       string `json:"id"`
+		TenantID string `json:"tenant_id"`
+	}
+	q := privileged.Order.Query().
+		Where(
+			order.StatusEQ(order.StatusPending),
+			order.CreatedAtLT(createdBefore),
+			order.CreatedAtGT(createdAfter),
+			order.PayrexxGatewayIDNotNil(),
+		).
+		Order(order.ByCreatedAt())
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	err := q.Modify(func(s *sql.Selector) {
+		s.Select(s.C(order.FieldID), s.C(order.FieldTenantID))
+	}).Scan(ctx, &rows)
 	if err != nil {
 		return nil, translateError(err)
 	}

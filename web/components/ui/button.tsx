@@ -1,3 +1,9 @@
+"use client"
+
+// Radix's Slot creates a React context at module scope, which the RSC build has
+// no createContext for: without this, a server component importing Button fails
+// page-data collection at build time.
+
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import * as React from "react"

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -152,6 +153,22 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := h.payments.MarkOrderPaidByPayrexx(ctx, orderID, result.GatewayID, result.TransactionID, contactEmail); err != nil {
+		// Unapplicable forever, so ack instead of letting Payrexx redeliver. The
+		// log is the escalation: a customer was charged for an undeliverable order.
+		if errors.Is(err, service.ErrOrderGone) || errors.Is(err, service.ErrOrderNotPending) {
+			h.logger.Error("payrexx webhook: payment cannot be applied to its order",
+				zap.Error(err),
+				zap.String("tenantId", tenantID),
+				zap.String("orderId", orderID),
+				zap.Int("transactionId", result.TransactionID),
+				zap.Int("amountCents", result.AmountCents),
+				zap.String("contactEmail", result.ContactEmail),
+			)
+			response.WriteJSON(w, http.StatusOK, map[string]string{"status": "unapplicable_payment"})
+			finalize(true)
+			committed = true
+			return
+		}
 		h.logger.Error("payrexx webhook: failed to mark order paid",
 			zap.Error(err),
 			zap.String("orderId", orderID),

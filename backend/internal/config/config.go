@@ -25,6 +25,7 @@ type Config struct {
 	CustomDomain CustomDomainConfig
 	Ingress      IngressConfig
 	Inventory    InventoryConfig
+	PaymentSync  PaymentReconcileConfig
 }
 
 // InventoryConfig drives the pending-order reservation backstop. A checkout
@@ -39,6 +40,22 @@ type InventoryConfig struct {
 	// PendingSweepInterval is how often the backstop sweeper runs. Set to 0 to
 	// disable the sweeper.
 	PendingSweepInterval time.Duration
+}
+
+// PaymentReconcileConfig drives the background reconciler that settles orders
+// whose success webhook never arrived, so a paid customer isn't left without a
+// pickup QR.
+type PaymentReconcileConfig struct {
+	// Interval is how often a reconcile pass runs. Set to 0 to disable.
+	Interval time.Duration
+	// MinAge keeps the reconciler off orders that are simply mid-checkout.
+	MinAge time.Duration
+	// MaxAge bounds the window so an abandoned order is polled a handful of times
+	// rather than every pass until the backstop sweeper reclaims it (which
+	// verifies once more before releasing).
+	MaxAge time.Duration
+	// BatchSize caps the provider calls one pass can make.
+	BatchSize int
 }
 
 // CustomDomainConfig drives bring-your-own custom domains: the DNS records a
@@ -270,6 +287,12 @@ func Load() Config {
 		Inventory: InventoryConfig{
 			PendingOrderTTL:      getEnvDurationWithDefault("INVENTORY_PENDING_TTL", 30*time.Minute),
 			PendingSweepInterval: getEnvDurationWithDefault("INVENTORY_PENDING_SWEEP_INTERVAL", 5*time.Minute),
+		},
+		PaymentSync: PaymentReconcileConfig{
+			Interval:  getEnvDurationWithDefault("PAYMENT_RECONCILE_INTERVAL", 60*time.Second),
+			MinAge:    getEnvDurationWithDefault("PAYMENT_RECONCILE_MIN_AGE", 90*time.Second),
+			MaxAge:    getEnvDurationWithDefault("PAYMENT_RECONCILE_MAX_AGE", 15*time.Minute),
+			BatchSize: getEnvIntWithDefault("PAYMENT_RECONCILE_BATCH_SIZE", 100),
 		},
 		Ingress: IngressConfig{
 			Enabled:          getEnvBoolOptional("INGRESS_RECONCILER_ENABLED"),

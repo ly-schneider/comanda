@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,9 @@ import (
 )
 
 const apiBaseURL = "https://api.payrexx.com/v1.0/"
+
+// ErrNotFound is a definitive answer, unlike a transport or server error.
+var ErrNotFound = errors.New("payrexx: not found")
 
 const DefaultRequestTimeout = 8 * time.Second
 
@@ -127,6 +131,9 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, params 
 		return nil, fmt.Errorf("payrexx: failed to read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%w (status 404): %s", ErrNotFound, string(respBody))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("payrexx: API error (status %d): %s", resp.StatusCode, string(respBody))
 	}
