@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// seedOrderForCustomer makes a user a customer of the tenant — the only thing
-// that makes a non-member readable through /v1/users/{id}.
 func (e *rlsEnv) seedOrderForCustomer(t *testing.T, tenantID, customerID string) string {
 	t.Helper()
 	orderID := nanoid.New()
@@ -24,11 +22,10 @@ func (e *rlsEnv) seedOrderForCustomer(t *testing.T, tenantID, customerID string)
 	return orderID
 }
 
-// TestUserManagementOrgScoped proves the /v1/users surface is confined to the
-// bound tenant: reads reach its org members and its own customers, mutations
-// reach members only. The user table is global (RLS USING true), so without
-// these service-level gates a tenant admin could read or mutate any user
-// platform-wide by ID.
+// TestUserManagementOrgScoped proves /v1/users is confined to the bound tenant:
+// reads reach its members and its own customers, mutations reach members only.
+// The user table is global (RLS USING true), so without these service-level
+// gates a tenant admin could read or mutate any user platform-wide by ID.
 func TestUserManagementOrgScoped(t *testing.T) {
 	env := newRLSEnv(t)
 

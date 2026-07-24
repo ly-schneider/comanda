@@ -57,9 +57,8 @@ export default function AdminUserDetailPage() {
   const created = user?.createdAt ? new Date(user.createdAt).toLocaleString("de-CH") : "-"
   const updated = user?.updatedAt ? new Date(user.updatedAt).toLocaleString("de-CH") : "-"
 
-  // Mirror the backend guard: you can only manage members strictly below your
-  // own tier, and never yourself. A user without a role is a customer, not a
-  // team member, so there is no membership to remove.
+  // Mirror the backend guard: members strictly below your own tier, never
+  // yourself. No role = a customer, so there is no membership to remove.
   const actorRank = tier ? (TIER_RANK[tier] ?? 0) : 0
   const removable = !!user?.role && (TIER_RANK[user.role] ?? 0) < actorRank && user.id !== actor?.id
 

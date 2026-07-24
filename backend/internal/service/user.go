@@ -249,9 +249,8 @@ func (s *userService) orgMemberUserIDs(ctx context.Context) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// requireOrgMember is the write gate: only the bound tenant's own members may be
-// mutated. It fails closed with ErrNotFound (a 404, not a 403, so callers can't
-// probe which user IDs exist outside their org).
+// requireOrgMember is the write gate. ErrNotFound, not forbidden, so callers
+// can't probe which user IDs exist outside their org.
 func (s *userService) requireOrgMember(ctx context.Context, userID string) error {
 	tx, ok := repository.RequestTxFromContext(ctx)
 	if !ok {
@@ -270,11 +269,10 @@ func (s *userService) requireOrgMember(ctx context.Context, userID string) error
 	return nil
 }
 
-// requireTenantVisible is the read gate: the bound org's members plus the users
-// the tenant's own rows point at — a customer who ordered here, or the account
-// behind a ledger entry, device decision or staff invite. Those tables are
-// RLS-scoped, so the EXISTS can only match this tenant's rows; the user table is
-// global with a permissive policy, so this gate is the isolation boundary.
+// requireTenantVisible is the read gate: members plus the users the tenant's own
+// rows point at (a customer is a user with no member row). The user table is
+// global with a permissive policy, so this gate — not RLS on user — is the
+// isolation boundary; only ever widen it to a tenant-scoped table.
 func (s *userService) requireTenantVisible(ctx context.Context, userID string) error {
 	tx, ok := repository.RequestTxFromContext(ctx)
 	if !ok {
