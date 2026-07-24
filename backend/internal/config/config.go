@@ -42,23 +42,19 @@ type InventoryConfig struct {
 	PendingSweepInterval time.Duration
 }
 
-// PaymentReconcileConfig drives the background reconciler that asks the payment
-// provider about orders whose payment never resolved locally. It exists because
-// the webhook is a single delivery attempt against our API: if it is delayed,
-// dropped, or lands mid-rollout, the customer has paid and has no pickup QR.
-// Pulling closes that hole without any customer action.
+// PaymentReconcileConfig drives the background reconciler that settles orders
+// whose success webhook never arrived, so a paid customer isn't left without a
+// pickup QR.
 type PaymentReconcileConfig struct {
 	// Interval is how often a reconcile pass runs. Set to 0 to disable.
 	Interval time.Duration
-	// MinAge keeps the reconciler off orders that are simply mid-checkout — the
-	// customer is still on the Payrexx page and the webhook has had no chance yet.
+	// MinAge keeps the reconciler off orders that are simply mid-checkout.
 	MinAge time.Duration
-	// MaxAge bounds the window, so an abandoned order is polled a handful of
-	// times rather than once a minute until the backstop sweeper reclaims it.
-	// Orders past this age are still verified once, just before release.
+	// MaxAge bounds the window so an abandoned order is polled a handful of times
+	// rather than every pass until the backstop sweeper reclaims it (which
+	// verifies once more before releasing).
 	MaxAge time.Duration
-	// BatchSize caps how many orders a single pass pulls, bounding the provider
-	// API calls one pass can make.
+	// BatchSize caps the provider calls one pass can make.
 	BatchSize int
 }
 

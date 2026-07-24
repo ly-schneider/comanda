@@ -153,9 +153,8 @@ func (h *Handlers) HandlePayrexxWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := h.payments.MarkOrderPaidByPayrexx(ctx, orderID, result.GatewayID, result.TransactionID, contactEmail); err != nil {
-		// A settled payment whose order is gone or already resolved can never be
-		// applied, and Payrexx would redeliver forever. Ack it and escalate: this
-		// means a customer was charged for something we cannot hand over.
+		// Unapplicable forever, so ack instead of letting Payrexx redeliver. The
+		// log is the escalation: a customer was charged for an undeliverable order.
 		if errors.Is(err, service.ErrOrderGone) || errors.Is(err, service.ErrOrderNotPending) {
 			h.logger.Error("payrexx webhook: payment cannot be applied to its order",
 				zap.Error(err),

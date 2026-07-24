@@ -21,9 +21,8 @@ import (
 // far longer than any real payment window, so it only ever catches abandonment.
 //
 // Release is destructive (the order row goes away), so each candidate is first
-// verified against the payment provider. An order that turns out to be paid is
-// settled instead of released — the last chance to rescue a customer whose
-// webhook never arrived.
+// verified against the payment provider and settled instead if it turns out to
+// be paid — the last chance to rescue a customer whose webhook never arrived.
 //
 // It enumerates stale orders across all tenants on the privileged (RLS-bypassing)
 // client, then reclaims each inside its own tenant-scoped tx so a single failure
@@ -61,10 +60,8 @@ func StartPendingOrderSweeper(
 		for _, o := range stale {
 			var wasPaid bool
 			err := repository.RunInTenantTx(ctx, appDB.DB, o.TenantID, func(fctx context.Context) error {
-				// Releasing deletes the order, which would strand a payment that
-				// did go through, so ask the provider first. A provider that can't
-				// answer means we don't know — the error keeps the hold and we
-				// retry next pass rather than delete a possibly-paid order.
+				// A provider that can't answer means we don't know: the error keeps
+				// the hold rather than deleting a possibly-paid order.
 				res, err := payments.ReconcilePendingOrder(fctx, o.ID)
 				if err != nil {
 					return err

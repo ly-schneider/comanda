@@ -18,7 +18,6 @@ func TestReconcileGuardCooldownPerOrder(t *testing.T) {
 	if _, ok := g.tryBegin("order1", now.Add(reconcilePullInterval/2)); ok {
 		t.Error("a second pull inside the cooldown must be declined")
 	}
-	// A different order is independent — one customer polling must not block another.
 	if _, ok := g.tryBegin("order2", now.Add(reconcilePullInterval/2)); !ok {
 		t.Error("a different order must not be blocked by another order's cooldown")
 	}
@@ -50,8 +49,6 @@ func TestReconcileGuardCapsConcurrency(t *testing.T) {
 	}
 }
 
-// Cooldown entries are keyed per order, so a long event must not leave the map
-// holding every order the shop ever sold.
 func TestReconcileGuardPrunesStaleEntries(t *testing.T) {
 	g := newReconcileGuard()
 	start := time.Now()

@@ -52,8 +52,6 @@ describe("payment return page", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/checkout/success?order_id=order0000001"))
   })
 
-  // The trip back from the TWINT app often beats the network; a single failed
-  // request must not be read as a failed payment.
   it("survives transient request failures and still confirms", async () => {
     getPaymentStatus
       .mockRejectedValueOnce(new Error("network"))
@@ -67,8 +65,6 @@ describe("payment return page", () => {
     expect(replace).not.toHaveBeenCalledWith("/checkout/error")
   })
 
-  // A webhook that never lands leaves the order pending. The customer has paid,
-  // so they belong on their order page — never on an error screen.
   it("hands a still-pending payment to the order page instead of the error page", async () => {
     getPaymentStatus.mockResolvedValue({ status: "pending" })
     render(<PaymentNextClient />)

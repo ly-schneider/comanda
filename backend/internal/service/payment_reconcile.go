@@ -13,41 +13,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// The webhook is one delivery attempt at our API; when it is late, dropped, or
-// lands mid-rollout the customer has paid and has no pickup QR. Reconciling
-// asks the provider directly, so confirmation never depends on a push arriving.
 const (
-	// reconcilePullTimeout bounds how long a provider call may pin the caller.
-	// On the request path that caller holds the request's DB transaction, so
-	// this stays well under any client-side poll interval.
-	reconcilePullTimeout = 5 * time.Second
-	// reconcilePullInterval is the minimum spacing between provider pulls for
-	// one order on the request path, where a waiting customer polls every
-	// couple of seconds.
+	reconcilePullTimeout  = 5 * time.Second
 	reconcilePullInterval = 3 * time.Second
-	// reconcileMaxInFlight caps concurrent request-path pulls. Each one holds a
-	// pooled DB connection across an external HTTP call, and connection
-	// exhaustion — not CPU — is this deployment's known ceiling.
+	// A request-path pull holds a pooled DB connection across an external HTTP
+	// call, and connection exhaustion — not CPU — is this deployment's ceiling.
 	reconcileMaxInFlight = 8
 )
 
-// ReconcileResult reports what a provider pull established about an order.
 type ReconcileResult struct {
-	// Checked is false when no pull happened (order already settled, no gateway,
-	// provider unconfigured, or the request-path guard declined).
+	// Checked is false when no pull happened: already settled, no gateway,
+	// provider unconfigured, or the request-path guard declined.
 	Checked bool
 	// Settled is true only when this call moved the order from pending to paid.
 	Settled bool
-	// Paid reflects the order's state after the call.
-	Paid bool
-	// Failed means the provider reports a terminal failure — the money will not
-	// arrive and the hold can be released.
-	Failed bool
+	Paid    bool
+	Failed  bool
 }
 
-// reconcileGuard keeps request-path pulls from becoming a load amplifier: a
-// per-order cooldown (many customers polling one order) plus a global
-// concurrency cap (many customers polling many orders).
 type reconcileGuard struct {
 	mu    sync.Mutex
 	last  map[string]time.Time
@@ -61,12 +44,8 @@ func newReconcileGuard() *reconcileGuard {
 	}
 }
 
-// tryBegin reserves the right to pull for one order, or reports false when the
-// caller should just answer from the database. Never blocks.
-//
-// The slot is taken before the cooldown is stamped so that a pull turned away
-// for lack of capacity doesn't start a cooldown it never used — otherwise a busy
-// moment would silently mute an order's next few polls.
+// tryBegin never blocks. The slot is taken before the cooldown is stamped, so a
+// pull turned away for capacity doesn't mute the order's next few polls.
 func (g *reconcileGuard) tryBegin(key string, now time.Time) (func(), bool) {
 	select {
 	case g.slots <- struct{}{}:
@@ -90,10 +69,8 @@ func (g *reconcileGuard) tryBegin(key string, now time.Time) (func(), bool) {
 	return release, true
 }
 
-// TryReconcilePendingOrder is the request-path entry point: it reconciles when
-// the shared pull budget allows and otherwise reports Checked=false, leaving the
-// order for the background reconciler. A caller must not treat a declined pull
-// as an error — answering from the database is the correct fallback.
+// TryReconcilePendingOrder is the request-path entry point. A declined pull is
+// not an error: answer from the database and leave it to the background pass.
 func (s *paymentService) TryReconcilePendingOrder(ctx context.Context, orderID string) (ReconcileResult, error) {
 	release, ok := s.reconcile.tryBegin(orderID, time.Now())
 	if !ok {
@@ -103,11 +80,9 @@ func (s *paymentService) TryReconcilePendingOrder(ctx context.Context, orderID s
 	return s.ReconcilePendingOrder(ctx, orderID)
 }
 
-// ReconcilePendingOrder asks the payment provider what actually happened to a
-// pending order's checkout and settles it when the money is in. It is
-// idempotent and safe to run against any order: anything already settled, never
-// sent to a provider, or belonging to a tenant without a configured provider is
-// a no-op.
+// ReconcilePendingOrder settles a pending order from the provider's own view of
+// its checkout, covering webhooks that never arrive. Idempotent, and a no-op for
+// any order that is already settled or was never sent to a provider.
 func (s *paymentService) ReconcilePendingOrder(ctx context.Context, orderID string) (ReconcileResult, error) {
 	ctx, finish := trace.StartSpan(ctx, "service", "payment.reconcile_pending")
 	defer finish()
@@ -125,8 +100,7 @@ func (s *paymentService) ReconcilePendingOrder(ctx context.Context, orderID stri
 		return ReconcileResult{}, nil
 	}
 
-	// No usable credentials (never configured, or disconnected since this order
-	// was placed) is "can't check", not a failure. Returning an error here would
+	// No usable credentials is "can't check", not a failure — an error here would
 	// block the sweeper that depends on this verdict and leak the hold forever.
 	provider, err := s.providers.For(ctx)
 	if err != nil {
@@ -140,9 +114,8 @@ func (s *paymentService) ReconcilePendingOrder(ctx context.Context, orderID stri
 	gatewayID := *ord.PayrexxGatewayID
 	checkout, err := provider.GetCheckout(pullCtx, gatewayID)
 	if err != nil {
-		// A gateway the provider no longer knows about (expired and expunged) is
-		// a definitive "no payment here". Reporting it as an error would make the
-		// sweeper defer release forever and strand the reserved stock.
+		// A gateway the provider has expunged is a definitive "no payment here";
+		// as an error it would defer the sweeper's release forever.
 		if errors.Is(err, payrexx.ErrNotFound) {
 			return ReconcileResult{Checked: true, Failed: true}, nil
 		}
@@ -166,9 +139,7 @@ func (s *paymentService) ReconcilePendingOrder(ctx context.Context, orderID stri
 	}
 
 	if checkout.Settlement.TransactionID == 0 {
-		// Settled without a transaction id: the customer is served, but a later
-		// refund for this order has to be issued from the Payrexx dashboard
-		// unless a webhook arrives to backfill it.
+		// Refunding this order needs the Payrexx dashboard until a webhook backfills.
 		s.logger.Warn("reconciled payment without transaction id",
 			zap.String("orderId", orderID),
 			zap.Int("gatewayId", gatewayID),

@@ -58,9 +58,8 @@ type OrderRepository interface {
 
 	// ListPendingForReconcile returns id + tenant_id for pending orders that were
 	// handed to the payment provider (they carry a gateway id) and were created
-	// within (createdAfter, createdBefore) — old enough that the payment should
-	// have resolved, young enough to still be worth polling. Like
-	// ListStalePending it runs on the privileged client for the background job.
+	// within (createdAfter, createdBefore). Like ListStalePending it runs on the
+	// privileged client for the background job.
 	ListPendingForReconcile(ctx context.Context, privileged *ent.Client, createdBefore, createdAfter time.Time, limit int) ([]StalePendingOrder, error)
 
 	// Aggregation

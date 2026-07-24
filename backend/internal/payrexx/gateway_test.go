@@ -24,8 +24,7 @@ func TestSettleConfirmedGateway(t *testing.T) {
 	}
 }
 
-// A gateway keeps every attempt it saw, so a retry after a decline must settle
-// on the successful transaction — refunding the declined one would fail.
+// Refunding the declined attempt of a retried payment would fail.
 func TestSettlePrefersSuccessfulTransaction(t *testing.T) {
 	body := []byte(`{"id":77,"status":"confirmed","invoices":[{"transactions":[{"id":1,"status":"declined"},{"id":2,"status":"confirmed","contact":{"email":"gast@example.ch"}}]}]}`)
 	var gw Gateway
@@ -42,8 +41,6 @@ func TestSettlePrefersSuccessfulTransaction(t *testing.T) {
 	}
 }
 
-// The customer's order matters more than our ability to refund it later, so a
-// confirmed gateway with no recoverable transaction id still settles.
 func TestSettleConfirmedWithoutTransactionID(t *testing.T) {
 	var gw Gateway
 	if err := json.Unmarshal([]byte(`{"id":77,"status":"confirmed"}`), &gw); err != nil {
@@ -89,8 +86,6 @@ func TestSettleNonTerminalAndFailedStatuses(t *testing.T) {
 	}
 }
 
-// A gateway can report "waiting" while carrying a confirmed transaction; the
-// money is in and the order must not be left pending.
 func TestSettleWaitingGatewayWithConfirmedTransaction(t *testing.T) {
 	var gw Gateway
 	if err := json.Unmarshal([]byte(`{"id":77,"status":"waiting","invoices":[{"transactions":[{"id":5,"status":"confirmed"}]}]}`), &gw); err != nil {

@@ -33,13 +33,10 @@ type CheckoutResult struct {
 	Link        string
 	Status      string
 	ReferenceID string
-	// Settlement is populated by GetCheckout only: what the provider says about
-	// the money behind this checkout, so a payment can be confirmed by pulling
-	// when the webhook never arrives.
+	// Settlement is populated by GetCheckout only.
 	Settlement CheckoutSettlement
 }
 
-// CheckoutSettlement mirrors the terminal facts a success webhook would carry.
 type CheckoutSettlement struct {
 	Paid          bool
 	Failed        bool

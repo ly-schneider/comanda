@@ -162,8 +162,8 @@ export default function OrderPageClient() {
   // A cancelled or fully refunded order has nothing left to hand over, so the
   // backend clears/empties the pickup token and we show no QR.
   const pickupSuppressed = status === "cancelled" || status === "refunded"
-  // Payment not confirmed yet: the backend withholds the pickup token until the
-  // money is in. The poll above keeps running, so the QR appears on its own.
+  // The backend withholds the pickup token until the money is in; the poll above
+  // keeps running, so the QR appears on its own.
   const awaitingPayment = status === "pending"
   const refundedTotalCents = serverOrder?.refundedTotalCents ?? 0
 

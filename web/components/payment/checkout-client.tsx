@@ -47,11 +47,9 @@ export function CheckoutClient() {
 
       const returnUrl = `${window.location.origin}/checkout/payment/next?order_id=${encodeURIComponent(orderRes.id)}`
 
-      // Record the order before leaving for Payrexx. The return trip from the
-      // TWINT app is the least reliable step of the whole flow — customers pay
-      // and then close the app instead of coming back — and anything stored
-      // only on return is lost with it. Persisted here, the order is waiting
-      // under "Bestellungen" with its pickup QR whenever they look.
+      // Before leaving for Payrexx: customers routinely pay and then close the
+      // TWINT app instead of coming back, and anything stored on return is lost
+      // with that trip.
       addOrder(orderRes.id)
 
       // Store order ID for success page

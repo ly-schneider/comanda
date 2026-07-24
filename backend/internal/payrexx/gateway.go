@@ -17,8 +17,7 @@ type Gateway struct {
 	ReferenceID  string    `json:"referenceId"`
 	PaymentMeans []string  `json:"pm"`
 	CreatedAt    time.Time `json:"-"`
-	// TransactionID is set on some responses; when absent the id has to be dug
-	// out of the nested invoices. Settle() prefers whichever is present.
+	// Only some responses carry transactionId; otherwise it's inside the invoices.
 	TransactionID *int             `json:"transactionId,omitempty"`
 	Invoices      []GatewayInvoice `json:"invoices,omitempty"`
 }
@@ -33,8 +32,6 @@ type GatewayTransaction struct {
 	Contact WebhookContact `json:"contact,omitempty"`
 }
 
-// Settlement is what a gateway pull says about the payment behind it: whether
-// the money is in, and the transaction identity needed to refund it later.
 type Settlement struct {
 	Paid          bool
 	Failed        bool
@@ -42,15 +39,9 @@ type Settlement struct {
 	ContactEmail  string
 }
 
-// Settle interprets a pulled gateway the same way the webhook path interprets a
-// pushed transaction, so a payment confirmed by polling is recorded identically
-// to one confirmed by a webhook.
-//
-// The gateway's own status is authoritative for paid/failed; the nested
-// transaction supplies the id and payer email. A confirmed gateway whose
-// transaction id can't be recovered is still Paid — the customer gets their
-// order — and the caller is expected to log the missing id, since refunding
-// that order needs the Payrexx dashboard.
+// Settle reads a pulled gateway the way the webhook path reads a pushed
+// transaction. A confirmed gateway with no recoverable transaction id is still
+// Paid — the customer gets their order; refunding it then needs the dashboard.
 func (g *Gateway) Settle() Settlement {
 	s := Settlement{}
 	switch g.Status {
@@ -65,8 +56,7 @@ func (g *Gateway) Settle() Settlement {
 			if txn.ID == 0 {
 				continue
 			}
-			// A gateway can carry several transactions (a declined attempt then a
-			// successful retry); the successful one is the one to record.
+			// A decline followed by a successful retry leaves both on the gateway.
 			if s.TransactionID == 0 || isSuccessTransactionStatus(txn.Status) {
 				s.TransactionID = txn.ID
 				if txn.Contact.Email != "" {

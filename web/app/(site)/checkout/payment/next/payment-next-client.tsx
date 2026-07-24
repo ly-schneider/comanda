@@ -6,15 +6,11 @@ import { useCart } from "@/contexts/cart-context"
 import { getPaymentStatus } from "@/lib/api/payments"
 import { addOrder } from "@/lib/orders-storage"
 
-// Confirmation depends on Payrexx notifying our backend, which can lag well
-// past the moment the customer lands back here. Waiting ~90s costs an impatient
-// customer nothing (the order page keeps polling either way) and saves a paid
-// customer from an error screen.
+// Confirmation can lag well past the moment the customer lands back here.
 const POLL_WINDOW_MS = 90_000
 const POLL_MIN_INTERVAL_MS = 1_000
 const POLL_MAX_INTERVAL_MS = 4_000
-// The trip back from the TWINT app routinely lands before the network does, so
-// a lone failed request means nothing.
+// The trip back from the TWINT app often lands before the network does.
 const MAX_CONSECUTIVE_ERRORS = 4
 
 export default function PaymentNextClient() {
@@ -74,7 +70,6 @@ export default function PaymentNextClient() {
       if (pollingRef.current) return
       pollingRef.current = true
 
-      // Keep the order reachable even if the customer closes this screen now.
       addOrder(orderId)
 
       const deadline = Date.now() + POLL_WINDOW_MS
@@ -102,8 +97,6 @@ export default function PaymentNextClient() {
         } catch {
           consecutiveErrors++
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            // Repeatedly unreachable: the payment may well have gone through, so
-            // hand over to the order page rather than claiming it failed.
             router.replace(`/orders/${encodeURIComponent(orderId)}?from=pending`)
             return
           }
@@ -117,8 +110,8 @@ export default function PaymentNextClient() {
 
       if (cancelled) return
 
-      // Still unconfirmed. The order exists and keeps polling on its own page;
-      // an error screen here would strand a customer whose money is already gone.
+      // Still unconfirmed: the order page keeps polling, an error screen would
+      // strand a customer whose money is already gone.
       router.replace(`/orders/${encodeURIComponent(orderId)}?from=pending`)
     }
 

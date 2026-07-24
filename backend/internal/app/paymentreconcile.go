@@ -14,14 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// StartPaymentReconciler asks the payment provider about orders whose payment
-// never resolved locally, and settles the ones that actually went through.
-//
-// The webhook is a single push at our API: delayed, dropped, or delivered while
-// a pod was rolling, it leaves a customer who has paid without a pickup QR and
-// with no way to get one. This pass makes confirmation pull-based as well, so
-// the customer's order appears on its own — whether or not they ever came back
-// from the TWINT app.
+// StartPaymentReconciler settles orders whose success webhook never arrived —
+// delayed, dropped, or delivered while a pod was rolling — so a customer who has
+// paid gets their pickup QR without ever coming back from the TWINT app.
 //
 // It enumerates candidates across all tenants on the privileged (RLS-bypassing)
 // client, then reconciles each inside its own tenant-scoped tx so one failure
@@ -56,8 +51,7 @@ func StartPaymentReconciler(
 			return
 		}
 		if len(candidates) == rc.BatchSize && rc.BatchSize > 0 {
-			// The window held more orders than one pass polls; the remainder is
-			// picked up next pass. Say so rather than looking fully covered.
+			// Don't look like full coverage when the window held more than a batch.
 			logger.Info("payment reconciler: batch full, deferring remainder",
 				zap.Int("batchSize", rc.BatchSize))
 		}
@@ -83,8 +77,6 @@ func StartPaymentReconciler(
 			}
 		}
 		if settled > 0 {
-			// Every one of these is a customer who paid and would otherwise have
-			// been left without a pickup QR.
 			logger.Info("settled orders missed by webhooks",
 				zap.Int("count", settled),
 				zap.Int("candidates", len(candidates)),

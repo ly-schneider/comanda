@@ -42,8 +42,7 @@ export default function OrdersPage() {
       const stored = getOrders()
       if (!cancelled) setOrders(stored)
 
-      // Locally stored orders are recorded before payment, so their state has to
-      // come from the server: one may still be waiting for confirmation, and one
+      // Stored before payment, so the state comes from the server — and an order
       // that was never paid is eventually released and stops existing.
       const resolved = await Promise.all(
         stored.map(async (o) => {

@@ -16,9 +16,7 @@ import (
 
 const apiBaseURL = "https://api.payrexx.com/v1.0/"
 
-// ErrNotFound means Payrexx has no such object — a definitive answer, unlike a
-// transport or server error. Callers reconciling an order can act on it instead
-// of holding the order open waiting for an answer that will never come.
+// ErrNotFound is a definitive answer, unlike a transport or server error.
 var ErrNotFound = errors.New("payrexx: not found")
 
 const DefaultRequestTimeout = 8 * time.Second
