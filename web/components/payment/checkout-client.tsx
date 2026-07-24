@@ -10,6 +10,7 @@ import { useCart } from "@/contexts/cart-context"
 import { isApiError } from "@/lib/api"
 import { createOrder, initiatePayment } from "@/lib/api/payments"
 import { extractSoldOutItems, extractUnavailableItems, stashSoldOut } from "@/lib/checkout-sold-out"
+import { addOrder } from "@/lib/orders-storage"
 import { cartDepositCents, formatChf } from "@/lib/utils"
 
 export function CheckoutClient() {
@@ -45,6 +46,13 @@ export function CheckoutClient() {
       const orderRes = await createOrder({ items, contactEmail: email || undefined }, accessToken || undefined)
 
       const returnUrl = `${window.location.origin}/checkout/payment/next?order_id=${encodeURIComponent(orderRes.id)}`
+
+      // Record the order before leaving for Payrexx. The return trip from the
+      // TWINT app is the least reliable step of the whole flow — customers pay
+      // and then close the app instead of coming back — and anything stored
+      // only on return is lost with it. Persisted here, the order is waiting
+      // under "Bestellungen" with its pickup QR whenever they look.
+      addOrder(orderRes.id)
 
       // Store order ID for success page
       try {

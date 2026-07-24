@@ -6,11 +6,14 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { listMyOrders } from "@/lib/api/orders"
-import { getOrders, type StoredOrder } from "@/lib/orders-storage"
+import { isApiError } from "@/lib/api"
+import { getOrderPublicById, listMyOrders, type OrderStatus } from "@/lib/api/orders"
+import { getOrders, removeOrder, type StoredOrder } from "@/lib/orders-storage"
+
+type ListedOrder = StoredOrder & { status?: OrderStatus }
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<StoredOrder[]>([])
+  const [orders, setOrders] = useState<ListedOrder[]>([])
   const router = useRouter()
   const { accessToken } = useAuth()
   const footerRef = useRef<HTMLDivElement>(null)
@@ -18,22 +21,51 @@ export default function OrdersPage() {
   const [appFooterHeight, setAppFooterHeight] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
+
     async function load() {
       // If authenticated, load orders from backend; otherwise fallback to local storage
       if (accessToken) {
         try {
           const res = await listMyOrders(accessToken)
           if (res.items?.length) {
-            setOrders(res.items.map((it) => ({ id: it.id, createdAt: it.createdAt })))
+            if (!cancelled) {
+              setOrders(res.items.map((it) => ({ id: it.id, createdAt: it.createdAt, status: it.status })))
+            }
             return
           }
         } catch {
           // ignore and fallback
         }
       }
-      setOrders(getOrders())
+
+      const stored = getOrders()
+      if (!cancelled) setOrders(stored)
+
+      // Locally stored orders are recorded before payment, so their state has to
+      // come from the server: one may still be waiting for confirmation, and one
+      // that was never paid is eventually released and stops existing.
+      const resolved = await Promise.all(
+        stored.map(async (o) => {
+          try {
+            const details = await getOrderPublicById(o.id)
+            return { ...o, status: details.status }
+          } catch (e) {
+            if (isApiError(e) && e.status === 404) {
+              removeOrder(o.id)
+              return null
+            }
+            return o
+          }
+        })
+      )
+      if (!cancelled) setOrders(resolved.filter((o): o is ListedOrder => o !== null))
     }
+
     void load()
+    return () => {
+      cancelled = true
+    }
   }, [accessToken])
 
   // Measure fixed bottom button height
@@ -105,7 +137,12 @@ export default function OrdersPage() {
                   </span>
 
                   {/* Middle: Name "Bestellung (date)" */}
-                  <span className="min-w-0 flex-1 truncate text-base font-medium">Bestellung {dateLabel}</span>
+                  <span className="min-w-0 flex-1 truncate text-base font-medium">
+                    Bestellung {dateLabel}
+                    {o.status === "pending" && (
+                      <span className="text-muted-foreground block text-xs font-normal">Zahlung wird bestätigt</span>
+                    )}
+                  </span>
 
                   {/* Right: Arrow in bordered rounded box */}
                   <span className="border-border bg-background shrink-0 rounded-[7px] border p-2">
