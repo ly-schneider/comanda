@@ -72,7 +72,10 @@ func TestGetLatestReleaseUsesProxyDownloadURL(t *testing.T) {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
 	if release == nil {
+		// Unreachable: staticcheck doesn't model t.Fatal as terminating and
+		// flags the derefs below as a nil deref (SA5011).
 		t.Fatal("expected a release")
+		return
 	}
 	if release.VersionName != "1.0.3" || release.VersionCode != 10003 {
 		t.Errorf("got version %s (%d)", release.VersionName, release.VersionCode)
@@ -95,6 +98,7 @@ func TestOpenAPKDownloadStreamsAsset(t *testing.T) {
 	}
 	if body == nil {
 		t.Fatal("expected a body")
+		return
 	}
 	defer func() { _ = body.Close() }()
 
