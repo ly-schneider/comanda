@@ -89,8 +89,6 @@ describe("proxy — session cookie name is proto-independent", () => {
 
   function reqWith(proto: string, cookie: string, pathname = "/admin"): NextRequest {
     return new NextRequest(`http://${host}${pathname}`, {
-      // cf-visitor mirrors the real custom-domain shape: the browser leg is
-      // https even when the edge→origin hop (x-forwarded-proto) is http.
       headers: { host, "x-forwarded-proto": proto, "cf-visitor": '{"scheme":"https"}', cookie },
     })
   }
@@ -113,10 +111,8 @@ describe("proxy — session cookie name is proto-independent", () => {
   })
 })
 
-// BYO custom-domain Ingresses carry no Traefik redirect-https middleware (an
-// origin-level redirect loops when the customer's edge terminates TLS and
-// forwards http), so the upgrade happens here — but only on positive evidence
-// that the *browser* used http.
+// The upgrade must fire only on positive evidence that the *browser* used http;
+// anything else loops on a custom domain whose edge forwards plain http.
 describe("proxy — https upgrade", () => {
   const host = "food.myevent.ch"
 

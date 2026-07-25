@@ -20,12 +20,10 @@ const HTTPS_UPGRADE_COOKIE = "comanda-https-upgrade"
 /**
  * The scheme the *browser* used, or null when it can't be established.
  *
- * A BYO custom domain behind the customer's Cloudflare in Flexible SSL mode is
- * https to the browser but plain :80 to Traefik, which overwrites
- * x-forwarded-proto (no trustedIPs — the TCP-passthrough LB means no client is
- * ever trusted). CF-Visitor survives untouched and reports the visitor's own
- * scheme, so it decides whenever Cloudflare fronted the request. Null over a
- * guess: a wrong "http" verdict redirects forever.
+ * A custom domain behind the customer's Cloudflare is https to the browser but
+ * plain :80 to Traefik, which overwrites x-forwarded-proto. Only CF-Visitor
+ * survives with the visitor's own scheme. Null over a guess — a wrong "http"
+ * verdict redirects forever.
  */
 function visitorScheme(request: NextRequest): "http" | "https" | null {
   const cfVisitor = request.headers.get("cf-visitor")
@@ -44,12 +42,9 @@ function visitorScheme(request: NextRequest): "http" | "https" | null {
 
 function httpsUpgrade(request: NextRequest, publicHost: string, pathname: string): NextResponse | null {
   if (isDevEnv() || visitorScheme(request) !== "http") return null
-  // HTTP-01 renewals are plaintext by definition (Traefik routes them to the
-  // solver first, so this only matters if that routing ever changes).
   if (pathname.startsWith("/.well-known/acme-challenge/")) return null
-  // Loop breaker: an unidentifiable TLS-terminating proxy in front looks exactly
-  // like a plain http visitor, and redirecting one of those is what made an
-  // earlier attempt at this ERR_TOO_MANY_REDIRECTS. One upgrade, then serve.
+  // Loop breaker: an unrecognised TLS terminator in front is indistinguishable
+  // from a plain http visitor. One upgrade, then serve.
   if (request.cookies.get(HTTPS_UPGRADE_COOKIE)) return null
 
   const url = new URL(request.nextUrl)
@@ -78,9 +73,8 @@ export async function proxy(request: NextRequest) {
   const publicHost = getPublicHost(request)
   const tenantResult = parseTenantHost(publicHost)
 
-  // Platform hosts are upgraded at the edge and by Traefik's redirect-https
-  // middleware; the Ingresses the domain reconciler creates for BYO custom
-  // domains carry no such middleware, so http is served in cleartext there.
+  // Custom-domain Ingresses carry no Traefik redirect-https middleware (an
+  // origin-level redirect loops there), so the upgrade happens here.
   const upgrade = httpsUpgrade(request, publicHost, pathname)
   if (upgrade) return upgrade
 
@@ -143,9 +137,7 @@ export async function proxy(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("Referrer-Policy", "origin-when-cross-origin")
 
-  // The upgrade redirect only fixes one request; HSTS is what stops the browser
-  // from ever going out in cleartext again. No includeSubDomains — a BYO apex
-  // has subdomains the platform doesn't serve.
+  // No includeSubDomains — a BYO apex has subdomains the platform doesn't serve.
   if (visitorScheme(request) === "https") {
     response.headers.set("Strict-Transport-Security", "max-age=15552000")
   }
