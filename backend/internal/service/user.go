@@ -82,7 +82,7 @@ func (s *userService) List(ctx context.Context) ([]*ent.User, int64, error) {
 }
 
 func (s *userService) GetByID(ctx context.Context, id string) (*ent.User, error) {
-	if err := s.requireOrgMember(ctx, id); err != nil {
+	if err := s.requireTenantVisible(ctx, id); err != nil {
 		return nil, err
 	}
 	return s.userRepo.GetByID(ctx, id)
@@ -249,9 +249,8 @@ func (s *userService) orgMemberUserIDs(ctx context.Context) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// requireOrgMember fails closed with ErrNotFound (a 404, not a 403, so callers
-// can't probe which user IDs exist outside their org) unless the target user is
-// a member of the bound tenant's organization.
+// requireOrgMember is the write gate. ErrNotFound, not forbidden, so callers
+// can't probe which user IDs exist outside their org.
 func (s *userService) requireOrgMember(ctx context.Context, userID string) error {
 	tx, ok := repository.RequestTxFromContext(ctx)
 	if !ok {
@@ -265,6 +264,32 @@ func (s *userService) requireOrgMember(ctx context.Context, userID string) error
 		return err
 	}
 	if !exists {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+// requireTenantVisible is the read gate: members plus the users the tenant's own
+// rows point at (a customer is a user with no member row). The user table is
+// global with a permissive policy, so this gate — not RLS on user — is the
+// isolation boundary; only ever widen it to a tenant-scoped table.
+func (s *userService) requireTenantVisible(ctx context.Context, userID string) error {
+	tx, ok := repository.RequestTxFromContext(ctx)
+	if !ok {
+		return errors.New("user service: no request tx in context")
+	}
+	var visible bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM member WHERE organization_id = app_current_org_id() AND user_id = $1)
+		    OR EXISTS(SELECT 1 FROM "order" WHERE customer_id = $1)
+		    OR EXISTS(SELECT 1 FROM inventory_ledger WHERE created_by = $1)
+		    OR EXISTS(SELECT 1 FROM device WHERE decided_by = $1)
+		    OR EXISTS(SELECT 1 FROM admin_invite WHERE invited_by_user_id = $1)`,
+		userID,
+	).Scan(&visible); err != nil {
+		return err
+	}
+	if !visible {
 		return repository.ErrNotFound
 	}
 	return nil

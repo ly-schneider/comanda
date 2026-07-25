@@ -4,16 +4,28 @@ import (
 	"testing"
 
 	"backend/internal/auth"
+	nanoid "backend/internal/id"
 	"backend/internal/repository"
 	"backend/internal/service"
 
 	"github.com/stretchr/testify/require"
 )
 
-// TestUserManagementOrgScoped proves the /v1/users surface is confined to the
-// bound tenant's organization members. The user table is global (RLS USING
-// true), so without the service-level membership gate a tenant admin could read
-// or mutate any user platform-wide by ID.
+func (e *rlsEnv) seedOrderForCustomer(t *testing.T, tenantID, customerID string) string {
+	t.Helper()
+	orderID := nanoid.New()
+	e.privExec(t,
+		`INSERT INTO "order" (id, total_cents, status, origin, customer_id, tenant_id)
+		 VALUES ($1, 500, 'paid', 'shop', $2, $3)`,
+		orderID, customerID, tenantID,
+	)
+	return orderID
+}
+
+// TestUserManagementOrgScoped proves /v1/users is confined to the bound tenant:
+// reads reach its members and its own customers, mutations reach members only.
+// The user table is global (RLS USING true), so without these service-level
+// gates a tenant admin could read or mutate any user platform-wide by ID.
 func TestUserManagementOrgScoped(t *testing.T) {
 	env := newRLSEnv(t)
 
@@ -57,6 +69,37 @@ func TestUserManagementOrgScoped(t *testing.T) {
 		u, err := svc.GetByID(ctx, adminA)
 		require.NoError(t, err)
 		require.Equal(t, adminA, u.ID)
+	})
+
+	t.Run("get of an own customer succeeds", func(t *testing.T) {
+		customerA := env.seedUser(t)
+		env.seedOrderForCustomer(t, tenantA, customerA)
+
+		u, err := svc.GetByID(ctx, customerA)
+		require.NoError(t, err)
+		require.Equal(t, customerA, u.ID)
+
+		roles, err := svc.RolesByUserIDs(ctx, []string{customerA})
+		require.NoError(t, err)
+		_, ok := roles[customerA]
+		require.False(t, ok, "a customer has no member role")
+	})
+
+	t.Run("get of a foreign tenant's customer is not found", func(t *testing.T) {
+		customerB := env.seedUser(t)
+		env.seedOrderForCustomer(t, tenantB, customerB)
+
+		_, err := svc.GetByID(ctx, customerB)
+		require.ErrorIs(t, err, repository.ErrNotFound)
+	})
+
+	t.Run("a customer cannot be renamed, re-roled or removed", func(t *testing.T) {
+		customerA := env.seedUser(t)
+		env.seedOrderForCustomer(t, tenantA, customerA)
+
+		require.ErrorIs(t, svc.UpdateName(ctx, customerA, "hijacked"), repository.ErrNotFound)
+		require.ErrorIs(t, svc.UpdateRole(ctx, customerA, "staff"), repository.ErrNotFound)
+		require.ErrorIs(t, svc.Delete(ctx, customerA), repository.ErrNotFound)
 	})
 
 	t.Run("rename of a non-member is refused and does not write", func(t *testing.T) {
