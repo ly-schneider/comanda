@@ -40,8 +40,19 @@ function visitorScheme(request: NextRequest): "http" | "https" | null {
   return proto === "http" || proto === "https" ? proto : null
 }
 
+/**
+ * Next fills in x-forwarded-proto from the socket when nothing upstream set it,
+ * so every direct hit — Playwright's webServer probe, e2e runs, k8s probes —
+ * reads as an http visitor. Only real public hostnames are ever upgraded.
+ */
+function isPublicHostname(host: string): boolean {
+  if (!host || host === "localhost" || host.endsWith(".localhost")) return false
+  if (/^[\d.]+$/.test(host) || host.startsWith("[")) return false
+  return host.includes(".")
+}
+
 function httpsUpgrade(request: NextRequest, publicHost: string, pathname: string): NextResponse | null {
-  if (isDevEnv() || visitorScheme(request) !== "http") return null
+  if (isDevEnv() || !isPublicHostname(publicHost) || visitorScheme(request) !== "http") return null
   if (pathname.startsWith("/.well-known/acme-challenge/")) return null
   // Loop breaker: an unrecognised TLS terminator in front is indistinguishable
   // from a plain http visitor. One upgrade, then serve.

@@ -163,6 +163,13 @@ describe("proxy — https upgrade", () => {
     expect(res.headers.get("set-cookie")).toContain("comanda-https-upgrade=1")
   })
 
+  // Next self-fills x-forwarded-proto: http on a direct hit, which would
+  // otherwise 308 Playwright's webServer probe off to https.
+  it.each(["127.0.0.1:3000", "localhost:3000", "myevent.localhost:3000"])("serves %s over http", async (h) => {
+    const res = await proxy(new NextRequest(`http://${h}/`, { headers: { host: h, "x-forwarded-proto": "http" } }))
+    expect(res.status).toBe(200)
+  })
+
   it("leaves ACME HTTP-01 challenges on http", async () => {
     const res = await proxy(req("/.well-known/acme-challenge/tok", { "x-forwarded-proto": "http" }))
     expect(res.status).toBe(200)
