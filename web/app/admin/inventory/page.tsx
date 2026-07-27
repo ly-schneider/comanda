@@ -1,98 +1,100 @@
 "use client"
+import { Download } from "lucide-react"
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import type { DateRange } from "react-day-picker"
+import { CategorySelect } from "@/components/admin/category-select"
+import { DateRangePicker } from "@/components/admin/date-range-picker"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
+import type { CategoryLike } from "@/lib/categories"
+import { categoryScope, scopeParams } from "@/lib/inventory-export"
 
-type Product = {
-  id: string
-  name: string
-  priceCents: number
-  variantLabel?: string | null
-}
+type Product = { id: string; name: string }
 
-type LedgerEntry = {
-  id: string
-  productId: string
+type Movement = {
+  at: string
+  category?: string | null
+  subcategory?: string | null
+  product: string
+  variant?: string | null
   delta: number
   reason: string
-  createdAt: string
   orderId?: string | null
-  orderLineId?: string | null
-  deviceId?: string | null
   createdBy?: string | null
-  createdByUser?: { id: string; name: string | null } | null
-  variantId?: string | null
-  variantValue?: string | null
+  createdById?: string | null
 }
 
-const REASON_LABELS: Record<string, string> = {
-  opening_balance: "Eröffnung",
-  sale: "Verkauf",
-  refund: "Erstattung",
-  cancellation: "Stornierung",
-  manual_adjust: "Manuelle Anpassung",
-  correction: "Korrektur",
-}
+type EventDay = { year: number; month: number; day: number }
 
-const PAGE_SIZE = 50
+type ScopeMode = "category" | "product"
+
+const PREVIEW_LIMIT = 200
+
+function eventDayValue(day: EventDay) {
+  return `${day.year}-${day.month}-${day.day}`
+}
 
 export default function InventoryHistoryPage() {
   const fetchAuth = useAuthorizedFetch()
+  const [categories, setCategories] = useState<CategoryLike[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [selectedProductId, setSelectedProductId] = useState<string>("")
-  const [entries, setEntries] = useState<LedgerEntry[]>([])
+  const [events, setEvents] = useState<EventDay[]>([])
+
+  const [mode, setMode] = useState<ScopeMode>("category")
+  const [categoryId, setCategoryId] = useState("")
+  const [productId, setProductId] = useState("")
+  const [range, setRange] = useState<DateRange | undefined>()
+
+  const [movements, setMovements] = useState<Movement[]>([])
+  const [truncated, setTruncated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
 
-  // Load products for the selector
   useEffect(() => {
     let cancelled = false
-    async function loadProducts() {
+    async function load(path: string, apply: (data: { items?: unknown[] }) => void) {
       try {
-        const res = await fetchAuth("/api/v1/products")
+        const res = await fetchAuth(path)
         if (!res.ok) return
-        const data = (await res.json()) as { items?: Product[] }
-        const items = data.items ?? []
-        if (!cancelled) setProducts(items)
+        const data = (await res.json()) as { items?: unknown[] }
+        if (!cancelled) apply(data)
       } catch {
-        // ignore
+        // Leave the selector empty.
       }
     }
-    void loadProducts()
+    void load("/api/v1/products", (d) => setProducts((d.items ?? []) as Product[]))
+    void load("/api/v1/categories", (d) => setCategories((d.items ?? []) as CategoryLike[]))
+    void load("/api/v1/events", (d) => setEvents((d.items ?? []) as EventDay[]))
     return () => {
       cancelled = true
     }
   }, [fetchAuth])
 
-  const loadEntries = useCallback(
-    async (productId: string, newOffset: number) => {
-      if (!productId) return
+  const scope = mode === "product" ? "product" : categoryScope(categories, categoryId)
+  const scopeId = mode === "product" ? productId : categoryId
+  const params = useMemo(() => (range ? scopeParams(scope, scopeId, range) : null), [scope, scopeId, range])
+
+  const loadMovements = useCallback(
+    async (query: URLSearchParams) => {
       setLoading(true)
       setError(null)
       try {
-        const params = new URLSearchParams({
-          limit: String(PAGE_SIZE),
-          offset: String(newOffset),
-        })
-        const res = await fetchAuth(`/api/v1/products/${encodeURIComponent(productId)}/inventory/history?${params}`)
+        const search = new URLSearchParams(query)
+        search.set("limit", String(PREVIEW_LIMIT))
+        const res = await fetchAuth(`/api/v1/inventory/movements?${search}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as { items?: LedgerEntry[] }
-        const items = data.items ?? []
-        if (newOffset === 0) {
-          setEntries(items)
-        } else {
-          setEntries((prev) => [...prev, ...items])
-        }
-        setHasMore(items.length === PAGE_SIZE)
-        setOffset(newOffset)
+        const data = (await res.json()) as { items?: Movement[]; truncated?: boolean }
+        setMovements(data.items ?? [])
+        setTruncated(Boolean(data.truncated))
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Fehler beim Laden"
-        setError(msg)
+        setError(e instanceof Error ? e.message : "Fehler beim Laden")
+        setMovements([])
+        setTruncated(false)
       } finally {
         setLoading(false)
       }
@@ -100,115 +102,181 @@ export default function InventoryHistoryPage() {
     [fetchAuth]
   )
 
-  function handleProductChange(productId: string) {
-    setSelectedProductId(productId)
-    setEntries([])
-    setOffset(0)
-    setHasMore(false)
-    if (productId) {
-      void loadEntries(productId, 0)
+  useEffect(() => {
+    if (!params) {
+      setMovements([])
+      setTruncated(false)
+      return
     }
+    void loadMovements(params)
+  }, [params, loadMovements])
+
+  function selectEventDay(value: string) {
+    const day = events.find((e) => eventDayValue(e) === value)
+    if (!day) return
+    const picked = new Date(day.year, day.month - 1, day.day)
+    setRange({ from: picked, to: picked })
   }
 
-  const showVariant = entries.some((e) => e.variantValue)
-  const selectedProduct = products.find((p) => p.id === selectedProductId)
-  const variantHeader = selectedProduct?.variantLabel || "Variante"
+  // Not fetch: apiRequest always parses JSON, and window.open carries the session cookie.
+  function downloadExport() {
+    if (!params) return
+    window.open(`/api/v1/inventory/export.xlsx?${params}`, "_blank")
+  }
+
+  const showVariant = movements.some((m) => m.variant)
 
   return (
     <div className="min-w-0 space-y-6">
       <h1 className="text-xl font-semibold">Inventarverlauf</h1>
 
-      {/* Product selector */}
-      <div className="max-w-sm space-y-1">
-        <Label htmlFor="product-select">Produkt auswählen</Label>
-        <Select value={selectedProductId} onValueChange={handleProductChange}>
-          <SelectTrigger id="product-select">
-            <SelectValue placeholder="Produkt wählen…" />
-          </SelectTrigger>
-          <SelectContent>
-            {products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as ScopeMode)}>
+            <TabsList>
+              <TabsTrigger value="category">Nach Kategorie</TabsTrigger>
+              <TabsTrigger value="product">Nach Produkt</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {mode === "category" ? (
+            <CategorySelect
+              categories={categories}
+              categoryId={categoryId}
+              onChange={setCategoryId}
+              idPrefix="inventory"
+            />
+          ) : (
+            <div className="space-y-1">
+              <Label htmlFor="inventory-product">Produkt</Label>
+              <Select value={productId || undefined} onValueChange={setProductId}>
+                <SelectTrigger id="inventory-product" className="h-10">
+                  <SelectValue placeholder="Produkt wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="inventory-range">Zeitraum</Label>
+            <DateRangePicker id="inventory-range" value={range} onChange={setRange} />
+          </div>
+
+          {events.length > 0 && (
+            <div className="space-y-1">
+              <Label htmlFor="inventory-event">Verkaufstag übernehmen</Label>
+              <Select onValueChange={selectEventDay}>
+                <SelectTrigger id="inventory-event" className="h-10">
+                  <SelectValue placeholder="Tag wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {events.map((e) => (
+                    <SelectItem key={eventDayValue(e)} value={eventDayValue(e)}>
+                      {new Date(e.year, e.month - 1, e.day).toLocaleDateString("de-CH", { dateStyle: "medium" })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <Button onClick={downloadExport} disabled={!params} className="w-full">
+            <Download className="mr-2 size-4" />
+            Excel exportieren
+          </Button>
+        </div>
       </div>
 
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      {selectedProductId && entries.length === 0 && !loading && (
-        <p className="text-muted-foreground text-sm">Keine Einträge vorhanden.</p>
+      {!params && !loading && <p className="text-muted-foreground text-sm">Wähle einen Bereich und einen Zeitraum.</p>}
+
+      {params && movements.length === 0 && !loading && !error && (
+        <p className="text-muted-foreground text-sm">Keine Bewegungen in diesem Zeitraum.</p>
       )}
 
-      {entries.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pr-4 pb-2 font-medium">Datum</th>
-                {showVariant && <th className="pr-4 pb-2 font-medium">{variantHeader}</th>}
-                <th className="pr-4 pb-2 font-medium">Delta</th>
-                <th className="pr-4 pb-2 font-medium">Grund</th>
-                <th className="pr-4 pb-2 font-medium">Bestellung</th>
-                <th className="pb-2 font-medium">Erstellt von</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-b last:border-0">
-                  <td className="text-muted-foreground py-2 pr-4 whitespace-nowrap">
-                    {new Date(e.createdAt).toLocaleString("de-CH")}
-                  </td>
-                  {showVariant && (
-                    <td className="py-2 pr-4">
-                      {e.variantValue ? e.variantValue : <span className="text-muted-foreground">–</span>}
-                    </td>
-                  )}
-                  <td className="py-2 pr-4">
-                    <span className={e.delta >= 0 ? "font-medium text-green-700" : "font-medium text-red-600"}>
-                      {e.delta >= 0 ? `+${e.delta}` : e.delta}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">{REASON_LABELS[e.reason] ?? e.reason}</td>
-                  <td className="py-2 pr-4">
-                    {e.orderId ? (
-                      <Link
-                        href={`/admin/orders/${encodeURIComponent(e.orderId)}`}
-                        className="text-xs underline underline-offset-2"
-                      >
-                        {e.orderId}
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">–</span>
+      {movements.length > 0 && (
+        <>
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Datum</TableHead>
+                  <TableHead>Produkt</TableHead>
+                  {showVariant && <TableHead>Variante</TableHead>}
+                  <TableHead>Delta</TableHead>
+                  <TableHead>Grund</TableHead>
+                  <TableHead>Bestellung</TableHead>
+                  <TableHead>Erfasst von</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movements.map((m, i) => (
+                  <TableRow key={`${m.at}-${m.product}-${i}`}>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {new Date(m.at).toLocaleString("de-CH")}
+                    </TableCell>
+                    <TableCell>
+                      {m.product}
+                      {m.subcategory && <span className="text-muted-foreground block text-xs">{m.subcategory}</span>}
+                    </TableCell>
+                    {showVariant && (
+                      <TableCell>{m.variant || <span className="text-muted-foreground">–</span>}</TableCell>
                     )}
-                  </td>
-                  <td className="py-2">
-                    {e.createdBy ? (
-                      <Link
-                        href={`/admin/users/${encodeURIComponent(e.createdBy)}`}
-                        className="text-xs underline underline-offset-2"
-                      >
-                        {e.createdByUser?.name || `${e.createdBy.slice(0, 8)}…`}
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">–</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <TableCell>
+                      <span className={m.delta >= 0 ? "font-medium text-green-700" : "font-medium text-red-600"}>
+                        {m.delta >= 0 ? `+${m.delta}` : m.delta}
+                      </span>
+                    </TableCell>
+                    <TableCell>{m.reason}</TableCell>
+                    <TableCell>
+                      {m.orderId ? (
+                        <Link
+                          href={`/admin/orders/${encodeURIComponent(m.orderId)}`}
+                          className="text-xs underline underline-offset-2"
+                        >
+                          {m.orderId}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">–</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {m.createdById ? (
+                        <Link
+                          href={`/admin/users/${encodeURIComponent(m.createdById)}`}
+                          className="text-xs underline underline-offset-2"
+                        >
+                          {m.createdBy || `${m.createdById.slice(0, 8)}…`}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">–</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {truncated && (
+            <p className="text-muted-foreground text-sm">
+              Nur die ersten {PREVIEW_LIMIT} Bewegungen werden angezeigt. Der Excel-Export enthält alle.
+            </p>
+          )}
+        </>
       )}
 
       {loading && <p className="text-muted-foreground text-sm">Lade…</p>}
-
-      {hasMore && !loading && (
-        <Button variant="outline" size="sm" onClick={() => void loadEntries(selectedProductId, offset + PAGE_SIZE)}>
-          Mehr laden
-        </Button>
-      )}
     </div>
   )
 }

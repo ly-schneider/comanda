@@ -1,6 +1,6 @@
 ---
 title: Inventar
-description: Bestandshistorie pro Produkt einsehen und nachvollziehen
+description: Bestandshistorie einsehen, nachvollziehen und als Excel exportieren
 ---
 
 # Inventar-Ledger
@@ -9,9 +9,14 @@ Das Inventar-Ledger ist eine append-only Historie aller Bestandsänderungen. Jed
 
 ---
 
-# Produkt auswählen
+# Bereich und Zeitraum wählen
 
-Oben auf der Seite befindet sich ein Dropdown zur Produktauswahl. Nach der Auswahl werden alle Ledger-Einträge für das gewählte Produkt angezeigt.
+Oben auf der Seite legst du fest, was du ansehen möchtest:
+
+- **Nach Kategorie** – wählst du eine Hauptkategorie, umfasst die Auswahl auch alle ihre Unterkategorien. Wählst du eine Unterkategorie, umfasst sie nur diese (praktisch, wenn eine Unterkategorie einem einzelnen Stand entspricht).
+- **Nach Produkt** – ein einzelnes Produkt.
+
+Dazu wählst du einen Zeitraum. Über „Verkaufstag übernehmen" springst du direkt auf einen Tag, an dem es Bestellungen gab.
 
 ---
 
@@ -22,30 +27,55 @@ Jeder Eintrag enthält:
 | Feld         | Beschreibung                                      |
 | ------------ | ------------------------------------------------- |
 | Datum        | Zeitpunkt der Änderung                            |
+| Produkt      | Produkt und, falls vorhanden, Unterkategorie      |
+| Variante     | Variante, falls das Produkt welche hat            |
 | Delta        | Bestandsänderung (z. B. +10, -1)                  |
 | Grund        | Art der Änderung (siehe unten)                    |
 | Bestellung   | Link zur verknüpften Bestellung (falls vorhanden) |
-| Erstellt von | Link zum Benutzer, der die Änderung ausgelöst hat |
+| Erfasst von  | Link zum Benutzer, der die Änderung ausgelöst hat |
 
-Positive Deltas werden grün, negative rot dargestellt.
+Positive Deltas werden grün, negative rot dargestellt. In der Tabelle werden höchstens 200 Bewegungen angezeigt – der Excel-Export enthält immer alle.
 
 ---
 
 # Änderungsgründe
 
-| Grund             | Beschreibung                                |
-| ----------------- | ------------------------------------------- |
-| `opening_balance` | Anfangsbestand                              |
-| `sale`            | Verkauf (automatisch bei Bestellung)        |
-| `refund`          | Rückerstattung (Bestand wird zurückgebucht) |
-| `cancellation`    | Stornierung (Bestand wird zurückgebucht)    |
-| `manual_adjust`   | Manuelle Anpassung durch einen Admin        |
-| `correction`      | Korrektur eines früheren Eintrags           |
+| Grund                   | Beschreibung                                                     |
+| ----------------------- | ---------------------------------------------------------------- |
+| Eröffnung               | Anfangsbestand                                                   |
+| Verkauf                 | Bezahlter Verkauf                                                |
+| Erstattung              | Rückerstattung (Bestand wird zurückgebucht)                      |
+| Stornierung             | Stornierung (Bestand wird zurückgebucht)                         |
+| Manuelle Anpassung      | Anpassung durch einen Benutzer                                   |
+| Korrektur               | Korrektur eines früheren Eintrags                                |
+| Reservierung            | Ware, die ein Warenkorb hielt, der nie bezahlt wurde             |
+| Reservierung verfallen  | Die Freigabe dazu – beide zusammen heben sich auf                |
+
+Ware wird schon beim Start der Bezahlung reserviert, damit sie nicht doppelt verkauft wird. Bricht jemand ab, wird die Reservierung wieder freigegeben. Solche Paare zählen nicht als Verkauf.
+
+---
+
+# Excel-Export
+
+„Excel exportieren" lädt eine `.xlsx`-Datei für den gewählten Bereich und Zeitraum herunter. Sie enthält zwei Blätter:
+
+**Übersicht** – eine Zeile pro Produkt beziehungsweise Variante:
+
+| Spalte         | Bedeutung                                                     |
+| -------------- | ------------------------------------------------------------- |
+| Anfangsbestand | Bestand unmittelbar vor Beginn des Zeitraums                  |
+| Verkauft       | Verkaufte Einheiten aus bezahlten Bestellungen                |
+| Erstattet      | Zurückgebuchte Einheiten aus Rückerstattungen                 |
+| Storniert      | Zurückgebuchte Einheiten aus Stornierungen                    |
+| Manuell        | Summe aller manuellen Anpassungen und Eröffnungsbuchungen     |
+| Endbestand     | Bestand am Ende des Zeitraums                                 |
+
+**Bewegungen** – der vollständige Bewegungsverlauf, eine Zeile pro Eintrag.
+
+Anfangs- und Endbestand sind die tatsächlichen Bestände zu den beiden Zeitpunkten. Bundles führen keinen eigenen Bestand: Ein Bundle-Verkauf erscheint bei den enthaltenen Produkten, nicht beim Bundle selbst.
 
 ---
 
 # Bestand anpassen
 
 Die Bestandsanpassung erfolgt nicht im Inventar direkt, sondern über die [Produktkarten](/admin-handbuch/produkte) (+ / - Buttons oder Direkteingabe).
-
-Die Einträge werden seitenweise geladen (50 pro Seite). Über den „Mehr laden"-Button können ältere Einträge nachgeladen werden.
