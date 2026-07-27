@@ -57,8 +57,6 @@ var movementHeaders = []string{
 	"Delta", "Grund", "Bestellung", "Erfasst von",
 }
 
-// RenderInventoryReport builds a two-sheet workbook: a per-product reconciliation
-// and the raw movement log behind it.
 func RenderInventoryReport(report InventoryReport) ([]byte, error) {
 	f := excelize.NewFile()
 	defer func() { _ = f.Close() }()
@@ -102,8 +100,6 @@ func writeSummary(f *excelize.File, report InventoryReport, headerStyle int) err
 	if err := setRow(f, sheetSummary, 1, []any{title(report)}); err != nil {
 		return err
 	}
-	// Bundles hold no stock of their own — components do — so a bundle sale lands
-	// on its components. Say so on the sheet or the numbers read as missing.
 	if err := setRow(f, sheetSummary, 2, []any{"Bundle-Verkäufe erscheinen bei den enthaltenen Produkten."}); err != nil {
 		return err
 	}
@@ -179,7 +175,7 @@ func title(report InventoryReport) string {
 	return fmt.Sprintf("Inventarverlauf %s · %s bis %s",
 		report.ScopeLabel,
 		report.From.Format("02.01.2006"),
-		// [from, to) — the last included day is the one before the exclusive bound.
+		// [from, to): the last included day precedes the exclusive bound.
 		report.To.Add(-time.Nanosecond).Format("02.01.2006"),
 	)
 }

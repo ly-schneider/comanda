@@ -55,7 +55,6 @@ func TestRenderInventoryReportSummaryCells(t *testing.T) {
 	}
 	f := openRendered(t, body)
 
-	// Row 4 is the header, row 5 the first data row.
 	for col, want := range map[string]string{
 		"A4": "Kategorie", "E4": "Anfangsbestand", "F4": "Verkauft", "J4": "Endbestand",
 		"C5": "Bier", "D5": "Gross", "E5": "100", "F5": "42", "J5": "58",

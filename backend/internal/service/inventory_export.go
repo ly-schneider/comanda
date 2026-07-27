@@ -62,17 +62,13 @@ const (
 	classRefunded
 	classCancelled
 	classManual
-	// A checkout reservation that was never paid, and the entry that released it.
-	// Both are held out of the summary columns; they net to zero.
 	classReservation
 )
 
-// Checkout writes `sale` before payment and releases an abandoned order with
-// `correction`, then hard-deletes the order — which nulls order_id via
-// ON DELETE SET NULL. Checkout never sets created_by, while every manual
-// adjustment does (device sessions carry the enrolling user). That makes the two
-// separable. Caveat: hard-deleting a *paid* order would make its sales read as
-// expired reservations; only pending orders are ever deleted today.
+// Deleting an abandoned order nulls order_id (ON DELETE SET NULL), so an unpaid
+// reservation and its release are told apart by created_by instead: checkout never
+// sets it, every manual adjustment does. Only pending orders are ever deleted, so a
+// sale keeping its order_id means it was paid.
 func classify(reason inventoryledger.Reason, hasOrder, hasCreatedBy bool) ledgerClass {
 	switch reason {
 	case inventoryledger.ReasonSale:
@@ -131,7 +127,6 @@ func (s *inventoryExportService) Build(ctx context.Context, scope InventoryExpor
 		return xlsx.InventoryReport{}, err
 	}
 
-	// Bundles carry no stock of their own; their components do.
 	stocked := make([]*ent.Product, 0, len(products))
 	for _, p := range products {
 		if p.Type == product.TypeSimple {
@@ -274,8 +269,7 @@ func fillSummary(row xlsx.SummaryRow, variant string, opening, closing int, t *m
 	return row
 }
 
-// Categories nest exactly two levels, so a product sits either on a top-level
-// category or on one of its children.
+// Categories nest exactly two levels.
 func categoryPath(p *ent.Product, byID map[string]*ent.Category) (category, subcategory string) {
 	if p == nil {
 		return "", ""

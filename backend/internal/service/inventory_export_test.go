@@ -63,7 +63,6 @@ func TestCategoryPathResolvesTwoLevels(t *testing.T) {
 		t.Fatalf("top-level product = (%q, %q)", cat, sub)
 	}
 
-	// Edge not loaded — fall back to the id map.
 	unloaded := &ent.Product{ID: "prod00000003", CategoryID: child.ID}
 	if cat, sub := categoryPath(unloaded, byID); cat != "Getränke" || sub != "Bar Ost" {
 		t.Fatalf("unloaded edge = (%q, %q)", cat, sub)

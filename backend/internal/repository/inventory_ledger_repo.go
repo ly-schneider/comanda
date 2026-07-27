@@ -159,7 +159,6 @@ func (r *inventoryLedgerRepo) GetByDateRange(ctx context.Context, start, end tim
 	return rows, nil
 }
 
-// Half-open [from, to), ascending, with the joins the export needs to name a row.
 func (r *inventoryLedgerRepo) ListInRange(ctx context.Context, productIDs []string, from, to time.Time) ([]*ent.InventoryLedger, error) {
 	if len(productIDs) == 0 {
 		return nil, nil
@@ -180,7 +179,6 @@ func (r *inventoryLedgerRepo) ListInRange(ctx context.Context, productIDs []stri
 	return rows, nil
 }
 
-// Ledger position strictly before `until`, over every row including variant-keyed ones.
 func (r *inventoryLedgerRepo) SumBeforeByProduct(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error) {
 	sums := make(map[string]int, len(productIDs))
 	if len(productIDs) == 0 {
@@ -218,8 +216,7 @@ func (r *inventoryLedgerRepo) SumBeforeByProduct(ctx context.Context, productIDs
 	return sums, nil
 }
 
-// Keys are variant ids; product-level rows (variant_id IS NULL) are excluded,
-// mirroring GetCurrentStockByVariantBatch.
+// Keys are variant ids; product-level rows (variant_id IS NULL) are excluded.
 func (r *inventoryLedgerRepo) SumBeforeByVariant(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error) {
 	sums := make(map[string]int)
 	if len(productIDs) == 0 {
