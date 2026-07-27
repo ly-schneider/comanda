@@ -8,12 +8,18 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// The client picks local days and ships them as UTC instants, so fixtures must
+// too — UTC-midnight input would hide any timezone slip in the rendered dates.
+func swissDay(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, reportLocation).UTC()
+}
+
 func testReport() InventoryReport {
-	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	from := swissDay(2026, 7, 1)
 	return InventoryReport{
 		ScopeLabel: "Bar Ost",
 		From:       from,
-		To:         from.AddDate(0, 0, 2),
+		To:         swissDay(2026, 7, 3),
 		Summary: []SummaryRow{
 			{Category: "Getränke", Subcategory: "Bar Ost", Product: "Bier", Variant: "Gross",
 				Opening: 100, Sold: 42, Refunded: 2, Cancelled: 1, Manual: -3, Closing: 58},
@@ -71,6 +77,31 @@ func TestRenderInventoryReportSummaryCells(t *testing.T) {
 	title, _ := f.GetCellValue(sheetSummary, "A1")
 	if title != "Inventarverlauf Bar Ost · 01.07.2026 bis 02.07.2026" {
 		t.Fatalf("title = %q", title)
+	}
+}
+
+func TestRenderInventoryReportUsesSwissWallClock(t *testing.T) {
+	// A single Swiss day: 00:00 local is 22:00 UTC the previous day.
+	from := swissDay(2026, 7, 27)
+	report := testReport()
+	report.From = from
+	report.To = swissDay(2026, 7, 28)
+	report.Movements = []MovementRow{{At: from, Product: "Bier", Delta: -1, Reason: "Verkauf"}}
+
+	body, err := RenderInventoryReport(report)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	f := openRendered(t, body)
+
+	title, _ := f.GetCellValue(sheetSummary, "A1")
+	if title != "Inventarverlauf Bar Ost · 27.07.2026 bis 27.07.2026" {
+		t.Fatalf("a one-day range must read as that day in both bounds, got %q", title)
+	}
+
+	at, _ := f.GetCellValue(sheetMovements, "A2")
+	if at != "27.07.2026 00:00" {
+		t.Fatalf("movement timestamp must render in Swiss wall-clock time, got %q", at)
 	}
 }
 

@@ -13,6 +13,21 @@ const (
 	sheetMovements = "Bewegungen"
 )
 
+// Bounds arrive as UTC instants derived from local midnight, so every rendered
+// date has to be read back in wall-clock time or it lands a day early.
+var reportLocation = loadReportLocation()
+
+func loadReportLocation() *time.Location {
+	loc, err := time.LoadLocation("Europe/Zurich")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+// Location is the timezone every date in the workbook is rendered in.
+func Location() *time.Location { return reportLocation }
+
 type SummaryRow struct {
 	Category    string
 	Subcategory string
@@ -147,7 +162,7 @@ func writeMovements(f *excelize.File, report InventoryReport, headerStyle, dateS
 	for i, row := range report.Movements {
 		r := headerRow + 1 + i
 		values := []any{
-			row.At, row.Category, row.Subcategory, row.Product, row.Variant,
+			row.At.In(reportLocation), row.Category, row.Subcategory, row.Product, row.Variant,
 			row.Delta, row.Reason, row.OrderID, row.CreatedBy,
 		}
 		if err := setRow(f, sheetMovements, r, values); err != nil {
@@ -174,9 +189,9 @@ func writeMovements(f *excelize.File, report InventoryReport, headerStyle, dateS
 func title(report InventoryReport) string {
 	return fmt.Sprintf("Inventarverlauf %s · %s bis %s",
 		report.ScopeLabel,
-		report.From.Format("02.01.2006"),
+		report.From.In(reportLocation).Format("02.01.2006"),
 		// [from, to): the last included day precedes the exclusive bound.
-		report.To.Add(-time.Nanosecond).Format("02.01.2006"),
+		report.To.Add(-time.Nanosecond).In(reportLocation).Format("02.01.2006"),
 	)
 }
 

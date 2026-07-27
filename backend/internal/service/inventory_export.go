@@ -9,6 +9,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/inventoryledger"
 	"backend/internal/generated/ent/product"
+	nanoid "backend/internal/id"
 	"backend/internal/repository"
 	"backend/internal/trace"
 	"backend/internal/xlsx"
@@ -291,6 +292,10 @@ func categoryPath(p *ent.Product, byID map[string]*ent.Category) (category, subc
 }
 
 func (s *inventoryExportService) resolveScope(ctx context.Context, scope InventoryExportScope, scopeID string, categories []*ent.Category) ([]*ent.Product, string, error) {
+	if !nanoid.Valid(scopeID) {
+		return nil, "", fmt.Errorf("%w: invalid scopeId %q", ErrInvalidExportScope, scopeID)
+	}
+
 	switch scope {
 	case InventoryScopeProduct:
 		p, err := s.productRepo.GetByIDWithRelations(ctx, scopeID)

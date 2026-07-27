@@ -110,7 +110,7 @@ func exportFilename(report xlsx.InventoryReport) string {
 	if name == "" {
 		name = "Export"
 	}
-	return fmt.Sprintf("Inventar_%s_%s.xlsx", name, report.From.Format("2006-01-02"))
+	return fmt.Sprintf("Inventar_%s_%s.xlsx", name, report.From.In(xlsx.Location()).Format("2006-01-02"))
 }
 
 var filenameTransliterations = strings.NewReplacer(

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"backend/internal/generated/ent"
@@ -42,6 +44,16 @@ func TestReasonLabelMarksReservations(t *testing.T) {
 	}
 	if got := reasonLabel(inventoryledger.ReasonSale, classSold); got != "Verkauf" {
 		t.Fatalf("paid sale label = %q", got)
+	}
+}
+
+func TestResolveScopeRejectsMalformedID(t *testing.T) {
+	svc := &inventoryExportService{}
+	for _, id := range []string{"", "nope", "prod0000000000000", "prod-0000001"} {
+		_, _, err := svc.resolveScope(context.Background(), InventoryScopeProduct, id, nil)
+		if !errors.Is(err, ErrInvalidExportScope) {
+			t.Fatalf("scopeId %q must be rejected before any query, got %v", id, err)
+		}
 	}
 }
 

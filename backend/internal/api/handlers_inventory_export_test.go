@@ -8,7 +8,8 @@ import (
 )
 
 func TestExportFilename(t *testing.T) {
-	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	// Local midnight as the client sends it: 2026-06-30T22:00:00Z.
+	from := time.Date(2026, 7, 1, 0, 0, 0, 0, xlsx.Location()).UTC()
 	cases := []struct {
 		label string
 		want  string
