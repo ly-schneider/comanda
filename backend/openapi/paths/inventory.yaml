@@ -1,3 +1,71 @@
+movements:
+  get:
+    tags: [Inventory]
+    summary: List inventory movements for a scope and range
+    description: |
+      The on-screen preview of what the Excel export contains, over the same
+      half-open `[from, to)` range. Capped by `limit`; the export is never capped.
+    operationId: listInventoryMovements
+    security:
+      - sessionAuth: []
+    x-required-permissions: [products:write]
+    parameters:
+      - name: scope
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [product, subcategory, category]
+      - name: scopeId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 200
+          minimum: 1
+          maximum: 1000
+    responses:
+      "200":
+        description: Movements in the range
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/inventory.yaml#/InventoryMovementList"
+      "400":
+        description: Invalid scope or range
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Scope target not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 export:
   get:
     tags: [Inventory]

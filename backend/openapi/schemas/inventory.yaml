@@ -1,0 +1,36 @@
+InventoryMovement:
+  type: object
+  required: [at, product, delta, reason]
+  properties:
+    at:
+      type: string
+      format: date-time
+    category:
+      type: string
+    subcategory:
+      type: string
+    product:
+      type: string
+    variant:
+      type: string
+    delta:
+      type: integer
+    reason:
+      type: string
+      description: Human-readable German label, matching the export
+    orderId:
+      type: string
+    createdBy:
+      type: string
+
+InventoryMovementList:
+  type: object
+  required: [items, truncated]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/InventoryMovement"
+    truncated:
+      type: boolean
+      description: True when the range holds more movements than `limit`; the export carries all of them

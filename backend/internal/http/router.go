@@ -200,6 +200,7 @@ func NewRouter(
 			catalog.Get("/products/{productId}/inventory", wrapper.GetProductInventory)
 			catalog.Get("/products/{productId}/inventory/history", wrapper.GetProductInventoryHistory)
 			catalog.Patch("/products/{productId}/inventory", wrapper.AdjustProductInventory)
+			catalog.Get("/inventory/movements", wrapper.ListInventoryMovements)
 			catalog.Get("/inventory/export.xlsx", wrapper.ExportInventory)
 
 			catalog.Post("/categories", wrapper.CreateCategory)

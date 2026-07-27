@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	generated "backend/internal/generated/api/generated"
+	"backend/internal/response"
 	"backend/internal/service"
 	"backend/internal/xlsx"
 )
@@ -46,6 +47,61 @@ func (h *Handlers) ExportInventory(w http.ResponseWriter, r *http.Request, param
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", exportFilename(report)))
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	_, _ = w.Write(body)
+}
+
+// ListInventoryMovements previews what the export contains, over the same range.
+// (GET /inventory/movements)
+func (h *Handlers) ListInventoryMovements(w http.ResponseWriter, r *http.Request, params generated.ListInventoryMovementsParams) {
+	report, err := h.inventoryExport.Build(
+		r.Context(),
+		service.InventoryExportScope(params.Scope),
+		params.ScopeId,
+		params.From,
+		params.To,
+	)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidExportScope) {
+			writeError(w, http.StatusBadRequest, "invalid_scope", err.Error())
+			return
+		}
+		writeEntError(w, err)
+		return
+	}
+
+	limit := 200
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+
+	movements := report.Movements
+	truncated := len(movements) > limit
+	if truncated {
+		movements = movements[:limit]
+	}
+
+	items := make([]generated.InventoryMovement, 0, len(movements))
+	for _, m := range movements {
+		items = append(items, generated.InventoryMovement{
+			At:          m.At,
+			Category:    optionalString(m.Category),
+			Subcategory: optionalString(m.Subcategory),
+			Product:     m.Product,
+			Variant:     optionalString(m.Variant),
+			Delta:       m.Delta,
+			Reason:      m.Reason,
+			OrderId:     optionalString(m.OrderID),
+			CreatedBy:   optionalString(m.CreatedBy),
+		})
+	}
+
+	response.WriteJSON(w, http.StatusOK, generated.InventoryMovementList{Items: items, Truncated: truncated})
+}
+
+func optionalString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func exportFilename(report xlsx.InventoryReport) string {

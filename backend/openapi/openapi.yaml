@@ -310,6 +310,8 @@ paths:
 
   /inventory/stream:
     $ref: "paths/inventory.yaml#/stream"
+  /inventory/movements:
+    $ref: "paths/inventory.yaml#/movements"
   /inventory/export.xlsx:
     $ref: "paths/inventory.yaml#/export"
 
