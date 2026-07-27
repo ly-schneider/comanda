@@ -1,3 +1,72 @@
+export:
+  get:
+    tags: [Inventory]
+    summary: Export the inventory history as an Excel workbook
+    description: |
+      Returns a two-sheet `.xlsx` workbook for the requested scope: `Übersicht`
+      (per product/variant reconciliation) and `Bewegungen` (the raw movement log).
+
+      The range is half-open — `from` is inclusive, `to` is exclusive. Opening and
+      closing balances are true ledger positions at each bound; the columns in
+      between are a classified breakdown of the movements inside the range.
+    operationId: exportInventory
+    security:
+      - sessionAuth: []
+    x-required-permissions: [products:write]
+    parameters:
+      - name: scope
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [product, subcategory, category]
+      - name: scopeId
+        in: query
+        required: true
+        description: Product id, subcategory id, or top-level category id, matching `scope`
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start of the range
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: true
+        description: Exclusive end of the range
+        schema:
+          type: string
+          format: date-time
+    responses:
+      "200":
+        description: Excel workbook
+        content:
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      "400":
+        description: Invalid scope or range
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Scope target not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
 stream:
   get:
     tags: [Inventory]

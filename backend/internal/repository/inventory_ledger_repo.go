@@ -17,6 +17,9 @@ type InventoryLedgerRepository interface {
 	GetByProductID(ctx context.Context, productID string) ([]*ent.InventoryLedger, error)
 	GetByProductIDWithPagination(ctx context.Context, productID string, limit, offset int) ([]*ent.InventoryLedger, error)
 	GetByDateRange(ctx context.Context, start, end time.Time) ([]*ent.InventoryLedger, error)
+	ListInRange(ctx context.Context, productIDs []string, from, to time.Time) ([]*ent.InventoryLedger, error)
+	SumBeforeByProduct(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error)
+	SumBeforeByVariant(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error)
 	GetCurrentStock(ctx context.Context, productID string) (int, error)
 	GetCurrentStockBatch(ctx context.Context, productIDs []string) (map[string]int, error)
 	GetCurrentStockByVariantBatch(ctx context.Context, productIDs []string) (map[string]int, error)
@@ -154,6 +157,100 @@ func (r *inventoryLedgerRepo) GetByDateRange(ctx context.Context, start, end tim
 		return nil, translateError(err)
 	}
 	return rows, nil
+}
+
+// Half-open [from, to), ascending, with the joins the export needs to name a row.
+func (r *inventoryLedgerRepo) ListInRange(ctx context.Context, productIDs []string, from, to time.Time) ([]*ent.InventoryLedger, error) {
+	if len(productIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := r.ec(ctx).InventoryLedger.Query().
+		Where(
+			inventoryledger.ProductIDIn(productIDs...),
+			inventoryledger.CreatedAtGTE(from),
+			inventoryledger.CreatedAtLT(to),
+		).
+		Order(inventoryledger.ByCreatedAt()).
+		WithVariant().
+		WithCreatedByUser().
+		All(ctx)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return rows, nil
+}
+
+// Ledger position strictly before `until`, over every row including variant-keyed ones.
+func (r *inventoryLedgerRepo) SumBeforeByProduct(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error) {
+	sums := make(map[string]int, len(productIDs))
+	if len(productIDs) == 0 {
+		return sums, nil
+	}
+
+	var results []struct {
+		ProductID string `json:"product_id"`
+		Stock     int    `json:"stock"`
+	}
+	err := r.ec(ctx).InventoryLedger.Query().
+		Where(
+			inventoryledger.ProductIDIn(productIDs...),
+			inventoryledger.CreatedAtLT(until),
+		).
+		Modify(func(s *sql.Selector) {
+			s.Select(
+				s.C(inventoryledger.FieldProductID),
+				sql.As(sql.Sum(s.C(inventoryledger.FieldDelta)), "stock"),
+			).GroupBy(s.C(inventoryledger.FieldProductID))
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	for _, row := range results {
+		sums[row.ProductID] = row.Stock
+	}
+	for _, id := range productIDs {
+		if _, ok := sums[id]; !ok {
+			sums[id] = 0
+		}
+	}
+	return sums, nil
+}
+
+// Keys are variant ids; product-level rows (variant_id IS NULL) are excluded,
+// mirroring GetCurrentStockByVariantBatch.
+func (r *inventoryLedgerRepo) SumBeforeByVariant(ctx context.Context, productIDs []string, until time.Time) (map[string]int, error) {
+	sums := make(map[string]int)
+	if len(productIDs) == 0 {
+		return sums, nil
+	}
+
+	var results []struct {
+		VariantID string `json:"variant_id"`
+		Stock     int    `json:"stock"`
+	}
+	err := r.ec(ctx).InventoryLedger.Query().
+		Where(
+			inventoryledger.ProductIDIn(productIDs...),
+			inventoryledger.VariantIDNotNil(),
+			inventoryledger.CreatedAtLT(until),
+		).
+		Modify(func(s *sql.Selector) {
+			s.Select(
+				s.C(inventoryledger.FieldVariantID),
+				sql.As(sql.Sum(s.C(inventoryledger.FieldDelta)), "stock"),
+			).GroupBy(s.C(inventoryledger.FieldVariantID))
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	for _, row := range results {
+		sums[row.VariantID] = row.Stock
+	}
+	return sums, nil
 }
 
 func (r *inventoryLedgerRepo) GetCurrentStock(ctx context.Context, productID string) (int, error) {
