@@ -61,7 +61,7 @@ tags:
   - name: StaffPerks
     description: Public staff-perk claim access (campaign admin lives under the staff-perks plugin)
   - name: Inventory
-    description: Real-time inventory stream
+    description: Real-time inventory stream and history export
   - name: Android
     description: Android app release feed for update checks
   - name: Internal
@@ -310,6 +310,10 @@ paths:
 
   /inventory/stream:
     $ref: "paths/inventory.yaml#/stream"
+  /inventory/movements:
+    $ref: "paths/inventory.yaml#/movements"
+  /inventory/export.xlsx:
+    $ref: "paths/inventory.yaml#/export"
 
   /android/latest:
     $ref: "paths/android.yaml#/latest"

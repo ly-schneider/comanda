@@ -20,31 +20,32 @@ import (
 type Handlers struct {
 	generated.Unimplemented
 
-	categories    service.CategoryService
-	products      service.ProductService
-	orders        service.OrderService
-	payments      service.PaymentService
-	refunds       service.RefundService
-	qrKeys        service.QRKeyService
-	pos           service.POSService
-	settings      service.SettingsService
-	stations      service.StationService
-	invites       service.AdminInviteService
-	ownerInvites  service.OwnerInviteService
-	email         service.EmailService
-	users         service.UserService
-	devices       service.DeviceService
-	claims        service.CampaignClaimService
-	androidUpdate service.AndroidUpdateService
-	domains       service.DomainService
-	tenants       service.TenantService
-	account       service.AccountService
-	qa            service.QaService
-	plugins       plugin.Service
-	verification  repository.VerificationRepository
-	idempotency   repository.IdempotencyRepository
-	blobStore     *blobstore.Client
-	inventoryHub  *inventory.Hub
+	categories      service.CategoryService
+	products        service.ProductService
+	inventoryExport service.InventoryExportService
+	orders          service.OrderService
+	payments        service.PaymentService
+	refunds         service.RefundService
+	qrKeys          service.QRKeyService
+	pos             service.POSService
+	settings        service.SettingsService
+	stations        service.StationService
+	invites         service.AdminInviteService
+	ownerInvites    service.OwnerInviteService
+	email           service.EmailService
+	users           service.UserService
+	devices         service.DeviceService
+	claims          service.CampaignClaimService
+	androidUpdate   service.AndroidUpdateService
+	domains         service.DomainService
+	tenants         service.TenantService
+	account         service.AccountService
+	qa              service.QaService
+	plugins         plugin.Service
+	verification    repository.VerificationRepository
+	idempotency     repository.IdempotencyRepository
+	blobStore       *blobstore.Client
+	inventoryHub    *inventory.Hub
 
 	// privileged resolves {tenantToken} -> tenant before context exists; appDB
 	// opens the RLS-bound tenant tx for the webhook path. The trusted-origins
@@ -63,70 +64,72 @@ var _ generated.ServerInterface = (*Handlers)(nil)
 type HandlersDeps struct {
 	fx.In
 
-	Config        config.Config
-	Categories    service.CategoryService
-	Products      service.ProductService
-	Orders        service.OrderService
-	Payments      service.PaymentService
-	Refunds       service.RefundService
-	QRKeys        service.QRKeyService
-	POS           service.POSService
-	Settings      service.SettingsService
-	Stations      service.StationService
-	Invites       service.AdminInviteService
-	OwnerInvites  service.OwnerInviteService
-	Email         service.EmailService
-	Users         service.UserService
-	Devices       service.DeviceService
-	Claims        service.CampaignClaimService
-	AndroidUpdate service.AndroidUpdateService
-	Domains       service.DomainService
-	Tenants       service.TenantService
-	Account       service.AccountService
-	Qa            service.QaService
-	Plugins       plugin.Service
-	Verification  repository.VerificationRepository
-	Idempotency   repository.IdempotencyRepository
-	BlobStore     *blobstore.Client `optional:"true"`
-	InventoryHub  *inventory.Hub
-	Privileged    *database.PrivilegedClient
-	AppDB         *database.AppClient
-	Providers     *payment.Factory
-	Logger        *zap.Logger
+	Config          config.Config
+	Categories      service.CategoryService
+	Products        service.ProductService
+	InventoryExport service.InventoryExportService
+	Orders          service.OrderService
+	Payments        service.PaymentService
+	Refunds         service.RefundService
+	QRKeys          service.QRKeyService
+	POS             service.POSService
+	Settings        service.SettingsService
+	Stations        service.StationService
+	Invites         service.AdminInviteService
+	OwnerInvites    service.OwnerInviteService
+	Email           service.EmailService
+	Users           service.UserService
+	Devices         service.DeviceService
+	Claims          service.CampaignClaimService
+	AndroidUpdate   service.AndroidUpdateService
+	Domains         service.DomainService
+	Tenants         service.TenantService
+	Account         service.AccountService
+	Qa              service.QaService
+	Plugins         plugin.Service
+	Verification    repository.VerificationRepository
+	Idempotency     repository.IdempotencyRepository
+	BlobStore       *blobstore.Client `optional:"true"`
+	InventoryHub    *inventory.Hub
+	Privileged      *database.PrivilegedClient
+	AppDB           *database.AppClient
+	Providers       *payment.Factory
+	Logger          *zap.Logger
 }
 
 // NewHandlers creates a new Handlers with all required service dependencies.
 func NewHandlers(deps HandlersDeps) *Handlers {
 	return &Handlers{
-		categories:    deps.Categories,
-		products:      deps.Products,
-		orders:        deps.Orders,
-		payments:      deps.Payments,
-		refunds:       deps.Refunds,
-		qrKeys:        deps.QRKeys,
-		pos:           deps.POS,
-		settings:      deps.Settings,
-		stations:      deps.Stations,
-		invites:       deps.Invites,
-		ownerInvites:  deps.OwnerInvites,
-		email:         deps.Email,
-		users:         deps.Users,
-		devices:       deps.Devices,
-		claims:        deps.Claims,
-		androidUpdate: deps.AndroidUpdate,
-		domains:       deps.Domains,
-		tenants:       deps.Tenants,
-		account:       deps.Account,
-		qa:            deps.Qa,
-		plugins:       deps.Plugins,
-		verification:  deps.Verification,
-		idempotency:   deps.Idempotency,
-		blobStore:     deps.BlobStore,
-		inventoryHub:  deps.InventoryHub,
-		privileged:    deps.Privileged.Client,
-		appDB:         deps.AppDB,
-		providers:     deps.Providers,
-		config:        deps.Config,
-		logger:        deps.Logger,
+		categories:      deps.Categories,
+		products:        deps.Products,
+		inventoryExport: deps.InventoryExport,
+		orders:          deps.Orders,
+		payments:        deps.Payments,
+		refunds:         deps.Refunds,
+		qrKeys:          deps.QRKeys,
+		pos:             deps.POS,
+		settings:        deps.Settings,
+		stations:        deps.Stations,
+		invites:         deps.Invites,
+		ownerInvites:    deps.OwnerInvites,
+		email:           deps.Email,
+		users:           deps.Users,
+		devices:         deps.Devices,
+		claims:          deps.Claims,
+		androidUpdate:   deps.AndroidUpdate,
+		domains:         deps.Domains,
+		tenants:         deps.Tenants,
+		account:         deps.Account,
+		qa:              deps.Qa,
+		plugins:         deps.Plugins,
+		verification:    deps.Verification,
+		idempotency:     deps.Idempotency,
+		blobStore:       deps.BlobStore,
+		inventoryHub:    deps.InventoryHub,
+		privileged:      deps.Privileged.Client,
+		appDB:           deps.AppDB,
+		providers:       deps.Providers,
+		config:          deps.Config,
+		logger:          deps.Logger,
 	}
 }

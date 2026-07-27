@@ -24,6 +24,7 @@ func NewServices() fx.Option {
 			service.NewSettingsService,
 			service.NewProductService,
 			service.NewCategoryService,
+			service.NewInventoryExportService,
 			service.NewOrderService,
 			service.NewStationService,
 			service.NewPOSService,

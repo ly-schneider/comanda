@@ -255,7 +255,7 @@ InventoryAdjustment:
 
 InventoryReason:
   type: string
-  enum: [opening_balance, sale, refund, manual_adjust, correction]
+  enum: [opening_balance, sale, refund, cancellation, manual_adjust, correction]
 
 InventoryLedgerEntry:
   type: object

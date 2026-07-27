@@ -146,6 +146,20 @@ func (s *orderService) restoreInventory(ctx context.Context, orderID string, rea
 		return err
 	}
 
+	entries := restoreEntries(lines, orderID, reason)
+
+	if len(entries) > 0 {
+		if _, err := s.inventoryRepo.CreateMany(ctx, entries); err != nil {
+			return err
+		}
+		s.publishInventoryUpdates(ctx, entries)
+	}
+	return nil
+}
+
+// VariantID must ride along, or restored units land on the product while
+// variant stock only counts variant-keyed rows.
+func restoreEntries(lines []*ent.OrderLine, orderID string, reason inventoryledger.Reason) []repository.InventoryLedgerCreateParams {
 	var entries []repository.InventoryLedgerCreateParams
 	for _, line := range lines {
 		if line.Quantity <= 0 {
@@ -160,16 +174,10 @@ func (s *orderService) restoreInventory(ctx context.Context, orderID string, rea
 			Reason:      reason,
 			OrderID:     &orderID,
 			OrderLineID: &line.ID,
+			VariantID:   line.VariantID,
 		})
 	}
-
-	if len(entries) > 0 {
-		if _, err := s.inventoryRepo.CreateMany(ctx, entries); err != nil {
-			return err
-		}
-		s.publishInventoryUpdates(ctx, entries)
-	}
-	return nil
+	return entries
 }
 
 func (s *orderService) publishInventoryUpdates(ctx context.Context, entries []repository.InventoryLedgerCreateParams) {
