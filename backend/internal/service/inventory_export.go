@@ -213,7 +213,11 @@ func (s *inventoryExportService) Build(ctx context.Context, scope InventoryExpor
 		if e.OrderID != nil {
 			orderID = *e.OrderID
 		}
-		createdBy := ""
+		createdBy, createdByID := "", ""
+		if e.CreatedBy != nil {
+			createdByID = *e.CreatedBy
+			createdBy = createdByID
+		}
 		if e.Edges.CreatedByUser != nil && e.Edges.CreatedByUser.Name != nil {
 			createdBy = *e.Edges.CreatedByUser.Name
 		}
@@ -228,6 +232,7 @@ func (s *inventoryExportService) Build(ctx context.Context, scope InventoryExpor
 			Reason:      reasonLabel(e.Reason, class),
 			OrderID:     orderID,
 			CreatedBy:   createdBy,
+			CreatedByID: createdByID,
 		})
 	}
 

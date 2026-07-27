@@ -36,6 +36,7 @@ type MovementRow struct {
 	Reason      string
 	OrderID     string
 	CreatedBy   string
+	CreatedByID string
 }
 
 type InventoryReport struct {

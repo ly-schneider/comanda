@@ -91,6 +91,7 @@ func (h *Handlers) ListInventoryMovements(w http.ResponseWriter, r *http.Request
 			Reason:      m.Reason,
 			OrderId:     optionalString(m.OrderID),
 			CreatedBy:   optionalString(m.CreatedBy),
+			CreatedById: optionalString(m.CreatedByID),
 		})
 	}
 

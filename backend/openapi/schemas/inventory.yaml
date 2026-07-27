@@ -22,6 +22,9 @@ InventoryMovement:
       type: string
     createdBy:
       type: string
+      description: Display name of the user who recorded the entry
+    createdById:
+      type: string
 
 InventoryMovementList:
   type: object
