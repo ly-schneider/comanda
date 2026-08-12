@@ -205,7 +205,7 @@ export default function StaffPerksCampaignList() {
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Zugangscode</span>
-                  <code className="font-mono text-sm tracking-wider">{m.accessCode}</code>
+                  <span className="text-sm font-medium tracking-wider">{m.accessCode}</span>
                 </div>
               </Link>
             )
