@@ -15,6 +15,7 @@ import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 import type { ProductSummaryDTO } from "@/types/product"
 import type { VolunteerCampaignStatus, VolunteerCampaignSummary } from "@/types/volunteer"
+import { joinPillActiveClass, joinPillClass, JoinRule } from "./join-rule"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
 type OptionRow = { productId: string; quantity: number | "" }
@@ -409,27 +410,21 @@ export default function StaffPerksCampaignList() {
 
 function JoinSwitch({ value, onChange }: { value: "and" | "or"; onChange: (value: "and" | "or") => void }) {
   return (
-    <div className="flex items-center gap-2 py-2" role="group" aria-label="Verknüpfung mit der Gruppe darüber">
-      <span className="bg-border/70 h-px flex-1" aria-hidden />
-      <div className="bg-muted/60 border-border/60 inline-flex items-center gap-0.5 rounded-lg border p-[3px]">
-        {(["and", "or"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={value === option}
-            onClick={() => onChange(option)}
-            className={`rounded-md px-2.5 py-1 text-[11px] font-medium tracking-wide transition-[color,background-color,box-shadow] ${
-              value === option
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {option === "and" ? "UND" : "ODER"}
-          </button>
-        ))}
-      </div>
-      <span className="bg-border/70 h-px flex-1" aria-hidden />
-    </div>
+    <JoinRule>
+      {(["and", "or"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={value === option}
+          onClick={() => onChange(option)}
+          className={`${joinPillClass} ${
+            value === option ? joinPillActiveClass : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {option === "and" ? "UND" : "ODER"}
+        </button>
+      ))}
+    </JoinRule>
   )
 }
 

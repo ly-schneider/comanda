@@ -14,7 +14,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -27,6 +26,7 @@ import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 import { campaignPositions } from "@/lib/volunteer-choices"
 import type { VolunteerCampaignDetail } from "@/types/volunteer"
+import { joinPillActiveClass, joinPillClass, JoinRule } from "./join-rule"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
 export default function StaffPerksCampaignDetail() {
@@ -315,10 +315,10 @@ export default function StaffPerksCampaignDetail() {
               <button
                 type="button"
                 onClick={copyAccessCode}
-                className="group bg-background hover:bg-accent/40 focus-visible:ring-ring/40 flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99]"
+                className="group bg-background hover:bg-accent/40 focus-visible:ring-ring/40 flex h-11 items-center gap-3 rounded-xl border px-4 text-left transition focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99]"
                 aria-label="Code kopieren"
               >
-                <span className="text-lg font-semibold tracking-[0.2em]">{detail.accessCode}</span>
+                <span className="text-base font-semibold tracking-[0.2em]">{detail.accessCode}</span>
                 <span className="text-muted-foreground group-hover:text-foreground transition">
                   {copiedCode ? (
                     <Check className="size-4 text-emerald-600" aria-hidden />
@@ -330,7 +330,7 @@ export default function StaffPerksCampaignDetail() {
             </div>
             <div className="flex min-w-0 flex-col gap-2">
               <div className="text-muted-foreground text-xs">Claim-URL</div>
-              <div className="bg-background flex items-center gap-1 rounded-xl border p-1 pl-3">
+              <div className="bg-background flex h-11 items-center gap-1 rounded-xl border p-1 pl-3">
                 <span className="min-w-0 flex-1 truncate text-sm">{claimUrl}</span>
                 <Button variant="ghost" size="sm" onClick={copyClaimUrl} aria-label="URL kopieren" className="shrink-0">
                   {copiedUrl ? (
@@ -365,35 +365,28 @@ export default function StaffPerksCampaignDetail() {
           {detail.products.length === 0 ? (
             <p className="text-muted-foreground text-sm">Keine Produkte.</p>
           ) : (
-            <ul className="divide-border/60 border-border/60 divide-y overflow-hidden rounded-xl border">
-              {campaignPositions(detail.products).map((position) => (
-                <li
-                  key={`${position.choiceGroup}-${position.options[0].productId}`}
-                  className="flex items-center justify-between gap-4 px-3.5 py-3"
-                >
-                  {position.options.length === 1 ? (
-                    <>
-                      <span className="truncate text-sm">{position.options[0].productName}</span>
-                      <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-                        ×{position.options[0].quantity}
-                      </span>
-                    </>
-                  ) : (
-                    <div className="flex min-w-0 flex-col gap-2">
-                      <span className="text-muted-foreground text-xs">Eines davon</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {position.options.map((option) => (
-                          <Badge key={option.productId} variant="secondary" className="gap-1.5 font-normal">
-                            {option.productName}
-                            <span className="text-muted-foreground tabular-nums">×{option.quantity}</span>
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+            <div className="flex flex-col">
+              {campaignPositions(detail.products).map((position, idx) => (
+                <div key={`${position.choiceGroup}-${position.options[0].productId}`} className="flex flex-col">
+                  {idx > 0 && (
+                    <JoinRule>
+                      <span className={`${joinPillClass} ${joinPillActiveClass}`}>UND</span>
+                    </JoinRule>
                   )}
-                </li>
+                  <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-3 shadow-xs">
+                    {position.options.length > 1 && (
+                      <span className="text-muted-foreground text-[11px]">Eines davon</span>
+                    )}
+                    {position.options.map((option) => (
+                      <div key={option.productId} className="flex items-center justify-between gap-4 text-sm">
+                        <span className="truncate">{option.productName}</span>
+                        <span className="text-muted-foreground shrink-0 tabular-nums">×{option.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>
