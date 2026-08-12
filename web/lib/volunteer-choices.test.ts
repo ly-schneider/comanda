@@ -26,4 +26,9 @@ describe("campaignPositions", () => {
   it("returns nothing for an empty campaign", () => {
     expect(campaignPositions([])).toEqual([])
   })
+
+  it("keeps products apart when the response carries no choiceGroup", () => {
+    const legacy = [{ id: "pommes" }, { id: "cola" }] as unknown as { id: string; choiceGroup: number }[]
+    expect(campaignPositions(legacy).map((pos) => pos.options.map((o) => o.id))).toEqual([["pommes"], ["cola"]])
+  })
 })

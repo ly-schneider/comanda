@@ -13,7 +13,9 @@ export function campaignPositions<T extends ChoiceGrouped>(products: T[]): Campa
   const byGroup = new Map<number, CampaignPosition<T>>()
 
   for (const product of products) {
-    if (product.choiceGroup <= 0) {
+    // Positive test on purpose: a response without choiceGroup must degrade to
+    // one position per product, not merge every product into one big choice.
+    if (!(product.choiceGroup > 0)) {
       positions.push({ choiceGroup: 0, options: [product] })
       continue
     }
