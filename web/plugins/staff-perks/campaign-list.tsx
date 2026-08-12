@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
@@ -18,9 +17,12 @@ import type { ProductSummaryDTO } from "@/types/product"
 import type { VolunteerCampaignStatus, VolunteerCampaignSummary } from "@/types/volunteer"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
-// joinPrevious is the connector to the row above: ODER puts both products in the
-// same choice — the staff member gets one of them. UND starts a new item.
-type ProductRow = { productId: string; quantity: number | ""; joinPrevious: boolean }
+type OptionRow = { productId: string; quantity: number | "" }
+// A group holds interchangeable options — "Getränke" is one group of several
+// drinks, and exactly one of them is handed out. joinPrevious is the connector
+// to the group above: ODER merges both groups into a single choice, UND hands
+// out both.
+type GroupRow = { options: OptionRow[]; joinPrevious: boolean }
 
 export default function StaffPerksCampaignList() {
   const fetchAuth = useAuthorizedFetch()
@@ -33,7 +35,7 @@ export default function StaffPerksCampaignList() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formName, setFormName] = useState("")
   const [formMaxRedemptions, setFormMaxRedemptions] = useState<number | "">(20)
-  const [formProducts, setFormProducts] = useState<ProductRow[]>([])
+  const [formGroups, setFormGroups] = useState<GroupRow[]>([])
   const [formValidUntil, setFormValidUntil] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -74,7 +76,7 @@ export default function StaffPerksCampaignList() {
   const resetForm = () => {
     setFormName("")
     setFormMaxRedemptions(20)
-    setFormProducts([])
+    setFormGroups([])
     setFormValidUntil("")
     setFormError(null)
   }
@@ -90,7 +92,7 @@ export default function StaffPerksCampaignList() {
       setFormError("Name erforderlich.")
       return
     }
-    if (formProducts.length === 0) {
+    if (formGroups.length === 0) {
       setFormError("Mindestens ein Produkt erforderlich.")
       return
     }
@@ -99,14 +101,15 @@ export default function StaffPerksCampaignList() {
       setFormError("Maximale Einlösungen muss mindestens 1 sein.")
       return
     }
+    // ODER merges a group into the choice above it, UND opens a new one.
     let choiceGroup = 0
-    const productsPayload = formProducts.map((row, idx) => {
-      if (idx === 0 || !row.joinPrevious) choiceGroup += 1
-      return {
-        productId: row.productId,
-        quantity: Math.max(1, row.quantity === "" ? 1 : row.quantity),
+    const productsPayload = formGroups.flatMap((group, idx) => {
+      if (idx === 0 || !group.joinPrevious) choiceGroup += 1
+      return group.options.map((option) => ({
+        productId: option.productId,
+        quantity: Math.max(1, option.quantity === "" ? 1 : option.quantity),
         choiceGroup,
-      }
+      }))
     })
     if (productsPayload.some((p) => !p.productId)) {
       setFormError("Bitte für jede Zeile ein Produkt wählen.")
@@ -249,72 +252,112 @@ export default function StaffPerksCampaignList() {
             <div className="grid gap-2">
               <Label>Produkte pro Einlösung</Label>
               <p className="text-muted-foreground text-xs">
-                UND gibt beide Produkte ab. ODER macht daraus eine Auswahl — die Station fragt beim Scannen nach.
+                Eine Gruppe mit mehreren Optionen wird an der Station zur Auswahl. UND gibt beide Gruppen ab, ODER macht
+                daraus eine einzige Auswahl.
               </p>
-              <div className="flex flex-col gap-1.5">
-                {formProducts.map((row, idx) => (
-                  <div key={idx} className="flex flex-col gap-1.5">
-                    {idx > 0 && (
-                      <ToggleGroup
-                        type="single"
-                        variant="outline"
-                        size="sm"
-                        value={row.joinPrevious ? "or" : "and"}
-                        onValueChange={(v) => {
-                          if (!v) return
-                          setFormProducts((rs) =>
-                            rs.map((r, i) => (i === idx ? { ...r, joinPrevious: v === "or" } : r))
+              <div className="flex flex-col">
+                {formGroups.map((group, groupIdx) => (
+                  <div key={groupIdx} className="flex flex-col">
+                    {groupIdx > 0 && (
+                      <JoinSwitch
+                        value={group.joinPrevious ? "or" : "and"}
+                        onChange={(v) =>
+                          setFormGroups((gs) =>
+                            gs.map((g, i) => (i === groupIdx ? { ...g, joinPrevious: v === "or" } : g))
                           )
-                        }}
-                        className="self-center"
-                        aria-label="Verknüpfung mit der Zeile darüber"
-                      >
-                        <ToggleGroupItem value="and" className="px-3 text-xs font-medium">
-                          UND
-                        </ToggleGroupItem>
-                        <ToggleGroupItem value="or" className="px-3 text-xs font-medium">
-                          ODER
-                        </ToggleGroupItem>
-                      </ToggleGroup>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={row.productId}
-                        onValueChange={(v) =>
-                          setFormProducts((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)))
                         }
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Produkt wählen …" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        min={1}
-                        className="w-20"
-                        value={row.quantity}
-                        aria-label="Menge"
-                        onChange={(e) => {
-                          const raw = e.target.value
-                          setFormProducts((rs) =>
-                            rs.map((r, i) => (i === idx ? { ...r, quantity: raw === "" ? "" : parseInt(raw, 10) } : r))
-                          )
-                        }}
                       />
+                    )}
+                    <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-2.5 shadow-xs">
+                      {group.options.length > 1 && (
+                        <span className="text-muted-foreground px-0.5 text-[11px]">Eines davon</span>
+                      )}
+                      {group.options.map((option, optionIdx) => (
+                        <div key={optionIdx} className="flex items-center gap-2">
+                          <Select
+                            value={option.productId}
+                            onValueChange={(v) =>
+                              setFormGroups((gs) =>
+                                gs.map((g, i) =>
+                                  i === groupIdx
+                                    ? {
+                                        ...g,
+                                        options: g.options.map((o, j) =>
+                                          j === optionIdx ? { ...o, productId: v } : o
+                                        ),
+                                      }
+                                    : g
+                                )
+                              )
+                            }
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Produkt wählen …" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={1}
+                            className="w-16"
+                            value={option.quantity}
+                            aria-label="Menge"
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              setFormGroups((gs) =>
+                                gs.map((g, i) =>
+                                  i === groupIdx
+                                    ? {
+                                        ...g,
+                                        options: g.options.map((o, j) =>
+                                          j === optionIdx ? { ...o, quantity: raw === "" ? "" : parseInt(raw, 10) } : o
+                                        ),
+                                      }
+                                    : g
+                                )
+                              )
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive size-9 shrink-0"
+                            onClick={() =>
+                              setFormGroups((gs) =>
+                                gs
+                                  .map((g, i) =>
+                                    i === groupIdx ? { ...g, options: g.options.filter((_, j) => j !== optionIdx) } : g
+                                  )
+                                  .filter((g) => g.options.length > 0)
+                              )
+                            }
+                            aria-label="Produkt entfernen"
+                          >
+                            <Trash2 className="size-4" aria-hidden />
+                          </Button>
+                        </div>
+                      ))}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setFormProducts((rs) => rs.filter((_, i) => i !== idx))}
-                        aria-label="Produkt entfernen"
+                        className="text-muted-foreground h-7 self-start px-1.5 text-xs"
+                        onClick={() =>
+                          setFormGroups((gs) =>
+                            gs.map((g, i) =>
+                              i === groupIdx ? { ...g, options: [...g.options, { productId: "", quantity: 1 }] } : g
+                            )
+                          )
+                        }
+                        disabled={products.length === 0}
                       >
-                        <Trash2 className="size-4" aria-hidden />
+                        <Plus className="size-3.5" aria-hidden />
+                        Option
                       </Button>
                     </div>
                   </div>
@@ -322,17 +365,17 @@ export default function StaffPerksCampaignList() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-1"
+                  className={formGroups.length > 0 ? "mt-2.5 self-start" : "self-start"}
                   onClick={() =>
-                    setFormProducts((rs) => [
-                      ...rs,
-                      { productId: products[0]?.id || "", quantity: 1, joinPrevious: false },
+                    setFormGroups((gs) => [
+                      ...gs,
+                      { options: [{ productId: products[0]?.id || "", quantity: 1 }], joinPrevious: false },
                     ])
                   }
                   disabled={products.length === 0}
                 >
                   <Plus className="size-4" aria-hidden />
-                  Produkt hinzufügen
+                  Gruppe hinzufügen
                 </Button>
               </div>
             </div>
@@ -352,6 +395,32 @@ export default function StaffPerksCampaignList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function JoinSwitch({ value, onChange }: { value: "and" | "or"; onChange: (value: "and" | "or") => void }) {
+  return (
+    <div className="flex items-center gap-2 py-2" role="group" aria-label="Verknüpfung mit der Gruppe darüber">
+      <span className="bg-border/70 h-px flex-1" aria-hidden />
+      <div className="bg-muted/60 border-border/60 inline-flex items-center gap-0.5 rounded-lg border p-[3px]">
+        {(["and", "or"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={value === option}
+            onClick={() => onChange(option)}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium tracking-wide transition-[color,background-color,box-shadow] ${
+              value === option
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {option === "and" ? "UND" : "ODER"}
+          </button>
+        ))}
+      </div>
+      <span className="bg-border/70 h-px flex-1" aria-hidden />
     </div>
   )
 }
