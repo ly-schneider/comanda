@@ -82,6 +82,20 @@ export default function StaffPerksCampaignList() {
   )
   const hasFreeProduct = products.some((p) => !usedProductIds.has(p.id))
 
+  // Spells out what a redemption hands over, so the UND/ODER structure is
+  // readable before saving instead of only on the detail page.
+  const summary = useMemo(() => {
+    const names = new Map(products.map((p) => [p.id, p.name]))
+    const merged: string[][] = []
+    for (const group of formGroups) {
+      const labels = group.options.map((o) => names.get(o.productId) ?? "…")
+      const previous = merged[merged.length - 1]
+      if (group.joinPrevious && previous) previous.push(...labels)
+      else merged.push(labels)
+    }
+    return merged.map((labels) => (labels.length === 1 ? labels[0] : `eines von (${labels.join(", ")})`)).join(" UND ")
+  }, [formGroups, products])
+
   const resetForm = () => {
     setFormName("")
     setFormMaxRedemptions(20)
@@ -383,6 +397,11 @@ export default function StaffPerksCampaignList() {
                   Gruppe hinzufügen
                 </Button>
               </div>
+              {formGroups.length > 0 && (
+                <p className="text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-2 text-xs">
+                  Pro Einlösung: <span className="text-foreground">{summary}</span>
+                </p>
+              )}
             </div>
             {formError && (
               <div className="bg-destructive/10 text-destructive rounded-xl p-3 text-sm" role="alert">

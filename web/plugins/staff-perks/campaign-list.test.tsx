@@ -94,6 +94,21 @@ describe("StaffPerksCampaignList create form", () => {
     expect(submittedProducts().map((p) => p.choiceGroup)).toEqual([1, 1])
   })
 
+  it("spells out the structure before saving", async () => {
+    await openCreateDialog()
+
+    fireEvent.click(screen.getByRole("button", { name: /Gruppe hinzufügen/ }))
+    await pickProduct(0, "Menü Gross")
+    fireEvent.click(screen.getByRole("button", { name: /Gruppe hinzufügen/ }))
+    await pickProduct(1, "Coca Cola")
+    fireEvent.click(screen.getAllByRole("button", { name: /Alternative/ })[1]!)
+    await pickProduct(2, "Wasser")
+
+    expect(screen.getByText(/Pro Einlösung/)).toHaveTextContent(
+      "Pro Einlösung: Menü Gross UND eines von (Coca Cola, Wasser)"
+    )
+  })
+
   it("refuses to submit a group with no product picked", async () => {
     await openCreateDialog()
 
