@@ -366,28 +366,21 @@ export default function StaffPerksCampaignDetail() {
           ) : (
             <ul className="flex flex-col gap-1.5">
               {campaignPositions(detail.products).map((position) => (
-                <li key={`${position.choiceGroup}-${position.options[0].productId}`}>
-                  {position.options.length === 1 ? (
-                    <div className="bg-muted/40 flex items-center justify-between rounded-xl px-3 py-2.5">
-                      <span className="truncate">{position.options[0].productName}</span>
-                      <span className="text-muted-foreground ml-3 shrink-0 tabular-nums">
-                        ×{position.options[0].quantity}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="bg-muted/40 flex flex-col gap-1 rounded-xl px-3 py-2.5">
-                      <span className="text-muted-foreground text-xs">Auswahl — eines davon</span>
-                      {position.options.map((option, idx) => (
-                        <div key={option.productId} className="flex items-center justify-between">
-                          <span className="truncate">
-                            {idx > 0 && <span className="text-muted-foreground mr-1.5 text-xs">oder</span>}
-                            {option.productName}
-                          </span>
-                          <span className="text-muted-foreground ml-3 shrink-0 tabular-nums">×{option.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <li
+                  key={`${position.choiceGroup}-${position.options[0].productId}`}
+                  className="bg-muted/40 flex items-center gap-2 rounded-xl px-3 py-2.5"
+                >
+                  {position.options.map((option, idx) => (
+                    <span key={option.productId} className="flex min-w-0 items-center gap-2">
+                      {idx > 0 && (
+                        <span className="text-muted-foreground shrink-0 text-[11px] font-medium tracking-wide">
+                          ODER
+                        </span>
+                      )}
+                      <span className="truncate">{option.productName}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">×{option.quantity}</span>
+                    </span>
+                  ))}
                 </li>
               ))}
             </ul>

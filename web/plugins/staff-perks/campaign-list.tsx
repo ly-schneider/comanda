@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
@@ -17,10 +18,9 @@ import type { ProductSummaryDTO } from "@/types/product"
 import type { VolunteerCampaignStatus, VolunteerCampaignSummary } from "@/types/volunteer"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
-type ProductRow = { productId: string; quantity: number | "" }
-// One position per redemption. Two or more options make it a choice: the staff
-// member gets exactly one of them ("Pommes ODER Getränk").
-type PositionRow = { options: ProductRow[] }
+// joinPrevious is the connector to the row above: ODER puts both products in the
+// same choice — the staff member gets one of them. UND starts a new item.
+type ProductRow = { productId: string; quantity: number | ""; joinPrevious: boolean }
 
 export default function StaffPerksCampaignList() {
   const fetchAuth = useAuthorizedFetch()
@@ -33,7 +33,7 @@ export default function StaffPerksCampaignList() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formName, setFormName] = useState("")
   const [formMaxRedemptions, setFormMaxRedemptions] = useState<number | "">(20)
-  const [formPositions, setFormPositions] = useState<PositionRow[]>([])
+  const [formProducts, setFormProducts] = useState<ProductRow[]>([])
   const [formValidUntil, setFormValidUntil] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -74,7 +74,7 @@ export default function StaffPerksCampaignList() {
   const resetForm = () => {
     setFormName("")
     setFormMaxRedemptions(20)
-    setFormPositions([])
+    setFormProducts([])
     setFormValidUntil("")
     setFormError(null)
   }
@@ -90,7 +90,7 @@ export default function StaffPerksCampaignList() {
       setFormError("Name erforderlich.")
       return
     }
-    if (formPositions.length === 0) {
+    if (formProducts.length === 0) {
       setFormError("Mindestens ein Produkt erforderlich.")
       return
     }
@@ -99,13 +99,15 @@ export default function StaffPerksCampaignList() {
       setFormError("Maximale Einlösungen muss mindestens 1 sein.")
       return
     }
-    const productsPayload = formPositions.flatMap((position, idx) =>
-      position.options.map((option) => ({
-        productId: option.productId,
-        quantity: Math.max(1, option.quantity === "" ? 1 : option.quantity),
-        choiceGroup: idx + 1,
-      }))
-    )
+    let choiceGroup = 0
+    const productsPayload = formProducts.map((row, idx) => {
+      if (idx === 0 || !row.joinPrevious) choiceGroup += 1
+      return {
+        productId: row.productId,
+        quantity: Math.max(1, row.quantity === "" ? 1 : row.quantity),
+        choiceGroup,
+      }
+    })
     if (productsPayload.some((p) => !p.productId)) {
       setFormError("Bitte für jede Zeile ein Produkt wählen.")
       return
@@ -247,113 +249,90 @@ export default function StaffPerksCampaignList() {
             <div className="grid gap-2">
               <Label>Produkte pro Einlösung</Label>
               <p className="text-muted-foreground text-xs">
-                Jede Position wird einmal abgegeben. Mit Alternativen wird daraus eine Auswahl — die Station fragt beim
-                Scannen nach.
+                UND gibt beide Produkte ab. ODER macht daraus eine Auswahl — die Station fragt beim Scannen nach.
               </p>
-              <div className="flex flex-col gap-2">
-                {formPositions.map((position, posIdx) => (
-                  <div key={posIdx} className="bg-muted/30 flex flex-col gap-2 rounded-xl border p-2.5">
-                    {position.options.map((row, optIdx) => (
-                      <div key={optIdx} className="flex flex-col gap-2">
-                        {optIdx > 0 && (
-                          <span className="text-muted-foreground text-center text-[11px] font-medium tracking-wide uppercase">
-                            oder
-                          </span>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <Select
-                            value={row.productId}
-                            onValueChange={(v) =>
-                              setFormPositions((ps) =>
-                                ps.map((p, i) =>
-                                  i === posIdx
-                                    ? {
-                                        options: p.options.map((o, j) => (j === optIdx ? { ...o, productId: v } : o)),
-                                      }
-                                    : p
-                                )
-                              )
-                            }
-                          >
-                            <SelectTrigger className="flex-1">
-                              <SelectValue placeholder="Produkt wählen …" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            min={1}
-                            className="w-20"
-                            value={row.quantity}
-                            aria-label="Menge"
-                            onChange={(e) => {
-                              const raw = e.target.value
-                              setFormPositions((ps) =>
-                                ps.map((p, i) =>
-                                  i === posIdx
-                                    ? {
-                                        options: p.options.map((o, j) =>
-                                          j === optIdx ? { ...o, quantity: raw === "" ? "" : parseInt(raw, 10) } : o
-                                        ),
-                                      }
-                                    : p
-                                )
-                              )
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setFormPositions((ps) =>
-                                ps
-                                  .map((p, i) =>
-                                    i === posIdx ? { options: p.options.filter((_, j) => j !== optIdx) } : p
-                                  )
-                                  .filter((p) => p.options.length > 0)
-                              )
-                            }
-                            aria-label="Produkt entfernen"
-                          >
-                            <Trash2 className="size-4" aria-hidden />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="self-start"
-                      onClick={() =>
-                        setFormPositions((ps) =>
-                          ps.map((p, i) =>
-                            i === posIdx ? { options: [...p.options, { productId: "", quantity: 1 }] } : p
+              <div className="flex flex-col gap-1.5">
+                {formProducts.map((row, idx) => (
+                  <div key={idx} className="flex flex-col gap-1.5">
+                    {idx > 0 && (
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        size="sm"
+                        value={row.joinPrevious ? "or" : "and"}
+                        onValueChange={(v) => {
+                          if (!v) return
+                          setFormProducts((rs) =>
+                            rs.map((r, i) => (i === idx ? { ...r, joinPrevious: v === "or" } : r))
                           )
-                        )
-                      }
-                      disabled={products.length === 0}
-                    >
-                      <Plus className="size-4" aria-hidden />
-                      Alternative
-                    </Button>
+                        }}
+                        className="self-center"
+                        aria-label="Verknüpfung mit der Zeile darüber"
+                      >
+                        <ToggleGroupItem value="and" className="px-3 text-xs font-medium">
+                          UND
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="or" className="px-3 text-xs font-medium">
+                          ODER
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={row.productId}
+                        onValueChange={(v) =>
+                          setFormProducts((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)))
+                        }
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Produkt wählen …" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="w-20"
+                        value={row.quantity}
+                        aria-label="Menge"
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          setFormProducts((rs) =>
+                            rs.map((r, i) => (i === idx ? { ...r, quantity: raw === "" ? "" : parseInt(raw, 10) } : r))
+                          )
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFormProducts((rs) => rs.filter((_, i) => i !== idx))}
+                        aria-label="Produkt entfernen"
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 <Button
                   variant="outline"
                   size="sm"
+                  className="mt-1"
                   onClick={() =>
-                    setFormPositions((ps) => [...ps, { options: [{ productId: products[0]?.id || "", quantity: 1 }] }])
+                    setFormProducts((rs) => [
+                      ...rs,
+                      { productId: products[0]?.id || "", quantity: 1, joinPrevious: false },
+                    ])
                   }
                   disabled={products.length === 0}
                 >
                   <Plus className="size-4" aria-hidden />
-                  Position hinzufügen
+                  Produkt hinzufügen
                 </Button>
               </div>
             </div>
