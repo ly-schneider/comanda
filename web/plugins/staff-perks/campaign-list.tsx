@@ -80,7 +80,7 @@ export default function StaffPerksCampaignList() {
     () => new Set(formGroups.flatMap((g) => g.options.map((o) => o.productId)).filter(Boolean)),
     [formGroups]
   )
-  const nextFreeProductId = products.find((p) => !usedProductIds.has(p.id))?.id ?? ""
+  const hasFreeProduct = products.some((p) => !usedProductIds.has(p.id))
 
   const resetForm = () => {
     setFormName("")
@@ -274,9 +274,10 @@ export default function StaffPerksCampaignList() {
                       />
                     )}
                     <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-2.5 shadow-xs">
-                      {group.options.length > 1 && (
-                        <span className="text-muted-foreground px-0.5 text-[11px]">Eines davon</span>
-                      )}
+                      <span className="text-muted-foreground px-0.5 text-[11px]">
+                        Gruppe {groupIdx + 1}
+                        {group.options.length > 1 && " · eines davon"}
+                      </span>
                       {group.options.map((option, optionIdx) => (
                         <div key={optionIdx} className="flex items-center gap-2">
                           <Select
@@ -357,16 +358,14 @@ export default function StaffPerksCampaignList() {
                         onClick={() =>
                           setFormGroups((gs) =>
                             gs.map((g, i) =>
-                              i === groupIdx
-                                ? { ...g, options: [...g.options, { productId: nextFreeProductId, quantity: 1 }] }
-                                : g
+                              i === groupIdx ? { ...g, options: [...g.options, { productId: "", quantity: 1 }] } : g
                             )
                           )
                         }
-                        disabled={!nextFreeProductId}
+                        disabled={!hasFreeProduct}
                       >
                         <Plus className="size-3.5" aria-hidden />
-                        Option
+                        Alternative
                       </Button>
                     </div>
                   </div>
@@ -376,12 +375,9 @@ export default function StaffPerksCampaignList() {
                   size="sm"
                   className={formGroups.length > 0 ? "mt-2.5 self-start" : "self-start"}
                   onClick={() =>
-                    setFormGroups((gs) => [
-                      ...gs,
-                      { options: [{ productId: nextFreeProductId, quantity: 1 }], joinPrevious: false },
-                    ])
+                    setFormGroups((gs) => [...gs, { options: [{ productId: "", quantity: 1 }], joinPrevious: false }])
                   }
-                  disabled={!nextFreeProductId}
+                  disabled={!hasFreeProduct}
                 >
                   <Plus className="size-4" aria-hidden />
                   Gruppe hinzufügen
