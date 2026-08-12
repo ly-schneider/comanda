@@ -107,11 +107,38 @@ backend/
 ```bash
 cp .env.example .env
 
-just up                 # Start PostgreSQL + Mailpit + MinIO
-just migrate            # Apply database migrations
-just seed               # Seed development data (idempotent)
+just up                 # Start PostgreSQL + Mailpit + MinIO (roles bootstrapped on a fresh volume)
+just bootstrap-local you@example.com   # Migrations + demo catalog + platform-admin owner
 just dev                # Start with live reload via Air
 ```
+
+`bootstrap-local` is idempotent and composed of `just migrate`, `just seed`, and
+`just bootstrap-admin`. The admin is created as a user row with a verified email —
+sign-in is OTP-only, so there is no password: request a code at
+http://localhost:3000/login and read it in Mailpit.
+
+Additional tenants (provisioned through the platform-admin UI in real
+environments) can be created directly. Recipe arguments are positional:
+
+```bash
+just create-tenant blessthun 'BlessThun'                  # → http://blessthun.localhost:3000
+just seed blessthun                                       # demo catalog
+just bootstrap-admin you@example.com 'Your Name' blessthun
+```
+
+`create-tenant` builds the same shape as platform-admin provisioning — an
+organization, a settings singleton, and a verified primary domain (`<slug>.localhost`
+unless a third argument overrides it). `bootstrap-admin` on its own promotes an
+account that already signed up.
+
+The cross-tenant control plane lives on a **platform host**, which is any host
+that resolves to no tenant — so it cannot be `localhost` (the seed tenant's
+`tenant_domain`). With `PLATFORM_HOSTS=admin.localhost` set, sign in at
+http://admin.localhost:3000/login and open `/platform-admin`; the session cookie
+is host-scoped, so a session on a tenant host does not carry over.
+
+Branding and plugin defaults stay unseeded; apply the dev set with
+`psql "$DATABASE_URL" -f db/seed/05_settings.sql`.
 
 ### Service URLs
 

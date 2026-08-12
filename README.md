@@ -73,8 +73,7 @@ docs/         Documentation site — Fumadocs, admin handbook, dev guide
 cd backend
 cp .env.example .env
 just up
-just migrate
-just seed
+just bootstrap-local you@example.com   # migrations + demo catalog + platform admin
 just dev              # API at http://localhost:8080
 
 # Terminal 2 — Web App

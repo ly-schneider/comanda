@@ -100,6 +100,7 @@ test *args='./internal/...':
 # Run integration tests. Needs POSTGRES_TEST_DSN (privileged); RLS tests
 # additionally need POSTGRES_TEST_DSN_APP (the comanda_app role). Run
 # `just bootstrap-rls` against the test DB once so the app role + RLS exist.
+[doc('Run integration tests (needs a provisioned test DB)')]
 [group('test')]
 test-integration:
     go test -v -race -count=1 -timeout=5m ./test/integration/...
@@ -111,20 +112,54 @@ test-integration:
 migrate *args:
     atlas migrate apply --dir "file://db/migrations" --url "$DATABASE_URL" {{args}}
 
-# Bootstrap the two RLS roles (comanda_privileged owner + comanda_app). Run by
-# the DB owner/superuser BEFORE the first migration, so migrations create their
-# tables under the right owner. Idempotent — re-run after migrations to repair
-# ownership or grant drift. Local dev gets this automatically via `just up`.
+# Run by the DB owner/superuser BEFORE the first migration, so migrations create
+# their tables under the right owner. Idempotent — re-run after migrations to
+# repair ownership or grant drift. Local dev gets this automatically via `just up`.
+[doc('Bootstrap the two RLS roles (comanda_privileged owner + comanda_app)')]
 [group('db')]
 bootstrap-rls:
     psql "$DATABASE_URL" -f db/provisioning/bootstrap-rls-roles.sql
 
-# Grant platform-admin to a Leys operator by email. There is intentionally no
-# HTTP path to set is_platform_admin (it would be a privilege-escalation vector);
-# Leys provisions platform admins out of band via the DB owner.
+# There is intentionally no HTTP path to set is_platform_admin (it would be a
+# privilege-escalation vector); Leys provisions platform admins out of band.
+[doc('Grant platform-admin to a Leys operator by email')]
 [group('db')]
 grant-platform-admin email:
     psql "$DATABASE_URL" -c "UPDATE \"user\" SET is_platform_admin = true WHERE email = '{{email}}'"
+
+# Same shape platform-admin provisioning produces: organization, settings, and a
+# verified primary domain (default <slug>.localhost, which browsers resolve to
+# 127.0.0.1). Args are positional: just create-tenant blessthun 'BlessThun'
+[doc('Create a tenant with its org, settings and primary host')]
+[group('db')]
+create-tenant slug name host='':
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+      -v tenant_slug={{slug}} -v tenant_name='{{name}}' \
+      -v tenant_host='{{ if host == "" { slug + ".localhost" } else { host } }}' \
+      -f db/seed/00_tenant.sql
+
+# Creates the user if it doesn't exist yet. Sign in afterwards via OTP (Mailpit on
+# http://localhost:8025) — there is no password to set. Args are positional:
+# just bootstrap-admin you@example.com 'Your Name' blessthun
+[doc("Make an email a platform admin and owner of a tenant's organization")]
+[group('db')]
+bootstrap-admin email name='Local Admin' slug='default':
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+      -v admin_email={{email}} -v admin_name='{{name}}' -v seed_slug={{slug}} \
+      -f db/seed/00_platform_admin.sql
+
+# Migrations, demo catalog, and a platform-admin owner of the seed tenant.
+# Branding and plugins stay unseeded (db/seed/05_settings.sql applies the dev
+# set). Safe to re-run.
+[doc('Full local environment from an empty DB')]
+[group('db')]
+bootstrap-local email name='Local Admin' slug='default':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just migrate
+    just seed {{slug}}
+    just bootstrap-admin {{email}} '{{name}}' {{slug}}
+    echo "→ sign in at http://localhost:3000/login as {{email}} (OTP inbox: http://localhost:8025)"
 
 # Generate a new migration from Ent schema diff
 [group('db')]
@@ -155,6 +190,7 @@ migrate-clean:
 # Seed the demo catalog into a tenant by slug (default 'default'). Re-points the
 # shared demo set, so one tenant holds it at a time. Branding, plugins and the
 # ops demo (05_settings, 99_ops_demo) are not seeded — those are per-tenant setup.
+[doc('Seed the demo catalog into a tenant by slug')]
 [group('db')]
 seed slug='default':
     #!/usr/bin/env bash
@@ -171,12 +207,14 @@ seed slug='default':
 # Seed loadtest users, sessions, and POS/station devices into the load-test
 # tenant (resolved from its verified host). Runs against a PRIVILEGED $DATABASE_URL.
 # Override the tenant with target_host=<host>.
+[doc('Seed loadtest users, sessions and devices into the load-test tenant')]
 [group('loadtest')]
 loadtest-seed target_host='load-test.staging.comanda.leys.ch':
     psql "$DATABASE_URL" -v target_host={{target_host}} -f loadtest/seed.sql
 
 # Bump inventory for the load-test tenant's simple products so a run can't
 # deplete stock. Re-run any time stock is low; each run adds +50k per product.
+[doc("Bump inventory for the load-test tenant's simple products")]
 [group('loadtest')]
 loadtest-stock target_host='load-test.staging.comanda.leys.ch':
     psql "$DATABASE_URL" -v target_host={{target_host}} -f loadtest/stock.sql
@@ -188,6 +226,7 @@ loadtest-cleanup target_host='load-test.staging.comanda.leys.ch':
 
 # Run the API load test. BASE_URL defaults to the load-test tenant.
 # Usage: just loadtest [smoke|baseline|stress]
+[doc('Run the API load test')]
 [group('loadtest')]
 loadtest profile='smoke':
     #!/usr/bin/env bash
@@ -196,6 +235,7 @@ loadtest profile='smoke':
 
 # Run the browser load test. WEB_URL defaults to the load-test tenant.
 # Usage: just loadtest-browser [smoke|baseline|stress]
+[doc('Run the browser load test')]
 [group('loadtest')]
 loadtest-browser profile='smoke':
     #!/usr/bin/env bash
@@ -205,6 +245,7 @@ loadtest-browser profile='smoke':
 # Run API + browser load tests in parallel (both default to the load-test tenant).
 # Output goes to loadtest/results/{api,browser}-<timestamp>.json for later diffing.
 # Usage: just loadtest-full [smoke|baseline|stress]
+[doc('Run API + browser load tests in parallel')]
 [group('loadtest')]
 loadtest-full profile='baseline':
     #!/usr/bin/env bash
