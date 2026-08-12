@@ -102,6 +102,27 @@ type VoucherScanResult = {
 
 type ScanResult = OrderScanResult | VoucherScanResult
 
+type CampaignChoiceOption = {
+  productId: string
+  productName: string
+  productImage?: string | null
+  quantity: number
+}
+
+type CampaignChoiceGroup = { choiceGroup: number; options: CampaignChoiceOption[] }
+
+type CampaignChoiceSelection = { choiceGroup: number; productId: string }
+
+// A campaign with alternatives ("Pommes ODER Getränk") is resolved here: the
+// server rejects the first redemption with the open groups, the operator picks,
+// and the same redemption is re-sent.
+type ChoicePrompt = {
+  scanKey: string
+  claimToken: string
+  idem: string
+  groups: CampaignChoiceGroup[]
+}
+
 type LineGroup = { key: string; parent: OrderLine; children: OrderLine[] }
 
 function groupLines(lines: OrderLine[], bundleParents?: Record<string, OrderLine>): LineGroup[] {
@@ -324,6 +345,7 @@ export default function StationPage() {
   const [error, setError] = useState<string | null>(null)
   const [scans, setScans] = useState<ScanResult[]>([])
   const [detailScan, setDetailScan] = useState<OrderScanResult | null>(null)
+  const [choicePrompt, setChoicePrompt] = useState<ChoicePrompt | null>(null)
   const [cameraPermission, setCameraPermission] = useState<"idle" | "pending" | "granted" | "denied">("idle")
   const [scannerActive, setScannerActive] = useState(false)
   const [scannerKey, setScannerKey] = useState(0)
@@ -592,6 +614,116 @@ export default function StationPage() {
     }
   }, [approved, triggerFlush, triggerReconcile, triggerCatalogRefresh])
 
+  // Campaign redemption is server-side (it needs the shared counter), so this is
+  // the one scan path that can't run offline. It re-runs unchanged when the
+  // operator answers a choice prompt — the rejected first attempt consumed
+  // nothing, and the idempotency key is carried over.
+  const redeemCampaign = useCallback(
+    async (key: string, claimToken: string, idem: string, selections: CampaignChoiceSelection[]) => {
+      try {
+        const res = await fetch(`/api/v1/stations/redeem-campaign`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearerToken}`,
+            "Idempotency-Key": idem,
+          },
+          body: JSON.stringify({ claimToken, selections }),
+        })
+        type Problem = { code?: string; detail?: string; message?: string; groups?: CampaignChoiceGroup[] }
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as Problem
+          if (res.status === 409 && j.code === "choice_required" && j.groups?.length) {
+            // Leave the scanner paused: the dialog owns the flow from here.
+            setChoicePrompt({ scanKey: key, claimToken, idem, groups: j.groups })
+            return
+          }
+          const detail =
+            j.detail ||
+            j.message ||
+            (res.status === 409
+              ? "Maximale Einlösungen erreicht."
+              : res.status === 410
+                ? "Kampagne nicht mehr aktiv."
+                : res.status === 404
+                  ? "Kampagne nicht gefunden."
+                  : `Fehler ${res.status}`)
+          throw new Error(detail)
+        }
+        type CampaignResp = {
+          orderId: string
+          redemptionCount: number
+          maxRedemptions: number
+          station?: {
+            orderId?: string
+            redeemedAt?: string
+            items?: Array<{
+              id: string
+              orderId: string
+              productId: string
+              title: string
+              quantity: number
+              isRedeemed: boolean
+              parentItemId?: string | null
+              bundleSlotId?: string | null
+              bundleSlotName?: string | null
+              variantId?: string | null
+              variantValue?: string | null
+            }>
+          }
+        }
+        const data = (await res.json()) as CampaignResp
+        const redeemedAt = data.station?.redeemedAt || new Date().toISOString()
+        const items = data.station?.items || []
+        const lines: OrderLine[] = items.map((it) => ({
+          id: it.id,
+          orderId: it.orderId,
+          productId: it.productId,
+          title: it.title,
+          quantity: it.quantity,
+          unitPriceCents: 0,
+          redemption: it.isRedeemed ? { id: it.id, redeemedAt } : null,
+          parentLineId: it.parentItemId ?? null,
+          bundleSlotId: it.bundleSlotId ?? null,
+          bundleSlotName: it.bundleSlotName ?? null,
+          variantId: it.variantId ?? null,
+          variantValue: it.variantValue ?? null,
+        }))
+        const unredeemed = lines.filter((l) => !l.redemption)
+        const allRedeemed = lines.length > 0 && unredeemed.length === 0
+        const nextStatus: ScanStatus = lines.length === 0 ? "no-items" : allRedeemed ? "already-redeemed" : "success"
+        updateScan(key, { status: nextStatus, orderId: data.orderId, lines })
+        playScanSound(nextStatus === "success" ? "success" : "warning")
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Scan fehlgeschlagen"
+        updateScan(key, { status: "error", message })
+        playScanSound("error")
+      }
+      scheduleResume()
+    },
+    [bearerToken, scheduleResume, updateScan]
+  )
+
+  const resolveChoice = useCallback(
+    async (prompt: ChoicePrompt, selections: CampaignChoiceSelection[]) => {
+      setChoicePrompt(null)
+      await redeemCampaign(prompt.scanKey, prompt.claimToken, prompt.idem, selections)
+    },
+    [redeemCampaign]
+  )
+
+  const cancelChoice = useCallback(
+    (prompt: ChoicePrompt) => {
+      setChoicePrompt(null)
+      updateScan(prompt.scanKey, { status: "error", message: "Abgebrochen" })
+      // Drop the duplicate-scan guard: nothing was redeemed, so the same slip
+      // has to be scannable again right away.
+      recentScanIdsRef.current.delete(prompt.claimToken)
+      scheduleResume()
+    },
+    [scheduleResume, updateScan]
+  )
+
   const handleScanned = useCallback(
     async (scan: QrScanResult) => {
       const parsed = parseScan(scan.text, scan.bytes)
@@ -667,75 +799,7 @@ export default function StationPage() {
       try {
         if (parsed.kind === "campaign") {
           const idem = `idem_${Date.now()}_${Math.random().toString(36).slice(2)}`
-          const res = await fetch(`/api/v1/stations/redeem-campaign`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${bearerToken}`,
-              "Idempotency-Key": idem,
-            },
-            body: JSON.stringify({ claimToken: parsed.token }),
-          })
-          type Problem = { detail?: string; message?: string }
-          if (!res.ok) {
-            const j = (await res.json().catch(() => ({}))) as Problem
-            const detail =
-              j.detail ||
-              j.message ||
-              (res.status === 409
-                ? "Maximale Einlösungen erreicht."
-                : res.status === 410
-                  ? "Kampagne nicht mehr aktiv."
-                  : res.status === 404
-                    ? "Kampagne nicht gefunden."
-                    : `Fehler ${res.status}`)
-            throw new Error(detail)
-          }
-          type CampaignResp = {
-            orderId: string
-            redemptionCount: number
-            maxRedemptions: number
-            station?: {
-              orderId?: string
-              redeemedAt?: string
-              items?: Array<{
-                id: string
-                orderId: string
-                productId: string
-                title: string
-                quantity: number
-                isRedeemed: boolean
-                parentItemId?: string | null
-                bundleSlotId?: string | null
-                bundleSlotName?: string | null
-                variantId?: string | null
-                variantValue?: string | null
-              }>
-            }
-          }
-          const data = (await res.json()) as CampaignResp
-          const redeemedAt = data.station?.redeemedAt || new Date().toISOString()
-          const items = data.station?.items || []
-          const lines: OrderLine[] = items.map((it) => ({
-            id: it.id,
-            orderId: it.orderId,
-            productId: it.productId,
-            title: it.title,
-            quantity: it.quantity,
-            unitPriceCents: 0,
-            redemption: it.isRedeemed ? { id: it.id, redeemedAt } : null,
-            parentLineId: it.parentItemId ?? null,
-            bundleSlotId: it.bundleSlotId ?? null,
-            bundleSlotName: it.bundleSlotName ?? null,
-            variantId: it.variantId ?? null,
-            variantValue: it.variantValue ?? null,
-          }))
-          const unredeemed = lines.filter((l) => !l.redemption)
-          const allRedeemed = lines.length > 0 && unredeemed.length === 0
-          const nextStatus: ScanStatus = lines.length === 0 ? "no-items" : allRedeemed ? "already-redeemed" : "success"
-          updateScan(key, { status: nextStatus, orderId: data.orderId, lines })
-          playScanSound(nextStatus === "success" ? "success" : "warning")
-          scheduleResume()
+          await redeemCampaign(key, parsed.token, idem, [])
           return
         }
 
@@ -813,7 +877,7 @@ export default function StationPage() {
         scheduleResume()
       }
     },
-    [assignedProductIds, bearerToken, handleEnqueue, pushScan, scheduleResume, updateScan]
+    [assignedProductIds, handleEnqueue, pushScan, redeemCampaign, scheduleResume, updateScan]
   )
 
   const handleResult = useCallback(
@@ -1014,8 +1078,90 @@ export default function StationPage() {
         bearerToken={bearerToken}
         onClose={() => setDetailScan(null)}
       />
+      <CampaignChoiceDialog
+        prompt={choicePrompt}
+        assignedProductIds={assignedProductIds}
+        onConfirm={resolveChoice}
+        onCancel={cancelChoice}
+      />
       <InstallHintDrawer />
     </div>
+  )
+}
+
+function CampaignChoiceDialog({
+  prompt,
+  assignedProductIds,
+  onConfirm,
+  onCancel,
+}: {
+  prompt: ChoicePrompt | null
+  assignedProductIds: Set<string>
+  onConfirm: (prompt: ChoicePrompt, selections: CampaignChoiceSelection[]) => void
+  onCancel: (prompt: ChoicePrompt) => void
+}) {
+  const [picked, setPicked] = useState<Record<number, string>>({})
+
+  useEffect(() => {
+    setPicked({})
+  }, [prompt])
+
+  if (!prompt) return null
+
+  const selections = prompt.groups
+    .map((g) => ({ choiceGroup: g.choiceGroup, productId: picked[g.choiceGroup] }))
+    .filter((s): s is CampaignChoiceSelection => !!s.productId)
+  const complete = selections.length === prompt.groups.length
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel(prompt)}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-center text-xl font-semibold">Auswahl treffen</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-5">
+          {prompt.groups.map((group) => (
+            <div key={group.choiceGroup} className="flex flex-col gap-2">
+              <div className="text-muted-foreground text-xs font-medium">Eines auswählen</div>
+              {group.options.map((option) => {
+                const active = picked[group.choiceGroup] === option.productId
+                // An unassigned product would be handed out nowhere on this
+                // station, so the server rejects it — say so before the tap.
+                const servedHere = assignedProductIds.size === 0 || assignedProductIds.has(option.productId)
+                return (
+                  <button
+                    key={option.productId}
+                    type="button"
+                    disabled={!servedHere}
+                    onClick={() => setPicked((p) => ({ ...p, [group.choiceGroup]: option.productId }))}
+                    aria-pressed={active}
+                    className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-45 ${
+                      active ? "border-primary bg-primary/5" : "border-border bg-background"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate font-medium">
+                      {option.productName}
+                      {!servedHere && (
+                        <span className="text-muted-foreground block text-xs font-normal">Nicht an dieser Station</span>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-sm tabular-nums">×{option.quantity}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => onCancel(prompt)}>
+              Abbrechen
+            </Button>
+            <Button className="flex-1" disabled={!complete} onClick={() => onConfirm(prompt, selections)}>
+              Einlösen
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

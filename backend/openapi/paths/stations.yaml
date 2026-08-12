@@ -232,6 +232,15 @@ redeem-campaign:
             properties:
               claimToken:
                 type: string
+              selections:
+                type: array
+                description: |
+                  One entry per alternatives group of the campaign. Groups with a
+                  single option resolve on their own; leaving a multi-option group
+                  unanswered returns `409 choice_required` without consuming a
+                  redemption.
+                items:
+                  $ref: "../schemas/staff-perks.yaml#/CampaignChoiceSelection"
     responses:
       "200":
         description: Campaign redeemed at station
@@ -252,11 +261,15 @@ redeem-campaign:
             schema:
               $ref: "../schemas/common.yaml#/Error"
       "409":
-        description: Campaign limit reached or no matching products
+        description: |
+          Campaign limit reached, no matching products, or a choice is required.
+          `choice_required` carries the unresolved alternatives groups.
         content:
           application/json:
             schema:
-              $ref: "../schemas/common.yaml#/Error"
+              oneOf:
+                - $ref: "../schemas/staff-perks.yaml#/CampaignChoiceRequired"
+                - $ref: "../schemas/common.yaml#/Error"
 
 item:
   parameters:

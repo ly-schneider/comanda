@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -123,6 +124,9 @@ func (s *service) CreateCampaign(ctx context.Context, input CreateCampaignInput)
 	}
 	if input.MaxRedemptions <= 0 {
 		return nil, errors.New("max_redemptions_must_be_positive")
+	}
+	if err := validateProducts(input.Products); err != nil {
+		return nil, err
 	}
 
 	accessCode := generateAccessCode()
@@ -248,6 +252,9 @@ func (s *service) UpdateCampaign(ctx context.Context, id string, input UpdateCam
 	}
 
 	if len(input.Products) > 0 {
+		if err := validateProducts(input.Products); err != nil {
+			return nil, err
+		}
 		if err := s.campaigns.ReplaceProducts(ctx, id, input.Products); err != nil {
 			return nil, err
 		}
@@ -308,7 +315,86 @@ func (s *service) GetClaimView(ctx context.Context, token string) (*coreservice.
 	}, nil
 }
 
-func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, stationID string, idempotencyKey string) (*coreservice.VolunteerRedemptionResult, error) {
+func validateProducts(items []VolunteerCampaignProductInput) error {
+	seen := make(map[string]struct{}, len(items))
+	for _, it := range items {
+		if it.ChoiceGroup < 0 {
+			return coreservice.ErrVolunteerCampaignProductInvalid
+		}
+		if _, dup := seen[it.ProductID]; dup {
+			return coreservice.ErrVolunteerCampaignProductInvalid
+		}
+		seen[it.ProductID] = struct{}{}
+	}
+	return nil
+}
+
+// resolveCampaignSelection reduces the campaign's products to the ones handed out
+// for a single redemption. Choice group 0 is always included; every positive group
+// contributes exactly one product — auto-picked when the group holds a single
+// option, otherwise taken from selections.
+func resolveCampaignSelection(
+	products []coreservice.VolunteerCampaignProductView,
+	selections []coreservice.VolunteerChoiceSelection,
+) ([]coreservice.VolunteerCampaignProductView, error) {
+	groups := make(map[int][]coreservice.VolunteerCampaignProductView)
+	groupOrder := make([]int, 0, len(products))
+	out := make([]coreservice.VolunteerCampaignProductView, 0, len(products))
+
+	for _, p := range products {
+		if p.ChoiceGroup <= 0 {
+			out = append(out, p)
+			continue
+		}
+		if _, ok := groups[p.ChoiceGroup]; !ok {
+			groupOrder = append(groupOrder, p.ChoiceGroup)
+		}
+		groups[p.ChoiceGroup] = append(groups[p.ChoiceGroup], p)
+	}
+	sort.Ints(groupOrder)
+
+	picked := make(map[int]string, len(selections))
+	for _, sel := range selections {
+		if _, ok := groups[sel.ChoiceGroup]; !ok {
+			return nil, coreservice.ErrVolunteerChoiceInvalid
+		}
+		if prev, ok := picked[sel.ChoiceGroup]; ok && prev != sel.ProductID {
+			return nil, coreservice.ErrVolunteerChoiceInvalid
+		}
+		picked[sel.ChoiceGroup] = sel.ProductID
+	}
+
+	var pending []coreservice.VolunteerChoiceGroup
+	for _, g := range groupOrder {
+		options := groups[g]
+		productID, chosen := picked[g]
+		if !chosen {
+			if len(options) == 1 {
+				out = append(out, options[0])
+				continue
+			}
+			pending = append(pending, coreservice.VolunteerChoiceGroup{ChoiceGroup: g, Options: options})
+			continue
+		}
+		idx := -1
+		for i, o := range options {
+			if o.ProductID == productID {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return nil, coreservice.ErrVolunteerChoiceInvalid
+		}
+		out = append(out, options[idx])
+	}
+	if len(pending) > 0 {
+		return nil, &coreservice.VolunteerChoiceRequiredError{Groups: pending}
+	}
+	return out, nil
+}
+
+func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, stationID string, idempotencyKey string, selections []coreservice.VolunteerChoiceSelection) (*coreservice.VolunteerRedemptionResult, error) {
 	campaign, err := s.campaigns.GetByClaimToken(ctx, claimToken)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -346,24 +432,23 @@ func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, station
 	if len(cps) == 0 {
 		return nil, coreservice.ErrVolunteerCampaignHasNoProducts
 	}
-	products := make([]productSnapshot, 0, len(cps))
-	campaignProductIDs := make(map[string]struct{}, len(cps))
-	for _, cp := range cps {
-		p, _ := cp.Edges.ProductOrErr()
-		name := ""
-		if p != nil {
-			name = p.Name
-		}
-		qty := cp.Quantity
+	selected, err := resolveCampaignSelection(campaignProductsToViews(cps), selections)
+	if err != nil {
+		return nil, err
+	}
+	products := make([]productSnapshot, 0, len(selected))
+	selectedProductIDs := make(map[string]struct{}, len(selected))
+	for _, v := range selected {
+		qty := v.Quantity
 		if qty <= 0 {
 			qty = 1
 		}
 		products = append(products, productSnapshot{
-			ID:       cp.ProductID,
-			Name:     name,
+			ID:       v.ProductID,
+			Name:     v.ProductName,
 			Quantity: qty,
 		})
-		campaignProductIDs[cp.ProductID] = struct{}{}
+		selectedProductIDs[v.ProductID] = struct{}{}
 	}
 
 	stationProductIDs, err := s.stations.ListStationProductIDs(ctx, stationID)
@@ -372,7 +457,7 @@ func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, station
 	}
 	hasMatch := false
 	for _, pid := range stationProductIDs {
-		if _, ok := campaignProductIDs[pid]; ok {
+		if _, ok := selectedProductIDs[pid]; ok {
 			hasMatch = true
 			break
 		}
@@ -431,6 +516,8 @@ func campaignWithinValidity(c *ent.VolunteerCampaign, now time.Time) bool {
 	return true
 }
 
+// campaignProductsToViews orders standalone products first, then each choice
+// group together, so every surface renders the same "A oder B" structure.
 func campaignProductsToViews(cps []*ent.VolunteerCampaignProduct) []coreservice.VolunteerCampaignProductView {
 	out := make([]coreservice.VolunteerCampaignProductView, 0, len(cps))
 	for _, cp := range cps {
@@ -445,7 +532,14 @@ func campaignProductsToViews(cps []*ent.VolunteerCampaignProduct) []coreservice.
 			ProductName:  name,
 			ProductImage: image,
 			Quantity:     cp.Quantity,
+			ChoiceGroup:  cp.ChoiceGroup,
 		})
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ChoiceGroup != out[j].ChoiceGroup {
+			return out[i].ChoiceGroup < out[j].ChoiceGroup
+		}
+		return out[i].ProductName < out[j].ProductName
+	})
 	return out
 }

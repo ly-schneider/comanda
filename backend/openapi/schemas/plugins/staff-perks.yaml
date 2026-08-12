@@ -6,6 +6,11 @@ VolunteerCampaignProductInput:
       type: string
     quantity:
       type: integer
+    choiceGroup:
+      type: integer
+      description: |
+        0 (default) always includes the product. Products sharing a positive
+        value are alternatives — exactly one of them per redemption.
 
 VolunteerCampaignRedemption:
   type: object

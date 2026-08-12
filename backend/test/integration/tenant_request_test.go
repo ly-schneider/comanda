@@ -95,7 +95,7 @@ func TestTenantRequest_VolunteerCreateAndRedeem(t *testing.T) {
 	})
 	require.NoError(t, err, "UpdateCampaign must not error inside the request tx")
 
-	res, err := svc.RedeemSharedQR(ctx, campaign.ClaimToken, stationID, "idem-"+randSuffix())
+	res, err := svc.RedeemSharedQR(ctx, campaign.ClaimToken, stationID, "idem-"+randSuffix(), nil)
 	require.NoError(t, err, "RedeemSharedQR must not error inside the request tx")
 	require.NotEqual(t, "", res.OrderID)
 }
