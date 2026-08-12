@@ -111,8 +111,10 @@ test-integration:
 migrate *args:
     atlas migrate apply --dir "file://db/migrations" --url "$DATABASE_URL" {{args}}
 
-# Bootstrap the two RLS roles (comanda_privileged owner + comanda_app). Run once
-# per environment, by the DB owner/superuser, AFTER migrations create the tables.
+# Bootstrap the two RLS roles (comanda_privileged owner + comanda_app). Run by
+# the DB owner/superuser BEFORE the first migration, so migrations create their
+# tables under the right owner. Idempotent — re-run after migrations to repair
+# ownership or grant drift. Local dev gets this automatically via `just up`.
 [group('db')]
 bootstrap-rls:
     psql "$DATABASE_URL" -f db/provisioning/bootstrap-rls-roles.sql
@@ -149,16 +151,6 @@ migrate-lint:
 [group('db')]
 migrate-clean:
     atlas schema clean --url "$DATABASE_URL"
-
-# Provision database roles and grants (idempotent)
-[group('db')]
-provision:
-    ./db/provisioning/provision.sh
-
-# Generate and set random passwords for database roles
-[group('db')]
-set-passwords:
-    ./db/provisioning/set-passwords.sh
 
 # Seed the demo catalog into a tenant by slug (default 'default'). Re-points the
 # shared demo set, so one tenant holds it at a time. Branding, plugins and the

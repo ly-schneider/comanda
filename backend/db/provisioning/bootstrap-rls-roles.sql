@@ -1,6 +1,7 @@
 -- bootstrap-rls-roles.sql
--- One-shot RLS role bootstrap for Comanda. Run ONCE per environment, by a
--- superuser / instance owner, BEFORE applying the tenant-and-RLS migration.
+-- RLS role bootstrap for Comanda. Run by a superuser / instance owner BEFORE the
+-- first migration; local dev runs it from the Compose init mount on a fresh
+-- volume. Idempotent — re-run to repair ownership or grant drift.
 --
 -- Two roles (mirrors the iglesio pattern):
 --   * comanda_privileged — owns every public table, so it bypasses RLS via
@@ -14,8 +15,6 @@
 -- DSNs:
 --   DATABASE_URL      -> comanda_privileged
 --   DATABASE_URL_APP  -> comanda_app
---
--- Idempotent. Re-running is non-destructive.
 
 -- =====================================================================
 -- 1. Roles
@@ -109,6 +108,35 @@ ALTER DEFAULT PRIVILEGES FOR ROLE comanda_privileged IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO comanda_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE comanda_privileged IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO comanda_app;
+
+-- =====================================================================
+-- 5. Atlas migration ledger. Atlas keeps it in its own schema, created by
+--    whichever role first runs `atlas migrate`. If that is not
+--    comanda_privileged, later runs fail with 42P01 on a table that does exist:
+--    inspection reads pg_catalog (sees the table) while column privileges hide
+--    its columns, so Atlas plans an ALTER against an invisible relation.
+-- =====================================================================
+
+DO $$
+BEGIN
+  EXECUTE format('GRANT CREATE ON DATABASE %I TO comanda_privileged', current_database());
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'Could not grant CREATE on the database; comanda_privileged must own the atlas_schema_revisions schema for migrations to run.';
+END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'atlas_schema_revisions') THEN
+    ALTER SCHEMA atlas_schema_revisions OWNER TO comanda_privileged;
+
+    IF EXISTS (
+      SELECT 1 FROM pg_tables
+      WHERE schemaname = 'atlas_schema_revisions' AND tablename = 'atlas_schema_revisions'
+    ) THEN
+      ALTER TABLE atlas_schema_revisions.atlas_schema_revisions OWNER TO comanda_privileged;
+    END IF;
+  END IF;
+END$$;
 
 -- =====================================================================
 -- VERIFY (run by hand)
