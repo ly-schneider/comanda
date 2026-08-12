@@ -37,6 +37,7 @@ type volunteerCampaignProductPayload struct {
 	ProductID   string `json:"productId"`
 	Quantity    int    `json:"quantity"`
 	ChoiceGroup int    `json:"choiceGroup,omitempty"`
+	OptionGroup int    `json:"optionGroup,omitempty"`
 }
 
 type createVolunteerCampaignRequest struct {
@@ -82,6 +83,7 @@ type adminCampaignProductItem struct {
 	ProductImage *string `json:"productImage,omitempty"`
 	Quantity     int     `json:"quantity"`
 	ChoiceGroup  int     `json:"choiceGroup"`
+	OptionGroup  int     `json:"optionGroup"`
 }
 
 type adminCampaignRedemptionItem struct {
@@ -147,6 +149,7 @@ func (h *handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 			ProductImage: cp.ProductImage,
 			Quantity:     cp.Quantity,
 			ChoiceGroup:  cp.ChoiceGroup,
+			OptionGroup:  cp.OptionGroup,
 		})
 	}
 	redemptions := make([]adminCampaignRedemptionItem, 0, len(detail.Redemptions))

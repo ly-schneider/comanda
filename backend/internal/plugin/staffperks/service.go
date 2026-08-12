@@ -533,11 +533,15 @@ func campaignProductsToViews(cps []*ent.VolunteerCampaignProduct) []coreservice.
 			ProductImage: image,
 			Quantity:     cp.Quantity,
 			ChoiceGroup:  cp.ChoiceGroup,
+			OptionGroup:  cp.OptionGroup,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].ChoiceGroup != out[j].ChoiceGroup {
 			return out[i].ChoiceGroup < out[j].ChoiceGroup
+		}
+		if out[i].OptionGroup != out[j].OptionGroup {
+			return out[i].OptionGroup < out[j].OptionGroup
 		}
 		return out[i].ProductName < out[j].ProductName
 	})

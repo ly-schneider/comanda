@@ -86,14 +86,17 @@ export default function StaffPerksCampaignList() {
   // readable before saving instead of only on the detail page.
   const summary = useMemo(() => {
     const names = new Map(products.map((p) => [p.id, p.name]))
-    const merged: string[][] = []
-    for (const group of formGroups) {
-      const labels = group.options.map((o) => names.get(o.productId) ?? "…")
-      const previous = merged[merged.length - 1]
-      if (group.joinPrevious && previous) previous.push(...labels)
-      else merged.push(labels)
+    const label = (group: GroupRow) => {
+      const options = group.options.map((o) => names.get(o.productId) ?? "…")
+      return options.length === 1 ? options[0]! : `eines von (${options.join(", ")})`
     }
-    return merged.map((labels) => (labels.length === 1 ? labels[0] : `eines von (${labels.join(", ")})`)).join(" UND ")
+    const positions: string[][] = []
+    for (const group of formGroups) {
+      const previous = positions[positions.length - 1]
+      if (group.joinPrevious && previous) previous.push(label(group))
+      else positions.push([label(group)])
+    }
+    return positions.map((branches) => branches.join(" ODER ")).join(" UND ")
   }, [formGroups, products])
 
   const resetForm = () => {
@@ -124,14 +127,22 @@ export default function StaffPerksCampaignList() {
       setFormError("Maximale Einlösungen muss mindestens 1 sein.")
       return
     }
-    // ODER merges a group into the choice above it, UND opens a new one.
+    // UND opens a new choice, ODER adds a branch to the choice above — so the
+    // group stays intact as "one of these" instead of merging into one list.
     let choiceGroup = 0
+    let optionGroup = 0
     const productsPayload = formGroups.flatMap((group, idx) => {
-      if (idx === 0 || !group.joinPrevious) choiceGroup += 1
+      if (idx === 0 || !group.joinPrevious) {
+        choiceGroup += 1
+        optionGroup = 1
+      } else {
+        optionGroup += 1
+      }
       return group.options.map((option) => ({
         productId: option.productId,
         quantity: Math.max(1, option.quantity === "" ? 1 : option.quantity),
         choiceGroup,
+        optionGroup,
       }))
     })
     if (productsPayload.some((p) => !p.productId)) {

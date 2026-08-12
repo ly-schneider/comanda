@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import QRCode from "@/components/qrcode"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { readErrorMessage } from "@/lib/http"
-import { campaignPositions } from "@/lib/volunteer-choices"
+import { campaignPositions, positionOptions } from "@/lib/volunteer-choices"
 import type { ClaimCampaignResponse } from "@/types/volunteer"
 
 const ACCESS_INPUT_PATTERN = "^[A-Za-z1-9]*$"
@@ -225,12 +225,15 @@ export default function ClaimPage() {
           <h2 className="mb-3 text-lg font-semibold">Dein Bezug</h2>
           <ul className="flex flex-col gap-3">
             {campaignPositions(data.products).map((position) => (
-              <li key={`${position.choiceGroup}-${position.options[0].productId}`} className="rounded-xl border p-3">
-                {position.options.length > 1 && (
+              <li
+                key={`${position.choiceGroup}-${position.branches[0].options[0].productId}`}
+                className="rounded-xl border p-3"
+              >
+                {positionOptions(position).length > 1 && (
                   <p className="text-muted-foreground mb-2 text-xs">Wähle eines an der Station</p>
                 )}
                 <div className="flex flex-col gap-2">
-                  {position.options.map((p, idx) => (
+                  {positionOptions(position).map((p, idx) => (
                     <div key={p.productId} className="flex flex-col gap-2">
                       {idx > 0 && (
                         <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">oder</span>

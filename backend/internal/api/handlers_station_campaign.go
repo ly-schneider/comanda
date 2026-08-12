@@ -27,6 +27,7 @@ type campaignChoiceOption struct {
 	ProductName  string  `json:"productName"`
 	ProductImage *string `json:"productImage,omitempty"`
 	Quantity     int     `json:"quantity"`
+	OptionGroup  int     `json:"optionGroup"`
 }
 
 type campaignChoiceGroup struct {
@@ -115,6 +116,7 @@ func writeChoiceRequired(w http.ResponseWriter, err *service.VolunteerChoiceRequ
 				ProductName:  o.ProductName,
 				ProductImage: o.ProductImage,
 				Quantity:     o.Quantity,
+				OptionGroup:  o.OptionGroup,
 			})
 		}
 		groups = append(groups, campaignChoiceGroup{ChoiceGroup: g.ChoiceGroup, Options: options})

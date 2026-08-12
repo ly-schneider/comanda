@@ -367,23 +367,35 @@ export default function StaffPerksCampaignDetail() {
           ) : (
             <div className="flex flex-col">
               {campaignPositions(detail.products).map((position, idx) => (
-                <div key={`${position.choiceGroup}-${position.options[0].productId}`} className="flex flex-col">
+                <div
+                  key={`${position.choiceGroup}-${position.branches[0].options[0].productId}`}
+                  className="flex flex-col"
+                >
                   {idx > 0 && (
                     <JoinRule>
                       <span className={`${joinPillClass} ${joinPillActiveClass}`}>UND</span>
                     </JoinRule>
                   )}
-                  <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-3 shadow-xs">
-                    {position.options.length > 1 && (
-                      <span className="text-muted-foreground text-[11px]">Eines davon</span>
-                    )}
-                    {position.options.map((option) => (
-                      <div key={option.productId} className="flex items-center justify-between gap-4 text-sm">
-                        <span className="truncate">{option.productName}</span>
-                        <span className="text-muted-foreground shrink-0 tabular-nums">×{option.quantity}</span>
+                  {position.branches.map((branch, branchIdx) => (
+                    <div key={branch.optionGroup} className="flex flex-col">
+                      {branchIdx > 0 && (
+                        <JoinRule>
+                          <span className={`${joinPillClass} ${joinPillActiveClass}`}>ODER</span>
+                        </JoinRule>
+                      )}
+                      <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-3 shadow-xs">
+                        {branch.options.length > 1 && (
+                          <span className="text-muted-foreground text-[11px]">Eines davon</span>
+                        )}
+                        {branch.options.map((option) => (
+                          <div key={option.productId} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="truncate">{option.productName}</span>
+                            <span className="text-muted-foreground shrink-0 tabular-nums">×{option.quantity}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

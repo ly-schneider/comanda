@@ -11,6 +11,11 @@ VolunteerCampaignProductInput:
       description: |
         0 (default) always includes the product. Products sharing a positive
         value are alternatives — exactly one of them per redemption.
+    optionGroup:
+      type: integer
+      description: |
+        Branch within the choice group. Products sharing a branch stay together,
+        so "Pommes ODER ein Getränk" offers the drinks as one nested choice.
 
 VolunteerCampaignRedemption:
   type: object

@@ -90,6 +90,7 @@ type VolunteerCampaignProductView struct {
 	ProductImage *string
 	Quantity     int
 	ChoiceGroup  int
+	OptionGroup  int
 }
 
 type VolunteerClaimView struct {

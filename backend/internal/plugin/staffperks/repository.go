@@ -37,6 +37,7 @@ type VolunteerCampaignProductInput struct {
 	ProductID   string
 	Quantity    int
 	ChoiceGroup int
+	OptionGroup int
 }
 
 type VolunteerRedemptionRepository interface {
@@ -197,7 +198,8 @@ func (r *volunteerCampaignRepo) ReplaceProducts(ctx context.Context, campaignID 
 			SetCampaignID(campaignID).
 			SetProductID(it.ProductID).
 			SetQuantity(it.Quantity).
-			SetChoiceGroup(it.ChoiceGroup)
+			SetChoiceGroup(it.ChoiceGroup).
+			SetOptionGroup(it.OptionGroup)
 	}
 	_, err = client.VolunteerCampaignProduct.CreateBulk(builders...).Save(ctx)
 	return repository.TranslateError(err)

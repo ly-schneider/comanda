@@ -26,6 +26,7 @@ type claimProductItem struct {
 	ProductImage *string `json:"productImage,omitempty"`
 	Quantity     int     `json:"quantity"`
 	ChoiceGroup  int     `json:"choiceGroup"`
+	OptionGroup  int     `json:"optionGroup"`
 }
 
 type claimCampaignPublic struct {
@@ -86,6 +87,7 @@ func (h *Handlers) GetClaimCampaign(w http.ResponseWriter, r *http.Request, toke
 			ProductImage: p.ProductImage,
 			Quantity:     p.Quantity,
 			ChoiceGroup:  p.ChoiceGroup,
+			OptionGroup:  p.OptionGroup,
 		})
 	}
 	response.WriteJSON(w, http.StatusOK, claimCampaignResponse{

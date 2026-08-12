@@ -42,7 +42,7 @@ async function pickProduct(index: number, name: string) {
   fireEvent.click(await screen.findByRole("option", { name }))
 }
 
-type SubmittedProduct = { productId: string; quantity: number; choiceGroup: number }
+type SubmittedProduct = { productId: string; quantity: number; choiceGroup: number; optionGroup: number }
 
 function submittedProducts(): SubmittedProduct[] {
   const call = fetchAuth.mock.calls.find(([, init]) => init?.method === "POST") as [string, RequestInit]
@@ -62,8 +62,8 @@ describe("StaffPerksCampaignList create form", () => {
 
     await waitFor(() => expect(submittedProducts()).toHaveLength(2))
     expect(submittedProducts()).toEqual([
-      { productId: "prod_menu", quantity: 1, choiceGroup: 1 },
-      { productId: "prod_cola", quantity: 1, choiceGroup: 2 },
+      { productId: "prod_menu", quantity: 1, choiceGroup: 1, optionGroup: 1 },
+      { productId: "prod_cola", quantity: 1, choiceGroup: 2, optionGroup: 1 },
     ])
   })
 
@@ -80,7 +80,7 @@ describe("StaffPerksCampaignList create form", () => {
     expect(submittedProducts().map((p) => p.choiceGroup)).toEqual([1, 1])
   })
 
-  it("merges a group into the one above when set to ODER", async () => {
+  it("keeps a group as its own branch of the choice above when set to ODER", async () => {
     await openCreateDialog()
 
     fireEvent.click(screen.getByRole("button", { name: /Gruppe hinzufügen/ }))
@@ -91,7 +91,11 @@ describe("StaffPerksCampaignList create form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Erstellen" }))
 
     await waitFor(() => expect(submittedProducts()).toHaveLength(2))
-    expect(submittedProducts().map((p) => p.choiceGroup)).toEqual([1, 1])
+    // One choice, two branches: Menü Gross ODER the drink.
+    expect(submittedProducts().map((p) => [p.choiceGroup, p.optionGroup])).toEqual([
+      [1, 1],
+      [1, 2],
+    ])
   })
 
   it("spells out the structure before saving", async () => {
@@ -107,6 +111,30 @@ describe("StaffPerksCampaignList create form", () => {
     expect(screen.getByText(/Pro Einlösung/)).toHaveTextContent(
       "Pro Einlösung: Menü Gross UND eines von (Coca Cola, Wasser)"
     )
+  })
+
+  it("builds 'Pommes ODER a drink' as one choice with a drinks branch", async () => {
+    await openCreateDialog()
+
+    fireEvent.click(screen.getByRole("button", { name: /Gruppe hinzufügen/ }))
+    await pickProduct(0, "Menü Gross")
+    fireEvent.click(screen.getByRole("button", { name: /Gruppe hinzufügen/ }))
+    await pickProduct(1, "Coca Cola")
+    fireEvent.click(screen.getAllByRole("button", { name: /Alternative/ })[1]!)
+    await pickProduct(2, "Wasser")
+    fireEvent.click(screen.getByRole("button", { name: "ODER" }))
+
+    expect(screen.getByText(/Pro Einlösung/)).toHaveTextContent(
+      "Pro Einlösung: Menü Gross ODER eines von (Coca Cola, Wasser)"
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Erstellen" }))
+    await waitFor(() => expect(submittedProducts()).toHaveLength(3))
+    expect(submittedProducts().map((p) => [p.choiceGroup, p.optionGroup])).toEqual([
+      [1, 1],
+      [1, 2],
+      [1, 2],
+    ])
   })
 
   it("refuses to submit a group with no product picked", async () => {

@@ -107,6 +107,7 @@ type CampaignChoiceOption = {
   productName: string
   productImage?: string | null
   quantity: number
+  optionGroup: number
 }
 
 type CampaignChoiceGroup = { choiceGroup: number; options: CampaignChoiceOption[] }
@@ -1123,30 +1124,41 @@ function CampaignChoiceDialog({
           {prompt.groups.map((group) => (
             <div key={group.choiceGroup} className="flex flex-col gap-2">
               <div className="text-muted-foreground text-xs font-medium">Eines auswählen</div>
-              {group.options.map((option) => {
+              {group.options.map((option, idx) => {
+                // A branch boundary is where the campaign said "… ODER …", so
+                // the drinks of one branch read as one block.
+                const startsBranch = idx > 0 && group.options[idx - 1]!.optionGroup !== option.optionGroup
                 const active = picked[group.choiceGroup] === option.productId
                 // An unassigned product would be handed out nowhere on this
                 // station, so the server rejects it — say so before the tap.
                 const servedHere = assignedProductIds.size === 0 || assignedProductIds.has(option.productId)
                 return (
-                  <button
-                    key={option.productId}
-                    type="button"
-                    disabled={!servedHere}
-                    onClick={() => setPicked((p) => ({ ...p, [group.choiceGroup]: option.productId }))}
-                    aria-pressed={active}
-                    className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-45 ${
-                      active ? "border-primary bg-primary/5" : "border-border bg-background"
-                    }`}
-                  >
-                    <span className="min-w-0 truncate font-medium">
-                      {option.productName}
-                      {!servedHere && (
-                        <span className="text-muted-foreground block text-xs font-normal">Nicht an dieser Station</span>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground shrink-0 text-sm tabular-nums">×{option.quantity}</span>
-                  </button>
+                  <div key={option.productId} className="flex flex-col gap-2">
+                    {startsBranch && (
+                      <span className="text-muted-foreground text-center text-[11px] font-medium tracking-wide">
+                        ODER
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={!servedHere}
+                      onClick={() => setPicked((p) => ({ ...p, [group.choiceGroup]: option.productId }))}
+                      aria-pressed={active}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-45 ${
+                        active ? "border-primary bg-primary/5" : "border-border bg-background"
+                      }`}
+                    >
+                      <span className="min-w-0 truncate font-medium">
+                        {option.productName}
+                        {!servedHere && (
+                          <span className="text-muted-foreground block text-xs font-normal">
+                            Nicht an dieser Station
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 text-sm tabular-nums">×{option.quantity}</span>
+                    </button>
+                  </div>
                 )
               })}
             </div>
