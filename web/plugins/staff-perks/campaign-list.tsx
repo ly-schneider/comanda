@@ -3,7 +3,7 @@
 import { ArrowRight, Plus, Ticket, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -73,6 +73,14 @@ export default function StaffPerksCampaignList() {
     }
   }, [fetchAuth])
 
+  // A product belongs to exactly one option anywhere in the campaign, so a
+  // picked one leaves the remaining dropdowns.
+  const usedProductIds = useMemo(
+    () => new Set(formGroups.flatMap((g) => g.options.map((o) => o.productId)).filter(Boolean)),
+    [formGroups]
+  )
+  const nextFreeProductId = products.find((p) => !usedProductIds.has(p.id))?.id ?? ""
+
   const resetForm = () => {
     setFormName("")
     setFormMaxRedemptions(20)
@@ -113,10 +121,6 @@ export default function StaffPerksCampaignList() {
     })
     if (productsPayload.some((p) => !p.productId)) {
       setFormError("Bitte für jede Zeile ein Produkt wählen.")
-      return
-    }
-    if (new Set(productsPayload.map((p) => p.productId)).size !== productsPayload.length) {
-      setFormError("Jedes Produkt darf nur einmal vorkommen.")
       return
     }
     setSaving(true)
@@ -295,11 +299,13 @@ export default function StaffPerksCampaignList() {
                               <SelectValue placeholder="Produkt wählen …" />
                             </SelectTrigger>
                             <SelectContent>
-                              {products.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name}
-                                </SelectItem>
-                              ))}
+                              {products
+                                .filter((p) => p.id === option.productId || !usedProductIds.has(p.id))
+                                .map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                           <Input
@@ -350,11 +356,13 @@ export default function StaffPerksCampaignList() {
                         onClick={() =>
                           setFormGroups((gs) =>
                             gs.map((g, i) =>
-                              i === groupIdx ? { ...g, options: [...g.options, { productId: "", quantity: 1 }] } : g
+                              i === groupIdx
+                                ? { ...g, options: [...g.options, { productId: nextFreeProductId, quantity: 1 }] }
+                                : g
                             )
                           )
                         }
-                        disabled={products.length === 0}
+                        disabled={!nextFreeProductId}
                       >
                         <Plus className="size-3.5" aria-hidden />
                         Option
@@ -369,10 +377,10 @@ export default function StaffPerksCampaignList() {
                   onClick={() =>
                     setFormGroups((gs) => [
                       ...gs,
-                      { options: [{ productId: products[0]?.id || "", quantity: 1 }], joinPrevious: false },
+                      { options: [{ productId: nextFreeProductId, quantity: 1 }], joinPrevious: false },
                     ])
                   }
-                  disabled={products.length === 0}
+                  disabled={!nextFreeProductId}
                 >
                   <Plus className="size-4" aria-hidden />
                   Gruppe hinzufügen
