@@ -1,5 +1,6 @@
 import "styles/tailwind.css"
 import type { Metadata, Viewport } from "next"
+import dynamicImport from "next/dynamic"
 import AnalyticsWrapper from "@/components/analytics-wrapper"
 import { PluginProvider } from "@/components/plugins/plugin-provider"
 import { AuthProvider } from "@/contexts/auth-context"
@@ -10,6 +11,13 @@ import { getBranding, isTenantSuspended } from "@/lib/server/branding"
 import { getPlugins } from "@/lib/server/plugins"
 
 export const dynamic = "force-dynamic"
+
+// The ternary is folded away in production builds, so agentation (a
+// devDependency) never reaches the client bundle.
+const DevAnnotations =
+  process.env.NODE_ENV === "development"
+    ? dynamicImport(() => import("@/components/dev/agentation").then((m) => m.DevAnnotations))
+    : () => null
 
 export const viewport: Viewport = { colorScheme: "light" }
 
@@ -71,6 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </AuthProvider>
         </TenantBrandingProvider>
         <AnalyticsWrapper />
+        <DevAnnotations />
       </body>
     </html>
   )

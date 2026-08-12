@@ -129,6 +129,7 @@
     "@typescript-eslint/eslint-plugin": "8.65.0",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/ui": "^4.1.10",
+    "agentation": "^3.0.2",
     "cross-env": "^10.0.0",
     "eslint": "^9.39.2",
     "eslint-config-next": "16.2.11",
