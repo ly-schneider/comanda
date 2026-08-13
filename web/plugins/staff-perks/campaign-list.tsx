@@ -3,7 +3,7 @@
 import { ArrowRight, Plus, Ticket, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -15,9 +15,15 @@ import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
 import type { ProductSummaryDTO } from "@/types/product"
 import type { VolunteerCampaignStatus, VolunteerCampaignSummary } from "@/types/volunteer"
+import { joinPillActiveClass, joinPillClass, JoinRule } from "./join-rule"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
-type ProductRow = { productId: string; quantity: number | "" }
+type OptionRow = { productId: string; quantity: number | "" }
+// A group holds interchangeable options — "Getränke" is one group of several
+// drinks, and exactly one of them is handed out. joinPrevious is the connector
+// to the group above: ODER merges both groups into a single choice, UND hands
+// out both.
+type GroupRow = { options: OptionRow[]; joinPrevious: boolean }
 
 export default function StaffPerksCampaignList() {
   const fetchAuth = useAuthorizedFetch()
@@ -30,7 +36,7 @@ export default function StaffPerksCampaignList() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formName, setFormName] = useState("")
   const [formMaxRedemptions, setFormMaxRedemptions] = useState<number | "">(20)
-  const [formProducts, setFormProducts] = useState<ProductRow[]>([])
+  const [formGroups, setFormGroups] = useState<GroupRow[]>([])
   const [formValidUntil, setFormValidUntil] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -68,10 +74,18 @@ export default function StaffPerksCampaignList() {
     }
   }, [fetchAuth])
 
+  // A product belongs to exactly one option anywhere in the campaign, so a
+  // picked one leaves the remaining dropdowns.
+  const usedProductIds = useMemo(
+    () => new Set(formGroups.flatMap((g) => g.options.map((o) => o.productId)).filter(Boolean)),
+    [formGroups]
+  )
+  const hasFreeProduct = products.some((p) => !usedProductIds.has(p.id))
+
   const resetForm = () => {
     setFormName("")
     setFormMaxRedemptions(20)
-    setFormProducts([])
+    setFormGroups([])
     setFormValidUntil("")
     setFormError(null)
   }
@@ -87,7 +101,7 @@ export default function StaffPerksCampaignList() {
       setFormError("Name erforderlich.")
       return
     }
-    if (formProducts.length === 0) {
+    if (formGroups.length === 0) {
       setFormError("Mindestens ein Produkt erforderlich.")
       return
     }
@@ -96,10 +110,28 @@ export default function StaffPerksCampaignList() {
       setFormError("Maximale Einlösungen muss mindestens 1 sein.")
       return
     }
-    const productsPayload = formProducts.map((r) => ({
-      ...r,
-      quantity: Math.max(1, r.quantity === "" ? 1 : r.quantity),
-    }))
+    // UND opens a new choice, ODER adds a branch to the choice above — so the
+    // group stays intact as "one of these" instead of merging into one list.
+    let choiceGroup = 0
+    let optionGroup = 0
+    const productsPayload = formGroups.flatMap((group, idx) => {
+      if (idx === 0 || !group.joinPrevious) {
+        choiceGroup += 1
+        optionGroup = 1
+      } else {
+        optionGroup += 1
+      }
+      return group.options.map((option) => ({
+        productId: option.productId,
+        quantity: Math.max(1, option.quantity === "" ? 1 : option.quantity),
+        choiceGroup,
+        optionGroup,
+      }))
+    })
+    if (productsPayload.some((p) => !p.productId)) {
+      setFormError("Bitte für jede Zeile ein Produkt wählen.")
+      return
+    }
     setSaving(true)
     try {
       const res = await fetchAuth("/api/v1/plugins/staff-perks/campaigns", {
@@ -182,7 +214,7 @@ export default function StaffPerksCampaignList() {
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground text-xs">Zugangscode</span>
-                  <code className="font-mono text-sm tracking-wider">{m.accessCode}</code>
+                  <span className="text-sm font-medium tracking-wider">{m.accessCode}</span>
                 </div>
               </Link>
             )
@@ -232,57 +264,131 @@ export default function StaffPerksCampaignList() {
             </div>
             <div className="grid gap-2">
               <Label>Produkte pro Einlösung</Label>
-              <div className="flex flex-col gap-2">
-                {formProducts.map((row, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Select
-                      value={row.productId}
-                      onValueChange={(v) =>
-                        setFormProducts((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)))
-                      }
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Produkt wählen …" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="w-20"
-                      value={row.quantity}
-                      aria-label="Menge"
-                      onChange={(e) => {
-                        const raw = e.target.value
-                        setFormProducts((rs) =>
-                          rs.map((r, i) => (i === idx ? { ...r, quantity: raw === "" ? "" : parseInt(raw, 10) } : r))
-                        )
-                      }}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setFormProducts((rs) => rs.filter((_, i) => i !== idx))}
-                      aria-label="Produkt entfernen"
-                    >
-                      <Trash2 className="size-4" aria-hidden />
-                    </Button>
+              <p className="text-muted-foreground text-xs">
+                Eine Gruppe mit mehreren Optionen wird an der Station zur Auswahl. UND gibt beide Gruppen ab, ODER macht
+                daraus eine einzige Auswahl.
+              </p>
+              <div className="flex flex-col">
+                {formGroups.map((group, groupIdx) => (
+                  <div key={groupIdx} className="flex flex-col">
+                    {groupIdx > 0 && (
+                      <JoinSwitch
+                        value={group.joinPrevious ? "or" : "and"}
+                        onChange={(v) =>
+                          setFormGroups((gs) =>
+                            gs.map((g, i) => (i === groupIdx ? { ...g, joinPrevious: v === "or" } : g))
+                          )
+                        }
+                      />
+                    )}
+                    <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-2.5 shadow-xs">
+                      <span className="text-muted-foreground px-0.5 text-[11px]">
+                        Gruppe {groupIdx + 1}
+                        {group.options.length > 1 && " · eines davon"}
+                      </span>
+                      {group.options.map((option, optionIdx) => (
+                        <div key={optionIdx} className="flex items-center gap-2">
+                          <Select
+                            value={option.productId}
+                            onValueChange={(v) =>
+                              setFormGroups((gs) =>
+                                gs.map((g, i) =>
+                                  i === groupIdx
+                                    ? {
+                                        ...g,
+                                        options: g.options.map((o, j) =>
+                                          j === optionIdx ? { ...o, productId: v } : o
+                                        ),
+                                      }
+                                    : g
+                                )
+                              )
+                            }
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Produkt wählen …" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products
+                                .filter((p) => p.id === option.productId || !usedProductIds.has(p.id))
+                                .map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={1}
+                            className="w-16"
+                            value={option.quantity}
+                            aria-label="Menge"
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              setFormGroups((gs) =>
+                                gs.map((g, i) =>
+                                  i === groupIdx
+                                    ? {
+                                        ...g,
+                                        options: g.options.map((o, j) =>
+                                          j === optionIdx ? { ...o, quantity: raw === "" ? "" : parseInt(raw, 10) } : o
+                                        ),
+                                      }
+                                    : g
+                                )
+                              )
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive size-9 shrink-0"
+                            onClick={() =>
+                              setFormGroups((gs) =>
+                                gs
+                                  .map((g, i) =>
+                                    i === groupIdx ? { ...g, options: g.options.filter((_, j) => j !== optionIdx) } : g
+                                  )
+                                  .filter((g) => g.options.length > 0)
+                              )
+                            }
+                            aria-label="Produkt entfernen"
+                          >
+                            <Trash2 className="size-4" aria-hidden />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground h-7 self-start px-1.5 text-xs"
+                        onClick={() =>
+                          setFormGroups((gs) =>
+                            gs.map((g, i) =>
+                              i === groupIdx ? { ...g, options: [...g.options, { productId: "", quantity: 1 }] } : g
+                            )
+                          )
+                        }
+                        disabled={!hasFreeProduct}
+                      >
+                        <Plus className="size-3.5" aria-hidden />
+                        Alternative
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setFormProducts((rs) => [...rs, { productId: products[0]?.id || "", quantity: 1 }])}
-                  disabled={products.length === 0}
+                  className={formGroups.length > 0 ? "mt-2.5 self-start" : "self-start"}
+                  onClick={() =>
+                    setFormGroups((gs) => [...gs, { options: [{ productId: "", quantity: 1 }], joinPrevious: false }])
+                  }
+                  disabled={!hasFreeProduct}
                 >
                   <Plus className="size-4" aria-hidden />
-                  Produkt hinzufügen
+                  Gruppe hinzufügen
                 </Button>
               </div>
             </div>
@@ -303,6 +409,26 @@ export default function StaffPerksCampaignList() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+function JoinSwitch({ value, onChange }: { value: "and" | "or"; onChange: (value: "and" | "or") => void }) {
+  return (
+    <JoinRule>
+      {(["and", "or"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={value === option}
+          onClick={() => onChange(option)}
+          className={`${joinPillClass} ${
+            value === option ? joinPillActiveClass : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {option === "and" ? "UND" : "ODER"}
+        </button>
+      ))}
+    </JoinRule>
   )
 }
 

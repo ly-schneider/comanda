@@ -19,6 +19,11 @@ export interface VolunteerCampaignProductItem {
   productName: string
   productImage?: string | null
   quantity: number
+  // 0 is always handed out; products sharing a positive value are alternatives.
+  choiceGroup: number
+  // Branch within the choice: one branch holding several products is the
+  // "one of these drinks" case.
+  optionGroup: number
 }
 
 export interface VolunteerCampaignRedemptionItem {

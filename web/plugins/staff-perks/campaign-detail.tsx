@@ -24,7 +24,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuthorizedFetch } from "@/hooks/use-authorized-fetch"
 import { getCSRFToken } from "@/lib/csrf"
 import { readErrorMessage } from "@/lib/http"
+import { campaignPositions } from "@/lib/volunteer-choices"
 import type { VolunteerCampaignDetail } from "@/types/volunteer"
+import { joinPillActiveClass, joinPillClass, JoinRule } from "./join-rule"
 import { STATUS_CLASS, STATUS_LABEL } from "./status"
 
 export default function StaffPerksCampaignDetail() {
@@ -313,10 +315,10 @@ export default function StaffPerksCampaignDetail() {
               <button
                 type="button"
                 onClick={copyAccessCode}
-                className="group bg-background hover:bg-accent/40 focus-visible:ring-ring/40 flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99]"
+                className="group bg-background hover:bg-accent/40 focus-visible:ring-ring/40 flex h-11 items-center gap-3 rounded-xl border px-4 text-left transition focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99]"
                 aria-label="Code kopieren"
               >
-                <span className="font-mono text-3xl font-semibold tracking-[0.3em]">{detail.accessCode}</span>
+                <span className="text-base font-semibold tracking-[0.2em]">{detail.accessCode}</span>
                 <span className="text-muted-foreground group-hover:text-foreground transition">
                   {copiedCode ? (
                     <Check className="size-4 text-emerald-600" aria-hidden />
@@ -328,8 +330,8 @@ export default function StaffPerksCampaignDetail() {
             </div>
             <div className="flex min-w-0 flex-col gap-2">
               <div className="text-muted-foreground text-xs">Claim-URL</div>
-              <div className="bg-background flex items-center gap-1 rounded-xl border p-1 pl-3">
-                <code className="min-w-0 flex-1 truncate text-sm">{claimUrl}</code>
+              <div className="bg-background flex h-11 items-center gap-1 rounded-xl border p-1 pl-3">
+                <span className="min-w-0 flex-1 truncate text-sm">{claimUrl}</span>
                 <Button variant="ghost" size="sm" onClick={copyClaimUrl} aria-label="URL kopieren" className="shrink-0">
                   {copiedUrl ? (
                     <Check className="size-4 text-emerald-600" aria-hidden />
@@ -363,14 +365,40 @@ export default function StaffPerksCampaignDetail() {
           {detail.products.length === 0 ? (
             <p className="text-muted-foreground text-sm">Keine Produkte.</p>
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {detail.products.map((p) => (
-                <li key={p.productId} className="bg-muted/40 flex items-center justify-between rounded-xl px-3 py-2.5">
-                  <span className="truncate">{p.productName}</span>
-                  <span className="text-muted-foreground ml-3 shrink-0 tabular-nums">×{p.quantity}</span>
-                </li>
+            <div className="flex flex-col">
+              {campaignPositions(detail.products).map((position, idx) => (
+                <div
+                  key={`${position.choiceGroup}-${position.branches[0].options[0].productId}`}
+                  className="flex flex-col"
+                >
+                  {idx > 0 && (
+                    <JoinRule>
+                      <span className={`${joinPillClass} ${joinPillActiveClass}`}>UND</span>
+                    </JoinRule>
+                  )}
+                  {position.branches.map((branch, branchIdx) => (
+                    <div key={branch.optionGroup} className="flex flex-col">
+                      {branchIdx > 0 && (
+                        <JoinRule>
+                          <span className={`${joinPillClass} ${joinPillActiveClass}`}>ODER</span>
+                        </JoinRule>
+                      )}
+                      <div className="border-border/70 bg-card flex flex-col gap-2 rounded-xl border p-3 shadow-xs">
+                        {branch.options.length > 1 && (
+                          <span className="text-muted-foreground text-[11px]">Eines davon</span>
+                        )}
+                        {branch.options.map((option) => (
+                          <div key={option.productId} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="truncate">{option.productName}</span>
+                            <span className="text-muted-foreground shrink-0 tabular-nums">×{option.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -385,9 +413,9 @@ export default function StaffPerksCampaignDetail() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12 pl-6 sm:pl-4">#</TableHead>
+                  <TableHead className="w-14 pl-6 sm:pl-4">Nr.</TableHead>
                   <TableHead>Zeitpunkt</TableHead>
-                  <TableHead className="pr-6 sm:pr-4">Order</TableHead>
+                  <TableHead className="pr-6 sm:pr-4">Bestellung</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -31,6 +31,15 @@ func (VolunteerCampaignProduct) Fields() []ent.Field {
 		field.String("product_id").MaxLen(12),
 		field.Int("quantity").
 			Default(1),
+		// 0 = always included. A positive value groups products into alternatives:
+		// exactly one product of that group is handed out per redemption.
+		field.Int("choice_group").
+			Default(0),
+		// Splits a choice group into named-by-position alternatives, so
+		// "Pommes ODER ein Getränk" keeps the drinks together as one branch
+		// instead of flattening into a single list.
+		field.Int("option_group").
+			Default(0),
 	}
 }
 

@@ -939,6 +939,14 @@ export const QA_SECTIONS: QaSection[] = [
         expected: "Kampagne startet als Entwurf und wird aktiv; Detailseite zeigt Zugangscode, Claim-Link und Zähler.",
       },
       {
+        key: "staff-perks.choice",
+        title: "Position mit Alternativen (ODER)",
+        action:
+          "Kampagne mit einer Position aus zwei Alternativen anlegen (z. B. Pommes oder Getränk) und an der Station scannen.",
+        expected:
+          "Detailseite, Claim-Seite und Voucher-PDF zeigen «oder»; die Station fragt vor der Einlösung nach und bucht nur das gewählte Produkt. Abbrechen löst nichts ein und erhöht den Zähler nicht.",
+      },
+      {
         key: "staff-perks.claim-gate",
         title: "Claim-Seite mit Zugangscode",
         action: "Claim-Link im Inkognito öffnen; falschen, dann richtigen 4er-Code eingeben.",

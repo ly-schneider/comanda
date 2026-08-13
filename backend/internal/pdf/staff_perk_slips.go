@@ -10,8 +10,9 @@ import (
 )
 
 type SlipProduct struct {
-	Name     string
-	Quantity int
+	Name        string
+	Quantity    int
+	ChoiceGroup int
 }
 
 type SlipInput struct {
@@ -70,11 +71,11 @@ func RenderStaffPerkSlips(in SlipInput) ([]byte, error) {
 	nameLines := wrapTextLines(campaignNameEnc, slipWidth-2*paddingMM, nameFontSize, pdf, "B")
 	instructionLines := wrapTextLines(instructionEnc, slipWidth-2*paddingMM, instructionFontSize, pdf, "I")
 
-	productLines := make([][]string, len(in.Products))
+	items := formatProductLines(in.Products)
+	productLines := make([][]string, len(items))
 	totalItemLines := 0
-	for i, p := range in.Products {
-		line := tr(formatProductLine(p))
-		wrapped := wrapTextLines(line, slipWidth-2*paddingMM, itemFontSize, pdf, "")
+	for i, item := range items {
+		wrapped := wrapTextLines(tr(item), slipWidth-2*paddingMM, itemFontSize, pdf, "")
 		productLines[i] = wrapped
 		totalItemLines += len(wrapped)
 	}
@@ -114,6 +115,27 @@ func RenderStaffPerkSlips(in SlipInput) ([]byte, error) {
 		return nil, fmt.Errorf("write pdf: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// formatProductLines prints one line per handed-out item; products sharing a
+// positive choice group collapse into a single "A oder B" alternatives line.
+func formatProductLines(products []SlipProduct) []string {
+	lines := make([]string, 0, len(products))
+	groupLine := make(map[int]int, len(products))
+	for _, p := range products {
+		text := formatProductLine(p)
+		if p.ChoiceGroup <= 0 {
+			lines = append(lines, text)
+			continue
+		}
+		if idx, ok := groupLine[p.ChoiceGroup]; ok {
+			lines[idx] += " oder " + text
+			continue
+		}
+		groupLine[p.ChoiceGroup] = len(lines)
+		lines = append(lines, text)
+	}
+	return lines
 }
 
 func formatProductLine(p SlipProduct) string {

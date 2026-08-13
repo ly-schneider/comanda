@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import QRCode from "@/components/qrcode"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { readErrorMessage } from "@/lib/http"
+import { campaignPositions, positionOptions } from "@/lib/volunteer-choices"
 import type { ClaimCampaignResponse } from "@/types/volunteer"
 
 const ACCESS_INPUT_PATTERN = "^[A-Za-z1-9]*$"
@@ -223,29 +224,44 @@ export default function ClaimPage() {
         <div className="mt-8">
           <h2 className="mb-3 text-lg font-semibold">Dein Bezug</h2>
           <ul className="flex flex-col gap-3">
-            {data.products.map((p) => (
-              <li key={p.productId} className="rounded-xl border p-3">
-                <div className="flex items-center gap-3">
-                  {p.productImage ? (
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
-                      <Image
-                        src={p.productImage}
-                        alt={"Produktbild von " + p.productName}
-                        fill
-                        sizes="64px"
-                        quality={90}
-                        className="h-full w-full rounded-[11px] object-cover"
-                      />
+            {campaignPositions(data.products).map((position) => (
+              <li
+                key={`${position.choiceGroup}-${position.branches[0].options[0].productId}`}
+                className="rounded-xl border p-3"
+              >
+                {positionOptions(position).length > 1 && (
+                  <p className="text-muted-foreground mb-2 text-xs">Wähle eines an der Station</p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {positionOptions(position).map((p, idx) => (
+                    <div key={p.productId} className="flex flex-col gap-2">
+                      {idx > 0 && (
+                        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">oder</span>
+                      )}
+                      <div className="flex items-center gap-3">
+                        {p.productImage ? (
+                          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[11px] bg-[#cec9c6]">
+                            <Image
+                              src={p.productImage}
+                              alt={"Produktbild von " + p.productName}
+                              fill
+                              sizes="64px"
+                              quality={90}
+                              className="h-full w-full rounded-[11px] object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-16 w-16 shrink-0 rounded-[11px] bg-[#cec9c6]" aria-hidden />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate font-medium">{p.productName}</p>
+                            <p className="text-muted-foreground shrink-0 text-sm tabular-nums">×{p.quantity}</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="h-16 w-16 shrink-0 rounded-[11px] bg-[#cec9c6]" aria-hidden />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="truncate font-medium">{p.productName}</p>
-                      <p className="text-muted-foreground shrink-0 text-sm tabular-nums">×{p.quantity}</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </li>
             ))}

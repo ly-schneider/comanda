@@ -33,6 +33,6 @@ describe("qa-tests definitions", () => {
   })
 
   it("covers the full checklist", () => {
-    expect(QA_TEST_COUNT).toBe(130)
+    expect(QA_TEST_COUNT).toBe(131)
   })
 })

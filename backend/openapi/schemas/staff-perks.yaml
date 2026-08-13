@@ -1,6 +1,6 @@
 VolunteerCampaignProduct:
   type: object
-  required: [productId, productName, quantity]
+  required: [productId, productName, quantity, choiceGroup, optionGroup]
   properties:
     productId:
       type: string
@@ -11,6 +11,59 @@ VolunteerCampaignProduct:
       nullable: true
     quantity:
       type: integer
+    choiceGroup:
+      type: integer
+      description: |
+        0 means the product is always included. A positive value groups products
+        into alternatives: exactly one product of that group is handed out.
+    optionGroup:
+      type: integer
+      description: |
+        Splits a choice group into branches — "Pommes ODER ein Getränk" keeps the
+        drinks together as one branch instead of one flat list of alternatives.
+
+CampaignChoiceSelection:
+  type: object
+  required: [choiceGroup, productId]
+  properties:
+    choiceGroup:
+      type: integer
+    productId:
+      type: string
+
+CampaignChoiceRequired:
+  type: object
+  required: [code, message, groups]
+  properties:
+    code:
+      type: string
+    message:
+      type: string
+    groups:
+      type: array
+      items:
+        type: object
+        required: [choiceGroup, options]
+        properties:
+          choiceGroup:
+            type: integer
+          options:
+            type: array
+            items:
+              type: object
+              required: [productId, productName, quantity, optionGroup]
+              properties:
+                productId:
+                  type: string
+                productName:
+                  type: string
+                productImage:
+                  type: string
+                  nullable: true
+                quantity:
+                  type: integer
+                optionGroup:
+                  type: integer
 
 ClaimAccessVerify:
   type: object

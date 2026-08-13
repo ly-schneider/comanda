@@ -34,8 +34,10 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 type volunteerCampaignProductPayload struct {
-	ProductID string `json:"productId"`
-	Quantity  int    `json:"quantity"`
+	ProductID   string `json:"productId"`
+	Quantity    int    `json:"quantity"`
+	ChoiceGroup int    `json:"choiceGroup,omitempty"`
+	OptionGroup int    `json:"optionGroup,omitempty"`
 }
 
 type createVolunteerCampaignRequest struct {
@@ -80,6 +82,8 @@ type adminCampaignProductItem struct {
 	ProductName  string  `json:"productName"`
 	ProductImage *string `json:"productImage,omitempty"`
 	Quantity     int     `json:"quantity"`
+	ChoiceGroup  int     `json:"choiceGroup"`
+	OptionGroup  int     `json:"optionGroup"`
 }
 
 type adminCampaignRedemptionItem struct {
@@ -144,6 +148,8 @@ func (h *handlers) GetVolunteerCampaign(w http.ResponseWriter, r *http.Request, 
 			ProductName:  cp.ProductName,
 			ProductImage: cp.ProductImage,
 			Quantity:     cp.Quantity,
+			ChoiceGroup:  cp.ChoiceGroup,
+			OptionGroup:  cp.OptionGroup,
 		})
 	}
 	redemptions := make([]adminCampaignRedemptionItem, 0, len(detail.Redemptions))
@@ -251,8 +257,9 @@ func (h *handlers) PrintStaffPerkSlips(w http.ResponseWriter, r *http.Request, c
 	products := make([]pdf.SlipProduct, 0, len(detail.Products))
 	for _, p := range detail.Products {
 		products = append(products, pdf.SlipProduct{
-			Name:     p.ProductName,
-			Quantity: p.Quantity,
+			Name:        p.ProductName,
+			Quantity:    p.Quantity,
+			ChoiceGroup: p.ChoiceGroup,
 		})
 	}
 
