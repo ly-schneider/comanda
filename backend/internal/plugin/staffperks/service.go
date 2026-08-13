@@ -315,10 +315,19 @@ func (s *service) GetClaimView(ctx context.Context, token string) (*coreservice.
 	}, nil
 }
 
+func servesAny(stationServes map[string]struct{}, views []coreservice.VolunteerCampaignProductView) bool {
+	for _, v := range views {
+		if _, ok := stationServes[v.ProductID]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func validateProducts(items []VolunteerCampaignProductInput) error {
 	seen := make(map[string]struct{}, len(items))
 	for _, it := range items {
-		if it.ChoiceGroup < 0 {
+		if it.ChoiceGroup < 0 || it.OptionGroup < 0 {
 			return coreservice.ErrVolunteerCampaignProductInvalid
 		}
 		if _, dup := seen[it.ProductID]; dup {
@@ -432,12 +441,29 @@ func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, station
 	if len(cps) == 0 {
 		return nil, coreservice.ErrVolunteerCampaignHasNoProducts
 	}
-	selected, err := resolveCampaignSelection(campaignProductsToViews(cps), selections)
+	views := campaignProductsToViews(cps)
+
+	stationProductIDs, err := s.stations.ListStationProductIDs(ctx, stationID)
+	if err != nil {
+		return nil, fmt.Errorf("list station products: %w", err)
+	}
+	stationServes := make(map[string]struct{}, len(stationProductIDs))
+	for _, pid := range stationProductIDs {
+		stationServes[pid] = struct{}{}
+	}
+
+	// Checked before the choice is resolved: a station serving nothing from this
+	// campaign can never fulfil it, so it must not send the operator through a
+	// picker only to reject the answer.
+	if !servesAny(stationServes, views) {
+		return nil, coreservice.ErrVolunteerStationNoMatchingProducts
+	}
+
+	selected, err := resolveCampaignSelection(views, selections)
 	if err != nil {
 		return nil, err
 	}
 	products := make([]productSnapshot, 0, len(selected))
-	selectedProductIDs := make(map[string]struct{}, len(selected))
 	for _, v := range selected {
 		qty := v.Quantity
 		if qty <= 0 {
@@ -448,21 +474,8 @@ func (s *service) RedeemSharedQR(ctx context.Context, claimToken string, station
 			Name:     v.ProductName,
 			Quantity: qty,
 		})
-		selectedProductIDs[v.ProductID] = struct{}{}
 	}
-
-	stationProductIDs, err := s.stations.ListStationProductIDs(ctx, stationID)
-	if err != nil {
-		return nil, fmt.Errorf("list station products: %w", err)
-	}
-	hasMatch := false
-	for _, pid := range stationProductIDs {
-		if _, ok := selectedProductIDs[pid]; ok {
-			hasMatch = true
-			break
-		}
-	}
-	if !hasMatch {
+	if !servesAny(stationServes, selected) {
 		return nil, coreservice.ErrVolunteerStationNoMatchingProducts
 	}
 

@@ -143,11 +143,38 @@ func TestResolveCampaignSelection(t *testing.T) {
 	})
 }
 
+func TestServesAny(t *testing.T) {
+	views := []coreservice.VolunteerCampaignProductView{product("pommes", 1), product("getraenk", 1)}
+
+	t.Run("true when the station carries one of the products", func(t *testing.T) {
+		serves := map[string]struct{}{"getraenk": {}, "bier": {}}
+		if !servesAny(serves, views) {
+			t.Fatal("expected a match")
+		}
+	})
+
+	t.Run("false when the station carries none of them", func(t *testing.T) {
+		serves := map[string]struct{}{"bier": {}}
+		if servesAny(serves, views) {
+			t.Fatal("expected no match")
+		}
+	})
+}
+
 func TestValidateProducts(t *testing.T) {
 	t.Run("rejects the same product twice", func(t *testing.T) {
 		err := validateProducts([]VolunteerCampaignProductInput{
 			{ProductID: "pommes", Quantity: 1, ChoiceGroup: 1},
 			{ProductID: "pommes", Quantity: 1, ChoiceGroup: 2},
+		})
+		if !errors.Is(err, coreservice.ErrVolunteerCampaignProductInvalid) {
+			t.Fatalf("expected product invalid, got %v", err)
+		}
+	})
+
+	t.Run("rejects a negative option group", func(t *testing.T) {
+		err := validateProducts([]VolunteerCampaignProductInput{
+			{ProductID: "pommes", Quantity: 1, ChoiceGroup: 1, OptionGroup: -1},
 		})
 		if !errors.Is(err, coreservice.ErrVolunteerCampaignProductInvalid) {
 			t.Fatalf("expected product invalid, got %v", err)

@@ -106,7 +106,10 @@ func (h *Handlers) RedeemCampaignAtStation(w http.ResponseWriter, r *http.Reques
 }
 
 func writeChoiceRequired(w http.ResponseWriter, err *service.VolunteerChoiceRequiredError) {
-	status, code, message, _ := service.VolunteerErrorResponse(err)
+	status, code, message, ok := service.VolunteerErrorResponse(err)
+	if !ok {
+		status, code, message = http.StatusConflict, "choice_required", err.Error()
+	}
 	groups := make([]campaignChoiceGroup, 0, len(err.Groups))
 	for _, g := range err.Groups {
 		options := make([]campaignChoiceOption, 0, len(g.Options))

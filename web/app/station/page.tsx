@@ -1129,8 +1129,10 @@ function CampaignChoiceDialog({
                 // the drinks of one branch read as one block.
                 const startsBranch = idx > 0 && group.options[idx - 1]!.optionGroup !== option.optionGroup
                 const active = picked[group.choiceGroup] === option.productId
-                // An unassigned product would be handed out nowhere on this
-                // station, so the server rejects it — say so before the tap.
+                // Flagged, never blocked: the server accepts the redemption as
+                // long as *some* selected product is served here, including the
+                // single-option groups it resolved without asking. Disabling
+                // would dead-end a campaign this station can partly fulfil.
                 const servedHere = assignedProductIds.size === 0 || assignedProductIds.has(option.productId)
                 return (
                   <div key={option.productId} className="flex flex-col gap-2">
@@ -1141,12 +1143,11 @@ function CampaignChoiceDialog({
                     )}
                     <button
                       type="button"
-                      disabled={!servedHere}
                       onClick={() => setPicked((p) => ({ ...p, [group.choiceGroup]: option.productId }))}
                       aria-pressed={active}
-                      className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-45 ${
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] ${
                         active ? "border-primary bg-primary/5" : "border-border bg-background"
-                      }`}
+                      } ${servedHere ? "" : "opacity-60"}`}
                     >
                       <span className="min-w-0 truncate font-medium">
                         {option.productName}
