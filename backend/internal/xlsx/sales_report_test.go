@@ -91,8 +91,6 @@ func TestRenderSalesReportSummaryCells(t *testing.T) {
 	}
 }
 
-// Amounts have to arrive as numbers on a currency format, so the bookkeeper can
-// sum a column instead of retyping it.
 func TestRenderSalesReportWritesAmountsAsNumbers(t *testing.T) {
 	body, err := RenderSalesReport(testSalesReport())
 	if err != nil {

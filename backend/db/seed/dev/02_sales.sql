@@ -1,13 +1,7 @@
--- Dev-only: generates a three-day event's worth of sales for a tenant, shaped
--- the way the app writes them — bundle parents priced with their components at
--- zero, deposits as sibling lines, one payment row per settled order, a sale
--- ledger row per physical item. Sized and mixed after a real BlessThun weekend.
+-- Dev-only: a three-day event's worth of sales, shaped the way the app writes
+-- them. See README.md. Undo with 99_reset.sql.
 --
--- Usage: psql "$DATABASE_URL" -v seed_tenant=<tenant id> -f 02_sales.sql
--- Undo:  99_reset.sql (keys off the same day window)
---
--- Runs as one transaction: a failure leaves the database untouched rather than
--- half an event.
+-- One transaction, so a failure leaves no half event behind.
 
 \set ON_ERROR_STOP on
 
@@ -24,7 +18,7 @@ LANGUAGE sql VOLATILE AS $$
   FROM generate_series(1, 12)
 $$;
 
--- Weighted pick: the smallest -ln(U)/w wins with probability proportional to w.
+-- The smallest -ln(U)/w wins with probability proportional to w.
 CREATE OR REPLACE FUNCTION pg_temp.pick_hour() RETURNS int
 LANGUAGE sql VOLATILE AS $$
   SELECT h FROM (VALUES
@@ -84,7 +78,7 @@ DECLARE
   v_roll        numeric;
   v_device      varchar(12);
 BEGIN
-  -- Two tills, so POS payments carry a device the way they do in the hall.
+  -- Two tills, so POS payments carry a device.
   FOR v_item IN 1..2 LOOP
     v_line_id := pg_temp.nanoid();
     INSERT INTO device (id, tenant_id, name, device_key, type, status, decided_by, decided_at, created_at)
@@ -117,8 +111,7 @@ BEGIN
         END;
       END IF;
 
-      -- A few checkouts are simply abandoned. They reserved stock but never took
-      -- money, so the revenue report has to leave them out.
+      -- Abandoned checkouts: stock reserved, no money taken.
       v_status := CASE WHEN random() < 0.012 THEN 'pending' ELSE 'paid' END;
 
       v_order_id := pg_temp.nanoid();
@@ -172,9 +165,8 @@ BEGIN
             VALUES (pg_temp.nanoid(), v_tenant, v_order_id, 'component', v_opt_id, left(v_opt_name, 40), v_qty,
                     0, v_parent_id, v_slot.id, left(v_slot.name, 20));
 
-            -- Checkout does not stamp order_line_id on a sale row; only the
-            -- restore paths do. Mirror that or the export would look better here
-            -- than it does in production.
+            -- Checkout stamps no order_line_id on a sale row; only the restore
+            -- paths do. Mirror that.
             INSERT INTO inventory_ledger (id, tenant_id, product_id, delta, reason, order_id, created_at)
             VALUES (pg_temp.nanoid(), v_tenant, v_opt_id, -v_qty, 'sale', v_order_id, v_created);
           END LOOP;

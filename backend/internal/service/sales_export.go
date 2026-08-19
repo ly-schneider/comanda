@@ -54,8 +54,6 @@ var paymentMethodLabels = map[orderpayment.Method]string{
 	orderpayment.MethodGRATIS_PLUGIN: "Gratis (Aktion)",
 }
 
-// methodOrder keeps the cash-up table in a stable, cash-first order instead of
-// whichever method happened to sell first.
 var methodOrder = []orderpayment.Method{
 	orderpayment.MethodCASH,
 	orderpayment.MethodCARD,
@@ -117,8 +115,6 @@ func (s *salesExportService) Build(ctx context.Context, from, to time.Time) (xls
 	return agg.finish(report), nil
 }
 
-// salesCatalog is the product-side lookup the report needs: names, category paths
-// and the list prices a bundle price is split by.
 type salesCatalog struct {
 	products   map[string]*ent.Product
 	variants   map[string]*ent.ProductVariant
@@ -152,8 +148,6 @@ func (s *salesExportService) loadCatalog(ctx context.Context) (salesCatalog, err
 	return c, nil
 }
 
-// listPriceCents is what the article would have cost on its own — the weight a
-// bundle price is distributed by.
 func (c salesCatalog) listPriceCents(productID string, variantID *string) int64 {
 	p, ok := c.products[productID]
 	if !ok {
@@ -176,7 +170,6 @@ func (c salesCatalog) productName(line *ent.OrderLine) string {
 	if p, ok := c.products[line.ProductID]; ok {
 		return p.Name
 	}
-	// Falls back to the title snapshotted on the line, which survives renames.
 	return line.Title
 }
 
@@ -209,8 +202,7 @@ func indexRefunds(refunds []*ent.Refund) map[string]orderRefunds {
 	return out
 }
 
-// saleRecord pairs a rendered row with the identity it aggregates under, so a
-// renamed product still merges with its earlier sales.
+// Keyed on ids, so a renamed product still merges with its earlier sales.
 type saleRecord struct {
 	row       xlsx.SaleRow
 	productID string
@@ -229,8 +221,7 @@ type salesAggregator struct {
 	orders   []xlsx.OrderRow
 	articles map[articleKey]*xlsx.ArticleRow
 	methods  map[orderpayment.Method]*xlsx.MethodRow
-	// unknown catches an order with no payment row, so the cash-up table still
-	// adds up to the totals instead of quietly dropping it.
+	// Orders with no payment row, so the cash-up still adds up to the totals.
 	unknown *xlsx.MethodRow
 	totals  xlsx.SalesTotals
 }
@@ -249,9 +240,8 @@ func (a *salesAggregator) addOrder(o *ent.Order, refunds orderRefunds) {
 	if hasMethod {
 		methodLabel = paymentMethodLabel(method)
 	}
-	// A gratis order still carries its full nominal total; it just never took any
-	// money. Booking that as revenue would inflate the takings, so it is reported
-	// at zero with the nominal value kept in its own column.
+	// A gratis order keeps its full nominal total but took no money, so booking it
+	// as revenue would inflate the takings.
 	gratis := hasMethod && isGratisMethod(method)
 
 	records := a.flattenOrder(o, refunds, methodLabel, gratis)
@@ -290,8 +280,7 @@ func (a *salesAggregator) addOrder(o *ent.Order, refunds orderRefunds) {
 		a.totals.GratisItemCount += itemCount
 	}
 
-	// Line refunds already ride on the rows; whatever a refund covered beyond them
-	// — an arbitrary refund — is still money that left the till.
+	// Whatever a refund covered beyond the rows is an arbitrary one.
 	unlinked := refunds.totalCents - linkedRefunds
 	if unlinked < 0 || gratis {
 		unlinked = 0
@@ -393,11 +382,9 @@ func (a *salesAggregator) finish(report xlsx.SalesReport) xlsx.SalesReport {
 	return report
 }
 
-// flattenOrder turns an order's lines into one record per article actually handed
-// over. A configured bundle is a grouping row that carries the price while its
-// components sit at zero, so the price is split across the components and the
-// parent never becomes a row of its own — otherwise article revenue would count
-// the bundle twice.
+// flattenOrder returns one record per article handed over. A configured bundle
+// carries the price with its components at zero, so the price is split onto them
+// and the parent never becomes a row — otherwise it would count twice.
 func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, methodLabel string, gratis bool) []saleRecord {
 	children := make(map[string][]*ent.OrderLine)
 	for _, l := range o.Edges.Lines {
@@ -448,8 +435,7 @@ func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, metho
 				revenue:   revenues[i],
 				deposit:   deposits[i],
 				refunded:  refundShares[i],
-				// One component is consumed per bundle unit, so a refunded bundle unit
-				// takes back exactly one of each component.
+				// One component per bundle unit, so a refund takes back one of each.
 				refundedQty: refunded.quantity,
 				parentGross: gross,
 			}, line.Title))
@@ -465,8 +451,8 @@ type saleAmounts struct {
 	deposit     int64
 	refunded    int64
 	refundedQty int
-	// parentGross is the bundle price a component was cut out of; a component of a
-	// paid bundle is not a giveaway even when its own share rounds to zero.
+	// The bundle price a component was cut out of: its own share may round to
+	// zero without the component being a giveaway.
 	parentGross int64
 }
 
@@ -501,8 +487,6 @@ func (a *salesAggregator) record(o *ent.Order, line *ent.OrderLine, methodLabel 
 		charged = amounts.parentGross
 	}
 	if gratis {
-		// Nominal value net of what was given back, so a cancelled gratis order
-		// doesn't stay on the books as goods handed out.
 		row.GratisCents = max(amounts.revenue-amounts.refunded, 0)
 		row.RevenueCents = 0
 		row.DepositCents = 0
@@ -527,8 +511,7 @@ func componentsOf(children []*ent.OrderLine) []*ent.OrderLine {
 	return out
 }
 
-// depositOf returns what the line's deposit sibling charged and what has been
-// returned of it. Deposits hang off the product line, never off a component.
+// Deposits hang off the product line, never off a component.
 func depositOf(children []*ent.OrderLine, refunds orderRefunds) (charged, refunded int64) {
 	for _, c := range children {
 		if c.LineType != orderline.LineTypeDeposit {
@@ -540,8 +523,8 @@ func depositOf(children []*ent.OrderLine, refunds orderRefunds) (charged, refund
 	return charged, refunded
 }
 
-// allocateCents splits total along weights so the parts always add back up to
-// total: the remainder goes to the largest fractions first.
+// The remainder goes to the largest fractions, so the parts always add back up
+// to total.
 func allocateCents(total int64, weights []int64) []int64 {
 	out := make([]int64, len(weights))
 	if len(weights) == 0 || total == 0 {

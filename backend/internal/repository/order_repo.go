@@ -35,10 +35,9 @@ type OrderRepository interface {
 	ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string, includeLines bool) ([]*ent.Order, int64, error)
 	ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error)
 
-	// ListSettledInRange returns every order created in [from, to) that carries
-	// money — pending ones are excluded — oldest first, with lines and payments
-	// loaded. Unlike ListAdmin it is keyset-paged rather than capped: a sales
-	// report that silently stopped at a cap would misstate the takings.
+	// ListSettledInRange returns the orders in [from, to) that carry money, with
+	// lines and payments loaded. Keyset-paged rather than capped like ListAdmin:
+	// a report that stopped at a cap would misstate the takings.
 	ListSettledInRange(ctx context.Context, from, to time.Time) ([]*ent.Order, error)
 
 	// POS payment methods - creates payment record and updates order status
@@ -397,9 +396,8 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 // or a runaway query can't pull the full table into memory.
 const adminListHardCap = 1000
 
-// settledStatuses are the order states that represent money that moved. A
-// cancelled order was paid and then fully refunded, so it belongs in the report
-// (gross and refund cancel out) — only pending orders are left out.
+// A cancelled order was paid and fully refunded, so it belongs in the report;
+// only pending ones never took money.
 var settledStatuses = []order.Status{
 	order.StatusPaid,
 	order.StatusPartiallyRefunded,
@@ -422,8 +420,7 @@ func (r *orderRepo) ListSettledInRange(ctx context.Context, from, to time.Time) 
 				order.CreatedAtLT(to),
 				order.StatusIn(settledStatuses...),
 			)
-		// Keyset, not offset: orders keep arriving while the export runs, and an
-		// offset page would then skip or repeat rows.
+		// Keyset, not offset: orders keep arriving while the export runs.
 		if lastID != "" {
 			query = query.Where(order.Or(
 				order.CreatedAtGT(lastAt),

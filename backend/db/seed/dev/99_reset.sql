@@ -1,7 +1,5 @@
--- Dev-only: removes everything the 01–04 fixtures wrote for a tenant. Keyed on
--- the seeded event window, so anything you created outside 14.–16.08.2026 stays.
---
--- Usage: psql "$DATABASE_URL" -v seed_tenant=<tenant id> -f 99_reset.sql
+-- Dev-only: removes what the 01–04 fixtures wrote. Keyed on the seeded event
+-- window, so anything outside 14.–16.08.2026 stays.
 
 \set ON_ERROR_STOP on
 
@@ -15,16 +13,14 @@ SELECT id FROM "order"
    AND created_at >= timestamptz '2026-08-14 00:00:00+02'
    AND created_at <  timestamptz '2026-08-17 00:00:00+02';
 
--- Refunds first: refund.order_id is NO ACTION, so it would block the delete.
+-- Refunds first: refund.order_id is NO ACTION and would block the delete.
 DELETE FROM refund_line WHERE refund_id IN (
   SELECT r.id FROM refund r JOIN seed_orders s ON s.id = r.order_id
 );
 DELETE FROM refund WHERE order_id IN (SELECT id FROM seed_orders);
 
--- Ledger rows would only be orphaned (order_id is ON DELETE SET NULL) and would
--- then read as expired reservations, so they go explicitly: the ones tied to
--- seeded orders, the seeded delivery, and whatever the pending sweeper already
--- detached.
+-- order_id is ON DELETE SET NULL, so orphaned rows would read as expired
+-- reservations. They go explicitly, including what the sweeper already detached.
 DELETE FROM inventory_ledger
  WHERE tenant_id = :'seed_tenant'
    AND (
@@ -34,7 +30,6 @@ DELETE FROM inventory_ledger
          AND created_at >= timestamptz '2026-08-14 00:00:00+02')
    );
 
--- Lines and payments cascade with the order.
 DELETE FROM "order" WHERE id IN (SELECT id FROM seed_orders);
 
 DELETE FROM device WHERE tenant_id = :'seed_tenant' AND device_key LIKE 'dev-seed-kasse-%';

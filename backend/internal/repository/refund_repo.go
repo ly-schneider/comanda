@@ -16,8 +16,6 @@ type RefundRepository interface {
 	SumSucceededLineQtyByOrder(ctx context.Context, orderID string) (map[string]int, error)
 	ListByOrder(ctx context.Context, orderID string) ([]*ent.Refund, error)
 	List(ctx context.Context, limit, offset int) ([]*ent.Refund, error)
-	// ListSucceededByOrderIDs returns the succeeded refunds for many orders at
-	// once, with their lines, for reporting over a whole date range.
 	ListSucceededByOrderIDs(ctx context.Context, orderIDs []string) ([]*ent.Refund, error)
 }
 

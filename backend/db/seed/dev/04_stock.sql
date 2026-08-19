@@ -1,8 +1,5 @@
--- Dev-only: sizes the morning delivery to what the weekend actually sold, plus
--- headroom. Run after 02_sales.sql, otherwise products finish the event with a
--- negative stock, which no real event ever does.
---
--- Usage: psql "$DATABASE_URL" -v seed_tenant=<tenant id> -f 04_stock.sql
+-- Dev-only: sizes the morning delivery to what the weekend sold, plus headroom.
+-- Run after 02_sales.sql or products end up with negative stock.
 
 \set ON_ERROR_STOP on
 

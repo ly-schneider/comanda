@@ -1,6 +1,5 @@
 // Command devseedqr provisions a tenant's Ed25519 pickup key and signs the
-// pickup tokens of seeded orders. Local dev tool for the db/seed/dev fixtures;
-// not wired into the app.
+// tokens of seeded orders. Dev tool for the db/seed/dev fixtures.
 package main
 
 import (
@@ -65,8 +64,6 @@ func main() {
 	}
 }
 
-// verifyOne reads a token back and checks it against the tenant's stored public
-// key — proof the seeded orders would actually scan at a station.
 func verifyOne(ctx context.Context, conn *pgx.Conn, tenant string) error {
 	var pubB64, token, orderID string
 	err := conn.QueryRow(ctx,
@@ -129,9 +126,8 @@ func ensureKey(ctx context.Context, conn *pgx.Conn, enc *crypto.Encryptor, tenan
 	return priv, nil
 }
 
-// signOrders mirrors the checkout's redeemable set: the physical items are the
-// simple lines and the chosen bundle components, and a bundle parent only counts
-// when it has no components of its own.
+// signOrders mirrors the checkout's redeemable set: simple lines and chosen
+// components, a bundle parent only when it has none.
 func signOrders(ctx context.Context, conn *pgx.Conn, priv ed25519.PrivateKey, tenant, from string) (int, error) {
 	rows, err := conn.Query(ctx,
 		`SELECT o.id, o.created_at,

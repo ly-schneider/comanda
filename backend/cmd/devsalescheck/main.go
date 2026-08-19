@@ -1,6 +1,5 @@
-// Command devsalescheck builds the sales report for a tenant through the real
-// service — RLS-bound, off the request path — and writes the workbook to disk.
-// Local dev tool for eyeballing the db/seed/dev fixtures; not wired into the app.
+// Command devsalescheck builds a tenant's sales report through the real service
+// and writes the workbook to disk. Dev tool for the db/seed/dev fixtures.
 package main
 
 import (

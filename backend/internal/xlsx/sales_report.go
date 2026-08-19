@@ -15,8 +15,8 @@ const (
 	salesSheetOrders   = "Bestellungen"
 )
 
-// SaleRow is one article handed over in one order. A bundle contributes one row
-// per component, never a row of its own, so the rows sum to the takings.
+// SaleRow is one article handed over in one order; a bundle contributes one row
+// per component, never one of its own.
 type SaleRow struct {
 	At            time.Time
 	OrderID       string
@@ -37,7 +37,6 @@ type SaleRow struct {
 	GratisCents   int64
 }
 
-// ArticleRow aggregates SaleRows per product and variant.
 type ArticleRow struct {
 	Category      string
 	Subcategory   string
@@ -53,7 +52,6 @@ type ArticleRow struct {
 	GratisCents   int64
 }
 
-// OrderRow is the receipt-level view: what a single order took in.
 type OrderRow struct {
 	At            time.Time
 	OrderID       string
@@ -66,7 +64,6 @@ type OrderRow struct {
 	Contact       string
 }
 
-// MethodRow totals one payment method for the cash-up.
 type MethodRow struct {
 	Method        string
 	OrderCount    int
@@ -195,8 +192,6 @@ func newSalesStyles(f *excelize.File) (salesStyles, error) {
 	if s.title, err = f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 13}}); err != nil {
 		return s, err
 	}
-	// Amounts are real numbers, not text: the bookkeeper has to be able to sum a
-	// column without retyping it.
 	if s.money, err = f.NewStyle(&excelize.Style{CustomNumFmt: strPtr(`#,##0.00`)}); err != nil {
 		return s, err
 	}
@@ -309,8 +304,6 @@ func writeArticles(f *excelize.File, report SalesReport, styles salesStyles) err
 	if err := f.SetCellStyle(salesSheetArticles, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	// The one thing the columns cannot show: a bundle is missing from this list,
-	// so someone looking for it would think the data is incomplete.
 	if err := setRow(f, salesSheetArticles, 2, []any{"Ein Bundle hat keine eigene Zeile, sein Preis verteilt sich auf die Artikel, die drin waren."}); err != nil {
 		return err
 	}

@@ -1,9 +1,5 @@
--- Dev-only: layers the money that came back onto the seeded event — line
--- refunds with their released deposit, deposit returns, full cancellations,
--- admin cancellations without a payout, and a couple of arbitrary refunds that
--- no article can be pinned on.
---
--- Usage: psql "$DATABASE_URL" -v seed_tenant=<tenant id> -f 03_refunds.sql
+-- Dev-only: the money that came back — line refunds, deposit returns,
+-- cancellations, arbitrary refunds. See README.md.
 
 \set ON_ERROR_STOP on
 
@@ -43,7 +39,7 @@ DECLARE
   v_at         timestamptz;
   v_method     text;
 BEGIN
-  -- 1. Line refunds: one item handed back, its deposit released with it.
+  -- 1. Line refund: one item back, its deposit released with it.
   FOR v_order IN SELECT * FROM seed_candidates WHERE rn <= 40 LOOP
     SELECT l.id, l.product_id, l.variant_id, l.unit_price_cents, l.line_type::text AS line_type,
            p.type::text AS product_type
@@ -82,9 +78,8 @@ BEGIN
       VALUES (pg_temp.nanoid(), v_tenant, v_refund_id, v_dep.id, 1, v_dep.unit_price_cents);
     END IF;
 
-    -- Only a simple product comes back into stock. A refunded bundle line
-    -- restores nothing today (its components are never expanded) — seeded that
-    -- way on purpose so the data shows the real behaviour.
+    -- A refunded bundle line restores nothing today: its components are never
+    -- expanded. Seeded that way on purpose.
     IF v_line.product_type = 'simple' THEN
       INSERT INTO inventory_ledger (id, tenant_id, product_id, variant_id, delta, reason, order_id,
                                     order_line_id, created_at)
@@ -127,7 +122,7 @@ BEGIN
     UPDATE "order" SET status = 'cancelled', updated_at = v_at, qr_payload = NULL WHERE id = v_order.id;
   END LOOP;
 
-  -- 3. Arbitrary goodwill refunds: real money out, no article to hang it on.
+  -- 3. Arbitrary refunds: money out, no article to hang it on.
   FOR v_order IN SELECT * FROM seed_candidates WHERE rn BETWEEN 53 AND 55 LOOP
     v_refund_id := pg_temp.nanoid();
     v_at := v_order.created_at + make_interval(mins => floor(random() * 180 + 30)::int);
@@ -146,7 +141,7 @@ BEGIN
      WHERE id = v_order.id;
   END LOOP;
 
-  -- 4. Deposit returns at the end of the evening: cups come back, no stock moves.
+  -- 4. Deposit returns: cups come back, no stock moves.
   FOR v_order IN
     SELECT c.* FROM seed_candidates c
      WHERE c.rn > 55
@@ -175,8 +170,7 @@ BEGIN
     UPDATE "order" SET status = 'partially_refunded', updated_at = v_at WHERE id = v_order.id;
   END LOOP;
 
-  -- 5. Two orders cancelled by an admin without a payout: the stock comes back
-  -- under its own reason, which is the other way cancellations reach the ledger.
+  -- 5. Cancelled by an admin without a payout: the other way stock comes back.
   FOR v_order IN
     SELECT * FROM "order"
      WHERE tenant_id = v_tenant AND status = 'pending'

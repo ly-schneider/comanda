@@ -17,8 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A full round trip over the real schema: the range query, the eager-loaded
-// lines and payments, and the money that has to come back out of them.
 func TestSalesExport_RevenuePerArticleAcrossBundlesAndRefunds(t *testing.T) {
 	tdb := NewTestDB(t)
 	defer tdb.Close()
@@ -35,25 +33,21 @@ func TestSalesExport_RevenuePerArticleAcrossBundlesAndRefunds(t *testing.T) {
 	drink := fixtures.CreateProduct("Getränk", merch.ID, 1000, entProduct.TypeSimple, nil)
 	combo := fixtures.CreateProduct("Shirt + Getränk", merch.ID, 3200, entProduct.TypeBundle, nil)
 
-	// Paid by card: two shirts straight off the shelf, one of them refunded.
 	direct := fixtures.CreateOrder(6000, entOrder.StatusPartiallyRefunded, entOrder.OriginPos)
 	directLine := fixtures.CreateOrderLine(direct.ID, shirt.ID, "Shirt", 2, 3000, orderline.LineTypeSimple)
 	payOrder(t, repos, direct.ID, orderpayment.MethodCARD, 6000)
 	refundLine(t, repos, direct.ID, directLine.ID, 1, 3000)
 
-	// Paid by TWINT: the bundle, whose price has to land on its components.
 	bundleOrder := fixtures.CreateOrder(3200, entOrder.StatusPaid, entOrder.OriginShop)
 	parent := fixtures.CreateOrderLine(bundleOrder.ID, combo.ID, "Shirt + Getränk", 1, 3200, orderline.LineTypeBundle)
 	addChild(t, repos, bundleOrder.ID, shirt.ID, "Shirt", parent.ID)
 	addChild(t, repos, bundleOrder.ID, drink.ID, "Getränk", parent.ID)
 	payOrder(t, repos, bundleOrder.ID, orderpayment.MethodTWINT, 3200)
 
-	// A VIP giveaway: nominal value only, no takings.
 	vip := fixtures.CreateOrder(3000, entOrder.StatusPaid, entOrder.OriginPos)
 	fixtures.CreateOrderLine(vip.ID, shirt.ID, "Shirt", 1, 3000, orderline.LineTypeSimple)
 	payOrder(t, repos, vip.ID, orderpayment.MethodGRATIS_VIP, 3000)
 
-	// A pending order never took money and must stay out of the report.
 	pending := fixtures.CreateOrder(3000, entOrder.StatusPending, entOrder.OriginShop)
 	fixtures.CreateOrderLine(pending.ID, shirt.ID, "Shirt", 1, 3000, orderline.LineTypeSimple)
 
@@ -79,8 +73,7 @@ func TestSalesExport_RevenuePerArticleAcrossBundlesAndRefunds(t *testing.T) {
 	require.Equal(t, 1, shirtRow.BundleQty)
 	require.Equal(t, 1, shirtRow.GratisQty)
 	require.Equal(t, 1, shirtRow.RefundedQty)
-	// CHF 60 direct + the shirt's CHF 24 share of the CHF 32 bundle; the VIP shirt
-	// is worth CHF 30 but earned nothing.
+	// CHF 60 direct + the shirt's CHF 24 share of the CHF 32 bundle.
 	require.Equal(t, int64(8400), shirtRow.RevenueCents)
 	require.Equal(t, int64(3000), shirtRow.RefundedCents)
 	require.Equal(t, int64(3000), shirtRow.GratisCents)

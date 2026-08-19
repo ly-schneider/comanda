@@ -1,8 +1,5 @@
--- Dev-only: rounds the demo catalog out so a sales export has every column to
--- show — deposits, variants, and a "3 für 2" combo modelled the way BlessThun
--- actually built theirs (one flat product, not a bundle).
---
--- Usage: psql "$DATABASE_URL" -v seed_tenant=<tenant id> -f 01_catalog_extras.sql
+-- Dev-only: deposits, variants and a "3 für 2" combo, so the export has every
+-- column to show. See README.md.
 
 \set ON_ERROR_STOP on
 
@@ -13,7 +10,7 @@ LANGUAGE sql VOLATILE AS $$
   FROM generate_series(1, 12)
 $$;
 
--- Returnable cups: every cold drink carries a deposit, the Capri Sun pouch does not.
+-- Returnable cups; the Capri Sun pouch has none.
 UPDATE product SET deposit_cents = 200
 WHERE tenant_id = :'seed_tenant'
   AND id IN ('prd________1', 'prd________2', 'prd________3', 'prd________4', 'prd________6');
@@ -25,8 +22,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO product (id, tenant_id, category_id, type, name, price_cents, deposit_cents, is_active, variant_label)
 VALUES
   ('prd_dev_shrt', :'seed_tenant', 'cat_dev_mrch', 'simple', 'BlessThun Shirt', 3000, 0, true, 'Grösse'),
-  -- Deliberately a single flat product: the report can then only ever see "one
-  -- pack sold", never the three shirts inside it.
+  -- Deliberately one flat product, exactly as BlessThun built it.
   ('prd_dev_3f2_', :'seed_tenant', 'cat_dev_mrch', 'simple', 'Shirt 3 für 2', 6000, 0, true, NULL)
 ON CONFLICT (id) DO NOTHING;
 
@@ -38,8 +34,7 @@ VALUES
   ('var_dev_shrx', :'seed_tenant', 'prd_dev_shrt', 'XL', 200, true, 3)
 ON CONFLICT (id) DO NOTHING;
 
--- The delivery on the morning of the first event day. Dated inside the reported
--- range on purpose, so it shows up as a movement and not as opening stock.
+-- Dated inside the reported range on purpose, so it shows up as a movement.
 INSERT INTO inventory_ledger (id, tenant_id, product_id, variant_id, delta, reason, created_by, created_at)
 SELECT pg_temp.nanoid(), :'seed_tenant', v.product_id, v.variant_id, v.delta, 'opening_balance', 'kBHQDv91PRkx',
        timestamptz '2026-08-14 08:00:00+02'

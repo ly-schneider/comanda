@@ -264,8 +264,6 @@ func NewRouter(
 
 			ops.Get("/events", wrapper.ListEvents)
 
-			// Revenue reporting sits with the order surface: same tier that can
-			// already read every order and refund.
 			ops.Get("/sales/summary", wrapper.GetSalesSummary)
 			ops.Get("/sales/export.xlsx", wrapper.ExportSales)
 		})
