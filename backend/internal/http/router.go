@@ -263,6 +263,11 @@ func NewRouter(
 			ops.Post("/devices/pairings/{code}", wrapper.CompleteDevicePairing)
 
 			ops.Get("/events", wrapper.ListEvents)
+
+			// Revenue reporting sits with the order surface: same tier that can
+			// already read every order and refund.
+			ops.Get("/sales/summary", wrapper.GetSalesSummary)
+			ops.Get("/sales/export.xlsx", wrapper.ExportSales)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────

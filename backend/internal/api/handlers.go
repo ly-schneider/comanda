@@ -23,6 +23,7 @@ type Handlers struct {
 	categories      service.CategoryService
 	products        service.ProductService
 	inventoryExport service.InventoryExportService
+	salesExport     service.SalesExportService
 	orders          service.OrderService
 	payments        service.PaymentService
 	refunds         service.RefundService
@@ -68,6 +69,7 @@ type HandlersDeps struct {
 	Categories      service.CategoryService
 	Products        service.ProductService
 	InventoryExport service.InventoryExportService
+	SalesExport     service.SalesExportService
 	Orders          service.OrderService
 	Payments        service.PaymentService
 	Refunds         service.RefundService
@@ -103,6 +105,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		categories:      deps.Categories,
 		products:        deps.Products,
 		inventoryExport: deps.InventoryExport,
+		salesExport:     deps.SalesExport,
 		orders:          deps.Orders,
 		payments:        deps.Payments,
 		refunds:         deps.Refunds,

@@ -1,0 +1,104 @@
+summary:
+  get:
+    tags: [Sales]
+    summary: Sales and revenue summary for a date range
+    description: |
+      The on-screen preview of what the Excel export contains, over the same
+      half-open `[from, to)` range: totals, a per-payment-method breakdown for the
+      cash-up, and one row per article. The line-level detail is export-only.
+
+      Gratis orders (guest/VIP/staff/plugin) count as zero revenue; their nominal
+      value is reported separately under `gratisCents`.
+    operationId: getSalesSummary
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:read-all]
+    parameters:
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start of the range
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: true
+        description: Exclusive end of the range
+        schema:
+          type: string
+          format: date-time
+    responses:
+      "200":
+        description: Sales summary
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/sales.yaml#/SalesSummary"
+      "400":
+        description: Invalid range
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+export:
+  get:
+    tags: [Sales]
+    summary: Export sales and revenue as an Excel workbook
+    description: |
+      Returns a four-sheet `.xlsx` workbook for the range: `Zusammenfassung`
+      (totals and payment methods), `Pro Artikel` (revenue per product and
+      variant), `Verkäufe` (one row per article handed over) and `Bestellungen`
+      (the receipt-level list).
+
+      Bundles are flattened: the bundle price is split across the components it
+      contained, pro rata by their list prices, so article revenue is never
+      counted twice. Deposits are reported in their own column and never as
+      article revenue. Only settled orders are included — pending ones never took
+      any money.
+    operationId: exportSales
+    security:
+      - sessionAuth: []
+    x-required-permissions: [orders:read-all]
+    parameters:
+      - name: from
+        in: query
+        required: true
+        description: Inclusive start of the range
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: true
+        description: Exclusive end of the range
+        schema:
+          type: string
+          format: date-time
+    responses:
+      "200":
+        description: Excel workbook
+        content:
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      "400":
+        description: Invalid range
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"

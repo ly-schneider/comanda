@@ -35,6 +35,12 @@ type OrderRepository interface {
 	ListAdmin(ctx context.Context, status *order.Status, from, to *time.Time, q *string, includeLines bool) ([]*ent.Order, int64, error)
 	ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error)
 
+	// ListSettledInRange returns every order created in [from, to) that carries
+	// money — pending ones are excluded — oldest first, with lines and payments
+	// loaded. Unlike ListAdmin it is keyset-paged rather than capped: a sales
+	// report that silently stopped at a cap would misstate the takings.
+	ListSettledInRange(ctx context.Context, from, to time.Time) ([]*ent.Order, error)
+
 	// POS payment methods - creates payment record and updates order status
 	SetPosPaymentCash(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey *string) error
 	SetPosPaymentCard(ctx context.Context, orderID string, deviceID *string, amountCents int64, card *CardMeta, pluginKey *string) error
@@ -390,6 +396,57 @@ func (r *orderRepo) ListAdmin(ctx context.Context, status *order.Status, from, t
 // adminListHardCap bounds the admin /v1/orders response so a missing date filter
 // or a runaway query can't pull the full table into memory.
 const adminListHardCap = 1000
+
+// settledStatuses are the order states that represent money that moved. A
+// cancelled order was paid and then fully refunded, so it belongs in the report
+// (gross and refund cancel out) — only pending orders are left out.
+var settledStatuses = []order.Status{
+	order.StatusPaid,
+	order.StatusPartiallyRefunded,
+	order.StatusRefunded,
+	order.StatusCancelled,
+}
+
+const salesPageSize = 500
+
+func (r *orderRepo) ListSettledInRange(ctx context.Context, from, to time.Time) ([]*ent.Order, error) {
+	var (
+		out    []*ent.Order
+		lastAt time.Time
+		lastID string
+	)
+	for {
+		query := r.ec(ctx).Order.Query().
+			Where(
+				order.CreatedAtGTE(from),
+				order.CreatedAtLT(to),
+				order.StatusIn(settledStatuses...),
+			)
+		// Keyset, not offset: orders keep arriving while the export runs, and an
+		// offset page would then skip or repeat rows.
+		if lastID != "" {
+			query = query.Where(order.Or(
+				order.CreatedAtGT(lastAt),
+				order.And(order.CreatedAtEQ(lastAt), order.IDGT(lastID)),
+			))
+		}
+		rows, err := query.
+			WithLines().
+			WithPayments().
+			Order(order.ByCreatedAt(), order.ByID()).
+			Limit(salesPageSize).
+			All(ctx)
+		if err != nil {
+			return nil, translateError(err)
+		}
+		out = append(out, rows...)
+		if len(rows) < salesPageSize {
+			return out, nil
+		}
+		last := rows[len(rows)-1]
+		lastAt, lastID = last.CreatedAt, last.ID
+	}
+}
 
 func (r *orderRepo) ListByCustomerIDPaginated(ctx context.Context, customerID string) ([]*ent.Order, int64, error) {
 	total, err := r.ec(ctx).Order.Query().

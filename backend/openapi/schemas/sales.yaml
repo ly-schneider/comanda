@@ -1,0 +1,130 @@
+SalesTotals:
+  type: object
+  required:
+    [
+      orderCount,
+      itemCount,
+      revenueCents,
+      depositCents,
+      refundedCents,
+      netCents,
+      gratisCents,
+      gratisOrderCount,
+      gratisItemCount,
+    ]
+  properties:
+    orderCount:
+      type: integer
+    itemCount:
+      type: integer
+    revenueCents:
+      type: integer
+      format: int64
+      description: Goods revenue actually charged; gratis orders contribute 0
+    depositCents:
+      type: integer
+      format: int64
+    refundedCents:
+      type: integer
+      format: int64
+    netCents:
+      type: integer
+      format: int64
+      description: revenueCents + depositCents - refundedCents
+    gratisCents:
+      type: integer
+      format: int64
+      description: Nominal value of everything handed out for free
+    gratisOrderCount:
+      type: integer
+    gratisItemCount:
+      type: integer
+
+SalesPaymentMethod:
+  type: object
+  required: [method, orderCount, revenueCents, depositCents, refundedCents, netCents, gratisCents]
+  properties:
+    method:
+      type: string
+      description: Human-readable German label, matching the export
+    orderCount:
+      type: integer
+    revenueCents:
+      type: integer
+      format: int64
+    depositCents:
+      type: integer
+      format: int64
+    refundedCents:
+      type: integer
+      format: int64
+    netCents:
+      type: integer
+      format: int64
+    gratisCents:
+      type: integer
+      format: int64
+
+SalesArticle:
+  type: object
+  required:
+    [
+      product,
+      quantity,
+      bundleQty,
+      gratisQty,
+      refundedQty,
+      revenueCents,
+      depositCents,
+      refundedCents,
+      netCents,
+      gratisCents,
+    ]
+  properties:
+    category:
+      type: string
+    subcategory:
+      type: string
+    product:
+      type: string
+    variant:
+      type: string
+    quantity:
+      type: integer
+    bundleQty:
+      type: integer
+      description: Of `quantity`, how many were handed over as part of a bundle
+    gratisQty:
+      type: integer
+    refundedQty:
+      type: integer
+    revenueCents:
+      type: integer
+      format: int64
+    depositCents:
+      type: integer
+      format: int64
+    refundedCents:
+      type: integer
+      format: int64
+    netCents:
+      type: integer
+      format: int64
+    gratisCents:
+      type: integer
+      format: int64
+
+SalesSummary:
+  type: object
+  required: [totals, methods, articles]
+  properties:
+    totals:
+      $ref: "#/SalesTotals"
+    methods:
+      type: array
+      items:
+        $ref: "#/SalesPaymentMethod"
+    articles:
+      type: array
+      items:
+        $ref: "#/SalesArticle"
