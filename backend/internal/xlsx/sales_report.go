@@ -216,7 +216,7 @@ func writeSalesSummary(f *excelize.File, report SalesReport, styles salesStyles)
 	if err := f.SetCellStyle(salesSheetSummary, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	if err := setRow(f, salesSheetSummary, 2, []any{"Alle Beträge in CHF. Gratis-Bestellungen zählen als Umsatz 0 — ihr Warenwert steht separat unter «Gratis abgegeben»."}); err != nil {
+	if err := setRow(f, salesSheetSummary, 2, []any{"Alle Beträge in CHF. Gratis-Bestellungen zählen als Umsatz 0, ihr Warenwert steht in der Zeile «Gratis abgegeben»."}); err != nil {
 		return err
 	}
 
@@ -313,7 +313,7 @@ func writeArticles(f *excelize.File, report SalesReport, styles salesStyles) err
 	if err := f.SetCellStyle(salesSheetArticles, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	if err := setRow(f, salesSheetArticles, 2, []any{"Artikel aus Bundles zählen beim enthaltenen Produkt; ihr Anteil am Bundle-Preis ist im Warenumsatz enthalten."}); err != nil {
+	if err := setRow(f, salesSheetArticles, 2, []any{"Ein Bundle hat hier keine eigene Zeile. Sein Preis verteilt sich auf die Artikel, die drin waren."}); err != nil {
 		return err
 	}
 
@@ -440,9 +440,11 @@ func chf(cents int64) float64 {
 }
 
 func salesTitle(report SalesReport) string {
-	return fmt.Sprintf("Verkäufe %s bis %s",
-		report.From.In(reportLocation).Format("02.01.2006"),
-		// [from, to): the last included day precedes the exclusive bound.
-		report.To.Add(-time.Nanosecond).In(reportLocation).Format("02.01.2006"),
-	)
+	from := report.From.In(reportLocation).Format("02.01.2006")
+	// [from, to): the last included day precedes the exclusive bound.
+	last := report.To.Add(-time.Nanosecond).In(reportLocation).Format("02.01.2006")
+	if from == last {
+		return "Verkäufe " + from
+	}
+	return fmt.Sprintf("Verkäufe %s bis %s", from, last)
 }

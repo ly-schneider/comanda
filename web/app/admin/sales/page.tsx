@@ -235,7 +235,7 @@ export default function SalesPage() {
                 <div
                   className="overflow-x-auto overscroll-x-contain"
                   role="region"
-                  aria-label="Artikel – horizontal scrollen für weitere Spalten"
+                  aria-label="Artikel, horizontal scrollen für weitere Spalten"
                   tabIndex={0}
                 >
                   <Table className="whitespace-nowrap">

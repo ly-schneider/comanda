@@ -69,7 +69,7 @@ func TestRenderSalesReportSummaryCells(t *testing.T) {
 	f := openRendered(t, body)
 
 	for ref, want := range map[string]string{
-		"A1":  "Verkäufe 24.07.2026 bis 24.07.2026",
+		"A1":  "Verkäufe 24.07.2026",
 		"A4":  "Bestellungen",
 		"B4":  "2",
 		"A6":  "Warenumsatz",
@@ -150,5 +150,18 @@ func TestRenderSalesReportHandlesEmptyRange(t *testing.T) {
 	f := openRendered(t, body)
 	if got, _ := f.GetCellValue(salesSheetLines, "A1"); got != "Datum" {
 		t.Fatalf("empty workbook still needs its headers, got %q", got)
+	}
+}
+
+func TestSalesTitleSpansMultipleDays(t *testing.T) {
+	report := testSalesReport()
+	report.To = swissDay(2026, 7, 27)
+	body, err := RenderSalesReport(report)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	f := openRendered(t, body)
+	if got, _ := f.GetCellValue(salesSheetSummary, "A1"); got != "Verkäufe 24.07.2026 bis 26.07.2026" {
+		t.Fatalf("title = %q", got)
 	}
 }
