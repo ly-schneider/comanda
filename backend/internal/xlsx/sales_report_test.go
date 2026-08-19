@@ -69,17 +69,17 @@ func TestRenderSalesReportSummaryCells(t *testing.T) {
 	f := openRendered(t, body)
 
 	for ref, want := range map[string]string{
-		"A1":  "Verkäufe 24.07.2026",
-		"A4":  "Bestellungen",
-		"B4":  "2",
-		"A6":  "Warenumsatz",
-		"B6":  "84.00",
-		"A8":  "Erstattungen",
-		"B8":  "-5.00",
-		"A9":  "Nettoeinnahmen",
-		"B9":  "83.00",
-		"A10": "Gratis abgegeben (Warenwert)",
-		"B10": "30.00",
+		"A1": "Verkäufe 24.07.2026",
+		"A3": "Bestellungen",
+		"B3": "2",
+		"A5": "Warenumsatz",
+		"B5": "84.00",
+		"A7": "Erstattungen",
+		"B7": "-5.00",
+		"A8": "Nettoeinnahmen",
+		"B8": "83.00",
+		"A9": "Gratis abgegeben (Warenwert)",
+		"B9": "30.00",
 	} {
 		got, err := f.GetCellValue(salesSheetSummary, ref)
 		if err != nil {

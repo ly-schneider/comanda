@@ -216,10 +216,6 @@ func writeSalesSummary(f *excelize.File, report SalesReport, styles salesStyles)
 	if err := f.SetCellStyle(salesSheetSummary, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	if err := setRow(f, salesSheetSummary, 2, []any{"Alle Beträge in CHF. Gratis-Bestellungen zählen als Umsatz 0, ihr Warenwert steht in der Zeile «Gratis abgegeben»."}); err != nil {
-		return err
-	}
-
 	t := report.Totals
 	rows := []struct {
 		label string
@@ -235,7 +231,7 @@ func writeSalesSummary(f *excelize.File, report SalesReport, styles salesStyles)
 		{"Gratis abgegeben (Warenwert)", chf(t.GratisCents), true},
 	}
 
-	row := 4
+	row := 3
 	for _, r := range rows {
 		if err := setRow(f, salesSheetSummary, row, []any{r.label, r.value}); err != nil {
 			return err
@@ -313,7 +309,9 @@ func writeArticles(f *excelize.File, report SalesReport, styles salesStyles) err
 	if err := f.SetCellStyle(salesSheetArticles, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	if err := setRow(f, salesSheetArticles, 2, []any{"Ein Bundle hat hier keine eigene Zeile. Sein Preis verteilt sich auf die Artikel, die drin waren."}); err != nil {
+	// The one thing the columns cannot show: a bundle is missing from this list,
+	// so someone looking for it would think the data is incomplete.
+	if err := setRow(f, salesSheetArticles, 2, []any{"Ein Bundle hat keine eigene Zeile, sein Preis verteilt sich auf die Artikel, die drin waren."}); err != nil {
 		return err
 	}
 
