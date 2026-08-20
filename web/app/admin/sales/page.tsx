@@ -243,9 +243,6 @@ export default function SalesPage() {
           {bundles.length > 0 && (
             <section className="space-y-2">
               <h2 className="text-sm font-semibold">Bundles</h2>
-              <p className="text-muted-foreground text-sm">
-                Dasselbe Geld wie unter «Pro Artikel», nur nach Bundle gezählt statt nach Artikel.
-              </p>
               <TableContainer>
                 <div
                   className="overflow-x-auto overscroll-x-contain"
