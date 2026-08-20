@@ -16,6 +16,7 @@ type RefundRepository interface {
 	SumSucceededLineQtyByOrder(ctx context.Context, orderID string) (map[string]int, error)
 	ListByOrder(ctx context.Context, orderID string) ([]*ent.Refund, error)
 	List(ctx context.Context, limit, offset int) ([]*ent.Refund, error)
+	ListSucceededByOrderIDs(ctx context.Context, orderIDs []string) ([]*ent.Refund, error)
 }
 
 type CreateRefundParams struct {
@@ -150,6 +151,27 @@ func (r *refundRepo) ListByOrder(ctx context.Context, orderID string) ([]*ent.Re
 		return nil, translateError(err)
 	}
 	return rows, nil
+}
+
+func (r *refundRepo) ListSucceededByOrderIDs(ctx context.Context, orderIDs []string) ([]*ent.Refund, error) {
+	const chunkSize = 500
+	var out []*ent.Refund
+	for start := 0; start < len(orderIDs); start += chunkSize {
+		end := min(start+chunkSize, len(orderIDs))
+		rows, err := r.ec(ctx).Refund.Query().
+			Where(
+				refund.OrderIDIn(orderIDs[start:end]...),
+				refund.StatusEQ(refund.StatusSucceeded),
+			).
+			WithRefundLines().
+			Order(refund.ByCreatedAt()).
+			All(ctx)
+		if err != nil {
+			return nil, translateError(err)
+		}
+		out = append(out, rows...)
+	}
+	return out, nil
 }
 
 func (r *refundRepo) List(ctx context.Context, limit, offset int) ([]*ent.Refund, error) {

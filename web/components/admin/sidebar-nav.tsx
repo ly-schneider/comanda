@@ -1,5 +1,6 @@
 "use client"
 import {
+  ChartColumn,
   Circle,
   ClipboardList,
   CreditCard,
@@ -66,6 +67,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
       icon: <Undo2 className="size-5" />,
       requiredTier: "staff",
     },
+    { href: "/admin/sales", label: "Verkäufe", icon: <ChartColumn className="size-5" />, requiredTier: "staff" },
     { href: "/admin/inventory", label: "Inventar", icon: <ClipboardList className="size-5" />, requiredTier: "staff" },
     { href: "/admin/devices", label: "Geräte", icon: <Smartphone className="size-5" />, requiredTier: "staff" },
     {

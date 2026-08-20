@@ -263,6 +263,9 @@ func NewRouter(
 			ops.Post("/devices/pairings/{code}", wrapper.CompleteDevicePairing)
 
 			ops.Get("/events", wrapper.ListEvents)
+
+			ops.Get("/sales/summary", wrapper.GetSalesSummary)
+			ops.Get("/sales/export.xlsx", wrapper.ExportSales)
 		})
 
 		// ── App-admin routes (auth + app-admin membership + CSRF) ──────

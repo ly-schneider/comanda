@@ -62,6 +62,8 @@ tags:
     description: Public staff-perk claim access (campaign admin lives under the staff-perks plugin)
   - name: Inventory
     description: Real-time inventory stream and history export
+  - name: Sales
+    description: Sales and revenue reporting (per article, payment method, order)
   - name: Android
     description: Android app release feed for update checks
   - name: Internal
@@ -314,6 +316,11 @@ paths:
     $ref: "paths/inventory.yaml#/movements"
   /inventory/export.xlsx:
     $ref: "paths/inventory.yaml#/export"
+
+  /sales/summary:
+    $ref: "paths/sales.yaml#/summary"
+  /sales/export.xlsx:
+    $ref: "paths/sales.yaml#/export"
 
   /android/latest:
     $ref: "paths/android.yaml#/latest"
