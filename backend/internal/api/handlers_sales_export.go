@@ -70,6 +70,22 @@ func (h *Handlers) GetSalesSummary(w http.ResponseWriter, r *http.Request, param
 		})
 	}
 
+	bundles := make([]generated.SalesBundle, 0, len(report.Bundles))
+	for _, b := range report.Bundles {
+		bundles = append(bundles, generated.SalesBundle{
+			Product:       b.Product,
+			Quantity:      b.Quantity,
+			GratisQty:     b.GratisQty,
+			RefundedQty:   b.RefundedQty,
+			OrderCount:    b.OrderCount,
+			RevenueCents:  b.RevenueCents,
+			DepositCents:  b.DepositCents,
+			RefundedCents: b.RefundedCents,
+			NetCents:      b.NetCents(),
+			GratisCents:   b.GratisCents,
+		})
+	}
+
 	methods := make([]generated.SalesPaymentMethod, 0, len(report.Methods))
 	for _, m := range report.Methods {
 		methods = append(methods, generated.SalesPaymentMethod{
@@ -97,6 +113,7 @@ func (h *Handlers) GetSalesSummary(w http.ResponseWriter, r *http.Request, param
 		},
 		Methods:  methods,
 		Articles: articles,
+		Bundles:  bundles,
 	})
 }
 

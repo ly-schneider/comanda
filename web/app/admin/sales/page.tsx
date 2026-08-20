@@ -50,7 +50,20 @@ type Article = {
   gratisCents: number
 }
 
-type Summary = { totals: Totals; methods: PaymentMethod[]; articles: Article[] }
+type Bundle = {
+  product: string
+  quantity: number
+  gratisQty: number
+  refundedQty: number
+  orderCount: number
+  revenueCents: number
+  depositCents: number
+  refundedCents: number
+  netCents: number
+  gratisCents: number
+}
+
+type Summary = { totals: Totals; methods: PaymentMethod[]; articles: Article[]; bundles: Bundle[] }
 
 type EventDay = { year: number; month: number; day: number }
 
@@ -133,6 +146,7 @@ export default function SalesPage() {
 
   const totals = summary?.totals
   const articles = summary?.articles ?? []
+  const bundles = summary?.bundles ?? []
   const showVariant = articles.some((a) => a.variant)
   const showBundle = articles.some((a) => a.bundleQty > 0)
 
@@ -225,6 +239,50 @@ export default function SalesPage() {
               </Table>
             </TableContainer>
           </section>
+
+          {bundles.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Bundles</h2>
+              <p className="text-muted-foreground text-sm">
+                Dasselbe Geld wie unter «Pro Artikel», nur nach Bundle gezählt statt nach Artikel.
+              </p>
+              <TableContainer>
+                <div
+                  className="overflow-x-auto overscroll-x-contain"
+                  role="region"
+                  aria-label="Bundles, horizontal scrollen für weitere Spalten"
+                  tabIndex={0}
+                >
+                  <Table className="whitespace-nowrap">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Bundle</TableHead>
+                        <TableHead className="text-right">Menge</TableHead>
+                        <TableHead className="text-right">Bestellungen</TableHead>
+                        <TableHead className="text-right">davon gratis</TableHead>
+                        <TableHead className="text-right">Warenumsatz</TableHead>
+                        <TableHead className="text-right">Erstattet</TableHead>
+                        <TableHead className="text-right">Netto</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bundles.map((b) => (
+                        <TableRow key={b.product}>
+                          <TableCell>{b.product}</TableCell>
+                          <TableCell className="text-right">{b.quantity}</TableCell>
+                          <TableCell className="text-right">{b.orderCount}</TableCell>
+                          <TableCell className="text-right">{b.gratisQty}</TableCell>
+                          <TableCell className="text-right">{formatChf(b.revenueCents)}</TableCell>
+                          <TableCell className="text-right">{formatChf(-b.refundedCents)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatChf(b.netCents)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TableContainer>
+            </section>
+          )}
 
           <section className="space-y-2">
             <h2 className="text-sm font-semibold">Pro Artikel</h2>
