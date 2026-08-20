@@ -156,14 +156,14 @@ func TestRenderSalesReportBundleSheet(t *testing.T) {
 		t.Fatalf("sheets = %v, want %v", got, want)
 	}
 	for ref, expected := range map[string]string{
-		"A4": "Artikel",
-		"A5": "Shirt 3 für 2",
-		"B5": "3",
-		"E5": "2",
-		"F5": "210.00",
-		"H5": "-30.00",
-		"I5": "180.00",
-		"K5": "70.00",
+		"A3": "Artikel",
+		"A4": "Shirt 3 für 2",
+		"B4": "3",
+		"E4": "2",
+		"F4": "210.00",
+		"H4": "-30.00",
+		"I4": "180.00",
+		"K4": "70.00",
 	} {
 		got, err := f.GetCellValue(salesSheetBundles, ref)
 		if err != nil {

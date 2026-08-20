@@ -381,11 +381,7 @@ func writeBundles(f *excelize.File, report SalesReport, styles salesStyles) erro
 	if err := f.SetCellStyle(salesSheetBundles, cell(1, 1), cell(1, 1), styles.title); err != nil {
 		return err
 	}
-	if err := setRow(f, salesSheetBundles, 2, []any{"Dasselbe Geld wie auf 'Pro Artikel', nur nach Bundle gezählt statt nach Artikel. Nicht dazuzählen."}); err != nil {
-		return err
-	}
-
-	const headerRow = 4
+	const headerRow = 3
 	if err := setRow(f, salesSheetBundles, headerRow, toAny(bundleHeaders)); err != nil {
 		return err
 	}
