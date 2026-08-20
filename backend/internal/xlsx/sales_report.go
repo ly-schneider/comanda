@@ -11,6 +11,7 @@ import (
 const (
 	salesSheetSummary  = "Zusammenfassung"
 	salesSheetArticles = "Pro Artikel"
+	salesSheetBundles  = "Bundles"
 	salesSheetLines    = "Verkäufe"
 	salesSheetOrders   = "Bestellungen"
 )
@@ -46,6 +47,20 @@ type ArticleRow struct {
 	BundleQty     int
 	GratisQty     int
 	RefundedQty   int
+	RevenueCents  int64
+	DepositCents  int64
+	RefundedCents int64
+	GratisCents   int64
+}
+
+// BundleRow counts bundles as they were sold. The same money already sits on
+// the article rows its price was split onto, so this never feeds the totals.
+type BundleRow struct {
+	Product       string
+	Quantity      int
+	GratisQty     int
+	RefundedQty   int
+	OrderCount    int
 	RevenueCents  int64
 	DepositCents  int64
 	RefundedCents int64
@@ -91,6 +106,7 @@ type SalesReport struct {
 	Totals   SalesTotals
 	Methods  []MethodRow
 	Articles []ArticleRow
+	Bundles  []BundleRow
 	Sales    []SaleRow
 	Orders   []OrderRow
 }
@@ -107,6 +123,10 @@ func (a ArticleRow) NetCents() int64 {
 	return a.RevenueCents + a.DepositCents - a.RefundedCents
 }
 
+func (b BundleRow) NetCents() int64 {
+	return b.RevenueCents + b.DepositCents - b.RefundedCents
+}
+
 func (s SaleRow) NetCents() int64 {
 	return s.RevenueCents + s.DepositCents - s.RefundedCents
 }
@@ -121,6 +141,11 @@ var articleHeaders = []string{
 	"Kategorie", "Unterkategorie", "Artikel", "Variante", "Menge",
 	"davon über Bundle", "davon gratis", "Menge erstattet", "Warenumsatz",
 	"Depot", "Erstattet", "Netto", "Ø Preis",
+}
+
+var bundleHeaders = []string{
+	"Artikel", "Menge", "davon gratis", "Menge erstattet", "Bestellungen",
+	"Warenumsatz", "Depot", "Erstattet", "Netto", "Gratis-Wert", "Ø Preis",
 }
 
 var orderHeaders = []string{
@@ -152,7 +177,13 @@ func RenderSalesReport(report SalesReport) ([]byte, error) {
 	if err := f.SetSheetName(f.GetSheetName(0), salesSheetSummary); err != nil {
 		return nil, err
 	}
-	for _, name := range []string{salesSheetArticles, salesSheetLines, salesSheetOrders} {
+	sheets := []string{salesSheetArticles}
+	// A tenant that sells no bundles should not carry an empty sheet around.
+	if len(report.Bundles) > 0 {
+		sheets = append(sheets, salesSheetBundles)
+	}
+	sheets = append(sheets, salesSheetLines, salesSheetOrders)
+	for _, name := range sheets {
 		if _, err := f.NewSheet(name); err != nil {
 			return nil, err
 		}
@@ -163,6 +194,11 @@ func RenderSalesReport(report SalesReport) ([]byte, error) {
 	}
 	if err := writeArticles(f, report, styles); err != nil {
 		return nil, err
+	}
+	if len(report.Bundles) > 0 {
+		if err := writeBundles(f, report, styles); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeSales(f, report, styles); err != nil {
 		return nil, err
@@ -322,7 +358,7 @@ func writeArticles(f *excelize.File, report SalesReport, styles salesStyles) err
 			a.Category, a.Subcategory, a.Product, a.Variant,
 			a.Quantity, a.BundleQty, a.GratisQty, a.RefundedQty,
 			chf(a.RevenueCents), chf(a.DepositCents), chf(-a.RefundedCents), chf(a.NetCents()),
-			chf(averageUnitCents(a)),
+			chf(averageUnitCents(a.RevenueCents, a.Quantity, a.GratisQty)),
 		}
 		if err := setRow(f, salesSheetArticles, r, values); err != nil {
 			return err
@@ -336,6 +372,46 @@ func writeArticles(f *excelize.File, report SalesReport, styles salesStyles) err
 		return err
 	}
 	return setColWidths(f, salesSheetArticles, []float64{18, 18, 28, 12, 10, 17, 13, 15, 14, 12, 12, 12, 12})
+}
+
+func writeBundles(f *excelize.File, report SalesReport, styles salesStyles) error {
+	if err := setRow(f, salesSheetBundles, 1, []any{salesTitle(report)}); err != nil {
+		return err
+	}
+	if err := f.SetCellStyle(salesSheetBundles, cell(1, 1), cell(1, 1), styles.title); err != nil {
+		return err
+	}
+	if err := setRow(f, salesSheetBundles, 2, []any{"Dasselbe Geld wie auf 'Pro Artikel', nur nach Bundle gezählt statt nach Artikel. Nicht dazuzählen."}); err != nil {
+		return err
+	}
+
+	const headerRow = 4
+	if err := setRow(f, salesSheetBundles, headerRow, toAny(bundleHeaders)); err != nil {
+		return err
+	}
+	if err := f.SetCellStyle(salesSheetBundles, cell(1, headerRow), cell(len(bundleHeaders), headerRow), styles.header); err != nil {
+		return err
+	}
+
+	for i, b := range report.Bundles {
+		r := headerRow + 1 + i
+		values := []any{
+			b.Product, b.Quantity, b.GratisQty, b.RefundedQty, b.OrderCount,
+			chf(b.RevenueCents), chf(b.DepositCents), chf(-b.RefundedCents), chf(b.NetCents()),
+			chf(b.GratisCents), chf(averageUnitCents(b.RevenueCents, b.Quantity, b.GratisQty)),
+		}
+		if err := setRow(f, salesSheetBundles, r, values); err != nil {
+			return err
+		}
+		if err := f.SetCellStyle(salesSheetBundles, cell(6, r), cell(11, r), styles.money); err != nil {
+			return err
+		}
+	}
+
+	if err := freezeAndFilter(f, salesSheetBundles, headerRow, len(bundleHeaders), len(report.Bundles)); err != nil {
+		return err
+	}
+	return setColWidths(f, salesSheetBundles, []float64{28, 10, 13, 15, 14, 14, 12, 12, 12, 12, 12})
 }
 
 func writeSales(f *excelize.File, report SalesReport, styles salesStyles) error {
@@ -418,12 +494,12 @@ func freezeAndFilter(f *excelize.File, sheet string, headerRow, cols, rows int) 
 	return f.AutoFilter(sheet, fmt.Sprintf("%s:%s", cell(1, headerRow), cell(cols, headerRow+rows)), nil)
 }
 
-func averageUnitCents(a ArticleRow) int64 {
-	paidQty := a.Quantity - a.GratisQty
+func averageUnitCents(revenueCents int64, quantity, gratisQty int) int64 {
+	paidQty := quantity - gratisQty
 	if paidQty <= 0 {
 		return 0
 	}
-	return a.RevenueCents / int64(paidQty)
+	return revenueCents / int64(paidQty)
 }
 
 func chf(cents int64) float64 {

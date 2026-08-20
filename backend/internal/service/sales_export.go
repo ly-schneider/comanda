@@ -215,11 +215,24 @@ type articleKey struct {
 	variantID string
 }
 
+// One bundle as it was handed over, kept aside from the component records so it
+// can be counted whole without its price landing in the totals twice.
+type bundleSale struct {
+	orderID string
+	rec     saleRecord
+}
+
+type bundleEntry struct {
+	row    xlsx.BundleRow
+	orders map[string]struct{}
+}
+
 type salesAggregator struct {
 	catalog  salesCatalog
 	sales    []xlsx.SaleRow
 	orders   []xlsx.OrderRow
 	articles map[articleKey]*xlsx.ArticleRow
+	bundles  map[string]*bundleEntry
 	methods  map[orderpayment.Method]*xlsx.MethodRow
 	// Orders with no payment row, so the cash-up still adds up to the totals.
 	unknown *xlsx.MethodRow
@@ -230,6 +243,7 @@ func newSalesAggregator(c salesCatalog) *salesAggregator {
 	return &salesAggregator{
 		catalog:  c,
 		articles: make(map[articleKey]*xlsx.ArticleRow),
+		bundles:  make(map[string]*bundleEntry),
 		methods:  make(map[orderpayment.Method]*xlsx.MethodRow),
 	}
 }
@@ -244,7 +258,10 @@ func (a *salesAggregator) addOrder(o *ent.Order, refunds orderRefunds) {
 	// as revenue would inflate the takings.
 	gratis := hasMethod && isGratisMethod(method)
 
-	records := a.flattenOrder(o, refunds, methodLabel, gratis)
+	records, bundles := a.flattenOrder(o, refunds, methodLabel, gratis)
+	for _, b := range bundles {
+		a.addBundle(b)
+	}
 	sort.SliceStable(records, func(i, j int) bool {
 		if records[i].row.Product != records[j].row.Product {
 			return records[i].row.Product < records[j].row.Product
@@ -345,6 +362,27 @@ func (a *salesAggregator) addArticle(rec saleRecord) {
 	a.totals.GratisCents += rec.row.GratisCents
 }
 
+func (a *salesAggregator) addBundle(b bundleSale) {
+	entry, ok := a.bundles[b.rec.productID]
+	if !ok {
+		entry = &bundleEntry{
+			row:    xlsx.BundleRow{Product: b.rec.row.Product},
+			orders: make(map[string]struct{}),
+		}
+		a.bundles[b.rec.productID] = entry
+	}
+	entry.orders[b.orderID] = struct{}{}
+	entry.row.Quantity += b.rec.row.Quantity
+	entry.row.RefundedQty += b.rec.row.RefundedQty
+	if b.rec.free {
+		entry.row.GratisQty += b.rec.row.Quantity
+	}
+	entry.row.RevenueCents += b.rec.row.RevenueCents
+	entry.row.DepositCents += b.rec.row.DepositCents
+	entry.row.RefundedCents += b.rec.row.RefundedCents
+	entry.row.GratisCents += b.rec.row.GratisCents
+}
+
 func (a *salesAggregator) finish(report xlsx.SalesReport) xlsx.SalesReport {
 	articles := make([]xlsx.ArticleRow, 0, len(a.articles))
 	for _, entry := range a.articles {
@@ -364,6 +402,16 @@ func (a *salesAggregator) finish(report xlsx.SalesReport) xlsx.SalesReport {
 		return l.Variant < r.Variant
 	})
 
+	bundles := make([]xlsx.BundleRow, 0, len(a.bundles))
+	for _, entry := range a.bundles {
+		row := entry.row
+		row.OrderCount = len(entry.orders)
+		bundles = append(bundles, row)
+	}
+	sort.SliceStable(bundles, func(i, j int) bool {
+		return bundles[i].Product < bundles[j].Product
+	})
+
 	methods := make([]xlsx.MethodRow, 0, len(a.methods)+1)
 	for _, m := range methodOrder {
 		if entry, ok := a.methods[m]; ok {
@@ -377,6 +425,7 @@ func (a *salesAggregator) finish(report xlsx.SalesReport) xlsx.SalesReport {
 	report.Totals = a.totals
 	report.Methods = methods
 	report.Articles = articles
+	report.Bundles = bundles
 	report.Sales = a.sales
 	report.Orders = a.orders
 	return report
@@ -384,8 +433,9 @@ func (a *salesAggregator) finish(report xlsx.SalesReport) xlsx.SalesReport {
 
 // flattenOrder returns one record per article handed over. A configured bundle
 // carries the price with its components at zero, so the price is split onto them
-// and the parent never becomes a row — otherwise it would count twice.
-func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, methodLabel string, gratis bool) []saleRecord {
+// and the parent never becomes a row — otherwise it would count twice. The
+// parents come back separately, for counting bundles rather than money.
+func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, methodLabel string, gratis bool) ([]saleRecord, []bundleSale) {
 	children := make(map[string][]*ent.OrderLine)
 	for _, l := range o.Edges.Lines {
 		if l.ParentLineID != nil {
@@ -394,6 +444,7 @@ func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, metho
 	}
 
 	var records []saleRecord
+	var bundles []bundleSale
 	for _, line := range o.Edges.Lines {
 		if line.ParentLineID != nil || line.LineType == orderline.LineTypeDeposit {
 			continue
@@ -415,6 +466,19 @@ func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, metho
 			}, ""))
 			continue
 		}
+
+		// Reuses record so the gratis rule stays identical to the article rows.
+		bundles = append(bundles, bundleSale{
+			orderID: o.ID,
+			rec: a.record(o, line, methodLabel, gratis, saleAmounts{
+				quantity:    line.Quantity,
+				unitCents:   line.UnitPriceCents,
+				revenue:     gross,
+				deposit:     deposit,
+				refunded:    refunded.cents + depositRefund,
+				refundedQty: refunded.quantity,
+			}, ""),
+		})
 
 		weights := make([]int64, len(components))
 		for i, c := range components {
@@ -441,7 +505,7 @@ func (a *salesAggregator) flattenOrder(o *ent.Order, refunds orderRefunds, metho
 			}, line.Title))
 		}
 	}
-	return records
+	return records, bundles
 }
 
 type saleAmounts struct {

@@ -79,6 +79,103 @@ func TestBundleRevenueLandsOnTheComponents(t *testing.T) {
 	}
 }
 
+// One "3 für 2" pack: a CHF 70.00 bundle holding three CHF 30.00 shirts.
+func testPack(parentID, componentPrefix string) []*ent.OrderLine {
+	parent := testLine(parentID, orderline.LineTypeBundle, "prod_bundle1", "Shirt 3 für 2", 1, 7000, nil)
+	lines := []*ent.OrderLine{parent}
+	for _, slot := range []string{"1", "2", "3"} {
+		lines = append(lines, testLine(componentPrefix+slot, orderline.LineTypeComponent, "prod_shirt01", "Shirt", 1, 0, &parent.ID))
+	}
+	return lines
+}
+
+func TestBundleSheetCountsPacksNotOrders(t *testing.T) {
+	catalog := testCatalog(testProduct("prod_shirt01", "Shirt", 3000, "cat_merch001"))
+	// One customer took two packs at once — counting orders would report three.
+	twoPacks := append(testPack("line_pack001", "line_p001c"), testPack("line_pack002", "line_p002c")...)
+	first := testOrder("ord_00000001", 14000, orderpayment.MethodTWINT, twoPacks...)
+	second := testOrder("ord_00000002", 7000, orderpayment.MethodTWINT, testPack("line_pack003", "line_p003c")...)
+
+	agg := newSalesAggregator(catalog)
+	agg.addOrder(first, orderRefunds{byLine: map[string]refundedLine{}})
+	agg.addOrder(second, orderRefunds{byLine: map[string]refundedLine{}})
+	report := agg.finish(testReport())
+
+	if len(report.Bundles) != 1 {
+		t.Fatalf("bundles = %+v, want a single row", report.Bundles)
+	}
+	b := report.Bundles[0]
+	if b.Product != "Shirt 3 für 2" {
+		t.Fatalf("bundle product = %q", b.Product)
+	}
+	if b.Quantity != 3 {
+		t.Fatalf("packs = %d, want 3", b.Quantity)
+	}
+	if b.OrderCount != 2 {
+		t.Fatalf("orders = %d, want 2", b.OrderCount)
+	}
+	if b.RevenueCents != 21000 {
+		t.Fatalf("bundle revenue = %d, want 21000", b.RevenueCents)
+	}
+	// The same money already sits on the shirts; the sheet must not add to it.
+	if report.Totals.RevenueCents != 21000 {
+		t.Fatalf("totals = %d, want the bundle price counted exactly once", report.Totals.RevenueCents)
+	}
+}
+
+func TestGratisBundleIsCountedButNotBooked(t *testing.T) {
+	catalog := testCatalog(testProduct("prod_shirt01", "Shirt", 3000, "cat_merch001"))
+	ord := testOrder("ord_00000001", 7000, orderpayment.MethodGRATIS_VIP, testPack("line_pack001", "line_p001c")...)
+
+	agg := newSalesAggregator(catalog)
+	agg.addOrder(ord, orderRefunds{byLine: map[string]refundedLine{}})
+	report := agg.finish(testReport())
+
+	b := report.Bundles[0]
+	if b.Quantity != 1 || b.GratisQty != 1 {
+		t.Fatalf("quantities = %d sold / %d gratis, want 1 / 1", b.Quantity, b.GratisQty)
+	}
+	if b.RevenueCents != 0 || b.GratisCents != 7000 {
+		t.Fatalf("gratis pack = %d revenue / %d nominal, want 0 / 7000", b.RevenueCents, b.GratisCents)
+	}
+}
+
+func TestRefundedBundleNetsOutOnTheBundleSheet(t *testing.T) {
+	catalog := testCatalog(testProduct("prod_shirt01", "Shirt", 3000, "cat_merch001"))
+	ord := testOrder("ord_00000001", 7000, orderpayment.MethodTWINT, testPack("line_pack001", "line_p001c")...)
+	// Refunds hang off the bundle line, not off the components.
+	refunds := orderRefunds{
+		totalCents: 3000,
+		byLine:     map[string]refundedLine{"line_pack001": {quantity: 1, cents: 3000}},
+	}
+
+	agg := newSalesAggregator(catalog)
+	agg.addOrder(ord, refunds)
+	report := agg.finish(testReport())
+
+	b := report.Bundles[0]
+	if b.RefundedCents != 3000 || b.RefundedQty != 1 {
+		t.Fatalf("refund = %d cents / %d packs, want 3000 / 1", b.RefundedCents, b.RefundedQty)
+	}
+	if b.NetCents() != 4000 {
+		t.Fatalf("net = %d, want 4000", b.NetCents())
+	}
+}
+
+func TestBundleWithoutComponentsStaysOffTheBundleSheet(t *testing.T) {
+	catalog := testCatalog(testProduct("prod_bundle1", "Wundertüte", 1500, "cat_merch001"))
+	parent := testLine("line_parent1", orderline.LineTypeBundle, "prod_bundle1", "Wundertüte", 2, 1500, nil)
+	ord := testOrder("ord_00000001", 3000, orderpayment.MethodCASH, parent)
+
+	agg := newSalesAggregator(catalog)
+	agg.addOrder(ord, orderRefunds{byLine: map[string]refundedLine{}})
+	report := agg.finish(testReport())
+
+	if len(report.Bundles) != 0 {
+		t.Fatalf("a bundle without components is an article, not a pack: %+v", report.Bundles)
+	}
+}
+
 func TestBundleWithoutComponentsStaysItsOwnArticle(t *testing.T) {
 	catalog := testCatalog(testProduct("prod_bundle1", "Wundertüte", 1500, "cat_merch001"))
 	parent := testLine("line_parent1", orderline.LineTypeBundle, "prod_bundle1", "Wundertüte", 2, 1500, nil)

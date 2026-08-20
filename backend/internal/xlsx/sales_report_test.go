@@ -139,6 +139,42 @@ func TestRenderSalesReportBundleOriginSurvives(t *testing.T) {
 	}
 }
 
+func TestRenderSalesReportBundleSheet(t *testing.T) {
+	report := testSalesReport()
+	report.Bundles = []BundleRow{
+		{Product: "Shirt 3 für 2", Quantity: 3, RefundedQty: 1, OrderCount: 2,
+			RevenueCents: 21000, RefundedCents: 3000},
+	}
+	body, err := RenderSalesReport(report)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	f := openRendered(t, body)
+
+	want := []string{salesSheetSummary, salesSheetArticles, salesSheetBundles, salesSheetLines, salesSheetOrders}
+	if got := f.GetSheetList(); len(got) != len(want) || got[2] != salesSheetBundles {
+		t.Fatalf("sheets = %v, want %v", got, want)
+	}
+	for ref, expected := range map[string]string{
+		"A4": "Artikel",
+		"A5": "Shirt 3 für 2",
+		"B5": "3",
+		"E5": "2",
+		"F5": "210.00",
+		"H5": "-30.00",
+		"I5": "180.00",
+		"K5": "70.00",
+	} {
+		got, err := f.GetCellValue(salesSheetBundles, ref)
+		if err != nil {
+			t.Fatalf("read %s: %v", ref, err)
+		}
+		if got != expected {
+			t.Fatalf("%s = %q, want %q", ref, got, expected)
+		}
+	}
+}
+
 func TestRenderSalesReportHandlesEmptyRange(t *testing.T) {
 	report := SalesReport{From: swissDay(2026, 7, 24), To: swissDay(2026, 7, 25)}
 	body, err := RenderSalesReport(report)
