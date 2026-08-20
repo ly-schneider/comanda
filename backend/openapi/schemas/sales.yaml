@@ -114,9 +114,56 @@ SalesArticle:
       type: integer
       format: int64
 
+SalesBundle:
+  type: object
+  description: >-
+    A bundle counted whole. Its money already sits on the articles its price was
+    split onto, so these figures must never be added to the totals.
+  required:
+    [
+      product,
+      quantity,
+      gratisQty,
+      refundedQty,
+      orderCount,
+      revenueCents,
+      depositCents,
+      refundedCents,
+      netCents,
+      gratisCents,
+    ]
+  properties:
+    product:
+      type: string
+    quantity:
+      type: integer
+      description: Bundles handed over, not the articles inside them
+    gratisQty:
+      type: integer
+    refundedQty:
+      type: integer
+    orderCount:
+      type: integer
+      description: Orders containing this bundle; lower than `quantity` when one order took several
+    revenueCents:
+      type: integer
+      format: int64
+    depositCents:
+      type: integer
+      format: int64
+    refundedCents:
+      type: integer
+      format: int64
+    netCents:
+      type: integer
+      format: int64
+    gratisCents:
+      type: integer
+      format: int64
+
 SalesSummary:
   type: object
-  required: [totals, methods, articles]
+  required: [totals, methods, articles, bundles]
   properties:
     totals:
       $ref: "#/SalesTotals"
@@ -128,3 +175,7 @@ SalesSummary:
       type: array
       items:
         $ref: "#/SalesArticle"
+    bundles:
+      type: array
+      items:
+        $ref: "#/SalesBundle"
