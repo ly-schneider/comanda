@@ -31,7 +31,10 @@ Releases are cut from GitHub Actions, not locally:
    - `version` — semver `X.Y.Z` (e.g. `1.0.9`).
    - `tenants` — JSON array of tenant builds, or `[]` for the neutral build only:
      `[{"pkg":"t_acme","label":"Acme","posUrl":"https://acme.comanda.leys.ch/pos","iconBg":"#0B5D3B","iconUrl":"https://…/logo.png"}]`.
-     `iconBg`/`iconUrl` are optional — with no usable logo the icon falls back to the tenant's initials.
+     `iconUrl` is optional; without a usable logo the badge shows the tenant's initials.
+     `iconBg` colours the badge behind initials or transparent art — a logo with its
+     own opaque matte supplies its colour and ignores it. The field around the badge
+     is always the brand charcoal.
      Get `pkg` from the tenant's **POS-App installieren** card in platform admin.
 3. The workflow (`.github/workflows/android-release.yml`):
    - runs quality checks (`lint`, `test`, `assembleDebug`);

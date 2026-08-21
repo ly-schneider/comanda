@@ -18,9 +18,10 @@ on:
         description: >
           Tenant builds to produce, as JSON:
           [{"pkg":"t_acme","label":"Acme","posUrl":"https://acme.comanda.leys.ch/pos","iconBg":"#0B5D3B","iconUrl":"https://…/logo.png"}].
-          Leave empty for the neutral build only. iconBg and iconUrl are
-          optional — without a usable logo the icon falls back to the tenant's
-          initials.
+          Leave empty for the neutral build only. iconUrl is optional; without a
+          usable logo the badge shows the tenant's initials. iconBg colours the
+          badge behind initials or transparent art, and is ignored when the logo
+          carries its own opaque matte.
         required: false
         default: "[]"
         type: string

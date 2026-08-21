@@ -61,27 +61,25 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         System.setProperty("java.awt.headless", "true")
 
         val logo = sourceImage.orNull?.asFile?.takeIf { it.isFile }?.let { readImage(it) }
-        // Tenant logos are often square with an opaque white matte rather than a
-        // transparent one. Compositing that onto the brand colour reads as a hard
-        // tile, so adopt the logo's own matte as the icon background and let the
-        // two blend. Falls back to the brand colour for transparent art.
+        // A logo supplied with an opaque matte already carries its own badge
+        // colour; transparent art and the initials fallback use the tenant's.
         val matte = logo?.let(::matteColor)
-        val background = matte ?: parseColor(backgroundColor.get())
-        val foreground = contrastingColor(background)
+        val badgeFill = matte ?: parseColor(backgroundColor.get())
+        val badgeInk = contrastingColor(badgeFill)
 
         ADAPTIVE_DENSITIES.forEach { (density, size) ->
             val canvas = blankCanvas(size)
             canvas.createGraphics().use { g ->
-                // Fitting the art's diagonal inside the safe circle survives
-                // any mask shape the launcher applies.
-                val safeDiameter = size * SAFE_ZONE_FRACTION
-                drawContent(g, logo, initials.get(), foreground, size, safeDiameter, matte != null)
+                // Foreground carries the badge alone. The outer shape is the
+                // launcher's to choose — baking a squircle here would get its
+                // corners clipped again by a circle-masking launcher.
+                drawBadge(g, size, size * SAFE_ZONE_FRACTION, logo, initials.get(), badgeFill, badgeInk, matte != null)
             }
             write(canvas, File(out, "mipmap-$density/ic_launcher_tenant_foreground.png"))
         }
 
         LEGACY_DENSITIES.forEach { (density, size) ->
-            val icon = legacyIcon(size, logo, initials.get(), background, foreground, matte != null)
+            val icon = legacyIcon(size, logo, initials.get(), badgeFill, badgeInk, matte != null)
             write(icon, File(out, "mipmap-$density/ic_launcher_tenant.png"))
             write(icon, File(out, "mipmap-$density/ic_launcher_tenant_round.png"))
         }
@@ -91,7 +89,7 @@ abstract class GenerateTenantIconTask : DefaultTask() {
             """
             <?xml version="1.0" encoding="utf-8"?>
             <resources>
-                <color name="ic_launcher_tenant_background">${toHex(background)}</color>
+                <color name="ic_launcher_tenant_background">${toHex(FIELD_COLOR)}</color>
             </resources>
             """.trimIndent() + "\n"
         )
@@ -114,71 +112,86 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         size: Int,
         logo: BufferedImage?,
         initials: String,
-        background: Color,
-        foreground: Color,
+        badgeFill: Color,
+        badgeInk: Color,
         blends: Boolean,
     ): BufferedImage {
         val canvas = blankCanvas(size)
         canvas.createGraphics().use { g ->
-            // Pre-26 launchers show the bitmap unmasked, so draw our own circle.
-            g.color = background
-            g.fill(Ellipse2D.Float(0f, 0f, size.toFloat(), size.toFloat()))
-            drawContent(g, logo, initials, foreground, size, size * LEGACY_CONTENT_FRACTION, blends)
+            // Pre-26 launchers show the bitmap unmasked, so this is the one place
+            // the squircle is ours to draw.
+            g.color = FIELD_COLOR
+            g.fill(RoundRectangle2D.Float(
+                0f, 0f, size.toFloat(), size.toFloat(),
+                size * LEGACY_CORNER_FRACTION, size * LEGACY_CORNER_FRACTION,
+            ))
+            // Larger than the adaptive badge so both render alike: an adaptive
+            // layer only ever shows its inner 72dp, blown back up, while this
+            // bitmap is shown whole.
+            drawBadge(g, size, size * LEGACY_BADGE_FRACTION, logo, initials, badgeFill, badgeInk, blends)
         }
         return canvas
     }
 
-    private fun drawContent(
+    /**
+     * A circular badge centred on the canvas: the tenant's logo cropped to the
+     * circle, or their initials on it. [diameter] is the launcher's guaranteed
+     * safe area, so nothing here is ever masked away.
+     */
+    private fun drawBadge(
         g: java.awt.Graphics2D,
+        size: Int,
+        diameter: Float,
         logo: BufferedImage?,
         initials: String,
-        foreground: Color,
-        size: Int,
-        contentDiameter: Float,
+        fill: Color,
+        ink: Color,
         blends: Boolean,
     ) {
+        val offset = (size - diameter) / 2f
+        val circle = Ellipse2D.Float(offset, offset, diameter, diameter)
+
+        g.color = fill
+        g.fill(circle)
+
+        val clip = g.clip
+        g.clip(circle)
         if (logo != null) {
-            // Art that blends into the background only needs its *mark* inside the
-            // safe circle, and a logo's own matte already pads that. Fitting the
-            // whole frame's diagonal as well would inset it twice and leave the
-            // mark looking shrunken.
+            // Art on its own matte fills the badge edge to edge: the corners the
+            // circle cuts are matte-coloured, so nothing visible is lost. Art with
+            // transparency has to fit inside instead, or the mark itself clips.
             val extent =
                 if (blends) maxOf(logo.width, logo.height).toDouble()
                 else Math.hypot(logo.width.toDouble(), logo.height.toDouble())
-            val scale = contentDiameter / extent.toFloat()
+            val scale = diameter / extent.toFloat()
             val w = (logo.width * scale).toInt().coerceAtLeast(1)
             val h = (logo.height * scale).toInt().coerceAtLeast(1)
-            val x = (size - w) / 2
-            val y = (size - h) / 2
-            // Rounded so an opaque logo whose matte differs from the background
-            // does not sit there as a hard-edged rectangle.
-            val clip = g.clip
-            g.clip(RoundRectangle2D.Float(
-                x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(),
-                minOf(w, h) * CORNER_FRACTION, minOf(w, h) * CORNER_FRACTION,
-            ))
-            g.drawImage(logo, x, y, w, h, null)
-            g.clip = clip
-            return
+            g.drawImage(logo, (size - w) / 2, (size - h) / 2, w, h, null)
+        } else {
+            drawInitials(g, size, diameter * INITIALS_FRACTION, initials, ink)
         }
+        g.clip = clip
+    }
 
+    private fun drawInitials(g: java.awt.Graphics2D, size: Int, extent: Float, initials: String, ink: Color) {
         val text = initials.ifBlank { "?" }
-        g.color = foreground
+        g.color = ink
         // Scale linearly from a reference size, twice: font metrics aren't linear.
         var font = Font(Font.SANS_SERIF, Font.BOLD, (size / 2f).toInt().coerceAtLeast(1))
         repeat(2) {
             val bounds = g.getFontMetrics(font).getStringBounds(text, g)
             val diagonal = Math.hypot(bounds.width, bounds.height).toFloat()
             if (diagonal <= 0f) return@repeat
-            val next = (font.size * (contentDiameter / diagonal)).toInt().coerceAtLeast(1)
+            val next = (font.size * (extent / diagonal)).toInt().coerceAtLeast(1)
             font = font.deriveFont(next.toFloat())
         }
         g.font = font
-        val metrics = g.fontMetrics
-        val bounds = metrics.getStringBounds(text, g)
-        val x = ((size - bounds.width) / 2).toFloat()
-        val y = ((size - bounds.height) / 2 - bounds.y).toFloat()
-        g.drawString(text, x, y)
+        val bounds = g.fontMetrics.getStringBounds(text, g)
+        g.drawString(
+            text,
+            ((size - bounds.width) / 2).toFloat(),
+            ((size - bounds.height) / 2 - bounds.y).toFloat(),
+        )
     }
 
     private fun blankCanvas(size: Int) = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
@@ -199,8 +212,11 @@ abstract class GenerateTenantIconTask : DefaultTask() {
     private companion object {
         /** Adaptive layers are 108dp; the guaranteed-visible circle is 72dp. */
         const val SAFE_ZONE_FRACTION = 72f / 108f
-        const val LEGACY_CONTENT_FRACTION = 0.72f
-        const val CORNER_FRACTION = 0.18f
+        const val LEGACY_CORNER_FRACTION = 0.45f
+        const val LEGACY_BADGE_FRACTION = 0.88f
+        const val INITIALS_FRACTION = 0.62f
+        /** Brand charcoal, matching the neutral app's ic_launcher_background. */
+        val FIELD_COLOR = Color(0x1F, 0x1F, 0x1D)
 
         val ADAPTIVE_DENSITIES = listOf(
             "mdpi" to 108, "hdpi" to 162, "xhdpi" to 216, "xxhdpi" to 324, "xxxhdpi" to 432,
