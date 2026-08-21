@@ -49,12 +49,6 @@ RUN --mount=type=cache,target=/go/pkg/mod,uid=1001,gid=1001 \
 # Generate API types from bundled OpenAPI spec
 RUN oapi-codegen -config oapi-codegen.yaml openapi/bundled.yaml
 
-# Generated sources are gitignored, so anything that tidies without them present
-# prunes the requirements only they import (kin-openapi, swag) to indirect. Tidy
-# again now they exist, or the build below cannot resolve them.
-RUN --mount=type=cache,target=/go/pkg/mod,uid=1001,gid=1001 \
-    go mod tidy
-
 # Generate Swagger docs
 RUN --mount=type=cache,target=/go/pkg/mod,uid=1001,gid=1001 \
     swag init -g cmd/backend/main.go --parseInternal --parseDependency --generatedTime=false

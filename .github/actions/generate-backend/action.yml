@@ -20,14 +20,14 @@ runs:
         go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
         oapi-codegen -config oapi-codegen.yaml openapi/bundled.yaml
 
-    # Generated sources are gitignored, so anything that runs `go mod tidy`
-    # without them present — Dependabot, notably — prunes the requirements only
-    # they import (kin-openapi, swag) down to indirect. Re-tidying once the
-    # generated code exists puts the graph back before anything tries to build.
-    - name: Tidy modules against generated code
+    # backend/tools.go pins what only generated code imports, so go.mod should
+    # already match once the generated sources exist. Fail loudly rather than
+    # fixing it silently: drift means a dependency escaped that file, and the
+    # PR that caused it should be the thing that goes red.
+    - name: Check go.mod matches generated code
       shell: bash
       working-directory: backend
-      run: go mod tidy
+      run: go mod tidy -diff
 
     - name: Generate Swagger
       shell: bash
