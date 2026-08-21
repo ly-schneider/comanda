@@ -2,6 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"backend/internal/androidpkg"
 	"backend/internal/config"
 
 	"go.uber.org/zap"
@@ -27,9 +32,17 @@ type AndroidUpdateService interface {
 	// baseURL is the origin the requesting device reached us on; the download
 	// URL is built against it so the APK stays on a host the device can reach
 	// (PUBLIC_BASE_URL is the web apex, not the API host).
-	GetLatestRelease(ctx context.Context, channel, baseURL string) (*AndroidRelease, error)
+	//
+	// pkg selects the tenant build's asset; empty means the neutral build.
+	GetLatestRelease(ctx context.Context, channel, pkg, baseURL string) (*AndroidRelease, error)
 	// Returns a nil reader (no error) when no release is published.
-	OpenAPKDownload(ctx context.Context, channel string) (io.ReadCloser, int64, error)
+	OpenAPKDownload(ctx context.Context, channel, pkg string) (io.ReadCloser, int64, error)
+	// DownloadToken derives the token that authorizes fetching a package's APK.
+	// Returns "" when no secret is configured.
+	DownloadToken(channel, pkg string) string
+	// VerifyDownloadToken reports whether token authorizes this package. Always
+	// true while enforcement is off.
+	VerifyDownloadToken(channel, pkg, token string) bool
 }
 
 var validChannels = map[string]struct{}{
@@ -52,11 +65,13 @@ type cachedRelease struct {
 }
 
 type androidUpdateService struct {
-	repoOwner  string
-	repoName   string
-	token      string
-	apiBaseURL string
-	logger     *zap.Logger
+	repoOwner      string
+	repoName       string
+	token          string
+	apiBaseURL     string
+	downloadSecret string
+	requireToken   bool
+	logger         *zap.Logger
 
 	mu       sync.Mutex
 	cache    map[string]cachedRelease
@@ -67,31 +82,65 @@ func NewAndroidUpdateService(cfg config.AndroidConfig, logger *zap.Logger) Andro
 	parts := strings.SplitN(cfg.GitHubRepo, "/", 2)
 	owner, repo := parts[0], parts[1]
 	return &androidUpdateService{
-		repoOwner:  owner,
-		repoName:   repo,
-		token:      cfg.GitHubToken,
-		apiBaseURL: "https://api.github.com",
-		logger:     logger,
-		cache:      make(map[string]cachedRelease),
-		cacheTTL:   5 * time.Minute,
+		repoOwner:      owner,
+		repoName:       repo,
+		token:          cfg.GitHubToken,
+		apiBaseURL:     "https://api.github.com",
+		downloadSecret: cfg.DownloadSecret,
+		requireToken:   cfg.RequireDownloadToken,
+		logger:         logger,
+		cache:          make(map[string]cachedRelease),
+		cacheTTL:       5 * time.Minute,
 	}
 }
 
-func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel, baseURL string) (*AndroidRelease, error) {
-	info, err := s.latestReleaseInfo(ctx, channel)
+func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel, pkg, baseURL string) (*AndroidRelease, error) {
+	info, err := s.latestReleaseInfo(ctx, channel, pkg)
 	if err != nil || info == nil {
 		return nil, err
+	}
+	download := fmt.Sprintf("%s/v1/android/download?channel=%s", strings.TrimRight(baseURL, "/"), channel)
+	if pkg != "" {
+		download += "&pkg=" + pkg
+	}
+	// The app follows this URL verbatim, so it has to carry the credential the
+	// download route will ask for.
+	if tok := s.DownloadToken(channel, pkg); tok != "" {
+		download += "&t=" + tok
 	}
 	return &AndroidRelease{
 		VersionName: info.versionName,
 		VersionCode: info.versionCode,
-		DownloadURL: fmt.Sprintf("%s/v1/android/download?channel=%s", strings.TrimRight(baseURL, "/"), channel),
+		DownloadURL: download,
 		SHA256:      info.sha256,
 	}, nil
 }
 
-func (s *androidUpdateService) OpenAPKDownload(ctx context.Context, channel string) (io.ReadCloser, int64, error) {
-	info, err := s.latestReleaseInfo(ctx, channel)
+func (s *androidUpdateService) DownloadToken(channel, pkg string) string {
+	if s.downloadSecret == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(s.downloadSecret))
+	mac.Write([]byte(channel + "|" + pkg))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))[:32]
+}
+
+func (s *androidUpdateService) VerifyDownloadToken(channel, pkg, token string) bool {
+	if !s.requireToken {
+		return true
+	}
+	expected := s.DownloadToken(channel, pkg)
+	if expected == "" {
+		// Enforcement asked for without a secret to derive against would lock every
+		// tablet out of updates. Refuse to pretend it is enforced.
+		s.logger.Error("android update: ANDROID_REQUIRE_DOWNLOAD_TOKEN set without ANDROID_DOWNLOAD_SECRET; serving unauthenticated")
+		return true
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(token)) == 1
+}
+
+func (s *androidUpdateService) OpenAPKDownload(ctx context.Context, channel, pkg string) (io.ReadCloser, int64, error) {
+	info, err := s.latestReleaseInfo(ctx, channel, pkg)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -115,26 +164,31 @@ func (s *androidUpdateService) OpenAPKDownload(ctx context.Context, channel stri
 	return resp.Body, resp.ContentLength, nil
 }
 
-func (s *androidUpdateService) latestReleaseInfo(ctx context.Context, channel string) (*releaseInfo, error) {
+func (s *androidUpdateService) latestReleaseInfo(ctx context.Context, channel, pkg string) (*releaseInfo, error) {
 	if _, ok := validChannels[channel]; !ok {
 		return nil, fmt.Errorf("android update: invalid channel %q", channel)
 	}
+	if pkg != "" && !androidpkg.Valid(pkg) {
+		return nil, fmt.Errorf("android update: invalid package %q", pkg)
+	}
+
+	cacheKey := channel + "|" + pkg
 
 	s.mu.Lock()
-	if entry, ok := s.cache[channel]; ok && time.Since(entry.at) < s.cacheTTL {
+	if entry, ok := s.cache[cacheKey]; ok && time.Since(entry.at) < s.cacheTTL {
 		result := entry.info
 		s.mu.Unlock()
 		return result, nil
 	}
 	s.mu.Unlock()
 
-	info, err := s.fetchLatestRelease(ctx, channel)
+	info, err := s.fetchLatestRelease(ctx, channel, pkg)
 	if err != nil {
 		return nil, err
 	}
 
 	s.mu.Lock()
-	s.cache[channel] = cachedRelease{info: info, at: time.Now()}
+	s.cache[cacheKey] = cachedRelease{info: info, at: time.Now()}
 	s.mu.Unlock()
 
 	return info, nil
@@ -162,7 +216,7 @@ func (s *androidUpdateService) newGitHubRequest(ctx context.Context, url, accept
 	return req, nil
 }
 
-func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel string) (*releaseInfo, error) {
+func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel, pkg string) (*releaseInfo, error) {
 	tagPrefix := "android-" + channel + "-v"
 	url := fmt.Sprintf("%s/repos/%s/%s/releases", s.apiBaseURL, s.repoOwner, s.repoName)
 
@@ -198,13 +252,17 @@ func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel s
 			continue
 		}
 
+		// Match the exact asset name, not a ".apk" suffix: a release carries one
+		// APK per tenant package, and a suffix match would hand every device
+		// whichever asset GitHub happened to list last.
+		apkName := androidpkg.APKAssetName(pkg)
 		var apkAssetURL string
 		var sha256AssetURL string
 		for _, asset := range rel.Assets {
-			if strings.HasSuffix(asset.Name, ".apk") {
+			switch asset.Name {
+			case apkName:
 				apkAssetURL = asset.URL
-			}
-			if strings.HasSuffix(asset.Name, ".sha256") {
+			case apkName + ".sha256":
 				sha256AssetURL = asset.URL
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"backend/internal/androidpkg"
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/tenant"
 	nanoid "backend/internal/id"
@@ -51,6 +52,7 @@ func (r *tenantRepo) Create(ctx context.Context, slug, name string) (*ent.Tenant
 		SetSlug(slug).
 		SetName(name).
 		SetOrganizationID(orgID).
+		SetAndroidPackageID(androidpkg.ForSlug(slug)).
 		Save(ctx)
 	return created, translateError(err)
 }

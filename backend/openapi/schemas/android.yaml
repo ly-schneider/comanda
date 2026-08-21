@@ -10,3 +10,19 @@ AndroidRelease:
       type: string
     sha256:
       type: string
+
+AndroidSetupPinRequest:
+  type: object
+  required: [pin]
+  properties:
+    pin:
+      type: string
+      minLength: 1
+      maxLength: 32
+
+AndroidSetupPinResponse:
+  type: object
+  required: [ok]
+  properties:
+    ok:
+      type: boolean

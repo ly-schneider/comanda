@@ -126,6 +126,20 @@ type SentryConfig struct {
 type AndroidConfig struct {
 	GitHubRepo  string
 	GitHubToken string
+	// SetupPIN gates Device Setup on the tablet. Held here rather than compiled
+	// into the APK, where it is a readable string constant. Stored in plaintext
+	// on purpose: a hash of a numeric PIN falls to an offline brute force in
+	// seconds, so the protection is the constant-time compare plus the attempt
+	// limiter in front of the endpoint, not the storage form.
+	SetupPIN string
+	// DownloadSecret derives the per-package APK download token. Empty disables
+	// token derivation entirely.
+	DownloadSecret string
+	// RequireDownloadToken enforces that token on the update and download routes.
+	// Defaults false: tablets already in the field run builds that send no token,
+	// and flipping this on before the fleet has upgraded would leave them unable
+	// to fetch the very update that teaches them to send one.
+	RequireDownloadToken bool
 }
 
 type AppConfig struct {
@@ -272,8 +286,11 @@ func Load() Config {
 			TracesSampleRate: getEnvFloatWithDefault("SENTRY_TRACES_SAMPLE_RATE", 0.2),
 		},
 		Android: AndroidConfig{
-			GitHubRepo:  getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
-			GitHubToken: getEnvOptional("ANDROID_GITHUB_TOKEN"),
+			GitHubRepo:           getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
+			GitHubToken:          getEnvOptional("ANDROID_GITHUB_TOKEN"),
+			SetupPIN:             strings.TrimSpace(getEnvOptional("ANDROID_SETUP_PIN")),
+			DownloadSecret:       strings.TrimSpace(getEnvOptional("ANDROID_DOWNLOAD_SECRET")),
+			RequireDownloadToken: getEnvBoolOptional("ANDROID_REQUIRE_DOWNLOAD_TOKEN"),
 		},
 		CustomDomain: CustomDomainConfig{
 			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),

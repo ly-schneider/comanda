@@ -328,6 +328,9 @@ paths:
   /android/download:
     $ref: "paths/android.yaml#/download"
 
+  /android/setup/verify-pin:
+    $ref: "paths/android.yaml#/setup-verify-pin"
+
   /internal/trusted-origins:
     $ref: "paths/internal.yaml#/trusted-origins"
 
