@@ -9,26 +9,39 @@ import (
 	"strings"
 
 	"backend/internal/androidpkg"
+	"backend/internal/generated/api/generated"
+	"backend/internal/ratelimit"
 	"backend/internal/response"
 
 	"go.uber.org/zap"
 )
 
-func androidChannel(r *http.Request) (string, bool) {
-	channel := r.URL.Query().Get("channel")
-	if channel == "" {
-		channel = "production"
+// oapi-codegen binds these but does not enforce the enum or the pattern.
+func androidChannel(raw *string) (string, bool) {
+	if raw == nil || *raw == "" {
+		return "production", true
 	}
+	channel := *raw
 	return channel, channel == "staging" || channel == "production"
 }
 
 // Empty selects the neutral build, which is what tablets in the field still ask for.
-func androidPackage(r *http.Request) (string, bool) {
-	pkg := strings.TrimSpace(r.URL.Query().Get("pkg"))
+func androidPackage(raw *string) (string, bool) {
+	if raw == nil {
+		return "", true
+	}
+	pkg := strings.TrimSpace(*raw)
 	if pkg == "" {
 		return "", true
 	}
 	return pkg, androidpkg.Valid(pkg)
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func requestBaseURL(r *http.Request) string {
@@ -39,18 +52,18 @@ func requestBaseURL(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
-func (h *Handlers) GetAndroidLatestVersion(w http.ResponseWriter, r *http.Request) {
-	channel, ok := androidChannel(r)
+func (h *Handlers) GetAndroidLatestVersion(w http.ResponseWriter, r *http.Request, params generated.GetAndroidLatestVersionParams) {
+	channel, ok := androidChannel((*string)(params.Channel))
 	if !ok {
 		response.WriteError(w, http.StatusBadRequest, "invalid channel")
 		return
 	}
-	pkg, ok := androidPackage(r)
+	pkg, ok := androidPackage(params.Pkg)
 	if !ok {
 		response.WriteError(w, http.StatusBadRequest, "invalid package")
 		return
 	}
-	if !h.androidUpdate.VerifyDownloadToken(channel, pkg, r.URL.Query().Get("t")) {
+	if !h.androidUpdate.VerifyDownloadToken(channel, pkg, deref(params.T)) {
 		response.WriteError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
@@ -70,18 +83,18 @@ func (h *Handlers) GetAndroidLatestVersion(w http.ResponseWriter, r *http.Reques
 	response.WriteJSON(w, http.StatusOK, release)
 }
 
-func (h *Handlers) DownloadAndroidApk(w http.ResponseWriter, r *http.Request) {
-	channel, ok := androidChannel(r)
+func (h *Handlers) DownloadAndroidApk(w http.ResponseWriter, r *http.Request, params generated.DownloadAndroidApkParams) {
+	channel, ok := androidChannel((*string)(params.Channel))
 	if !ok {
 		response.WriteError(w, http.StatusBadRequest, "invalid channel")
 		return
 	}
-	pkg, ok := androidPackage(r)
+	pkg, ok := androidPackage(params.Pkg)
 	if !ok {
 		response.WriteError(w, http.StatusBadRequest, "invalid package")
 		return
 	}
-	if !h.androidUpdate.VerifyDownloadToken(channel, pkg, r.URL.Query().Get("t")) {
+	if !h.androidUpdate.VerifyDownloadToken(channel, pkg, deref(params.T)) {
 		response.WriteError(w, http.StatusUnauthorized, "invalid token")
 		return
 	}
@@ -112,6 +125,12 @@ func (h *Handlers) DownloadAndroidApk(w http.ResponseWriter, r *http.Request) {
 // The PIN lives here rather than in the APK, where it was a readable string
 // constant in a publicly downloadable binary.
 func (h *Handlers) VerifyAndroidSetupPin(w http.ResponseWriter, r *http.Request) {
+	ip := ratelimit.ClientIP(r)
+	if h.setupPinLimit.Blocked(ip) {
+		response.WriteError(w, http.StatusTooManyRequests, "Zu viele Fehlversuche. Bitte später erneut versuchen.")
+		return
+	}
+
 	var body struct {
 		Pin string `json:"pin"`
 	}
@@ -128,6 +147,7 @@ func (h *Handlers) VerifyAndroidSetupPin(w http.ResponseWriter, r *http.Request)
 	}
 
 	if subtle.ConstantTimeCompare([]byte(expected), []byte(strings.TrimSpace(body.Pin))) != 1 {
+		h.setupPinLimit.Fail(ip)
 		response.WriteError(w, http.StatusUnauthorized, "Falsche PIN.")
 		return
 	}

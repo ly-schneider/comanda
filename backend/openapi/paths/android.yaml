@@ -16,6 +16,27 @@ latest:
     operationId: getAndroidLatestVersion
     security:
       - {}
+    parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [production, staging]
+          default: production
+      - name: pkg
+        in: query
+        required: false
+        description: Android applicationId suffix, e.g. `t_blessthun`. Omit for the neutral build.
+        schema:
+          type: string
+          pattern: '^t_[a-z0-9_]{1,63}$'
+      - name: t
+        in: query
+        required: false
+        description: Per-package download token. Required only when ANDROID_REQUIRE_DOWNLOAD_TOKEN is on.
+        schema:
+          type: string
     responses:
       "200":
         description: Latest release
@@ -58,6 +79,27 @@ download:
     operationId: downloadAndroidApk
     security:
       - {}
+    parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [production, staging]
+          default: production
+      - name: pkg
+        in: query
+        required: false
+        description: Android applicationId suffix, e.g. `t_blessthun`. Omit for the neutral build.
+        schema:
+          type: string
+          pattern: '^t_[a-z0-9_]{1,63}$'
+      - name: t
+        in: query
+        required: false
+        description: Per-package download token. Required only when ANDROID_REQUIRE_DOWNLOAD_TOKEN is on.
+        schema:
+          type: string
     responses:
       "200":
         description: APK binary

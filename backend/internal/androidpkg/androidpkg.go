@@ -10,7 +10,8 @@ import (
 // Prefix keeps the segment starting with a letter; tenant slugs may start with a digit.
 const Prefix = "t_"
 
-var pattern = regexp.MustCompile(`^t_[a-z0-9_]{1,60}$`)
+// Slugs are DNS labels of 1-63 chars, so the suffix spans 3-65.
+var pattern = regexp.MustCompile(`^t_[a-z0-9_]{1,63}$`)
 
 // ForSlug derives the package suffix for a tenant slug. Slugs are DNS labels
 // ([a-z0-9-], never underscore), so the hyphen substitution cannot collide two

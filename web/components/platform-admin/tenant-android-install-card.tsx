@@ -14,6 +14,7 @@ type InstallInfo = {
   channel: string
   installPath: string
   token?: string
+  versionName?: string
 }
 
 type Channel = "production" | "staging"
@@ -120,7 +121,13 @@ export function TenantAndroidInstallCard({
             </div>
 
             <p className="text-muted-foreground text-xs">
-              Mit der Tablet-Kamera scannen. Paket-ID: <code>{info?.packageId}</code>.
+              Mit der Tablet-Kamera scannen. Paket-ID: <code>{info?.packageId}</code>. Version:{" "}
+              {info?.versionName ? (
+                <code>{info.versionName}</code>
+              ) : (
+                <span className="text-destructive">noch kein Build — diesen Tenant beim nächsten Release mitgeben</span>
+              )}
+              .
               {info?.token
                 ? " Der Link enthält das Download-Token — wie ein Passwort behandeln."
                 : " Kein Download-Token konfiguriert; der Download ist offen erreichbar."}

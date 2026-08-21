@@ -31,7 +31,20 @@ func New(period time.Duration, max int) *Limiter {
 	}
 }
 
-func (l *Limiter) Allow(key string) bool {
+// Blocked reports whether key has spent its budget. It does not consume any.
+func (l *Limiter) Blocked(key string) bool {
+	now := l.now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	w := l.windows[key]
+	return w != nil && !now.After(w.reset) && w.count >= l.max
+}
+
+// Fail records one failed attempt. Only failures count: a whole venue shares one
+// NAT'd IP, so charging successes would lock the operator out partway through
+// provisioning a rack of tablets with the correct PIN.
+func (l *Limiter) Fail(key string) {
 	now := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -40,13 +53,9 @@ func (l *Limiter) Allow(key string) bool {
 	if w == nil || now.After(w.reset) {
 		l.windows[key] = &window{count: 1, reset: now.Add(l.period)}
 		l.evictExpired(now)
-		return true
-	}
-	if w.count >= l.max {
-		return false
+		return
 	}
 	w.count++
-	return true
 }
 
 func (l *Limiter) evictExpired(now time.Time) {
@@ -57,18 +66,6 @@ func (l *Limiter) evictExpired(now time.Time) {
 		if now.After(w.reset) {
 			delete(l.windows, k)
 		}
-	}
-}
-
-func (l *Limiter) Middleware(message string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !l.Allow(ClientIP(r)) {
-				http.Error(w, message, http.StatusTooManyRequests)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
 	}
 }
 

@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"time"
 
 	"backend/internal/api"
 	"backend/internal/auth"
@@ -10,7 +9,6 @@ import (
 	"backend/internal/generated/api/generated"
 	"backend/internal/middleware"
 	"backend/internal/plugin"
-	"backend/internal/ratelimit"
 
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi/v5"
@@ -74,11 +72,9 @@ func NewRouter(
 	r.Get("/v1/android/latest", wrapper.GetAndroidLatestVersion)
 	r.Get("/v1/android/download", wrapper.DownloadAndroidApk)
 
-	// Public by necessity (the tablet is unpaired at setup time), so the attempt
-	// limiter is what makes a short PIN survive being guessed at.
-	setupPinLimit := ratelimit.New(5*time.Minute, 5)
-	r.With(setupPinLimit.Middleware("Zu viele Versuche. Bitte später erneut versuchen.")).
-		Post("/v1/android/setup/verify-pin", wrapper.VerifyAndroidSetupPin)
+	// Public by necessity (the tablet is unpaired at setup time); the handler
+	// rate limits failed attempts.
+	r.Post("/v1/android/setup/verify-pin", wrapper.VerifyAndroidSetupPin)
 
 	// ── Payrexx webhook (per-tenant, no auth, no Host) ──────────────
 	// Wired outside the /v1 tenant-tx group: with no tenant-bearing Host it can't

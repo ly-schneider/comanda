@@ -44,3 +44,9 @@ AndroidInstallInfo:
     token:
       type: string
       description: Empty when no download secret is configured.
+    versionName:
+      type: string
+      description: >
+        Version this package currently resolves to. Absent means no release
+        contains it yet. Older than the newest release means the package was
+        left out of that run.

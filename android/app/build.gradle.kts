@@ -42,11 +42,14 @@ fun updateUrl(base: String, channel: String): String {
     return url
 }
 
-// The update feed already points at the API origin the PIN check needs.
+// The update feed already points at the API origin the PIN check needs. Returns
+// "" when it cannot be derived confidently — callers building a shippable APK
+// must treat that as fatal, since an empty base bricks the Device Setup PIN gate
+// with no remote fix.
 fun apiBaseUrl(updateCheckUrl: String): String {
     val explicit = prop("apiBaseUrl")
     if (explicit.isNotEmpty()) return explicit.trimEnd('/')
-    if (updateCheckUrl.isBlank()) return ""
+    if (!updateCheckUrl.contains("/v1/")) return ""
     return updateCheckUrl.substringBefore("/v1/").trimEnd('/')
 }
 
@@ -102,7 +105,9 @@ android {
         buildConfigField("String", "POS_URL", "\"http://localhost:3000/pos\"")
         buildConfigField("boolean", "DEV_BUILD", "true")
         buildConfigField("String", "UPDATE_CHECK_URL", "\"\"")
-        buildConfigField("String", "API_BASE_URL", "\"\"")
+        // 10.0.2.2 is the host loopback from the emulator; debug and dev builds
+        // talk to a locally running backend.
+        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
     }
 
     buildFeatures {
@@ -161,8 +166,12 @@ android {
             buildConfigField("boolean", "DEV_BUILD", "false")
 
             val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
+            val apiBase = apiBaseUrl(updateCheckUrl)
+            if (buildingRelease && apiBase.isEmpty()) {
+                throw GradleException("API_BASE_URL could not be derived. Set UPDATE_CHECK_URL (containing /v1/) or -PapiBaseUrl; without it Device Setup can never unlock.")
+            }
             buildConfigField("String", "UPDATE_CHECK_URL", "\"${updateUrl(updateCheckUrl, "production")}\"")
-            buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl(updateCheckUrl)}\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
         }
 
         create("dev") {
@@ -200,8 +209,14 @@ android {
             buildConfigField("boolean", "DEV_BUILD", "false")
 
             val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
+            val apiBase = apiBaseUrl(updateCheckUrl)
+            val buildingStaging =
+                gradle.startParameter.taskNames.any { it.contains("Staging", ignoreCase = true) }
+            if (buildingStaging && apiBase.isEmpty()) {
+                throw GradleException("API_BASE_URL could not be derived. Set UPDATE_CHECK_URL (containing /v1/) or -PapiBaseUrl; without it Device Setup can never unlock.")
+            }
             buildConfigField("String", "UPDATE_CHECK_URL", "\"${updateUrl(updateCheckUrl, "staging")}\"")
-            buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl(updateCheckUrl)}\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
         }
     }
     compileOptions {

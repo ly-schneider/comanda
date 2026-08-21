@@ -55,6 +55,12 @@ jobs:
         working-directory: android
         run: ./gradlew test --parallel
 
+      # Gradle 8+ builds buildSrc's jar without running its tests, and `test`
+      # from android/ only reaches :app.
+      - name: Run buildSrc tests
+        working-directory: android
+        run: ./gradlew -p buildSrc test
+
       - name: Assemble debug
         working-directory: android
         run: ./gradlew assembleDebug --parallel
@@ -85,6 +91,15 @@ jobs:
           fi
           if ! jq -e 'all(.[]; .pkg == "" or (.label != "" and .posUrl != ""))' <<<"$BUILDS" >/dev/null; then
             echo "Every tenant build needs a label and a posUrl"; exit 1
+          fi
+          # Exactly one neutral leg: an entry whose pkg key is missing or misspelled
+          # would otherwise normalise to "" and quietly build a second neutral APK,
+          # colliding on both the asset name and the artifact name.
+          if [ "$(jq '[.[] | select(.pkg == "")] | length' <<<"$BUILDS")" -ne 1 ]; then
+            echo "A tenant entry is missing its pkg"; exit 1
+          fi
+          if ! jq -e '(map(.pkg) | unique | length) == length' <<<"$BUILDS" >/dev/null; then
+            echo "Duplicate pkg across tenant entries"; exit 1
           fi
           echo "builds=$BUILDS" >> "$GITHUB_OUTPUT"
           jq -r '.[] | "  - " + (if .pkg == "" then "neutral" else .pkg + " (" + .label + ")" end)' <<<"$BUILDS"
@@ -125,8 +140,9 @@ jobs:
           echo "COMANDA_UPLOAD_STORE_FILE=$RUNNER_TEMP/comanda-upload.jks" >> "$GITHUB_ENV"
 
       - name: Validate version format
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Version must be in format X.Y.Z (e.g., 1.0.0)"
             exit 1
@@ -238,14 +254,16 @@ jobs:
           LABEL: ${{ matrix.build.label }}
           ICON: ${{ steps.icon.outputs.path }}
           BG: ${{ matrix.build.iconBg }}
+          POS_URL: ${{ matrix.build.posUrl }}
+          APK_NAME: ${{ steps.artifact.outputs.name }}
         run: |
           {
             echo "### ${PKG:-neutral}"
             echo ""
-            echo "- **APK:** ${{ steps.artifact.outputs.name }}"
+            echo "- **APK:** $APK_NAME"
             echo "- **Label:** ${LABEL:-Comanda POS}"
             echo "- **applicationId:** ch.leys.comanda${PKG:+.$PKG}"
-            echo "- **POS URL:** ${{ matrix.build.posUrl != '' && matrix.build.posUrl || '(default)' }}"
+            echo "- **POS URL:** ${POS_URL:-(default)}"
             echo "- **Icon:** ${ICON:+logo}${ICON:-initials} on ${BG:-#1F1F1D}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -309,13 +327,16 @@ jobs:
           fi
 
       - name: Release summary
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          VERSION: ${{ inputs.version }}
         run: |
           {
             echo "## Android Release Created"
             echo ""
-            echo "- **Environment:** ${{ inputs.environment }}"
-            echo "- **Version:** ${{ inputs.version }}"
-            echo "- **Tag:** android-${{ inputs.environment }}-v${{ inputs.version }}"
+            echo "- **Environment:** $ENVIRONMENT"
+            echo "- **Version:** $VERSION"
+            echo "- **Tag:** android-$ENVIRONMENT-v$VERSION"
             echo ""
             echo "### Assets"
             ls -1 dist/*.apk | sed 's|dist/|- |'

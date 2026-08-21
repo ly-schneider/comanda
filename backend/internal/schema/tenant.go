@@ -34,7 +34,7 @@ func (Tenant) Fields() []ent.Field {
 		// install off the applicationId, so a change makes the next build a
 		// different app — no upgrade path, re-pairing, two icons.
 		field.String("android_package_id").
-			MaxLen(64).
+			MaxLen(66).
 			Optional().
 			Nillable().
 			Immutable().

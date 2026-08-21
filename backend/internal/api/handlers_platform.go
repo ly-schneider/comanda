@@ -12,6 +12,8 @@ import (
 	"backend/internal/repository"
 	"backend/internal/response"
 	"backend/internal/service"
+
+	"go.uber.org/zap"
 )
 
 // requirePlatformContext rejects platform-admin calls that did not arrive on a
@@ -127,9 +129,14 @@ func (h *Handlers) GetTenantAndroidInstall(
 		return
 	}
 
+	// oapi-codegen binds the enum but does not enforce it.
 	channel := string(generated.Production)
 	if params.Channel != nil {
 		channel = string(*params.Channel)
+	}
+	if channel != "production" && channel != "staging" {
+		writeError(w, http.StatusBadRequest, "invalid_channel", "channel must be production or staging")
+		return
 	}
 
 	t, err := h.tenants.Get(r.Context(), tenantID)
@@ -152,10 +159,21 @@ func (h *Handlers) GetTenantAndroidInstall(
 		query.Set("t", token)
 	}
 
-	response.WriteJSON(w, http.StatusOK, generated.AndroidInstallInfo{
+	info := generated.AndroidInstallInfo{
 		PackageId:   pkg,
 		Channel:     channel,
 		InstallPath: "/install?" + query.Encode(),
 		Token:       ptr(token),
-	})
+	}
+
+	// A package omitted from the newest release silently resolves to an older
+	// one, which is indistinguishable from healthy. Surfacing the version it
+	// actually resolves to is what makes that visible.
+	if release, err := h.androidUpdate.GetLatestRelease(r.Context(), channel, pkg, requestBaseURL(r)); err != nil {
+		h.logger.Warn("could not resolve android release for install info", zap.Error(err))
+	} else if release != nil {
+		info.VersionName = ptr(release.VersionName)
+	}
+
+	response.WriteJSON(w, http.StatusOK, info)
 }

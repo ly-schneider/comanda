@@ -5,21 +5,36 @@ import (
 	"time"
 )
 
-func TestAllowWithinWindow(t *testing.T) {
+func TestBlocksAfterMaxFailures(t *testing.T) {
 	base := time.Unix(1_700_000_000, 0)
 	l := New(5*time.Minute, 3)
 	l.now = func() time.Time { return base }
 
 	for i := range 3 {
-		if !l.Allow("1.2.3.4") {
-			t.Fatalf("attempt %d denied inside the window", i+1)
+		if l.Blocked("1.2.3.4") {
+			t.Fatalf("blocked after only %d failures", i)
 		}
+		l.Fail("1.2.3.4")
 	}
-	if l.Allow("1.2.3.4") {
-		t.Error("fourth attempt allowed past the limit")
+	if !l.Blocked("1.2.3.4") {
+		t.Error("not blocked after exhausting the budget")
 	}
-	if !l.Allow("5.6.7.8") {
+	if l.Blocked("5.6.7.8") {
 		t.Error("a different client hit another client's window")
+	}
+}
+
+// A venue NATs every tablet behind one IP, so provisioning a rack with the
+// correct PIN must never consume budget.
+func TestSuccessesDoNotConsumeBudget(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	l := New(5*time.Minute, 3)
+	l.now = func() time.Time { return base }
+
+	for range 50 {
+		if l.Blocked("1.2.3.4") {
+			t.Fatal("blocked without a single failure")
+		}
 	}
 }
 
@@ -29,15 +44,13 @@ func TestWindowResets(t *testing.T) {
 	l := New(time.Minute, 1)
 	l.now = func() time.Time { return now }
 
-	if !l.Allow("1.2.3.4") {
-		t.Fatal("first attempt denied")
-	}
-	if l.Allow("1.2.3.4") {
-		t.Fatal("second attempt allowed inside the window")
+	l.Fail("1.2.3.4")
+	if !l.Blocked("1.2.3.4") {
+		t.Fatal("not blocked inside the window")
 	}
 
 	now = base.Add(61 * time.Second)
-	if !l.Allow("1.2.3.4") {
-		t.Error("attempt denied after the window expired")
+	if l.Blocked("1.2.3.4") {
+		t.Error("still blocked after the window expired")
 	}
 }

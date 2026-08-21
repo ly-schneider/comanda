@@ -1,4 +1,4 @@
-ALTER TABLE tenant ADD COLUMN android_package_id VARCHAR(64);
+ALTER TABLE tenant ADD COLUMN android_package_id VARCHAR(66);
 
 -- Slugs are DNS labels ([a-z0-9-], never underscore), so hyphen->underscore is
 -- injective and cannot collide two tenants onto one package. The leading "t_"

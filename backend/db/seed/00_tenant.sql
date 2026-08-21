@@ -34,8 +34,8 @@ BEGIN
     v_org_id := pg_temp.nanoid();
     INSERT INTO "organization" (id, name, slug, created_at)
       VALUES (v_org_id, v_name, v_slug, now());
-    INSERT INTO tenant (id, slug, name, organization_id)
-      VALUES (v_tenant_id, v_slug, v_name, v_org_id);
+    INSERT INTO tenant (id, slug, name, organization_id, android_package_id)
+      VALUES (v_tenant_id, v_slug, v_name, v_org_id, 't_' || replace(v_slug, '-', '_'));
     RAISE NOTICE 'created tenant % (%)', v_slug, v_tenant_id;
   ELSE
     IF v_org_id IS NULL THEN
@@ -44,6 +44,10 @@ BEGIN
         VALUES (v_org_id, v_name, v_slug, now());
       UPDATE tenant SET organization_id = v_org_id WHERE id = v_tenant_id;
     END IF;
+    -- Self-heal tenants seeded before the column existed; the Ent field is
+    -- immutable, so this is the only path that can fill it.
+    UPDATE tenant SET android_package_id = 't_' || replace(v_slug, '-', '_')
+      WHERE id = v_tenant_id AND android_package_id IS NULL;
     RAISE NOTICE 'tenant % already exists (%)', v_slug, v_tenant_id;
   END IF;
 
