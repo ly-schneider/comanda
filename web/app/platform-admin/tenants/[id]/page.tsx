@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { TenantAndroidInstallCard } from "@/components/platform-admin/tenant-android-install-card"
 import { TenantPluginsCard } from "@/components/platform-admin/tenant-plugins-card"
 import {
   AlertDialog,
@@ -277,6 +278,8 @@ export default function ManageTenantPage() {
       </Card>
 
       <TenantPluginsCard tenantId={tenant.id} fetchAuth={fetchAuth} />
+
+      <TenantAndroidInstallCard tenantId={tenant.id} slug={tenant.slug} fetchAuth={fetchAuth} />
     </div>
   )
 }

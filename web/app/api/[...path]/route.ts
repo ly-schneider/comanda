@@ -130,9 +130,13 @@ async function handle(req: Request, params: Promise<{ path: string[] }>) {
     return new NextResponse(null, { status: res.status, headers: respHeaders })
   }
 
-  // Stream SSE responses instead of buffering
+  // Stream SSE responses instead of buffering. APKs get the same treatment for
+  // the opposite reason: buffering one would hold tens of megabytes per
+  // concurrent tablet install in the web pod's heap.
   const respContentType = res.headers.get("content-type") || ""
-  if (respContentType.includes("text/event-stream") && res.body) {
+  const streamThrough =
+    respContentType.includes("text/event-stream") || respContentType.includes("application/vnd.android.package-archive")
+  if (streamThrough && res.body) {
     return new NextResponse(res.body, { status: res.status, headers: respHeaders })
   }
 

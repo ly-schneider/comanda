@@ -322,6 +322,7 @@ func NewRouter(
 			pa.Get("/platform/tenants", wrapper.ListTenants)
 			pa.Post("/platform/tenants", wrapper.CreateTenant)
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
+			pa.Get("/platform/tenants/{tenantId}/android-install", wrapper.GetTenantAndroidInstall)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
 			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
 

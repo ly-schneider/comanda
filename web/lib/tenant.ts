@@ -94,6 +94,19 @@ export function parseTenantHost(hostname: string): TenantHostResult {
   return { type: "custom-domain" }
 }
 
+/**
+ * Inverse of parseTenantHost: the tenant's subdomain host on the apex the
+ * caller is currently served from. Port is preserved so dev links work.
+ *
+ * Every tenant keeps this host — it is the primary domain seeded at creation —
+ * even after they add a custom domain, so it is always a valid target.
+ */
+export function tenantSubdomainHost(slug: string, platformHost: string): string {
+  const [host, port] = platformHost.split(":")
+  const base = `${slug}.${normalizeHost(host)}`
+  return port ? `${base}:${port}` : base
+}
+
 // Client-side env signal — the browser knows its own host, so nothing is baked
 // at build. Server code uses the runtime APP_ENV var instead (lib/env.ts).
 export function appEnvFromHost(hostname: string): "dev" | "staging" | "prod" {

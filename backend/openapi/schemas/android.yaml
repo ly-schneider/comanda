@@ -26,3 +26,21 @@ AndroidSetupPinResponse:
   properties:
     ok:
       type: boolean
+
+AndroidInstallInfo:
+  type: object
+  required: [packageId, channel, installPath]
+  properties:
+    packageId:
+      type: string
+      description: Android applicationId suffix, e.g. t_blessthun
+    channel:
+      type: string
+    installPath:
+      type: string
+      description: >
+        Path on the tenant's own host that serves the install page, query
+        string included. Join it to the tenant origin to get the QR target.
+    token:
+      type: string
+      description: Empty when no download secret is configured.

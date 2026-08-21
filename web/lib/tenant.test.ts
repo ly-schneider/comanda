@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getPublicHost, normalizeHost, parseTenantHost, platformOrigin } from "./tenant"
+import { getPublicHost, normalizeHost, parseTenantHost, platformOrigin, tenantSubdomainHost } from "./tenant"
 
 describe("parseTenantHost", () => {
   // Platform bare hosts
@@ -137,5 +137,23 @@ describe("normalizeHost", () => {
     expect(normalizeHost(null)).toBe("")
     expect(normalizeHost(undefined)).toBe("")
     expect(normalizeHost("")).toBe("")
+  })
+})
+
+describe("tenantSubdomainHost", () => {
+  it("puts the slug on the apex the caller is served from", () => {
+    expect(tenantSubdomainHost("acme", "comanda.leys.ch")).toBe("acme.comanda.leys.ch")
+    expect(tenantSubdomainHost("acme", "staging.comanda.leys.ch")).toBe("acme.staging.comanda.leys.ch")
+  })
+
+  it("keeps the port so dev links stay clickable", () => {
+    expect(tenantSubdomainHost("acme", "localhost:3000")).toBe("acme.localhost:3000")
+  })
+
+  it("round-trips through parseTenantHost", () => {
+    for (const apex of ["comanda.leys.ch", "staging.comanda.leys.ch", "localhost"]) {
+      const host = tenantSubdomainHost("acme", apex)
+      expect(parseTenantHost(host)).toEqual({ type: "tenant-subdomain", slug: "acme" })
+    }
   })
 })

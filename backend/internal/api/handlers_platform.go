@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 
 	"backend/internal/enttenant"
 	"backend/internal/generated/api/generated"
@@ -111,4 +112,53 @@ func toAPITenant(t *ent.Tenant) generated.Tenant {
 		CreatedAt: t.CreatedAt,
 		UpdatedAt: ptr(t.UpdatedAt),
 	}
+}
+
+// GetTenantAndroidInstall returns what the admin UI needs to put a tenant's app
+// on a tablet: the package id and the token that authorizes the download.
+//
+// The install link is a credential — it is the only thing standing between the
+// public internet and an APK carrying the SumUp affiliate key — so it is minted
+// here behind the platform-admin gate rather than exposed on the tenant host.
+func (h *Handlers) GetTenantAndroidInstall(
+	w http.ResponseWriter,
+	r *http.Request,
+	tenantID string,
+	params generated.GetTenantAndroidInstallParams,
+) {
+	if !h.requirePlatformContext(w, r) {
+		return
+	}
+
+	channel := string(generated.Production)
+	if params.Channel != nil {
+		channel = string(*params.Channel)
+	}
+
+	t, err := h.tenants.Get(r.Context(), tenantID)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	if t.AndroidPackageID == nil || *t.AndroidPackageID == "" {
+		writeError(w, http.StatusConflict, "no_android_package", "Tenant has no Android package id assigned")
+		return
+	}
+
+	pkg := *t.AndroidPackageID
+	token := h.androidUpdate.DownloadToken(channel, pkg)
+
+	query := url.Values{}
+	query.Set("pkg", pkg)
+	query.Set("channel", channel)
+	if token != "" {
+		query.Set("t", token)
+	}
+
+	response.WriteJSON(w, http.StatusOK, generated.AndroidInstallInfo{
+		PackageId:   pkg,
+		Channel:     channel,
+		InstallPath: "/install?" + query.Encode(),
+		Token:       ptr(token),
+	})
 }

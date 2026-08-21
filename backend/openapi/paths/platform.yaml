@@ -263,3 +263,70 @@ TenantStatusUpdate:
     status:
       type: string
       description: "active | suspended"
+
+android-install:
+  parameters:
+    - name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Platform]
+    summary: Get a tenant's Android install descriptor
+    description: |
+      Platform-admin only. Returns the tenant's Android package id and the
+      download token for a channel, so the admin UI can render an install link
+      and QR code for their tablets.
+
+      The token is what keeps the APK — and the SumUp affiliate key compiled
+      into it — from being anonymously downloadable. Treat the resulting link as
+      a credential.
+    operationId: getTenantAndroidInstall
+    security:
+      - sessionAuth: []
+    parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [production, staging]
+          default: production
+    responses:
+      "200":
+        description: Install descriptor
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/android.yaml#/AndroidInstallInfo"
+      "400":
+        description: Invalid channel
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "403":
+        description: Not a platform admin
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "404":
+        description: Tenant not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "409":
+        description: Tenant has no Android package id assigned
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
