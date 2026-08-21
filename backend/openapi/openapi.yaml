@@ -210,6 +210,9 @@ paths:
     $ref: "paths/platform.yaml#/collection"
   /platform/tenants/{tenantId}:
     $ref: "paths/platform.yaml#/item"
+  /platform/tenants/{tenantId}/android-install:
+    $ref: "paths/platform.yaml#/android-install"
+
   /platform/tenants/{tenantId}/owner-invite:
     $ref: "paths/platform.yaml#/owner-invite"
 
@@ -327,6 +330,9 @@ paths:
 
   /android/download:
     $ref: "paths/android.yaml#/download"
+
+  /android/setup/verify-pin:
+    $ref: "paths/android.yaml#/setup-verify-pin"
 
   /internal/trusted-origins:
     $ref: "paths/internal.yaml#/trusted-origins"

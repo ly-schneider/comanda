@@ -144,7 +144,7 @@ The release workflow (`.github/workflows/android-release.yml`) runs in the `stag
 | `ANDROID_KEY_ALIAS_PASSWORD` | secret   | key password (same as keystore password)                                  |
 | `SUMUP_AFFILIATE_KEY`        | secret   | shared SumUp affiliate key                                                |
 | `POS_URL`                    | secret   | default POS URL a fresh install points at (overridden in Device Setup)    |
-| `ANDROID_SETUP_PIN`          | secret   | Device Setup PIN                                                          |
+| `ANDROID_DOWNLOAD_SECRET`    | secret   | derives the APK download token; must match the backend's Doppler value    |
 | `UPDATE_CHECK_URL`           | variable | `https://api.<domain>/v1/android/latest` (channel appended at build time) |
 
 ## Hardware Integration

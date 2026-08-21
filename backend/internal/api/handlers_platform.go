@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 
 	"backend/internal/enttenant"
 	"backend/internal/generated/api/generated"
@@ -11,6 +12,8 @@ import (
 	"backend/internal/repository"
 	"backend/internal/response"
 	"backend/internal/service"
+
+	"go.uber.org/zap"
 )
 
 // requirePlatformContext rejects platform-admin calls that did not arrive on a
@@ -111,4 +114,66 @@ func toAPITenant(t *ent.Tenant) generated.Tenant {
 		CreatedAt: t.CreatedAt,
 		UpdatedAt: ptr(t.UpdatedAt),
 	}
+}
+
+// The install link is a credential: it is what stands between the public
+// internet and an APK carrying the SumUp affiliate key. Hence platform-admin
+// only, rather than exposed on the tenant host.
+func (h *Handlers) GetTenantAndroidInstall(
+	w http.ResponseWriter,
+	r *http.Request,
+	tenantID string,
+	params generated.GetTenantAndroidInstallParams,
+) {
+	if !h.requirePlatformContext(w, r) {
+		return
+	}
+
+	// oapi-codegen binds the enum but does not enforce it.
+	channel := string(generated.Production)
+	if params.Channel != nil {
+		channel = string(*params.Channel)
+	}
+	if channel != "production" && channel != "staging" {
+		writeError(w, http.StatusBadRequest, "invalid_channel", "channel must be production or staging")
+		return
+	}
+
+	t, err := h.tenants.Get(r.Context(), tenantID)
+	if err != nil {
+		writeEntError(w, err)
+		return
+	}
+	if t.AndroidPackageID == nil || *t.AndroidPackageID == "" {
+		writeError(w, http.StatusConflict, "no_android_package", "Tenant has no Android package id assigned")
+		return
+	}
+
+	pkg := *t.AndroidPackageID
+	token := h.androidUpdate.DownloadToken(channel, pkg)
+
+	query := url.Values{}
+	query.Set("pkg", pkg)
+	query.Set("channel", channel)
+	if token != "" {
+		query.Set("t", token)
+	}
+
+	info := generated.AndroidInstallInfo{
+		PackageId:   pkg,
+		Channel:     channel,
+		InstallPath: "/install?" + query.Encode(),
+		Token:       ptr(token),
+	}
+
+	// A package omitted from the newest release silently resolves to an older
+	// one, which is indistinguishable from healthy. Surfacing the version it
+	// actually resolves to is what makes that visible.
+	if release, err := h.androidUpdate.GetLatestRelease(r.Context(), channel, pkg, requestBaseURL(r)); err != nil {
+		h.logger.Warn("could not resolve android release for install info", zap.Error(err))
+	} else if release != nil {
+		info.VersionName = ptr(release.VersionName)
+	}
+
+	response.WriteJSON(w, http.StatusOK, info)
 }

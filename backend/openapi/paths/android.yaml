@@ -8,9 +8,35 @@ latest:
       The optional `channel` query parameter selects the release channel
       (`production` or `staging`, default `production`); other values return
       `400`. Returns `204` when no release is published for the channel.
+
+      The optional `pkg` query parameter selects a tenant build's asset
+      (the Android applicationId suffix, e.g. `t_blessthun`); omitted means the
+      neutral build. The optional `t` parameter carries the per-package download
+      token, required only when `ANDROID_REQUIRE_DOWNLOAD_TOKEN` is on.
     operationId: getAndroidLatestVersion
     security:
       - {}
+    parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [production, staging]
+          default: production
+      - name: pkg
+        in: query
+        required: false
+        description: Android applicationId suffix, e.g. `t_blessthun`. Omit for the neutral build.
+        schema:
+          type: string
+          pattern: '^t_[a-z0-9_]{1,63}$'
+      - name: t
+        in: query
+        required: false
+        description: Per-package download token. Required only when ANDROID_REQUIRE_DOWNLOAD_TOKEN is on.
+        schema:
+          type: string
     responses:
       "200":
         description: Latest release
@@ -45,9 +71,35 @@ download:
       The optional `channel` query parameter selects the release channel
       (`production` or `staging`, default `production`); other values return
       `400`. Returns `404` when no release is published for the channel.
+
+      The optional `pkg` query parameter selects a tenant build's asset
+      (the Android applicationId suffix, e.g. `t_blessthun`); omitted means the
+      neutral build. The optional `t` parameter carries the per-package download
+      token, required only when `ANDROID_REQUIRE_DOWNLOAD_TOKEN` is on.
     operationId: downloadAndroidApk
     security:
       - {}
+    parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [production, staging]
+          default: production
+      - name: pkg
+        in: query
+        required: false
+        description: Android applicationId suffix, e.g. `t_blessthun`. Omit for the neutral build.
+        schema:
+          type: string
+          pattern: '^t_[a-z0-9_]{1,63}$'
+      - name: t
+        in: query
+        required: false
+        description: Per-package download token. Required only when ANDROID_REQUIRE_DOWNLOAD_TOKEN is on.
+        schema:
+          type: string
     responses:
       "200":
         description: APK binary
@@ -70,6 +122,53 @@ download:
               $ref: "../schemas/common.yaml#/Error"
       "502":
         description: Upstream release feed unavailable
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+
+setup-verify-pin:
+  post:
+    tags: [Android]
+    summary: Verify the Device Setup PIN
+    description: |
+      Checks the platform operator PIN that gates Device Setup on the tablet.
+
+      The PIN is held server-side rather than compiled into the APK, where it
+      was a readable string constant in a publicly downloadable binary. The
+      route is rate limited per client IP.
+    operationId: verifyAndroidSetupPin
+    security:
+      - {}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/android.yaml#/AndroidSetupPinRequest"
+    responses:
+      "200":
+        description: PIN accepted
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/android.yaml#/AndroidSetupPinResponse"
+      "400":
+        description: Invalid body
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "401":
+        description: Wrong PIN
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/Error"
+      "429":
+        description: Too many attempts
+      "501":
+        description: No setup PIN configured
         content:
           application/json:
             schema:

@@ -30,6 +30,15 @@ func (Tenant) Fields() []ent.Field {
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
+		// Suffix of the tenant's Android applicationId. Immutable: a tablet keys its
+		// install off the applicationId, so a change makes the next build a
+		// different app — no upgrade path, re-pairing, two icons.
+		field.String("android_package_id").
+			MaxLen(66).
+			Optional().
+			Nillable().
+			Immutable().
+			Unique(),
 		// 1:1 link to the tenant's Better Auth organization. Its FK, unique index,
 		// and org-keyed RLS live in the migration (organization is not an Ent type).
 		field.String("organization_id").

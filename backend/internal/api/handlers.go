@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"backend/internal/blobstore"
 	"backend/internal/config"
 	"backend/internal/database"
@@ -9,6 +11,7 @@ import (
 	"backend/internal/inventory"
 	"backend/internal/payment"
 	"backend/internal/plugin"
+	"backend/internal/ratelimit"
 	"backend/internal/repository"
 	"backend/internal/service"
 
@@ -57,6 +60,9 @@ type Handlers struct {
 
 	config config.Config
 	logger *zap.Logger
+
+	// Failed Device Setup PIN attempts per client IP.
+	setupPinLimit *ratelimit.Limiter
 }
 
 // Compile-time check that Handlers implements ServerInterface.
@@ -128,6 +134,7 @@ func NewHandlers(deps HandlersDeps) *Handlers {
 		verification:    deps.Verification,
 		idempotency:     deps.Idempotency,
 		blobStore:       deps.BlobStore,
+		setupPinLimit:   ratelimit.New(15*time.Minute, 10),
 		inventoryHub:    deps.InventoryHub,
 		privileged:      deps.Privileged.Client,
 		appDB:           deps.AppDB,

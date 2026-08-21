@@ -126,6 +126,16 @@ type SentryConfig struct {
 type AndroidConfig struct {
 	GitHubRepo  string
 	GitHubToken string
+	// SetupPIN gates Device Setup. Plaintext on purpose: hashing a numeric PIN
+	// buys nothing against an offline brute force, so the attempt limiter in
+	// front of the endpoint is the actual protection.
+	SetupPIN string
+	// DownloadSecret derives the per-package APK download token; empty disables it.
+	DownloadSecret string
+	// RequireDownloadToken must stay false until the whole fleet runs builds that
+	// send a token — otherwise those tablets cannot fetch the update that would
+	// teach them to send one.
+	RequireDownloadToken bool
 }
 
 type AppConfig struct {
@@ -272,8 +282,11 @@ func Load() Config {
 			TracesSampleRate: getEnvFloatWithDefault("SENTRY_TRACES_SAMPLE_RATE", 0.2),
 		},
 		Android: AndroidConfig{
-			GitHubRepo:  getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
-			GitHubToken: getEnvOptional("ANDROID_GITHUB_TOKEN"),
+			GitHubRepo:           getEnvWithDefault("ANDROID_GITHUB_REPO", "ly-schneider/comanda"),
+			GitHubToken:          getEnvOptional("ANDROID_GITHUB_TOKEN"),
+			SetupPIN:             strings.TrimSpace(getEnvOptional("ANDROID_SETUP_PIN")),
+			DownloadSecret:       strings.TrimSpace(getEnvOptional("ANDROID_DOWNLOAD_SECRET")),
+			RequireDownloadToken: getEnvBoolOptional("ANDROID_REQUIRE_DOWNLOAD_TOKEN"),
 		},
 		CustomDomain: CustomDomainConfig{
 			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),

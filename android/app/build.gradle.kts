@@ -1,5 +1,8 @@
+import com.android.build.api.variant.ResValue
 import java.util.regex.Pattern
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import tenantbranding.GenerateTenantIconTask
+import tenantbranding.initialsFor
 
 fun semverFromTag(): Triple<Int, Int, Int> {
     val raw = (System.getenv("VERSION_TAG") ?: System.getenv("GITHUB_REF_NAME") ?: "")
@@ -12,10 +15,42 @@ fun semverFromTag(): Triple<Int, Int, Int> {
     ) else Triple(0, 0, 1)
 }
 
-fun appendChannel(base: String, channel: String): String {
+fun prop(name: String): String =
+    ((project.findProperty(name) as String?) ?: System.getenv(name.uppercase())).orEmpty().trim()
+
+// With tenantPkg set this builds one tenant's own app; without it, the neutral one.
+val tenantPkg = prop("tenantPkg")
+val tenantLabel = prop("appLabel")
+val tenantIconSource = prop("iconSource")
+val tenantIconBg = prop("iconBg").ifEmpty { "#1F1F1D" }
+val isTenantBuild = tenantPkg.isNotEmpty()
+
+if (isTenantBuild) {
+    require(Regex("^t_[a-z0-9_]{1,60}$").matches(tenantPkg)) {
+        "tenantPkg must match ^t_[a-z0-9_]{1,60}$ (the tenant's android_package_id), got \"$tenantPkg\""
+    }
+    require(tenantLabel.isNotEmpty()) { "appLabel is required for a tenant build" }
+}
+
+fun updateUrl(base: String, channel: String): String {
     if (base.isBlank()) return ""
     val sep = if (base.contains("?")) "&" else "?"
-    return "$base${sep}channel=$channel"
+    var url = "$base${sep}channel=$channel"
+    if (isTenantBuild) url += "&pkg=$tenantPkg"
+    val token = prop("updateToken")
+    if (token.isNotEmpty()) url += "&t=$token"
+    return url
+}
+
+// The update feed already points at the API origin the PIN check needs. Returns
+// "" when it cannot be derived confidently — callers building a shippable APK
+// must treat that as fatal, since an empty base bricks the Device Setup PIN gate
+// with no remote fix.
+fun apiBaseUrl(updateCheckUrl: String): String {
+    val explicit = prop("apiBaseUrl")
+    if (explicit.isNotEmpty()) return explicit.trimEnd('/')
+    if (!updateCheckUrl.contains("/v1/")) return ""
+    return updateCheckUrl.substringBefore("/v1/").trimEnd('/')
 }
 
 val (maj, min, pat) = semverFromTag()
@@ -32,7 +67,9 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ch.leys.comanda"
+        // From the tenant's immutable android_package_id — Android keys an install
+        // off this, so a change reads as a different app: no upgrade, two icons.
+        applicationId = if (isTenantBuild) "ch.leys.comanda.$tenantPkg" else "ch.leys.comanda"
         minSdk = 26
         targetSdk = 35
         versionName = computedVersionName
@@ -41,6 +78,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         vectorDrawables { useSupportLibrary = true }
+
+        // Generated icons use their own resource names; two res dirs declaring
+        // ic_launcher in one source set is a duplicate-resource error.
+        manifestPlaceholders["appIcon"] =
+            if (isTenantBuild) "@mipmap/ic_launcher_tenant" else "@mipmap/ic_launcher"
+        manifestPlaceholders["appRoundIcon"] =
+            if (isTenantBuild) "@mipmap/ic_launcher_tenant_round" else "@mipmap/ic_launcher_round"
+
+        buildConfigField("boolean", "TENANT_BUILD", "$isTenantBuild")
+        buildConfigField("String", "TENANT_PACKAGE", "\"$tenantPkg\"")
 
         val sumupAffiliateKey = (project.findProperty("sumupAffiliateKey") as String?)
             ?: System.getenv("SUMUP_AFFILIATE_KEY")
@@ -58,10 +105,9 @@ android {
         buildConfigField("String", "POS_URL", "\"http://localhost:3000/pos\"")
         buildConfigField("boolean", "DEV_BUILD", "true")
         buildConfigField("String", "UPDATE_CHECK_URL", "\"\"")
-
-        // Owner-set PIN gating Device Setup; required for release builds (checked below).
-        val setupPin = (project.findProperty("setupPin") as String?) ?: System.getenv("SETUP_PIN")
-        buildConfigField("String", "SETUP_PIN", "\"${setupPin ?: ""}\"")
+        // 10.0.2.2 is the host loopback from the emulator; debug and dev builds
+        // talk to a locally running backend.
+        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
     }
 
     buildFeatures {
@@ -119,16 +165,13 @@ android {
             buildConfigField("String", "POS_URL", "\"$posUrlRelease\"")
             buildConfigField("boolean", "DEV_BUILD", "false")
 
-            val setupPin = (project.findProperty("setupPin") as String?) ?: System.getenv("SETUP_PIN")
-            if (buildingRelease && setupPin.isNullOrBlank()) {
-                throw GradleException("SETUP_PIN (or -PsetupPin) must be set for release builds")
-            }
-
             val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
-            buildConfigField("String", "UPDATE_CHECK_URL", "\"${appendChannel(updateCheckUrl, "production")}\"")
-
-            // App name for Play/production builds
-            resValue("string", "app_name", "Comanda POS")
+            val apiBase = apiBaseUrl(updateCheckUrl)
+            if (buildingRelease && apiBase.isEmpty()) {
+                throw GradleException("API_BASE_URL could not be derived. Set UPDATE_CHECK_URL (containing /v1/) or -PapiBaseUrl; without it Device Setup can never unlock.")
+            }
+            buildConfigField("String", "UPDATE_CHECK_URL", "\"${updateUrl(updateCheckUrl, "production")}\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
         }
 
         create("dev") {
@@ -144,8 +187,12 @@ android {
             buildConfigField("String", "POS_URL", "\"$posUrl\"")
             buildConfigField("boolean", "DEV_BUILD", "true")
 
-            // App name for developer builds
-            resValue("string", "app_name", "Comanda POS (Dev)")
+            val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                "\"${apiBaseUrl(updateCheckUrl).ifEmpty { "http://10.0.2.2:8080" }}\"",
+            )
         }
 
         // Optional staging buildType for pre-prod testing
@@ -162,10 +209,14 @@ android {
             buildConfigField("boolean", "DEV_BUILD", "false")
 
             val updateCheckUrl = (project.findProperty("updateCheckUrl") as String?) ?: System.getenv("UPDATE_CHECK_URL") ?: ""
-            buildConfigField("String", "UPDATE_CHECK_URL", "\"${appendChannel(updateCheckUrl, "staging")}\"")
-
-            // App name for staging builds
-            resValue("string", "app_name", "Comanda POS (Staging)")
+            val apiBase = apiBaseUrl(updateCheckUrl)
+            val buildingStaging =
+                gradle.startParameter.taskNames.any { it.contains("Staging", ignoreCase = true) }
+            if (buildingStaging && apiBase.isEmpty()) {
+                throw GradleException("API_BASE_URL could not be derived. Set UPDATE_CHECK_URL (containing /v1/) or -PapiBaseUrl; without it Device Setup can never unlock.")
+            }
+            buildConfigField("String", "UPDATE_CHECK_URL", "\"${updateUrl(updateCheckUrl, "staging")}\"")
+            buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
         }
     }
     compileOptions {
@@ -183,6 +234,35 @@ android {
         // Do not fail release builds on such third-party lint issues.
         abortOnError = false
         checkReleaseBuilds = false
+    }
+}
+
+// Always runs; produces nothing for the neutral build.
+val generateTenantIcon = tasks.register<GenerateTenantIconTask>("generateTenantIcon") {
+    generateIcon.set(isTenantBuild)
+    initials.set(initialsFor(tenantLabel))
+    backgroundColor.set(tenantIconBg)
+    if (tenantIconSource.isNotEmpty()) {
+        sourceImage.set(file(tenantIconSource))
+    }
+    outputDir.set(layout.buildDirectory.dir("generated/tenantIcon/res"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        // Not per build type: the env tag has to survive the tenant's own name.
+        val base = tenantLabel.ifEmpty { "Comanda POS" }
+        val label = when (variant.buildType) {
+            "dev" -> "$base (Dev)"
+            "staging" -> "$base (Staging)"
+            else -> base
+        }
+        variant.resValues.put(variant.makeResValueKey("string", "app_name"), ResValue(label))
+
+        variant.sources.res?.addGeneratedSourceDirectory(
+            generateTenantIcon,
+            GenerateTenantIconTask::outputDir,
+        )
     }
 }
 

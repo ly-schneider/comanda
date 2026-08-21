@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,9 +49,11 @@ import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpLoginContract
 
 /**
- * PIN-gated operator surface for pointing this neutral APK at a tenant host at runtime.
- * Returns RESULT_OK with a `hostChanged` extra so WebPosActivity knows to wipe the old
- * tenant's session and reload.
+ * PIN-gated operator surface for the SumUp account and, in the neutral build
+ * only, the tenant host.
+ *
+ * Returns RESULT_OK with a `hostChanged` extra so WebPosActivity knows to wipe
+ * the old tenant's session and reload.
  */
 class DeviceSetupActivity : ComponentActivity() {
 
@@ -86,6 +89,21 @@ class DeviceSetupActivity : ComponentActivity() {
 private fun PinGate(onUnlock: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+
+    fun submit() {
+        if (checking) return
+        checking = true
+        error = null
+        SetupPinVerifier.verify(pin) { result ->
+            checking = false
+            when (result) {
+                is SetupPinVerifier.Result.Ok -> onUnlock()
+                is SetupPinVerifier.Result.Rejected -> { error = result.message; pin = "" }
+                is SetupPinVerifier.Result.Unreachable -> error = result.message
+            }
+        }
+    }
 
     Column(
         Modifier
@@ -102,6 +120,7 @@ private fun PinGate(onUnlock: () -> Unit) {
             onValueChange = { pin = it.filter(Char::isDigit); error = null },
             label = { Text("PIN") },
             singleLine = true,
+            enabled = !checking,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             isError = error != null,
@@ -113,41 +132,21 @@ private fun PinGate(onUnlock: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Button(
-            onClick = { if (pin == BuildConfig.SETUP_PIN) onUnlock() else { error = "Falsche PIN."; pin = "" } },
+            onClick = ::submit,
+            enabled = !checking && pin.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Weiter") }
+        ) { Text(if (checking) "Prüfen…" else "Weiter") }
     }
 }
 
 @Composable
 private fun SetupForm(startHost: String?, onDone: (Boolean) -> Unit) {
     val ctx = LocalContext.current
-    var input by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
     var pendingLogout by remember { mutableStateOf(false) }
-    val recents = remember { DeviceConfig.recentHosts(ctx) }
     val hasOverride = remember { DeviceConfig.hostOverride(ctx) != null }
 
     fun finishAfterHostChange(changed: Boolean) {
         if (changed && SumUpAPI.isLoggedIn()) pendingLogout = true else onDone(changed)
-    }
-
-    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-        result.contents?.let { input = it; error = null }
-    }
-    fun launchScan() {
-        scanLauncher.launch(
-            ScanOptions().apply {
-                setPrompt("Tenant-QR scannen")
-                setBeepEnabled(true)
-                setOrientationLocked(false)
-                setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                captureActivity = CustomCaptureActivity::class.java
-            }
-        )
-    }
-    val cameraPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) launchScan()
     }
 
     Column(
@@ -164,66 +163,12 @@ private fun SetupForm(startHost: String?, onDone: (Boolean) -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(20.dp))
 
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it; error = null },
-            label = { Text("Tenant-Host") },
-            placeholder = { Text("kasse.comanda.leys.ch") },
-            singleLine = true,
-            isError = error != null,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (error != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = {
-                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-                    launchScan()
-                else
-                    cameraPerm.launch(Manifest.permission.CAMERA)
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("QR-Code scannen") }
-
-        if (recents.isNotEmpty()) {
-            Spacer(Modifier.height(20.dp))
-            Text("Zuletzt verwendet", style = MaterialTheme.typography.labelMedium)
-            recents.forEach { h ->
-                TextButton(onClick = { input = h; error = null }, modifier = Modifier.fillMaxWidth()) {
-                    Text(h, modifier = Modifier.fillMaxWidth())
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = {
-                when (val r = TenantHostValidator.validate(input)) {
-                    is TenantHostValidator.Result.Valid -> {
-                        DeviceConfig.setHostOverride(ctx, r.host)
-                        finishAfterHostChange(r.host != startHost)
-                    }
-                    is TenantHostValidator.Result.Invalid -> error = r.reason
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Speichern & neu laden") }
-
-        if (hasOverride) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    DeviceConfig.clearHostOverride(ctx)
-                    finishAfterHostChange(TenantHostValidator.effectiveAllowedHost(null, BuildConfig.POS_URL) != startHost)
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Auf Standard zurücksetzen") }
+        // Whatever page this app loads holds the native bridge — card payments,
+        // printing, the scanner — so a tenant build removes the ability to point
+        // it elsewhere rather than gating it. Switching tenants = another app.
+        if (!BuildConfig.TENANT_BUILD) {
+            HostSection(startHost, hasOverride, onHostChanged = ::finishAfterHostChange)
         }
 
         Spacer(Modifier.height(28.dp))
@@ -251,6 +196,98 @@ private fun SetupForm(startHost: String?, onDone: (Boolean) -> Unit) {
                 TextButton(onClick = { pendingLogout = false; onDone(true) }) { Text("Angemeldet bleiben") }
             },
         )
+    }
+}
+
+@Composable
+private fun ColumnScope.HostSection(
+    startHost: String?,
+    hasOverride: Boolean,
+    onHostChanged: (Boolean) -> Unit,
+) {
+    val ctx = LocalContext.current
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val recents = remember { DeviceConfig.recentHosts(ctx) }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { input = it; error = null }
+    }
+    fun launchScan() {
+        scanLauncher.launch(
+            ScanOptions().apply {
+                setPrompt("Tenant-QR scannen")
+                setBeepEnabled(true)
+                setOrientationLocked(false)
+                setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                captureActivity = CustomCaptureActivity::class.java
+            }
+        )
+    }
+    val cameraPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchScan()
+    }
+
+    Spacer(Modifier.height(20.dp))
+
+    OutlinedTextField(
+        value = input,
+        onValueChange = { input = it; error = null },
+        label = { Text("Tenant-Host") },
+        placeholder = { Text("kasse.comanda.leys.ch") },
+        singleLine = true,
+        isError = error != null,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (error != null) {
+        Spacer(Modifier.height(6.dp))
+        Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    }
+
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = {
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                launchScan()
+            else
+                cameraPerm.launch(Manifest.permission.CAMERA)
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("QR-Code scannen") }
+
+    if (recents.isNotEmpty()) {
+        Spacer(Modifier.height(20.dp))
+        Text("Zuletzt verwendet", style = MaterialTheme.typography.labelMedium)
+        recents.forEach { h ->
+            TextButton(onClick = { input = h; error = null }, modifier = Modifier.fillMaxWidth()) {
+                Text(h, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+
+    Spacer(Modifier.height(24.dp))
+    Button(
+        onClick = {
+            when (val r = TenantHostValidator.validate(input)) {
+                is TenantHostValidator.Result.Valid -> {
+                    DeviceConfig.setHostOverride(ctx, r.host)
+                    onHostChanged(r.host != startHost)
+                }
+                is TenantHostValidator.Result.Invalid -> error = r.reason
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Speichern & neu laden") }
+
+    if (hasOverride) {
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                DeviceConfig.clearHostOverride(ctx)
+                onHostChanged(TenantHostValidator.effectiveAllowedHost(null, BuildConfig.POS_URL) != startHost)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Auf Standard zurücksetzen") }
     }
 }
 

@@ -10,3 +10,43 @@ AndroidRelease:
       type: string
     sha256:
       type: string
+
+AndroidSetupPinRequest:
+  type: object
+  required: [pin]
+  properties:
+    pin:
+      type: string
+      minLength: 1
+      maxLength: 32
+
+AndroidSetupPinResponse:
+  type: object
+  required: [ok]
+  properties:
+    ok:
+      type: boolean
+
+AndroidInstallInfo:
+  type: object
+  required: [packageId, channel, installPath]
+  properties:
+    packageId:
+      type: string
+      description: Android applicationId suffix, e.g. t_blessthun
+    channel:
+      type: string
+    installPath:
+      type: string
+      description: >
+        Path on the tenant's own host that serves the install page, query
+        string included. Join it to the tenant origin to get the QR target.
+    token:
+      type: string
+      description: Empty when no download secret is configured.
+    versionName:
+      type: string
+      description: >
+        Version this package currently resolves to. Absent means no release
+        contains it yet. Older than the newest release means the package was
+        left out of that run.

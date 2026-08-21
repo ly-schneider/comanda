@@ -34,11 +34,15 @@ func newGitHubStub(t *testing.T) *httptest.Server {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 			t.Errorf("releases request Authorization = %q", got)
 		}
+		// Tenant APKs listed after the neutral one on purpose: a suffix match would
+		// return the last ".apk" seen and hand every device the wrong build.
 		_, _ = fmt.Fprintf(w, `[
 			{"tag_name": "web-v2.0.0", "assets": []},
 			{"tag_name": "android-production-v1.0.3", "assets": [
 				{"name": "comanda-pos.apk", "url": "%[1]s/assets/1"},
-				{"name": "comanda-pos.apk.sha256", "url": "%[1]s/assets/2"}
+				{"name": "comanda-pos.apk.sha256", "url": "%[1]s/assets/2"},
+				{"name": "comanda-pos-t_acme.apk", "url": "%[1]s/assets/4"},
+				{"name": "comanda-pos-t_acme.apk.sha256", "url": "%[1]s/assets/5"}
 			]},
 			{"tag_name": "android-staging-v1.0.2", "assets": [
 				{"name": "comanda-pos.apk", "url": "%[1]s/assets/3"}
@@ -57,6 +61,12 @@ func newGitHubStub(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/assets/2", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("abc123  comanda-pos.apk\n"))
 	})
+	mux.HandleFunc("/assets/4", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("acme-apk-bytes"))
+	})
+	mux.HandleFunc("/assets/5", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("def456  comanda-pos-t_acme.apk\n"))
+	})
 
 	srv = httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -67,7 +77,7 @@ func TestGetLatestReleaseUsesProxyDownloadURL(t *testing.T) {
 	srv := newGitHubStub(t)
 	s := newTestAndroidUpdateService(srv.URL)
 
-	release, err := s.GetLatestRelease(context.Background(), "production", "https://api.example.com")
+	release, err := s.GetLatestRelease(context.Background(), "production", "", "https://api.example.com")
 	if err != nil {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
@@ -92,7 +102,7 @@ func TestOpenAPKDownloadStreamsAsset(t *testing.T) {
 	srv := newGitHubStub(t)
 	s := newTestAndroidUpdateService(srv.URL)
 
-	body, size, err := s.OpenAPKDownload(context.Background(), "production")
+	body, size, err := s.OpenAPKDownload(context.Background(), "production", "")
 	if err != nil {
 		t.Fatalf("OpenAPKDownload: %v", err)
 	}
@@ -123,7 +133,7 @@ func TestGetLatestReleaseNoReleaseForChannel(t *testing.T) {
 	t.Cleanup(srv.Close)
 	s := newTestAndroidUpdateService(srv.URL)
 
-	release, err := s.GetLatestRelease(context.Background(), "staging", "https://api.example.com")
+	release, err := s.GetLatestRelease(context.Background(), "staging", "", "https://api.example.com")
 	if err != nil {
 		t.Fatalf("GetLatestRelease: %v", err)
 	}
@@ -134,7 +144,7 @@ func TestGetLatestReleaseNoReleaseForChannel(t *testing.T) {
 
 func TestGetLatestReleaseInvalidChannel(t *testing.T) {
 	s := newTestAndroidUpdateService("http://unused")
-	if _, err := s.GetLatestRelease(context.Background(), "beta", "https://api.example.com"); err == nil {
+	if _, err := s.GetLatestRelease(context.Background(), "beta", "", "https://api.example.com"); err == nil {
 		t.Fatal("expected error for invalid channel")
 	}
 }
@@ -154,7 +164,7 @@ func TestLatestReleaseInfoCaches(t *testing.T) {
 	s := newTestAndroidUpdateService(srv.URL)
 
 	for range 2 {
-		if _, err := s.GetLatestRelease(context.Background(), "production", "https://api.example.com"); err != nil {
+		if _, err := s.GetLatestRelease(context.Background(), "production", "", "https://api.example.com"); err != nil {
 			t.Fatalf("GetLatestRelease: %v", err)
 		}
 	}
@@ -162,5 +172,139 @@ func TestLatestReleaseInfoCaches(t *testing.T) {
 	defer mu.Unlock()
 	if calls != 1 {
 		t.Errorf("GitHub API called %d times, want 1 (cached)", calls)
+	}
+}
+
+func TestGetLatestReleasePicksPackageAsset(t *testing.T) {
+	srv := newGitHubStub(t)
+	s := newTestAndroidUpdateService(srv.URL)
+
+	release, err := s.GetLatestRelease(context.Background(), "production", "t_acme", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("GetLatestRelease: %v", err)
+	}
+	if release == nil {
+		t.Fatal("expected a release")
+		return
+	}
+	if want := "https://api.example.com/v1/android/download?channel=production&pkg=t_acme"; release.DownloadURL != want {
+		t.Errorf("DownloadURL = %q, want %q", release.DownloadURL, want)
+	}
+	// abc123 is the neutral build's, i.e. the wrong asset.
+	if release.SHA256 != "def456" {
+		t.Errorf("SHA256 = %q, want the t_acme asset's def456", release.SHA256)
+	}
+}
+
+func TestOpenAPKDownloadStreamsPackageAsset(t *testing.T) {
+	srv := newGitHubStub(t)
+	s := newTestAndroidUpdateService(srv.URL)
+
+	body, _, err := s.OpenAPKDownload(context.Background(), "production", "t_acme")
+	if err != nil {
+		t.Fatalf("OpenAPKDownload: %v", err)
+	}
+	if body == nil {
+		t.Fatal("expected a body")
+		return
+	}
+	defer func() { _ = body.Close() }()
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if string(data) != "acme-apk-bytes" {
+		t.Errorf("body = %q, want the t_acme asset", data)
+	}
+}
+
+func TestGetLatestReleaseUnknownPackageHasNoRelease(t *testing.T) {
+	srv := newGitHubStub(t)
+	s := newTestAndroidUpdateService(srv.URL)
+
+	release, err := s.GetLatestRelease(context.Background(), "production", "t_nobody", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("GetLatestRelease: %v", err)
+	}
+	if release != nil {
+		t.Errorf("expected no release for an unbuilt package, got %+v", release)
+	}
+}
+
+func TestGetLatestReleaseInvalidPackage(t *testing.T) {
+	s := newTestAndroidUpdateService("http://unused")
+	for _, pkg := range []string{"t_ACME", "acme", "t_acme-1", "t_", "../etc"} {
+		if _, err := s.GetLatestRelease(context.Background(), "production", pkg, "https://api.example.com"); err == nil {
+			t.Errorf("expected error for package %q", pkg)
+		}
+	}
+}
+
+func TestDownloadTokenEnforcement(t *testing.T) {
+	s := newTestAndroidUpdateService("http://unused")
+
+	if got := s.DownloadToken("production", "t_acme"); got != "" {
+		t.Errorf("DownloadToken without a secret = %q, want empty", got)
+	}
+	if !s.VerifyDownloadToken("production", "t_acme", "") {
+		t.Error("verification should pass while enforcement is off")
+	}
+
+	s.downloadSecret = "s3cret"
+	token := s.DownloadToken("production", "t_acme")
+	if token == "" {
+		t.Fatal("expected a derived token")
+	}
+	if s.DownloadToken("production", "t_acme") != token {
+		t.Error("token derivation must be deterministic — the APK bakes it at build time")
+	}
+	if s.DownloadToken("production", "t_other") == token {
+		t.Error("token must differ per package")
+	}
+	if s.DownloadToken("staging", "t_acme") == token {
+		t.Error("token must differ per channel")
+	}
+
+	// Not enforcing yet: tablets in the field send no token and must keep updating.
+	if !s.VerifyDownloadToken("production", "t_acme", "wrong") {
+		t.Error("wrong token should pass while enforcement is off")
+	}
+
+	s.requireToken = true
+	if !s.VerifyDownloadToken("production", "t_acme", token) {
+		t.Error("correct token rejected under enforcement")
+	}
+	if s.VerifyDownloadToken("production", "t_acme", "wrong") {
+		t.Error("wrong token accepted under enforcement")
+	}
+	if s.VerifyDownloadToken("production", "t_acme", "") {
+		t.Error("missing token accepted under enforcement")
+	}
+	if s.VerifyDownloadToken("production", "t_other", token) {
+		t.Error("another package's token accepted")
+	}
+
+	s.downloadSecret = ""
+	if !s.VerifyDownloadToken("production", "t_acme", "") {
+		t.Error("enforcement without a secret should fail open, not brick updates")
+	}
+}
+
+// The release workflow derives this same token in bash (see "Derive download
+// token" in android-release.yml). A drift silently stops every tablet on that
+// channel from updating, with no remote fix, so the value is pinned here.
+//
+// Shell equivalent:
+//
+//	printf '%s|%s' production t_acme \
+//	  | openssl dgst -sha256 -hmac golden-secret -binary \
+//	  | base64 | tr '+/' '-_' | tr -d '=' | cut -c1-32
+func TestDownloadTokenGoldenVector(t *testing.T) {
+	s := newTestAndroidUpdateService("http://unused")
+	s.downloadSecret = "golden-secret"
+
+	if got := s.DownloadToken("production", "t_acme"); got != "2TTYcKoC3ei9PTNbm9igJQfNAgMS50db" {
+		t.Errorf("DownloadToken = %q; the CI shell derivation no longer matches Go", got)
 	}
 }

@@ -67,8 +67,14 @@ func NewRouter(
 	r.Get("/health", apiHandlers.HealthCheck)
 
 	// ── Android update check + APK download (public, no auth) ───────
+	// Called on the API host with no tenant-bearing Host, so these sit outside
+	// the /v1 tenant-tx group. The optional ?t= token is the only gate.
 	r.Get("/v1/android/latest", wrapper.GetAndroidLatestVersion)
 	r.Get("/v1/android/download", wrapper.DownloadAndroidApk)
+
+	// Public by necessity (the tablet is unpaired at setup time); the handler
+	// rate limits failed attempts.
+	r.Post("/v1/android/setup/verify-pin", wrapper.VerifyAndroidSetupPin)
 
 	// ── Payrexx webhook (per-tenant, no auth, no Host) ──────────────
 	// Wired outside the /v1 tenant-tx group: with no tenant-bearing Host it can't
@@ -311,6 +317,7 @@ func NewRouter(
 			pa.Get("/platform/tenants", wrapper.ListTenants)
 			pa.Post("/platform/tenants", wrapper.CreateTenant)
 			pa.Get("/platform/tenants/{tenantId}", wrapper.GetTenant)
+			pa.Get("/platform/tenants/{tenantId}/android-install", wrapper.GetTenantAndroidInstall)
 			pa.Patch("/platform/tenants/{tenantId}", wrapper.UpdateTenant)
 			pa.Post("/platform/tenants/{tenantId}/owner-invite", wrapper.CreateOwnerInvite)
 
