@@ -295,3 +295,22 @@ func TestDownloadTokenEnforcement(t *testing.T) {
 		t.Error("enforcement without a secret should fail open, not brick updates")
 	}
 }
+
+// The release workflow derives this same token in bash to bake it into the APK
+// (see "Derive download token" in android-release.yml). If the two ever
+// disagree, every tablet on that channel silently stops receiving updates and
+// cannot be fixed remotely — so the exact value is pinned here.
+//
+// Shell equivalent:
+//
+//	printf '%s|%s' production t_acme \
+//	  | openssl dgst -sha256 -hmac golden-secret -binary \
+//	  | base64 | tr '+/' '-_' | tr -d '=' | cut -c1-32
+func TestDownloadTokenGoldenVector(t *testing.T) {
+	s := newTestAndroidUpdateService("http://unused")
+	s.downloadSecret = "golden-secret"
+
+	if got := s.DownloadToken("production", "t_acme"); got != "2TTYcKoC3ei9PTNbm9igJQfNAgMS50db" {
+		t.Errorf("DownloadToken = %q; the CI shell derivation no longer matches Go", got)
+	}
+}

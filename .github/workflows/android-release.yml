@@ -14,6 +14,16 @@ on:
         description: "Version to release (e.g., 1.0.0)"
         required: true
         type: string
+      tenants:
+        description: >
+          Tenant builds to produce, as JSON:
+          [{"pkg":"t_acme","label":"Acme","posUrl":"https://acme.comanda.leys.ch/pos","iconBg":"#0B5D3B","iconUrl":"https://…/logo.png"}].
+          Leave empty for the neutral build only. iconBg and iconUrl are
+          optional — without a usable logo the icon falls back to the tenant's
+          initials.
+        required: false
+        default: "[]"
+        type: string
 
 jobs:
   quality-checks:
@@ -49,13 +59,48 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --parallel
 
-  build-and-release:
-    name: Build & Release Android APK
+  plan:
+    name: Plan builds
     runs-on: ubuntu-latest
     needs: quality-checks
+    outputs:
+      builds: ${{ steps.plan.outputs.builds }}
+    steps:
+      - name: Build the matrix
+        id: plan
+        env:
+          TENANTS: ${{ inputs.tenants }}
+        run: |
+          set -euo pipefail
+          # The neutral build always ships: it is the demo/bring-up app and the
+          # fallback if a tenant build ever has to be rolled back.
+          #
+          # Every entry is filled out with empty strings for the optional keys.
+          # A missing key would reach the matrix as null, and null vs "" in a
+          # GitHub expression is a coercion rule nobody should have to remember.
+          EMPTY='{pkg:"",label:"",posUrl:"",iconBg:"",iconUrl:""}'
+          BUILDS=$(jq -c --argjson empty "$(jq -nc "$EMPTY")" \
+            '[$empty] + [(. // [])[] | $empty + with_entries(select(.value != null))]' \
+            <<<"${TENANTS:-[]}")
+
+          if ! jq -e 'all(.[]; .pkg == "" or (.pkg | test("^t_[a-z0-9_]{1,60}$")))' <<<"$BUILDS" >/dev/null; then
+            echo "A tenant pkg is not a valid android_package_id (^t_[a-z0-9_]{1,60}$)"; exit 1
+          fi
+          if ! jq -e 'all(.[]; .pkg == "" or (.label != "" and .posUrl != ""))' <<<"$BUILDS" >/dev/null; then
+            echo "Every tenant build needs a label and a posUrl"; exit 1
+          fi
+          echo "builds=$BUILDS" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "  - " + (if .pkg == "" then "neutral" else .pkg + " (" + .label + ")" end)' <<<"$BUILDS"
+
+  build:
+    name: Build ${{ matrix.build.pkg == '' && 'neutral' || matrix.build.pkg }}
+    runs-on: ubuntu-latest
+    needs: plan
     environment: ${{ inputs.environment }}
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        build: ${{ fromJson(needs.plan.outputs.builds) }}
 
     steps:
       - name: Checkout code
@@ -83,7 +128,6 @@ jobs:
           echo "COMANDA_UPLOAD_STORE_FILE=$RUNNER_TEMP/comanda-upload.jks" >> "$GITHUB_ENV"
 
       - name: Validate version format
-        id: version
         run: |
           VERSION="${{ inputs.version }}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -91,49 +135,139 @@ jobs:
             exit 1
           fi
 
-          # Calculate version code (major * 10000 + minor * 100 + patch)
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+      - name: Fetch tenant logo
+        id: icon
+        if: matrix.build.iconUrl != ''
+        env:
+          ICON_URL: ${{ matrix.build.iconUrl }}
+        run: |
+          set -euo pipefail
+          # A missing or unreadable logo is not fatal — the icon generator falls
+          # back to the tenant's initials, which is often the better icon anyway.
+          if curl -fsSL --max-time 30 "$ICON_URL" -o "$RUNNER_TEMP/tenant-icon"; then
+            echo "path=$RUNNER_TEMP/tenant-icon" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not fetch $ICON_URL; falling back to initials"
+          fi
 
-          echo "version_name=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "date=$(date +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_OUTPUT"
+      - name: Derive download token
+        id: token
+        env:
+          DOWNLOAD_SECRET: ${{ secrets.ANDROID_DOWNLOAD_SECRET }}
+          CHANNEL: ${{ inputs.environment == 'staging' && 'staging' || 'production' }}
+          PKG: ${{ matrix.build.pkg }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DOWNLOAD_SECRET:-}" ]; then
+            echo "::notice::ANDROID_DOWNLOAD_SECRET unset; building without a download token"
+            exit 0
+          fi
+          # Must match androidUpdateService.DownloadToken exactly — a mismatch
+          # locks tablets out of updates. The Go side pins this with a golden
+          # vector in TestDownloadTokenGoldenVector.
+          TOKEN=$(printf '%s|%s' "$CHANNEL" "$PKG" \
+            | openssl dgst -sha256 -hmac "$DOWNLOAD_SECRET" -binary \
+            | base64 | tr '+/' '-_' | tr -d '=' | cut -c1-32)
+          echo "::add-mask::$TOKEN"
+          echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Build Android release APK
+      - name: Build APK
         working-directory: android
         env:
           VERSION_TAG: ${{ inputs.version }}
           SUMUP_AFFILIATE_KEY: ${{ secrets.SUMUP_AFFILIATE_KEY }}
-          POS_URL: ${{ secrets.POS_URL }}
           ORG_GRADLE_PROJECT_sumupAffiliateKey: ${{ secrets.SUMUP_AFFILIATE_KEY }}
-          ORG_GRADLE_PROJECT_posUrl: ${{ secrets.POS_URL }}
-          ORG_GRADLE_PROJECT_setupPin: ${{ secrets.ANDROID_SETUP_PIN }}
+          ORG_GRADLE_PROJECT_posUrl: ${{ matrix.build.posUrl != '' && matrix.build.posUrl || secrets.POS_URL }}
           ORG_GRADLE_PROJECT_comandaEnv: ${{ inputs.environment }}
+          ORG_GRADLE_PROJECT_tenantPkg: ${{ matrix.build.pkg }}
+          ORG_GRADLE_PROJECT_appLabel: ${{ matrix.build.label }}
+          ORG_GRADLE_PROJECT_iconBg: ${{ matrix.build.iconBg }}
+          ORG_GRADLE_PROJECT_iconSource: ${{ steps.icon.outputs.path }}
+          ORG_GRADLE_PROJECT_updateToken: ${{ steps.token.outputs.value }}
           COMANDA_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           COMANDA_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           COMANDA_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}
           UPDATE_CHECK_URL: ${{ vars.UPDATE_CHECK_URL }}
         run: |
-          # Build the appropriate variant based on environment
+          set -euo pipefail
           if [ "${{ inputs.environment }}" == "staging" ]; then
             ./gradlew clean assembleStaging
           else
             ./gradlew clean assembleRelease
           fi
 
-      - name: Rename APK with environment
+      - name: Name the APK for its package
+        id: artifact
+        env:
+          PKG: ${{ matrix.build.pkg }}
         run: |
-          # Navigate to the correct output directory based on build type
+          set -euo pipefail
           if [ "${{ inputs.environment }}" == "staging" ]; then
-            cd android/app/build/outputs/apk/staging
+            APK_DIR="android/app/build/outputs/apk/staging"
           else
-            cd android/app/build/outputs/apk/release
+            APK_DIR="android/app/build/outputs/apk/release"
           fi
 
-          for apk in *.apk; do
-            mv "$apk" "comanda-pos.apk"
-          done
-          sha256sum comanda-pos.apk > comanda-pos.apk.sha256
+          # The asset name is the contract with the update feed: the backend
+          # matches it exactly, so a device only ever gets its own build.
+          if [ -z "$PKG" ]; then
+            NAME="comanda-pos.apk"
+          else
+            NAME="comanda-pos-$PKG.apk"
+          fi
+
+          cd "$APK_DIR"
+          COUNT=$(ls -1 *.apk | wc -l)
+          if [ "$COUNT" -ne 1 ]; then
+            echo "Expected exactly one APK, found $COUNT"; ls -la; exit 1
+          fi
+          mv *.apk "$NAME"
+          sha256sum "$NAME" > "$NAME.sha256"
+
+          echo "dir=$APK_DIR" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "artifact=${PKG:-neutral}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apk-${{ steps.artifact.outputs.artifact }}
+          path: |
+            ${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.name }}
+            ${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.name }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build summary
+        env:
+          PKG: ${{ matrix.build.pkg }}
+          LABEL: ${{ matrix.build.label }}
+          ICON: ${{ steps.icon.outputs.path }}
+          BG: ${{ matrix.build.iconBg }}
+        run: |
+          {
+            echo "### ${PKG:-neutral}"
+            echo ""
+            echo "- **APK:** ${{ steps.artifact.outputs.name }}"
+            echo "- **Label:** ${LABEL:-Comanda POS}"
+            echo "- **applicationId:** ch.leys.comanda${PKG:+.$PKG}"
+            echo "- **POS URL:** ${{ matrix.build.posUrl != '' && matrix.build.posUrl || '(default)' }}"
+            echo "- **Icon:** ${ICON:+logo}${ICON:-initials} on ${BG:-#1F1F1D}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all APKs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Create and publish GitHub Release
         env:
@@ -142,60 +276,53 @@ jobs:
           TITLE: Android POS - ${{ inputs.environment }} v${{ inputs.version }}
           ENVIRONMENT: ${{ inputs.environment }}
           VERSION: ${{ inputs.version }}
-          VERSION_CODE: ${{ steps.version.outputs.version_code }}
-          BUILT_AT: ${{ steps.version.outputs.date }}
           BRANCH: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
           IS_PRERELEASE: ${{ inputs.environment == 'staging' }}
         run: |
           set -euo pipefail
 
-          if [ "$ENVIRONMENT" = "staging" ]; then
-            APK_DIR="android/app/build/outputs/apk/staging"
-          else
-            APK_DIR="android/app/build/outputs/apk/release"
-          fi
-
+          ASSETS=$(ls -1 dist/*.apk dist/*.sha256)
           NOTES=$(cat <<EOF
           ## Android POS Release
 
           **Environment:** $ENVIRONMENT
-          **Version:** $VERSION (build $VERSION_CODE)
-          **Built:** $BUILT_AT
+          **Version:** $VERSION
           **Branch:** $BRANCH
           **Commit:** $COMMIT_SHA
 
           ---
 
-          Download the APK below and install on your tablets.
+          One APK per tenant package plus the neutral build. Tablets fetch their
+          own asset through the update feed; humans install from the QR code in
+          platform admin.
           EOF
           )
 
-          # Create as draft so assets can be attached on immutable-release repos
+          # Draft first so assets can be attached on immutable-release repos.
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$TITLE" \
             --notes "$NOTES" \
             --target "$COMMIT_SHA" \
             --draft \
-            "$APK_DIR/comanda-pos.apk" \
-            "$APK_DIR/comanda-pos.apk.sha256"
+            $ASSETS
 
-          # Publish draft; set prerelease flag based on environment
           if [ "$IS_PRERELEASE" = "true" ]; then
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
           else
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
           fi
 
-      - name: Build summary
+      - name: Release summary
         run: |
-          echo "## Android Release Created" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version:** ${{ inputs.version }} (build ${{ steps.version.version_code }})" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag:** android-${{ inputs.environment }}-v${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **APK:** comanda-pos.apk" >> $GITHUB_STEP_SUMMARY
-          echo "- **Prerelease:** ${{ inputs.environment == 'staging' }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "APK is available in the [Releases](https://github.com/${{ github.repository }}/releases) page." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Android Release Created"
+            echo ""
+            echo "- **Environment:** ${{ inputs.environment }}"
+            echo "- **Version:** ${{ inputs.version }}"
+            echo "- **Tag:** android-${{ inputs.environment }}-v${{ inputs.version }}"
+            echo ""
+            echo "### Assets"
+            ls -1 dist/*.apk | sed 's|dist/|- |'
+          } >> "$GITHUB_STEP_SUMMARY"
