@@ -1,8 +1,11 @@
 package tenantbranding
 
 import java.awt.Color
+import java.awt.GradientPaint
+import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class InitialsForTest {
 
@@ -73,5 +76,56 @@ class ParseColorTest {
             } catch (_: NumberFormatException) {
             }
         }
+    }
+}
+
+class MatteColorTest {
+
+    private fun image(border: Color?, centre: Color): BufferedImage {
+        val img = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        if (border != null) {
+            g.color = border
+            g.fillRect(0, 0, 64, 64)
+        }
+        g.color = centre
+        g.fillRect(16, 16, 32, 32)
+        g.dispose()
+        return img
+    }
+
+    @Test
+    fun `flat opaque border is the matte`() {
+        assertEquals(Color.WHITE, matteColor(image(Color.WHITE, Color.RED)))
+        val teal = Color(0x29, 0xB4, 0xA7)
+        assertEquals(teal, matteColor(image(teal, Color.WHITE)))
+    }
+
+    @Test
+    fun `transparent border is not a matte`() {
+        assertNull(matteColor(image(null, Color.RED)))
+    }
+
+    @Test
+    fun `a partly transparent border is not a matte`() {
+        assertNull(matteColor(image(Color(255, 255, 255, 128), Color.RED)))
+    }
+
+    @Test
+    fun `a border that is not one flat colour is not a matte`() {
+        val img = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.paint = GradientPaint(0f, 0f, Color.RED, 64f, 64f, Color.BLUE)
+        g.fillRect(0, 0, 64, 64)
+        g.dispose()
+        assertNull(matteColor(img))
+    }
+
+    @Test
+    fun `near-identical border survives antialiasing noise`() {
+        val img = image(Color.WHITE, Color.RED)
+        // One slightly-off pixel, as a rescaled logo's edge would produce.
+        img.setRGB(0, 0, Color(252, 253, 255).rgb)
+        assertEquals(Color.WHITE, matteColor(img))
     }
 }

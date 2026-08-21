@@ -16,6 +16,7 @@ import java.awt.Color
 import java.awt.Font
 import java.awt.RenderingHints
 import java.awt.geom.Ellipse2D
+import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -59,9 +60,14 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         // CI runners have no display.
         System.setProperty("java.awt.headless", "true")
 
-        val background = parseColor(backgroundColor.get())
-        val foreground = contrastingColor(background)
         val logo = sourceImage.orNull?.asFile?.takeIf { it.isFile }?.let { readImage(it) }
+        // Tenant logos are often square with an opaque white matte rather than a
+        // transparent one. Compositing that onto the brand colour reads as a hard
+        // tile, so adopt the logo's own matte as the icon background and let the
+        // two blend. Falls back to the brand colour for transparent art.
+        val matte = logo?.let(::matteColor)
+        val background = matte ?: parseColor(backgroundColor.get())
+        val foreground = contrastingColor(background)
 
         ADAPTIVE_DENSITIES.forEach { (density, size) ->
             val canvas = blankCanvas(size)
@@ -69,13 +75,13 @@ abstract class GenerateTenantIconTask : DefaultTask() {
                 // Fitting the art's diagonal inside the safe circle survives
                 // any mask shape the launcher applies.
                 val safeDiameter = size * SAFE_ZONE_FRACTION
-                drawContent(g, logo, initials.get(), foreground, size, safeDiameter)
+                drawContent(g, logo, initials.get(), foreground, size, safeDiameter, matte != null)
             }
             write(canvas, File(out, "mipmap-$density/ic_launcher_tenant_foreground.png"))
         }
 
         LEGACY_DENSITIES.forEach { (density, size) ->
-            val icon = legacyIcon(size, logo, initials.get(), background, foreground)
+            val icon = legacyIcon(size, logo, initials.get(), background, foreground, matte != null)
             write(icon, File(out, "mipmap-$density/ic_launcher_tenant.png"))
             write(icon, File(out, "mipmap-$density/ic_launcher_tenant_round.png"))
         }
@@ -110,13 +116,14 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         initials: String,
         background: Color,
         foreground: Color,
+        blends: Boolean,
     ): BufferedImage {
         val canvas = blankCanvas(size)
         canvas.createGraphics().use { g ->
             // Pre-26 launchers show the bitmap unmasked, so draw our own circle.
             g.color = background
             g.fill(Ellipse2D.Float(0f, 0f, size.toFloat(), size.toFloat()))
-            drawContent(g, logo, initials, foreground, size, size * LEGACY_CONTENT_FRACTION)
+            drawContent(g, logo, initials, foreground, size, size * LEGACY_CONTENT_FRACTION, blends)
         }
         return canvas
     }
@@ -128,12 +135,30 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         foreground: Color,
         size: Int,
         contentDiameter: Float,
+        blends: Boolean,
     ) {
         if (logo != null) {
-            val scale = contentDiameter / Math.hypot(logo.width.toDouble(), logo.height.toDouble()).toFloat()
+            // Art that blends into the background only needs its *mark* inside the
+            // safe circle, and a logo's own matte already pads that. Fitting the
+            // whole frame's diagonal as well would inset it twice and leave the
+            // mark looking shrunken.
+            val extent =
+                if (blends) maxOf(logo.width, logo.height).toDouble()
+                else Math.hypot(logo.width.toDouble(), logo.height.toDouble())
+            val scale = contentDiameter / extent.toFloat()
             val w = (logo.width * scale).toInt().coerceAtLeast(1)
             val h = (logo.height * scale).toInt().coerceAtLeast(1)
-            g.drawImage(logo, (size - w) / 2, (size - h) / 2, w, h, null)
+            val x = (size - w) / 2
+            val y = (size - h) / 2
+            // Rounded so an opaque logo whose matte differs from the background
+            // does not sit there as a hard-edged rectangle.
+            val clip = g.clip
+            g.clip(RoundRectangle2D.Float(
+                x.toFloat(), y.toFloat(), w.toFloat(), h.toFloat(),
+                minOf(w, h) * CORNER_FRACTION, minOf(w, h) * CORNER_FRACTION,
+            ))
+            g.drawImage(logo, x, y, w, h, null)
+            g.clip = clip
             return
         }
 
@@ -175,6 +200,7 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         /** Adaptive layers are 108dp; the guaranteed-visible circle is 72dp. */
         const val SAFE_ZONE_FRACTION = 72f / 108f
         const val LEGACY_CONTENT_FRACTION = 0.72f
+        const val CORNER_FRACTION = 0.18f
 
         val ADAPTIVE_DENSITIES = listOf(
             "mdpi" to 108, "hdpi" to 162, "xhdpi" to 216, "xxhdpi" to 324, "xxxhdpi" to 432,
@@ -207,6 +233,48 @@ internal fun parseColor(raw: String): Color {
 }
 
 internal fun toHex(c: Color): String = String.format("#%02X%02X%02X%02X", c.alpha, c.red, c.green, c.blue)
+
+/**
+ * The opaque matte a logo sits on, or null when the border is transparent or not
+ * one flat colour. Sampled from the outer ring rather than a single pixel so a
+ * stray antialiased corner does not decide the whole icon's background.
+ */
+internal fun matteColor(img: BufferedImage): Color? {
+    val samples = mutableListOf<Int>()
+    val stepX = maxOf(1, img.width / 32)
+    val stepY = maxOf(1, img.height / 32)
+    var x = 0
+    while (x < img.width) {
+        samples.add(img.getRGB(x, 0))
+        samples.add(img.getRGB(x, img.height - 1))
+        x += stepX
+    }
+    var y = 0
+    while (y < img.height) {
+        samples.add(img.getRGB(0, y))
+        samples.add(img.getRGB(img.width - 1, y))
+        y += stepY
+    }
+
+    // The dominant sample, not the first: a rescaled logo's corner is often a
+    // pixel or two of antialiasing noise, and adopting that as the background
+    // leaves a faint seam against the matte it was supposed to match.
+    val dominant = Color(samples.groupingBy { it }.eachCount().maxBy { it.value }.key, true)
+    if (dominant.alpha != 255) return null
+    for (rgb in samples) {
+        val c = Color(rgb, true)
+        if (c.alpha != 255) return null
+        if (Math.abs(c.red - dominant.red) > MATTE_TOLERANCE ||
+            Math.abs(c.green - dominant.green) > MATTE_TOLERANCE ||
+            Math.abs(c.blue - dominant.blue) > MATTE_TOLERANCE
+        ) {
+            return null
+        }
+    }
+    return Color(dominant.red, dominant.green, dominant.blue, 255)
+}
+
+private const val MATTE_TOLERANCE = 6
 
 /** WCAG relative luminance, so initials stay legible on any brand colour. */
 internal fun contrastingColor(background: Color): Color {
