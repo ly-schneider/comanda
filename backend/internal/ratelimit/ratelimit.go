@@ -1,9 +1,5 @@
-// Package ratelimit provides a fixed-window, in-process attempt limiter for
-// unauthenticated endpoints.
-//
-// In-process means the window is per pod, so a limit of N across a replica set
-// of R tolerates up to N*R attempts. That is fine for slowing a guess-the-PIN
-// loop to uselessness; it is not a distributed quota.
+// Package ratelimit provides a fixed-window, in-process attempt limiter.
+// The window is per pod, so a limit of N across R replicas tolerates N*R.
 package ratelimit
 
 import (
@@ -64,7 +60,6 @@ func (l *Limiter) evictExpired(now time.Time) {
 	}
 }
 
-// Middleware rejects with 429 once a client IP exhausts its window.
 func (l *Limiter) Middleware(message string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

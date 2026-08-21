@@ -22,8 +22,7 @@ func androidChannel(r *http.Request) (string, bool) {
 	return channel, channel == "staging" || channel == "production"
 }
 
-// androidPackage reads the tenant build selector. Empty selects the neutral
-// build, which is what pre-tenant-build tablets in the field still ask for.
+// Empty selects the neutral build, which is what tablets in the field still ask for.
 func androidPackage(r *http.Request) (string, bool) {
 	pkg := strings.TrimSpace(r.URL.Query().Get("pkg"))
 	if pkg == "" {
@@ -110,14 +109,8 @@ func (h *Handlers) DownloadAndroidApk(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// VerifyAndroidSetupPin checks the operator PIN that gates Device Setup on the
-// tablet.
-//
 // The PIN lives here rather than in the APK, where it was a readable string
-// constant in a publicly downloadable binary. This does not stop a patched app —
-// nothing server-side can, since the screen it guards is local — but it closes
-// the path that matters: a PIN lifted from a downloaded APK and typed into the
-// real one.
+// constant in a publicly downloadable binary.
 func (h *Handlers) VerifyAndroidSetupPin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Pin string `json:"pin"`

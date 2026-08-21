@@ -24,14 +24,13 @@ import javax.imageio.ImageIO
  * Generates a tenant's launcher icon from their logo, or from their initials
  * when no usable logo is supplied.
  *
- * Resources are named `ic_launcher_tenant*` rather than `ic_launcher*` so they
- * never collide with the stock icons already in `main/res` — the manifest picks
- * between them through the `appIcon` placeholder.
+ * Resources are named `ic_launcher_tenant*` so they never collide with the stock
+ * icons in `main/res`; the manifest picks between them via the `appIcon` placeholder.
  */
 @CacheableTask
 abstract class GenerateTenantIconTask : DefaultTask() {
 
-    /** Tenant logo. Absent falls back to [initials]. */
+    /** Absent falls back to [initials]. */
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
@@ -44,7 +43,6 @@ abstract class GenerateTenantIconTask : DefaultTask() {
     @get:Input
     abstract val backgroundColor: Property<String>
 
-    /** Off for the neutral build, which keeps the stock launcher icon. */
     @get:Input
     abstract val generateIcon: Property<Boolean>
 
@@ -58,7 +56,7 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         out.mkdirs()
         if (!generateIcon.get()) return
 
-        // Rendering happens on CI runners with no display.
+        // CI runners have no display.
         System.setProperty("java.awt.headless", "true")
 
         val background = parseColor(backgroundColor.get())
@@ -68,10 +66,8 @@ abstract class GenerateTenantIconTask : DefaultTask() {
         ADAPTIVE_DENSITIES.forEach { (density, size) ->
             val canvas = blankCanvas(size)
             canvas.createGraphics().use { g ->
-                // The outer 18 of the 108dp layer is reserved for masking and
-                // parallax; only the inner 72dp circle is guaranteed visible. Fit
-                // the art's *diagonal* inside that circle so nothing is ever
-                // clipped, whatever shape mask the launcher applies.
+                // Fitting the art's diagonal inside the safe circle survives
+                // any mask shape the launcher applies.
                 val safeDiameter = size * SAFE_ZONE_FRACTION
                 drawContent(g, logo, initials.get(), foreground, size, safeDiameter)
             }
@@ -117,8 +113,7 @@ abstract class GenerateTenantIconTask : DefaultTask() {
     ): BufferedImage {
         val canvas = blankCanvas(size)
         canvas.createGraphics().use { g ->
-            // Pre-26 launchers show the bitmap unmasked, so the icon supplies its
-            // own circle rather than sitting as a bare square among round peers.
+            // Pre-26 launchers show the bitmap unmasked, so draw our own circle.
             g.color = background
             g.fill(Ellipse2D.Float(0f, 0f, size.toFloat(), size.toFloat()))
             drawContent(g, logo, initials, foreground, size, size * LEGACY_CONTENT_FRACTION)
@@ -144,8 +139,7 @@ abstract class GenerateTenantIconTask : DefaultTask() {
 
         val text = initials.ifBlank { "?" }
         g.color = foreground
-        // Binary-search-free fit: measure at a reference size and scale linearly,
-        // then re-measure once because font metrics are not perfectly linear.
+        // Scale linearly from a reference size, twice: font metrics aren't linear.
         var font = Font(Font.SANS_SERIF, Font.BOLD, (size / 2f).toInt().coerceAtLeast(1))
         repeat(2) {
             val bounds = g.getFontMetrics(font).getStringBounds(text, g)
@@ -180,7 +174,6 @@ abstract class GenerateTenantIconTask : DefaultTask() {
     private companion object {
         /** Adaptive layers are 108dp; the guaranteed-visible circle is 72dp. */
         const val SAFE_ZONE_FRACTION = 72f / 108f
-        /** Content diagonal inside the circle this icon draws for itself. */
         const val LEGACY_CONTENT_FRACTION = 0.72f
 
         val ADAPTIVE_DENSITIES = listOf(
@@ -215,10 +208,7 @@ internal fun parseColor(raw: String): Color {
 
 internal fun toHex(c: Color): String = String.format("#%02X%02X%02X%02X", c.alpha, c.red, c.green, c.blue)
 
-/**
- * Picks white or near-black against [background] using the WCAG relative
- * luminance, so an initials icon stays legible on any brand colour.
- */
+/** WCAG relative luminance, so initials stay legible on any brand colour. */
 internal fun contrastingColor(background: Color): Color {
     fun channel(v: Int): Double {
         val s = v / 255.0
@@ -230,7 +220,6 @@ internal fun contrastingColor(background: Color): Color {
     return if (luminance > 0.179) Color(0x1F, 0x1F, 0x1D) else Color.WHITE
 }
 
-/** Derives up to two letters from a tenant name for the fallback icon. */
 fun initialsFor(name: String): String {
     val words = name.trim().split(Regex("[\\s\\-_]+")).filter { it.isNotBlank() }
     return when {

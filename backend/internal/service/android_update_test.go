@@ -34,9 +34,8 @@ func newGitHubStub(t *testing.T) *httptest.Server {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 			t.Errorf("releases request Authorization = %q", got)
 		}
-		// The tenant APKs are listed after the neutral one on purpose: a suffix
-		// match would return the last ".apk" seen and hand every device the wrong
-		// tenant's build.
+		// Tenant APKs listed after the neutral one on purpose: a suffix match would
+		// return the last ".apk" seen and hand every device the wrong build.
 		_, _ = fmt.Fprintf(w, `[
 			{"tag_name": "web-v2.0.0", "assets": []},
 			{"tag_name": "android-production-v1.0.3", "assets": [
@@ -191,8 +190,7 @@ func TestGetLatestReleasePicksPackageAsset(t *testing.T) {
 	if want := "https://api.example.com/v1/android/download?channel=production&pkg=t_acme"; release.DownloadURL != want {
 		t.Errorf("DownloadURL = %q, want %q", release.DownloadURL, want)
 	}
-	// The neutral build's sha256 is abc123; picking it here would mean the asset
-	// match fell back to the wrong APK.
+	// abc123 is the neutral build's, i.e. the wrong asset.
 	if release.SHA256 != "def456" {
 		t.Errorf("SHA256 = %q, want the t_acme asset's def456", release.SHA256)
 	}
@@ -246,7 +244,6 @@ func TestGetLatestReleaseInvalidPackage(t *testing.T) {
 func TestDownloadTokenEnforcement(t *testing.T) {
 	s := newTestAndroidUpdateService("http://unused")
 
-	// No secret configured: no token to hand out, and nothing to enforce.
 	if got := s.DownloadToken("production", "t_acme"); got != "" {
 		t.Errorf("DownloadToken without a secret = %q, want empty", got)
 	}
@@ -269,8 +266,7 @@ func TestDownloadTokenEnforcement(t *testing.T) {
 		t.Error("token must differ per channel")
 	}
 
-	// Still not enforcing: a wrong token is accepted so tablets in the field keep
-	// updating until the fleet ships a build that sends one.
+	// Not enforcing yet: tablets in the field send no token and must keep updating.
 	if !s.VerifyDownloadToken("production", "t_acme", "wrong") {
 		t.Error("wrong token should pass while enforcement is off")
 	}
@@ -289,17 +285,15 @@ func TestDownloadTokenEnforcement(t *testing.T) {
 		t.Error("another package's token accepted")
 	}
 
-	// Enforcement without a secret must not lock the fleet out.
 	s.downloadSecret = ""
 	if !s.VerifyDownloadToken("production", "t_acme", "") {
 		t.Error("enforcement without a secret should fail open, not brick updates")
 	}
 }
 
-// The release workflow derives this same token in bash to bake it into the APK
-// (see "Derive download token" in android-release.yml). If the two ever
-// disagree, every tablet on that channel silently stops receiving updates and
-// cannot be fixed remotely — so the exact value is pinned here.
+// The release workflow derives this same token in bash (see "Derive download
+// token" in android-release.yml). A drift silently stops every tablet on that
+// channel from updating, with no remote fix, so the value is pinned here.
 //
 // Shell equivalent:
 //

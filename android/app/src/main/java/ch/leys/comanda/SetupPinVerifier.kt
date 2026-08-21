@@ -12,12 +12,8 @@ private const val TAG = "SetupPinVerifier"
 /**
  * Checks the Device Setup PIN against the platform API.
  *
- * The PIN used to be a BuildConfig constant compared on device, which put it in
- * plain sight of anyone who pulled the APK apart. Server-side it is neither
- * shipped nor guessable at speed — the endpoint rate limits per client.
- *
- * Device Setup already requires connectivity (SumUp login does), so there is no
- * offline path to fall back to and no local copy of the PIN to keep in sync.
+ * No offline fallback: Device Setup already requires connectivity because SumUp
+ * login does, so there is no local copy of the PIN to leak or keep in sync.
  */
 object SetupPinVerifier {
 

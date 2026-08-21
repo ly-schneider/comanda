@@ -282,13 +282,8 @@ class WebPosActivity : ComponentActivity() {
         configureWebView(webView)
         setContentView(webView)
 
-        // Bridge for PosBridge.* calls from /pos page.
-        //
-        // The bridge hands the loaded page card payments, printing and the
-        // scanner, so a tenant build refuses to expose it anywhere but the host
-        // it was built for. Nothing can move that host today — Device Setup
-        // hides the field in tenant builds — so this is an invariant check that
-        // fails closed rather than a live gate.
+        // Nothing can move a tenant build's host today (Device Setup hides the
+        // field), so this is a fail-closed invariant check, not a live gate.
         if (bridgeHostAllowed()) {
             webView.addJavascriptInterface(PosBridge(), "PosBridge")
         } else {

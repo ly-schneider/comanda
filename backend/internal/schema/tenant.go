@@ -30,10 +30,9 @@ func (Tenant) Fields() []ent.Field {
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
-		// Suffix of the tenant's Android applicationId (ch.leys.comanda.<this>).
-		// Immutable and unique: a tablet keys its install off the applicationId, so
-		// changing this would make the next build a different app — no upgrade
-		// path, re-pairing, two icons on the launcher.
+		// Suffix of the tenant's Android applicationId. Immutable: a tablet keys its
+		// install off the applicationId, so a change makes the next build a
+		// different app — no upgrade path, re-pairing, two icons.
 		field.String("android_package_id").
 			MaxLen(64).
 			Optional().

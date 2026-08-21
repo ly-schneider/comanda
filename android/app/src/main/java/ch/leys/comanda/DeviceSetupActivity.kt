@@ -53,8 +53,7 @@ import com.sumup.merchant.reader.api.SumUpLoginContract
  * only, the tenant host.
  *
  * Returns RESULT_OK with a `hostChanged` extra so WebPosActivity knows to wipe
- * the old tenant's session and reload. A tenant build never sets it — its host
- * is compiled in.
+ * the old tenant's session and reload.
  */
 class DeviceSetupActivity : ComponentActivity() {
 
@@ -165,11 +164,9 @@ private fun SetupForm(startHost: String?, onDone: (Boolean) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // A tenant build is pinned to the host it was built for. The field is not
-        // hidden for tidiness: whatever page this app loads holds the native
-        // bridge — card payments, printing, the scanner — so being able to point
-        // it somewhere else is the capability worth removing outright. Switching
-        // tenants means installing that tenant's own app.
+        // Whatever page this app loads holds the native bridge — card payments,
+        // printing, the scanner — so a tenant build removes the ability to point
+        // it elsewhere rather than gating it. Switching tenants = another app.
         if (!BuildConfig.TENANT_BUILD) {
             HostSection(startHost, hasOverride, onHostChanged = ::finishAfterHostChange)
         }
@@ -202,7 +199,6 @@ private fun SetupForm(startHost: String?, onDone: (Boolean) -> Unit) {
     }
 }
 
-/** Host switching. Neutral builds only — see the call site. */
 @Composable
 private fun ColumnScope.HostSection(
     startHost: String?,

@@ -19,7 +19,7 @@ func TestAllowWithinWindow(t *testing.T) {
 		t.Error("fourth attempt allowed past the limit")
 	}
 	if !l.Allow("5.6.7.8") {
-		t.Error("a different client was caught by another client's window")
+		t.Error("a different client hit another client's window")
 	}
 }
 

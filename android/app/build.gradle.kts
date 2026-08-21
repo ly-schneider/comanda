@@ -18,10 +18,7 @@ fun semverFromTag(): Triple<Int, Int, Int> {
 fun prop(name: String): String =
     ((project.findProperty(name) as String?) ?: System.getenv(name.uppercase())).orEmpty().trim()
 
-// ── Tenant build inputs ───────────────────────────────────────────────
-// All optional. With none set this builds the neutral "Comanda POS" app,
-// unchanged. With tenantPkg set it builds that tenant's own app: its own
-// applicationId, launcher name, icon, and baked POS host.
+// With tenantPkg set this builds one tenant's own app; without it, the neutral one.
 val tenantPkg = prop("tenantPkg")
 val tenantLabel = prop("appLabel")
 val tenantIconSource = prop("iconSource")
@@ -35,8 +32,6 @@ if (isTenantBuild) {
     require(tenantLabel.isNotEmpty()) { "appLabel is required for a tenant build" }
 }
 
-// The update feed identifies a build by channel + package, and carries the
-// download token the API asks for once enforcement is on.
 fun updateUrl(base: String, channel: String): String {
     if (base.isBlank()) return ""
     val sep = if (base.contains("?")) "&" else "?"
@@ -47,8 +42,7 @@ fun updateUrl(base: String, channel: String): String {
     return url
 }
 
-// The PIN check and any other API call need the API origin, which is where the
-// update feed already points.
+// The update feed already points at the API origin the PIN check needs.
 fun apiBaseUrl(updateCheckUrl: String): String {
     val explicit = prop("apiBaseUrl")
     if (explicit.isNotEmpty()) return explicit.trimEnd('/')
@@ -70,10 +64,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        // Tenant builds get their own applicationId so several tenants' apps can
-        // sit on one tablet. It is derived from the tenant's immutable
-        // android_package_id — Android keys an install off this, so a change
-        // would read as a different app: no upgrade, re-pairing, two icons.
+        // From the tenant's immutable android_package_id — Android keys an install
+        // off this, so a change reads as a different app: no upgrade, two icons.
         applicationId = if (isTenantBuild) "ch.leys.comanda.$tenantPkg" else "ch.leys.comanda"
         minSdk = 26
         targetSdk = 35
@@ -84,8 +76,8 @@ android {
 
         vectorDrawables { useSupportLibrary = true }
 
-        // Generated tenant icons carry their own resource names, so the stock
-        // ic_launcher stays untouched and the two never collide.
+        // Generated icons use their own resource names; two res dirs declaring
+        // ic_launcher in one source set is a duplicate-resource error.
         manifestPlaceholders["appIcon"] =
             if (isTenantBuild) "@mipmap/ic_launcher_tenant" else "@mipmap/ic_launcher"
         manifestPlaceholders["appRoundIcon"] =
@@ -230,8 +222,7 @@ android {
     }
 }
 
-// Renders the tenant's launcher icon into a generated res dir. Always runs; it
-// produces nothing for the neutral build, which keeps the stock icon.
+// Always runs; produces nothing for the neutral build.
 val generateTenantIcon = tasks.register<GenerateTenantIconTask>("generateTenantIcon") {
     generateIcon.set(isTenantBuild)
     initials.set(initialsFor(tenantLabel))
@@ -244,9 +235,7 @@ val generateTenantIcon = tasks.register<GenerateTenantIconTask>("generateTenantI
 
 androidComponents {
     onVariants { variant ->
-        // The launcher name is the one place a tenant build announces itself, so
-        // it is composed here rather than per build type: the environment tag has
-        // to survive whichever name the tenant carries.
+        // Not per build type: the env tag has to survive the tenant's own name.
         val base = tenantLabel.ifEmpty { "Comanda POS" }
         val label = when (variant.buildType) {
             "dev" -> "$base (Dev)"

@@ -95,11 +95,8 @@ export function parseTenantHost(hostname: string): TenantHostResult {
 }
 
 /**
- * Inverse of parseTenantHost: the tenant's subdomain host on the apex the
- * caller is currently served from. Port is preserved so dev links work.
- *
- * Every tenant keeps this host — it is the primary domain seeded at creation —
- * even after they add a custom domain, so it is always a valid target.
+ * Inverse of parseTenantHost. Always a valid target: this host is the primary
+ * domain seeded at creation and survives adding a custom domain.
  */
 export function tenantSubdomainHost(slug: string, platformHost: string): string {
   const [host, port] = platformHost.split(":")

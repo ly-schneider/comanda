@@ -62,8 +62,7 @@ export function TenantAndroidInstallCard({
     void load()
   }, [load])
 
-  // The QR has to point at the tenant's own host, not the platform host this
-  // page is served from — that is where /install and the tenant's branding live.
+  // The tenant's own host, not the platform host this page is served from.
   const installUrl =
     info && typeof window !== "undefined"
       ? `${window.location.protocol}//${tenantSubdomainHost(slug, window.location.host)}${info.installPath}`

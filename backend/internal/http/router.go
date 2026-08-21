@@ -74,9 +74,8 @@ func NewRouter(
 	r.Get("/v1/android/latest", wrapper.GetAndroidLatestVersion)
 	r.Get("/v1/android/download", wrapper.DownloadAndroidApk)
 
-	// Device Setup's PIN check. Public by necessity — the tablet is unpaired at
-	// setup time — so the attempt limiter is what makes a 4-digit PIN survive
-	// being guessed at.
+	// Public by necessity (the tablet is unpaired at setup time), so the attempt
+	// limiter is what makes a short PIN survive being guessed at.
 	setupPinLimit := ratelimit.New(5*time.Minute, 5)
 	r.With(setupPinLimit.Middleware("Zu viele Versuche. Bitte später erneut versuchen.")).
 		Post("/v1/android/setup/verify-pin", wrapper.VerifyAndroidSetupPin)

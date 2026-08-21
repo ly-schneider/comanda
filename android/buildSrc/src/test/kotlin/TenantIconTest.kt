@@ -48,8 +48,8 @@ class ContrastingColorTest {
 
     @Test
     fun `mid greens are judged on luminance not brightness`() {
-        // Pure green is bright to the eye and light by luminance, so it must not
-        // get white text — that pairing is the classic unreadable icon.
+        // Pure green is light by luminance; white text on it is the classic
+        // unreadable icon.
         assertEquals(Color(0x1F, 0x1F, 0x1D), contrastingColor(Color(0x00, 0xFF, 0x00)))
     }
 }
@@ -70,9 +70,7 @@ class ParseColorTest {
                 parseColor(bad)
                 throw AssertionError("parseColor(\"$bad\") should have thrown")
             } catch (_: IllegalArgumentException) {
-                // expected
             } catch (_: NumberFormatException) {
-                // expected
             }
         }
     }

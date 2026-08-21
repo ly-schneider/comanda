@@ -72,12 +72,9 @@ jobs:
           TENANTS: ${{ inputs.tenants }}
         run: |
           set -euo pipefail
-          # The neutral build always ships: it is the demo/bring-up app and the
-          # fallback if a tenant build ever has to be rolled back.
-          #
-          # Every entry is filled out with empty strings for the optional keys.
-          # A missing key would reach the matrix as null, and null vs "" in a
-          # GitHub expression is a coercion rule nobody should have to remember.
+          # The neutral build always ships. Optional keys are filled with "" so
+          # nothing reaches the matrix as null, where GitHub's null-vs-"" coercion
+          # would decide behaviour.
           EMPTY='{pkg:"",label:"",posUrl:"",iconBg:"",iconUrl:""}'
           BUILDS=$(jq -c --argjson empty "$(jq -nc "$EMPTY")" \
             '[$empty] + [(. // [])[] | $empty + with_entries(select(.value != null))]' \
@@ -142,8 +139,7 @@ jobs:
           ICON_URL: ${{ matrix.build.iconUrl }}
         run: |
           set -euo pipefail
-          # A missing or unreadable logo is not fatal — the icon generator falls
-          # back to the tenant's initials, which is often the better icon anyway.
+          # Not fatal: the generator falls back to initials.
           if curl -fsSL --max-time 30 "$ICON_URL" -o "$RUNNER_TEMP/tenant-icon"; then
             echo "path=$RUNNER_TEMP/tenant-icon" >> "$GITHUB_OUTPUT"
           else
@@ -163,8 +159,7 @@ jobs:
             exit 0
           fi
           # Must match androidUpdateService.DownloadToken exactly — a mismatch
-          # locks tablets out of updates. The Go side pins this with a golden
-          # vector in TestDownloadTokenGoldenVector.
+          # locks tablets out of updates. Pinned by TestDownloadTokenGoldenVector.
           TOKEN=$(printf '%s|%s' "$CHANNEL" "$PKG" \
             | openssl dgst -sha256 -hmac "$DOWNLOAD_SECRET" -binary \
             | base64 | tr '+/' '-_' | tr -d '=' | cut -c1-32)
@@ -208,8 +203,7 @@ jobs:
             APK_DIR="android/app/build/outputs/apk/release"
           fi
 
-          # The asset name is the contract with the update feed: the backend
-          # matches it exactly, so a device only ever gets its own build.
+          # The backend matches this name exactly, so a device only gets its own build.
           if [ -z "$PKG" ]; then
             NAME="comanda-pos.apk"
           else

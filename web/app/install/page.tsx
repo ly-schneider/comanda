@@ -7,7 +7,7 @@ import { getBranding } from "@/lib/server/branding"
 
 export const metadata: Metadata = {
   title: "POS-App installieren",
-  // The link carries a download credential; keep it out of search indexes.
+  // The link carries a download credential.
   robots: { index: false, follow: false },
 }
 
@@ -19,9 +19,8 @@ export default async function InstallPage({ searchParams }: { searchParams: Sear
   const { pkg, channel, t } = await searchParams
   const branding = await getBranding()
 
-  // The APK is streamed through the same-origin proxy rather than linked on the
-  // API host: it keeps the download on the tenant's own domain, which is what
-  // BYO-domain tablets can reach without any extra CORS or DNS setup.
+  // Same-origin proxy rather than the API host, so BYO-domain tablets need no
+  // extra CORS or DNS setup.
   const download = new URLSearchParams()
   if (pkg) download.set("pkg", pkg)
   download.set("channel", channel || "production")

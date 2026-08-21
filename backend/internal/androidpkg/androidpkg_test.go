@@ -20,9 +20,6 @@ func TestForSlug(t *testing.T) {
 	}
 }
 
-// Slugs are DNS labels, so they can never contain the underscore that hyphens
-// map onto. Without that, "a-b" and "a_b" would collide onto one applicationId
-// and two tenants would fight over the same install.
 func TestForSlugIsInjective(t *testing.T) {
 	seen := map[string]string{}
 	for _, slug := range []string{"a-b", "ab", "a-b-c", "abc", "x1", "x-1"} {

@@ -114,12 +114,9 @@ func toAPITenant(t *ent.Tenant) generated.Tenant {
 	}
 }
 
-// GetTenantAndroidInstall returns what the admin UI needs to put a tenant's app
-// on a tablet: the package id and the token that authorizes the download.
-//
-// The install link is a credential — it is the only thing standing between the
-// public internet and an APK carrying the SumUp affiliate key — so it is minted
-// here behind the platform-admin gate rather than exposed on the tenant host.
+// The install link is a credential: it is what stands between the public
+// internet and an APK carrying the SumUp affiliate key. Hence platform-admin
+// only, rather than exposed on the tenant host.
 func (h *Handlers) GetTenantAndroidInstall(
 	w http.ResponseWriter,
 	r *http.Request,

@@ -32,16 +32,12 @@ type AndroidUpdateService interface {
 	// baseURL is the origin the requesting device reached us on; the download
 	// URL is built against it so the APK stays on a host the device can reach
 	// (PUBLIC_BASE_URL is the web apex, not the API host).
-	//
 	// pkg selects the tenant build's asset; empty means the neutral build.
 	GetLatestRelease(ctx context.Context, channel, pkg, baseURL string) (*AndroidRelease, error)
 	// Returns a nil reader (no error) when no release is published.
 	OpenAPKDownload(ctx context.Context, channel, pkg string) (io.ReadCloser, int64, error)
-	// DownloadToken derives the token that authorizes fetching a package's APK.
-	// Returns "" when no secret is configured.
+	// DownloadToken returns "" when no secret is configured.
 	DownloadToken(channel, pkg string) string
-	// VerifyDownloadToken reports whether token authorizes this package. Always
-	// true while enforcement is off.
 	VerifyDownloadToken(channel, pkg, token string) bool
 }
 
@@ -103,8 +99,7 @@ func (s *androidUpdateService) GetLatestRelease(ctx context.Context, channel, pk
 	if pkg != "" {
 		download += "&pkg=" + pkg
 	}
-	// The app follows this URL verbatim, so it has to carry the credential the
-	// download route will ask for.
+	// The app follows this URL verbatim, so it carries the download credential.
 	if tok := s.DownloadToken(channel, pkg); tok != "" {
 		download += "&t=" + tok
 	}
@@ -131,8 +126,7 @@ func (s *androidUpdateService) VerifyDownloadToken(channel, pkg, token string) b
 	}
 	expected := s.DownloadToken(channel, pkg)
 	if expected == "" {
-		// Enforcement asked for without a secret to derive against would lock every
-		// tablet out of updates. Refuse to pretend it is enforced.
+		// Enforcing without a secret would lock every tablet out of updates.
 		s.logger.Error("android update: ANDROID_REQUIRE_DOWNLOAD_TOKEN set without ANDROID_DOWNLOAD_SECRET; serving unauthenticated")
 		return true
 	}
@@ -252,9 +246,8 @@ func (s *androidUpdateService) fetchLatestRelease(ctx context.Context, channel, 
 			continue
 		}
 
-		// Match the exact asset name, not a ".apk" suffix: a release carries one
-		// APK per tenant package, and a suffix match would hand every device
-		// whichever asset GitHub happened to list last.
+		// Exact name, not a ".apk" suffix: a release carries one APK per tenant
+		// package, and a suffix match hands every device whichever GitHub listed last.
 		apkName := androidpkg.APKAssetName(pkg)
 		var apkAssetURL string
 		var sha256AssetURL string
