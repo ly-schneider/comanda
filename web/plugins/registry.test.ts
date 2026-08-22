@@ -8,7 +8,7 @@ describe("plugin registry", () => {
     expect(Object.keys(club100?.slots ?? {}).sort()).toEqual([
       "admin.settings.section",
       "platform.plugin.config",
-      "pos.basket.actions",
+      "pos.gratis.actions",
     ])
   })
 

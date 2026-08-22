@@ -3,7 +3,7 @@ import type { CartItem } from "@/types/cart"
 import type { TenantPluginUpdate } from "@/types/plugin"
 
 export type PluginSlotName =
-  | "pos.basket.actions"
+  | "pos.gratis.actions"
   | "admin.settings.section"
   | "admin.stations.actions"
   | "device.pairing.actions"
@@ -16,9 +16,9 @@ export type PluginDiscount = {
   paymentData: unknown
 }
 
-export type PosBasketActionsCtx = {
+export type PosGratisActionsCtx = {
   cartItems: CartItem[]
-  setPluginDiscount: (discount: PluginDiscount | null) => void
+  applyDiscount: (discount: PluginDiscount | null) => void
 }
 
 export type AdminSettingsSectionCtx = {
@@ -43,7 +43,7 @@ export type PlatformPluginConfigProps = {
 }
 
 export type PluginSlotCtx = {
-  "pos.basket.actions": PosBasketActionsCtx
+  "pos.gratis.actions": PosGratisActionsCtx
   "admin.settings.section": AdminSettingsSectionCtx
   "admin.stations.actions": AdminStationsActionsCtx
   "device.pairing.actions": DevicePairingActionsCtx

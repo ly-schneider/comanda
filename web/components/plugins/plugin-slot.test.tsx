@@ -7,7 +7,7 @@ describe("PluginSlot", () => {
   it("renders nothing when no plugin is enabled", () => {
     const { container } = render(
       <PluginProvider enabledPlugins={[]}>
-        <PluginSlot name="pos.basket.actions" ctx={{ cartItems: [], setPluginDiscount: () => {} }} />
+        <PluginSlot name="pos.gratis.actions" ctx={{ cartItems: [], applyDiscount: () => {} }} />
       </PluginProvider>
     )
     expect(container).toBeEmptyDOMElement()

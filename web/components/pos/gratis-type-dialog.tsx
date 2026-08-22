@@ -1,8 +1,11 @@
 "use client"
 
 import { Handshake, Star, Users } from "lucide-react"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import type { PluginDiscount } from "@/plugins/slots"
+import type { CartItem } from "@/types/cart"
 
 type GratisType = "guest" | "vip" | "staff"
 
@@ -10,9 +13,11 @@ interface GratisTypeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelect: (type: GratisType) => void
+  cartItems: CartItem[]
+  onApplyDiscount: (discount: PluginDiscount | null) => void
 }
 
-export function GratisTypeDialog({ open, onOpenChange, onSelect }: GratisTypeDialogProps) {
+export function GratisTypeDialog({ open, onOpenChange, onSelect, cartItems, onApplyDiscount }: GratisTypeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -47,6 +52,7 @@ export function GratisTypeDialog({ open, onOpenChange, onSelect }: GratisTypeDia
             <Handshake className="size-10" />
             <span className="text-base font-medium">Mitarbeiter</span>
           </Button>
+          <PluginSlot name="pos.gratis.actions" ctx={{ cartItems, applyDiscount: onApplyDiscount }} />
         </div>
       </DialogContent>
     </Dialog>

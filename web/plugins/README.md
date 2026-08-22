@@ -16,7 +16,7 @@ const manifest: PluginManifest = {
   key: "club100",
   name: "100 Club",
   slots: {
-    "pos.basket.actions": dynamic(() => import("./club100/basket-action")),
+    "pos.gratis.actions": dynamic(() => import("./club100/gratis-action")),
     "admin.settings.section": dynamic(() => import("./club100/admin-settings")),
     "platform.plugin.config": dynamic(() => import("./club100/platform-config")),
   },
@@ -39,7 +39,7 @@ when no enabled plugin provides the slot.
 
 | Slot | Where | `ctx` |
 | --- | --- | --- |
-| `pos.basket.actions` | POS basket action row | `{ cartItems: CartItem[]; setPluginDiscount: (d: PluginDiscount \| null) => void }` |
+| `pos.gratis.actions` | POS Gratis dialog (behind "Jetzt bezahlen") | `{ cartItems: CartItem[]; applyDiscount: (d: PluginDiscount \| null) => void }` |
 | `admin.settings.section` | Tenant admin settings page | `{ token: string }` |
 | `device.pairing.actions` | `/station` + `/pos` pairing screens | `{}` |
 | `platform.plugin.config` | Platform-admin plugin manager | see below (props, not a `PluginSlot`) |
@@ -63,13 +63,14 @@ manages arbitrary tenants. Its component is looked up directly from the registry
 
 ## Payment mechanism
 
-A `pos.basket.actions` component surfaces its own trigger and, on selection, calls
-`setPluginDiscount({ pluginKey, label, amountCents, paymentData })`. The basket renders a generic
+A `pos.gratis.actions` component renders a tile next to Gäste / VIP / Mitarbeiter and, on selection,
+calls `applyDiscount({ pluginKey, label, amountCents, paymentData })`. The basket renders a generic
 discount line from `label`/`amountCents`. On submit it attaches
 `PaymentCreate.plugin = { key: pluginKey, data: paymentData }`:
 
-- full comp (`total <= 0`) pays with method `gratis_plugin` and the plugin payload,
-- a partial discount plus cash/card/twint attaches the same plugin payload to that payment.
+- a discount covering the basket pays with method `gratis_plugin` and the plugin payload right away,
+- a partial discount drops back to the tender grid and attaches the same plugin payload to the
+  cash/card/twint payment.
 
 The backend's `PaymentHook` validates and records the plugin payload and persists `plugin_key`
 alongside the payment method for analytics.

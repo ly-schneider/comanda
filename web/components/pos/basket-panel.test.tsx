@@ -24,6 +24,7 @@ const h = vi.hoisted(() => {
     clearCart: vi.fn(),
     updateQuantity: vi.fn(),
     removeFromCart: vi.fn(),
+    discount: { pluginKey: "club100", label: "100 Club · Testperson", amountCents: 350, paymentData: { p: 1 } },
   }
 })
 
@@ -47,7 +48,10 @@ vi.mock("@/components/cart/use-best-bundle-suggestion", () => ({
     dismissSuggestion: vi.fn(),
   }),
 }))
-vi.mock("@/components/plugins/plugin-slot", () => ({ PluginSlot: () => null }))
+vi.mock("@/components/plugins/plugin-slot", () => ({
+  PluginSlot: ({ name, ctx }: { name: string; ctx: { applyDiscount?: (d: unknown) => void } }) =>
+    name === "pos.gratis.actions" ? <button onClick={() => ctx.applyDiscount?.(h.discount)}>Testrabatt</button> : null,
+}))
 
 const OK_RESULT: CreateOrderResult = { ok: true, serverId: "o1", idempotencyKey: "k1" }
 
@@ -75,6 +79,47 @@ function renderPanel(overrides?: {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  h.discount.amountCents = 350
+})
+
+async function openGratisDialog() {
+  fireEvent.click(screen.getByRole("button", { name: "Jetzt bezahlen" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Gratis" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Testrabatt" }))
+}
+
+describe("BasketPanel plugin discount from the Gratis dialog", () => {
+  it("comps the order as gratis_plugin when the discount covers the basket", async () => {
+    const { submitOrder } = renderPanel()
+
+    await openGratisDialog()
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1))
+    const call = submitOrder.mock.calls[0]!
+    expect(call[1]).toBe(0)
+    expect(call[2]).toBe("gratis_plugin")
+    expect(call[6]).toEqual({ key: "club100", data: { p: 1 } })
+    expect(call[7]).toMatchObject({ serverId: "o1" })
+  })
+
+  it("returns to the tender grid and attaches the payload when a remainder is left", async () => {
+    const { submitOrder } = renderPanel()
+    h.discount.amountCents = 100
+
+    await openGratisDialog()
+
+    // Once in the basket summary, once in the tender dialog.
+    expect(await screen.findAllByText("100 Club · Testperson")).toHaveLength(2)
+    expect(submitOrder).not.toHaveBeenCalled()
+
+    fireEvent.click(await screen.findByRole("button", { name: "Mit TWINT bezahlen" }))
+    fireEvent.click(screen.getByRole("button", { name: "TWINT-Zahlung abschliessen" }))
+
+    await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1))
+    const call = submitOrder.mock.calls[0]!
+    expect(call[2]).toBe("twint")
+    expect(call[6]).toEqual({ key: "club100", data: { p: 1 } })
+  })
 })
 
 describe("BasketPanel sold-out suppression while a checkout is in flight", () => {

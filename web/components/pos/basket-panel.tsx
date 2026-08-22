@@ -6,7 +6,6 @@ import { CartItemDisplay } from "@/components/cart/cart-item-display"
 import { InlineBundleGroup } from "@/components/cart/inline-bundle-group"
 import { ProductConfigurationModal } from "@/components/cart/product-configuration-modal"
 import { useBestBundleSuggestion } from "@/components/cart/use-best-bundle-suggestion"
-import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { GratisTypeDialog } from "@/components/pos/gratis-type-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -716,16 +715,18 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   }
 
   const completeGratisPayment = useCallback(
-    (paymentMethod: PosPaymentMethod, gratisInfo?: GratisInfo, plugin?: PluginPayment) => {
+    // amountCents defaults to the rendered total; a discount applied in the same
+    // tick must pass its own remainder, as `total` is still the pre-discount one.
+    (paymentMethod: PosPaymentMethod, gratisInfo?: GratisInfo, plugin?: PluginPayment, amountCents = total) => {
       const items = buildOrderItems(cart.items)
-      // Gratis comps stay product-only (totalCents: total), so don't print a
-      // Depot line the flow never collects.
+      // Gratis comps stay product-only, so don't print a Depot line the flow
+      // never collects.
       const printItems = buildPrintItems(false)
       const jetons = computeJetonTotals()
 
       const queued = submitOrder(
         items,
-        total,
+        amountCents,
         paymentMethod,
         { items: printItems, pickupQr: null },
         gratisInfo,
@@ -737,7 +738,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
         pendingPrintsRef.current.set(queued.localId, {
           template: {
             method: paymentMethod,
-            totalCents: total,
+            totalCents: amountCents,
             items: printItems,
             orderTimestamp: Date.now(),
             branding: receiptBranding,
@@ -785,6 +786,30 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     [completeGratisPayment]
   )
 
+  // A plugin discount is picked inside the Gratis dialog, on top of the pending
+  // order the checkout already holds: it either comps the basket outright or
+  // leaves a remainder that still needs a tender.
+  const handlePluginDiscount = useCallback(
+    (discount: PluginDiscount | null) => {
+      setPluginDiscount(discount)
+      setShowGratisDialog(false)
+      const remaining = Math.max(0, originalTotal - (discount?.amountCents ?? 0))
+      if (discount && remaining === 0) {
+        completeGratisPayment(
+          "gratis_plugin",
+          undefined,
+          { key: discount.pluginKey, data: discount.paymentData },
+          remaining
+        )
+        return
+      }
+      setTender(null)
+      setReceived("")
+      setShowCheckout(true)
+    },
+    [originalTotal, completeGratisPayment]
+  )
+
   // Create the pending order online before any tender, so stock is held and a
   // sold-out shows at the counter (no payment taken) instead of failing at sync.
   const handleStartCheckout = useCallback(async () => {
@@ -816,24 +841,10 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       idempotencyKey: result.idempotencyKey,
     }
     setCheckoutInFlight(true)
-    if (pluginDiscount && total <= 0) {
-      completeGratisPayment("gratis_plugin", undefined, pluginPayment)
-      return
-    }
     setTender(null)
     setReceived("")
     setShowCheckout(true)
-  }, [
-    startingCheckout,
-    jetonMode,
-    hasMissingJeton,
-    createOrder,
-    cart.items,
-    pluginDiscount,
-    total,
-    completeGratisPayment,
-    pluginPayment,
-  ])
+  }, [startingCheckout, jetonMode, hasMissingJeton, createOrder, cart.items])
 
   return (
     <>
@@ -963,18 +974,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
               <p className="text-base font-semibold">{formatChf(payableTotal)}</p>
             </div>
           </div>
-          <PluginSlot name="pos.basket.actions" ctx={{ cartItems: cart.items, setPluginDiscount }} />
           <div className="flex flex-col gap-2">
             <Button
               className="h-12 w-full rounded-xl text-sm"
               disabled={cartIsEmpty || startingCheckout}
               onClick={handleStartCheckout}
             >
-              {startingCheckout
-                ? "Wird erstellt…"
-                : pluginDiscount && total <= 0
-                  ? "Gratis abschliessen"
-                  : "Jetzt bezahlen"}
+              {startingCheckout ? "Wird erstellt…" : "Jetzt bezahlen"}
             </Button>
             {error && !showCheckout && <div className="text-sm text-red-600">{error}</div>}
             <Button
@@ -1018,6 +1024,13 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           <DialogHeader>
             <DialogTitle>{tenderTitle}</DialogTitle>
           </DialogHeader>
+
+          {pluginDiscount && (
+            <div className="flex items-center justify-between rounded-xl bg-green-100 px-3 py-2 text-sm">
+              <span className="font-medium text-green-700">{pluginDiscount.label}</span>
+              <span className="text-green-600">−{formatChf(pluginDiscount.amountCents)}</span>
+            </div>
+          )}
 
           {tender === null && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1494,6 +1507,8 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
           if (!v) discardCheckoutOrder()
         }}
         onSelect={handleGratisTypeSelect}
+        cartItems={cart.items}
+        onApplyDiscount={handlePluginDiscount}
       />
     </>
   )

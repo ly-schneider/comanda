@@ -219,7 +219,7 @@ const manifest: PluginManifest = {
   key: "club100",
   name: "100 Club",
   slots: {
-    "pos.basket.actions": dynamic(() => import("./club100/basket-action")),
+    "pos.gratis.actions": dynamic(() => import("./club100/gratis-action")),
     "admin.settings.section": dynamic(() => import("./club100/admin-settings")),
     "platform.plugin.config": dynamic(() => import("./club100/platform-config")),
   },
@@ -233,14 +233,15 @@ const manifest: PluginManifest = {
 
 | Slot | Ort | `ctx` |
 | --- | --- | --- |
-| `pos.basket.actions` | POS-Basket-Aktionsleiste | `{ cartItems; setPluginDiscount(d \| null) }` |
+| `pos.gratis.actions` | POS-Gratis-Dialog (hinter «Jetzt bezahlen») | `{ cartItems; applyDiscount(d \| null) }` |
 | `admin.settings.section` | Tenant-Admin-Settings | `{ token: string }` |
 | `device.pairing.actions` | Pairing-Screens `/station` + `/pos` | `{ deviceType }` |
 | `platform.plugin.config` | Platform-Admin-Plugin-Manager | Props (kein `PluginSlot`), s. u. |
 
-Payment-Slot-Contract: `pos.basket.actions` ruft
-`setPluginDiscount({ pluginKey, label, amountCents, paymentData })`. Der Basket rendert generisch eine
-Rabattzeile und hängt beim Submit `PaymentCreate.plugin = { key: pluginKey, data: paymentData }` an.
+Payment-Slot-Contract: `pos.gratis.actions` rendert eine Kachel neben Gäste / VIP / Mitarbeiter und ruft
+`applyDiscount({ pluginKey, label, amountCents, paymentData })`. Deckt der Rabatt den Korb, schliesst der
+POS direkt als `gratis_plugin` ab; sonst geht es zurück zur Zahlart-Auswahl. Beim Submit hängt der Basket
+`PaymentCreate.plugin = { key: pluginKey, data: paymentData }` an.
 
 ## 3. Platform-Config-Formular
 
