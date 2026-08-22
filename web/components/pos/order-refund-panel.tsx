@@ -44,10 +44,10 @@ const REFUNDABLE_STATUSES = new Set<AdminOrderStatus>(["paid", "partially_refund
 type RefundedHandler = (action: RefundAction, refund: Refund) => Promise<void>
 
 export function OrderRefundPanel() {
-  const { displayName, logoUrl, legal, currency } = useBranding()
+  const { displayName, legal, currency } = useBranding()
   const branding: ReceiptBranding = useMemo(
-    () => ({ displayName, logoUrl, address: legal.address, currency }),
-    [displayName, logoUrl, legal.address, currency]
+    () => ({ displayName, address: legal.address, currency }),
+    [displayName, legal.address, currency]
   )
 
   const [query, setQuery] = useState("")

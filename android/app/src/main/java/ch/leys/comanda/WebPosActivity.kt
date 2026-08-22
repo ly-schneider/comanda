@@ -53,7 +53,6 @@ import android.content.Context
 /** Branding supplied by the web POS in the print payload. All fields optional/nullable. */
 private data class ReceiptBranding(
     val displayName: String?,
-    val logoUrl: String?,
     val address: String?,
     val currency: String?
 )
@@ -62,10 +61,9 @@ private fun parseBranding(obj: JSONObject): ReceiptBranding {
     val b = obj.optJSONObject("branding")
     return if (b != null) ReceiptBranding(
         displayName = b.optString("displayName").ifBlank { null },
-        logoUrl     = b.optString("logoUrl").ifBlank { null },
         address     = b.optString("address").ifBlank { null },
         currency    = b.optString("currency").ifBlank { null }
-    ) else ReceiptBranding(null, null, null, null)
+    ) else ReceiptBranding(null, null, null)
 }
 
 /** One refunded/redeemable line on a slip. */
@@ -1112,7 +1110,7 @@ class WebPosActivity : ComponentActivity() {
         }
     }
 
-    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null, null)): Bitmap {
+    private fun renderReceiptBitmap(obj: JSONObject, branding: ReceiptBranding = ReceiptBranding(null, null, null)): Bitmap {
         if (receiptKind(obj) != "sale") return renderSlipBitmap(obj, branding)
 
         val width = 384
@@ -1121,7 +1119,6 @@ class WebPosActivity : ComponentActivity() {
         val topPad = 12
         val bottomPad = 16
         val qrSize = 288
-        val logoMaxHeight = 120
 
         // No anti-aliasing: thermal printers are 1-bit, and AA grey edges get thresholded
         // away, breaking up thin strokes. Aliased text prints solid like the QR.
@@ -1137,9 +1134,6 @@ class WebPosActivity : ComponentActivity() {
         val orderId = obj.optString("orderId", "-")
         val dateStr = receiptDateTime(obj)
         val pickupQr = obj.optString("pickupQr", "")
-
-        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
-            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
 
         val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
         val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
@@ -1178,7 +1172,6 @@ class WebPosActivity : ComponentActivity() {
         branding.displayName?.let { b.textRow(it, small, center = false, ellipsizeFn = ell) }
         (branding.address?.split("\n")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList())
             .forEach { b.textRow(it, small, center = false, ellipsizeFn = ell) }
-        logoBitmap?.let { b.gap(lineSpacing); b.imageRow(it) }
         b.gap(bottomPad)
 
         return b.build()
@@ -1191,7 +1184,6 @@ class WebPosActivity : ComponentActivity() {
         val topPad = 12
         val bottomPad = 4
         val qrSize = 288
-        val logoMaxHeight = 120
 
         val titlePaint = Paint().apply { color = Color.BLACK; textSize = 34f; isFakeBoldText = true }
         val itemPaint = Paint().apply { color = Color.BLACK; textSize = 22f }
@@ -1208,9 +1200,6 @@ class WebPosActivity : ComponentActivity() {
         val refundAmount = if (refundCents >= 0) refundCents else totalCents
         val pickupQr = obj.optString("pickupQr", "")
         val dateStr = receiptDateTime(obj)
-
-        val logoBitmap: Bitmap? = if (!branding.logoUrl.isNullOrBlank())
-            fetchLogoForReceipt(branding.logoUrl, cacheDir, maxWidth = width, maxHeight = logoMaxHeight) else null
 
         val b = ReceiptCanvasBuilder(width, padding, lineSpacing, qrSize)
         val ell = { t: String, p: Paint, w: Float -> ellipsize(t, p, w) }
@@ -1249,7 +1238,6 @@ class WebPosActivity : ComponentActivity() {
         branding.displayName?.let { b.textRow(it, small, center = false, ellipsizeFn = ell) }
         (branding.address?.split("\n")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList())
             .forEach { b.textRow(it, small, center = false, ellipsizeFn = ell) }
-        logoBitmap?.let { b.gap(lineSpacing); b.imageRow(it) }
         b.gap(bottomPad)
 
         return b.build()

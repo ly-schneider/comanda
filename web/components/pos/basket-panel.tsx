@@ -95,10 +95,9 @@ interface BasketPanelProps {
 
 export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discardOrder, stockMap }: BasketPanelProps) {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
-  const { displayName, logoUrl, legal, currency } = useBranding()
+  const { displayName, legal, currency } = useBranding()
   const receiptBranding: ReceiptBranding = {
     displayName,
-    logoUrl,
     address: legal.address,
     currency,
   }

@@ -3,7 +3,6 @@ import type { PosPaymentMethod } from "@/types/order-queue"
 // Field names are part of the contract with the Android receipt renderer — keep in sync.
 export type ReceiptBranding = {
   displayName: string
-  logoUrl: string | null
   address: string | null
   currency: string
 }
