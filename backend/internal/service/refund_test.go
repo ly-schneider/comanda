@@ -82,13 +82,11 @@ func TestCollectedCents(t *testing.T) {
 		if got := refundUnitPrice(comp, comp.Edges.Lines[0]); got != 0 {
 			t.Fatalf("%s refunds nothing per unit, got %d", method, got)
 		}
-		// The deposit is never collected on a comp either, so it holds nothing back.
 		if got := outstandingDepositCents(comp, map[string]int{}); got != 0 {
 			t.Fatalf("%s holds no deposit balance, got %d", method, got)
 		}
 	}
 
-	// An order with no payment row yet (still pending) keeps its nominal total.
 	if got := collectedCents(&ent.Order{TotalCents: 500}); got != 500 {
 		t.Fatalf("an unpaid order is not a comp, got %d", got)
 	}
@@ -101,7 +99,6 @@ func TestOrderStatusAfterLineRefund(t *testing.T) {
 	if got := orderStatusAfterLineRefund(1000, 1000, 3); got != order.StatusRefunded {
 		t.Fatalf("money back settles a paid order even with units out, got %s", got)
 	}
-	// A comp moves no money, so only the units returned can complete it.
 	if got := orderStatusAfterLineRefund(0, 0, 1); got != order.StatusPartiallyRefunded {
 		t.Fatalf("a comp with a unit still out is partial, got %s", got)
 	}

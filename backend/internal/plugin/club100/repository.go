@@ -61,9 +61,8 @@ func (r *redemptionRepo) GetTotalRedemptionsBatch(ctx context.Context, elvantoPe
 	return r.consumedToday(ctx, club100redemption.ElvantoPersonIDIn(elvantoPersonIDs...))
 }
 
-// consumedToday nets the day's redemption rows against what their orders have
-// since given back. The release is derived from the refund ledger rather than
-// stored, so orders refunded before this existed count correctly too.
+// The release is derived from the refund ledger, not stored, so orders refunded
+// before this existed count correctly too.
 func (r *redemptionRepo) consumedToday(ctx context.Context, who predicate.Club100Redemption) (map[string]int, error) {
 	dayStart, dayEnd := zurichDayBounds()
 
@@ -89,10 +88,8 @@ func (r *redemptionRepo) consumedToday(ctx context.Context, who predicate.Club10
 	return netRedemptions(rows, returned), nil
 }
 
-// returnedUnits counts, per order, the product units handed back by succeeded
-// refunds. Only top-level lines count: a deposit return moves deposit money
-// rather than the comped product, and a cancellation writes a refund line for a
-// bundle's components as well as its parent, which would double-count.
+// Top-level lines only: a deposit return moves deposit money, not the comped
+// product, and a cancellation writes lines for a bundle's components too.
 func (r *redemptionRepo) returnedUnits(ctx context.Context, orderIDs []string) (map[string]int, error) {
 	rows, err := r.ec(ctx).RefundLine.Query().
 		Where(
@@ -144,10 +141,8 @@ func orderIDsOf(rows []*ent.Club100Redemption) []string {
 	return out
 }
 
-// netRedemptions subtracts each order's returned units from what it redeemed.
-// An order can return more units than it comped — a member with one redemption
-// left still pays for the rest of the basket — so a row never gives back more
-// than it took, and rows sharing an order draw from the same returned pool.
+// An order can return more units than it comped (the rest of the basket was
+// paid for), so a row never gives back more than it took.
 func netRedemptions(rows []*ent.Club100Redemption, returnedByOrder map[string]int) map[string]int {
 	budget := make(map[string]int, len(returnedByOrder))
 	for orderID, qty := range returnedByOrder {

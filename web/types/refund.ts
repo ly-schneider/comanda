@@ -95,7 +95,7 @@ export interface RefundViewLine {
   variantId?: string | null
   variantValue?: string | null
   unitPriceCents: Cents
-  // what a refund gives back per unit — zero on a comped order, which collected nothing
+  // zero on a comped order, which collected nothing
   refundableUnitCents: Cents
   boughtQuantity: number
   refundedQuantity: number

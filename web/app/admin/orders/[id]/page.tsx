@@ -407,8 +407,7 @@ function LineRefundSection({
   const refundable = lines.filter((l) => l.refundableQuantity > 0)
 
   // Each product line auto-refunds its linked deposit (capped at outstanding).
-  // The order lines carry the parent link, the refund view the amount — a comp
-  // keeps its nominal prices on the order but gives nothing back.
+  // The order lines carry the parent link, the refund view the amount.
   const depositByParent = useMemo(() => {
     const byLineId: Record<string, RefundViewDeposit> = {}
     for (const d of deposits) byLineId[d.orderLineId] = d

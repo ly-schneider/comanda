@@ -888,9 +888,8 @@ type redeemableLine struct {
 	BoughtQty   int
 }
 
-// A comp keeps its nominal total so receipts and reporting still show what the
-// goods were worth, but nothing was collected — not even the deposit, which the
-// POS never charges on a comp. So a refund on one moves no money at all.
+// A comp keeps its nominal total for receipts and reporting but collected
+// nothing — not even the deposit, which the POS never charges on a comp.
 func gratisOrder(ord *ent.Order) bool {
 	method, ok := primaryPaymentMethod(ord)
 	return ok && isGratisMethod(method)
@@ -910,9 +909,6 @@ func refundUnitPrice(ord *ent.Order, line *ent.OrderLine) int64 {
 	return line.UnitPriceCents
 }
 
-// unitsOutstanding counts the purchased units not yet refunded. Deposits aren't
-// purchases and a bundle's components are already counted by their parent, so
-// only top-level product lines are measured.
 func unitsOutstanding(ord *ent.Order, refundedQty map[string]int) int {
 	total := 0
 	for _, l := range ord.Edges.Lines {
@@ -948,9 +944,7 @@ func orderStatusAfterRefund(collected, succeededAfter int64) order.Status {
 	return order.StatusPartiallyRefunded
 }
 
-// orderStatusAfterLineRefund adds the case money can't answer: an order that
-// collected nothing is square the moment the money is, so completion has to be
-// measured in units still out rather than francs still owed.
+// An order that collected nothing can't measure completion in money.
 func orderStatusAfterLineRefund(collected, succeededAfter int64, unitsOut int) order.Status {
 	if collected <= 0 && unitsOut > 0 {
 		return order.StatusPartiallyRefunded
