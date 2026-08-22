@@ -334,14 +334,15 @@ func toAPIRefundView(v *service.RefundView) generated.RefundView {
 	lines := make([]generated.RefundViewLine, 0, len(v.Lines))
 	for _, l := range v.Lines {
 		lines = append(lines, generated.RefundViewLine{
-			OrderLineId:        l.Line.ID,
-			ProductId:          l.Line.ProductID,
-			Title:              l.Line.Title,
-			UnitPriceCents:     l.Line.UnitPriceCents,
-			BoughtQuantity:     l.BoughtQuantity,
-			RefundedQuantity:   l.RefundedQuantity,
-			RefundableQuantity: l.RefundableQty,
-			Redeemed:           l.Redeemed,
+			OrderLineId:         l.Line.ID,
+			ProductId:           l.Line.ProductID,
+			Title:               l.Line.Title,
+			UnitPriceCents:      l.Line.UnitPriceCents,
+			RefundableUnitCents: l.RefundableUnitCents,
+			BoughtQuantity:      l.BoughtQuantity,
+			RefundedQuantity:    l.RefundedQuantity,
+			RefundableQuantity:  l.RefundableQty,
+			Redeemed:            l.Redeemed,
 		})
 	}
 	deposits := make([]generated.RefundViewDeposit, 0, len(v.Deposits))
@@ -351,6 +352,7 @@ func toAPIRefundView(v *service.RefundView) generated.RefundView {
 			ProductId:           d.Line.ProductID,
 			Title:               d.Line.Title,
 			UnitPriceCents:      d.Line.UnitPriceCents,
+			RefundableUnitCents: d.RefundableUnitCents,
 			BoughtQuantity:      d.BoughtQuantity,
 			ReturnedQuantity:    d.ReturnedQuantity,
 			OutstandingQuantity: d.OutstandingQty,

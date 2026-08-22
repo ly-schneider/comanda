@@ -37,14 +37,7 @@ import {
 } from "@/lib/refund-format"
 import { parseScan } from "@/lib/station-scan"
 import { formatChf } from "@/lib/utils"
-import type {
-  AdminOrder,
-  AdminOrderLine,
-  AdminOrderStatus,
-  Refund,
-  RefundView,
-  RefundViewDeposit,
-} from "@/types/refund"
+import type { AdminOrder, AdminOrderStatus, Refund, RefundView, RefundViewDeposit } from "@/types/refund"
 
 const REFUNDABLE_STATUSES = new Set<AdminOrderStatus>(["paid", "partially_refunded"])
 
@@ -452,24 +445,25 @@ function PosLineRefundSection({
   const orderLines = useMemo(() => view.order.lines ?? [], [view.order.lines])
 
   // Each product line auto-refunds its linked deposit (capped at outstanding).
+  // The order lines carry the parent link, the refund view the amount.
   const depositByParent = useMemo(() => {
-    const m: Record<string, AdminOrderLine> = {}
-    for (const l of orderLines) if (l.lineType === "deposit" && l.parentLineId) m[l.parentLineId] = l
+    const byLineId: Record<string, RefundViewDeposit> = {}
+    for (const d of view.deposits) byLineId[d.orderLineId] = d
+    const m: Record<string, RefundViewDeposit> = {}
+    for (const l of orderLines) {
+      if (l.lineType !== "deposit" || !l.parentLineId) continue
+      const dep = byLineId[l.id]
+      if (dep) m[l.parentLineId] = dep
+    }
     return m
-  }, [orderLines])
-  const outstandingByDeposit = useMemo(() => {
-    const m: Record<string, number> = {}
-    for (const d of view.deposits) m[d.orderLineId] = d.outstandingQuantity
-    return m
-  }, [view.deposits])
+  }, [orderLines, view.deposits])
 
   const selected = refundable.map((l) => ({ line: l, q: qty[l.orderLineId] ?? 0 })).filter((x) => x.q > 0)
-  const productCents = selected.reduce((s, x) => s + x.line.unitPriceCents * x.q, 0)
+  const productCents = selected.reduce((s, x) => s + x.line.refundableUnitCents * x.q, 0)
   const depositCents = selected.reduce((s, x) => {
     const dep = depositByParent[x.line.orderLineId]
     if (!dep) return s
-    const outstanding = outstandingByDeposit[dep.id] ?? 0
-    return s + Math.min(x.q, outstanding) * dep.unitPriceCents
+    return s + Math.min(x.q, dep.outstandingQuantity) * dep.refundableUnitCents
   }, 0)
 
   if (refundable.length === 0) return null
@@ -512,8 +506,8 @@ function PosLineRefundSection({
                   )}
                 </div>
                 <p className="text-muted-foreground text-xs">
-                  {formatChf(l.unitPriceCents)} · noch {l.refundableQuantity} von {l.boughtQuantity}
-                  {dep ? ` · inkl. Depot ${formatChf(dep.unitPriceCents)}` : ""}
+                  {formatChf(l.refundableUnitCents)} · noch {l.refundableQuantity} von {l.boughtQuantity}
+                  {dep ? ` · inkl. Depot ${formatChf(dep.refundableUnitCents)}` : ""}
                 </p>
               </div>
               <QtyStepper
@@ -557,7 +551,7 @@ function PosDepositReturnSection({
 
   const returnable = deposits.filter((d) => d.outstandingQuantity > 0)
   const selected = returnable.map((d) => ({ deposit: d, q: qty[d.orderLineId] ?? 0 })).filter((x) => x.q > 0)
-  const totalCents = selected.reduce((s, x) => s + x.deposit.unitPriceCents * x.q, 0)
+  const totalCents = selected.reduce((s, x) => s + x.deposit.refundableUnitCents * x.q, 0)
 
   if (returnable.length === 0) return null
 
@@ -588,7 +582,7 @@ function PosDepositReturnSection({
             <div className="min-w-0">
               <span className="truncate text-sm font-medium">{d.title}</span>
               <p className="text-muted-foreground text-xs">
-                {formatChf(d.unitPriceCents)} · noch {d.outstandingQuantity} von {d.boughtQuantity}
+                {formatChf(d.refundableUnitCents)} · noch {d.outstandingQuantity} von {d.boughtQuantity}
                 {d.returnedQuantity > 0 ? ` · ${d.returnedQuantity} zurückgenommen` : ""}
               </p>
             </div>

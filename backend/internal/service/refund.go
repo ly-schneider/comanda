@@ -88,19 +88,21 @@ type DepositReturnInput struct {
 }
 
 type RefundViewLine struct {
-	Line             *ent.OrderLine
-	BoughtQuantity   int
-	RefundedQuantity int
-	RefundableQty    int
-	Redeemed         bool
+	Line                *ent.OrderLine
+	RefundableUnitCents int64
+	BoughtQuantity      int
+	RefundedQuantity    int
+	RefundableQty       int
+	Redeemed            bool
 }
 
 // RefundViewDeposit is a returnable deposit line with its return accounting.
 type RefundViewDeposit struct {
-	Line             *ent.OrderLine
-	BoughtQuantity   int
-	ReturnedQuantity int
-	OutstandingQty   int
+	Line                *ent.OrderLine
+	RefundableUnitCents int64
+	BoughtQuantity      int
+	ReturnedQuantity    int
+	OutstandingQty      int
 }
 
 type RefundView struct {
@@ -172,10 +174,11 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 				outstanding = 0
 			}
 			deposits = append(deposits, RefundViewDeposit{
-				Line:             l,
-				BoughtQuantity:   l.Quantity,
-				ReturnedQuantity: returned,
-				OutstandingQty:   outstanding,
+				Line:                l,
+				RefundableUnitCents: refundUnitPrice(ord, l),
+				BoughtQuantity:      l.Quantity,
+				ReturnedQuantity:    returned,
+				OutstandingQty:      outstanding,
 			})
 			continue
 		}
@@ -188,11 +191,12 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 			refundable = 0
 		}
 		viewLines = append(viewLines, RefundViewLine{
-			Line:             l,
-			BoughtQuantity:   l.Quantity,
-			RefundedQuantity: refunded,
-			RefundableQty:    refundable,
-			Redeemed:         l.Edges.Redemption != nil,
+			Line:                l,
+			RefundableUnitCents: refundUnitPrice(ord, l),
+			BoughtQuantity:      l.Quantity,
+			RefundedQuantity:    refunded,
+			RefundableQty:       refundable,
+			Redeemed:            l.Edges.Redemption != nil,
 		})
 	}
 
@@ -201,7 +205,7 @@ func (s *refundService) GetRefundView(ctx context.Context, orderID string) (*Ref
 		Lines:                  viewLines,
 		Deposits:               deposits,
 		Refunds:                refundsList,
-		RefundableBalanceCents: refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty)),
+		RefundableBalanceCents: refundableBalanceCents(collectedCents(ord), succeededSum, outstandingDepositCents(ord, refundedQty)),
 	}, nil
 }
 
@@ -277,7 +281,7 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 		if err := validateRefundLineQty(line.Quantity, refundedQty[rl.OrderLineID]+added[rl.OrderLineID], rl.Quantity); err != nil {
 			return nil, err
 		}
-		lineAmount := line.UnitPriceCents * int64(rl.Quantity)
+		lineAmount := refundUnitPrice(ord, line) * int64(rl.Quantity)
 		amount += lineAmount
 		added[rl.OrderLineID] += rl.Quantity
 		lineSpecs = append(lineSpecs, refundLineSpec{
@@ -291,9 +295,9 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 		})
 	}
 
-	balance := refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty))
-	if amount <= 0 {
-		return nil, fmt.Errorf("refund amount must be positive")
+	balance := refundableBalanceCents(collectedCents(ord), succeededSum, outstandingDepositCents(ord, refundedQty))
+	if amount < 0 {
+		return nil, fmt.Errorf("refund amount must not be negative")
 	}
 	if amount > balance {
 		return nil, fmt.Errorf("refund amount %d exceeds refundable balance %d", amount, balance)
@@ -308,8 +312,9 @@ func (s *refundService) RefundLines(ctx context.Context, in RefundLinesInput) (*
 		lineSpecs = append(lineSpecs, ds)
 	}
 
-	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
-	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrReissue, mergeQty(refundedQty, added))
+	newRefundedQty := mergeQty(refundedQty, added)
+	newStatus := orderStatusAfterLineRefund(collectedCents(ord), succeededSum+amount, unitsOutstanding(ord, newRefundedQty))
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, in.Reason, in.Actor, lineSpecs, newStatus, qrReissue, newRefundedQty)
 }
 
 func (s *refundService) RefundArbitrary(ctx context.Context, in RefundArbitraryInput) (*ent.Refund, error) {
@@ -324,13 +329,13 @@ func (s *refundService) RefundArbitrary(ctx context.Context, in RefundArbitraryI
 	if err != nil {
 		return nil, err
 	}
-	balance := refundableBalanceCents(ord.TotalCents, succeededSum, outstandingDepositCents(ord, refundedQty))
+	balance := refundableBalanceCents(collectedCents(ord), succeededSum, outstandingDepositCents(ord, refundedQty))
 	amount := cappedArbitraryAmount(in.AmountCents, balance)
 	if amount <= 0 {
 		return nil, fmt.Errorf("no refundable balance")
 	}
 	reason := in.Reason
-	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
+	newStatus := orderStatusAfterLineRefund(collectedCents(ord), succeededSum+amount, unitsOutstanding(ord, refundedQty))
 	return s.commitRefund(ctx, ord, amount, refund.KindArbitrary, &reason, in.Actor, nil, newStatus, qrKeep, nil)
 }
 
@@ -365,12 +370,12 @@ func (s *refundService) CancelOrder(ctx context.Context, in CancelOrderInput) (*
 			productType: productTypeOf(l),
 			lineType:    l.LineType,
 			quantity:    remaining,
-			amountCents: l.UnitPriceCents * int64(remaining),
+			amountCents: refundUnitPrice(ord, l) * int64(remaining),
 		})
 	}
 
 	// Cancellation refunds everything still owed — products and outstanding deposits.
-	amount := ord.TotalCents - succeededSum
+	amount := collectedCents(ord) - succeededSum
 	if amount < 0 {
 		amount = 0
 	}
@@ -417,7 +422,7 @@ func (s *refundService) ReturnDeposit(ctx context.Context, in DepositReturnInput
 		if rl.Quantity > outstanding {
 			return nil, fmt.Errorf("return quantity %d exceeds %d outstanding", rl.Quantity, outstanding)
 		}
-		lineAmount := line.UnitPriceCents * int64(rl.Quantity)
+		lineAmount := refundUnitPrice(ord, line) * int64(rl.Quantity)
 		amount += lineAmount
 		added[rl.OrderLineID] += rl.Quantity
 		lineSpecs = append(lineSpecs, refundLineSpec{
@@ -429,12 +434,13 @@ func (s *refundService) ReturnDeposit(ctx context.Context, in DepositReturnInput
 			amountCents: lineAmount,
 		})
 	}
-	if amount <= 0 {
-		return nil, fmt.Errorf("deposit return amount must be positive")
+	if amount < 0 {
+		return nil, fmt.Errorf("deposit return amount must not be negative")
 	}
 
-	newStatus := orderStatusAfterRefund(ord.TotalCents, succeededSum+amount)
-	return s.commitRefund(ctx, ord, amount, refund.KindLine, depositReturnReason(in.Reason), in.Actor, lineSpecs, newStatus, qrKeep, mergeQty(refundedQty, added))
+	newRefundedQty := mergeQty(refundedQty, added)
+	newStatus := orderStatusAfterLineRefund(collectedCents(ord), succeededSum+amount, unitsOutstanding(ord, newRefundedQty))
+	return s.commitRefund(ctx, ord, amount, refund.KindLine, depositReturnReason(in.Reason), in.Actor, lineSpecs, newStatus, qrKeep, newRefundedQty)
 }
 
 // depositReturnReason defaults a deposit return's reason so the admin refunds list
@@ -785,7 +791,7 @@ func (s *refundService) settleDepositsOnFullRefund(ctx context.Context, ord *ent
 			RefundID:    refundID,
 			OrderLineID: l.ID,
 			Quantity:    outstanding,
-			AmountCents: l.UnitPriceCents * int64(outstanding),
+			AmountCents: refundUnitPrice(ord, l) * int64(outstanding),
 		})
 	}
 	if len(params) == 0 {
@@ -818,7 +824,7 @@ func outstandingDepositCents(ord *ent.Order, refundedQty map[string]int) int64 {
 		}
 		outstanding := l.Quantity - refundedQty[l.ID]
 		if outstanding > 0 {
-			sum += int64(outstanding) * l.UnitPriceCents
+			sum += int64(outstanding) * refundUnitPrice(ord, l)
 		}
 	}
 	return sum
@@ -858,7 +864,7 @@ func linkedDepositSpecs(ord *ent.Order, productSpecs []refundLineSpec, refundedQ
 			productType: productTypeOf(dep),
 			lineType:    orderline.LineTypeDeposit,
 			quantity:    release,
-			amountCents: dep.UnitPriceCents * int64(release),
+			amountCents: refundUnitPrice(ord, dep) * int64(release),
 		})
 	}
 	return out
@@ -882,6 +888,40 @@ type redeemableLine struct {
 	BoughtQty   int
 }
 
+// A comp keeps its nominal total for receipts and reporting but collected
+// nothing — not even the deposit, which the POS never charges on a comp.
+func gratisOrder(ord *ent.Order) bool {
+	method, ok := primaryPaymentMethod(ord)
+	return ok && isGratisMethod(method)
+}
+
+func collectedCents(ord *ent.Order) int64 {
+	if gratisOrder(ord) {
+		return 0
+	}
+	return ord.TotalCents
+}
+
+func refundUnitPrice(ord *ent.Order, line *ent.OrderLine) int64 {
+	if gratisOrder(ord) {
+		return 0
+	}
+	return line.UnitPriceCents
+}
+
+func unitsOutstanding(ord *ent.Order, refundedQty map[string]int) int {
+	total := 0
+	for _, l := range ord.Edges.Lines {
+		if l.LineType == orderline.LineTypeDeposit || l.ParentLineID != nil {
+			continue
+		}
+		if remaining := l.Quantity - refundedQty[l.ID]; remaining > 0 {
+			total += remaining
+		}
+	}
+	return total
+}
+
 func refundMethodFor(payrexxTransactionID *int) refund.Method {
 	if payrexxTransactionID != nil {
 		return refund.MethodTwint
@@ -889,19 +929,27 @@ func refundMethodFor(payrexxTransactionID *int) refund.Method {
 	return refund.MethodCash
 }
 
-func refundableBalanceCents(totalCents, succeededSum, outstandingDeposit int64) int64 {
-	bal := totalCents - succeededSum - outstandingDeposit
+func refundableBalanceCents(collected, succeededSum, outstandingDeposit int64) int64 {
+	bal := collected - succeededSum - outstandingDeposit
 	if bal < 0 {
 		return 0
 	}
 	return bal
 }
 
-func orderStatusAfterRefund(totalCents, succeededAfter int64) order.Status {
-	if succeededAfter >= totalCents {
+func orderStatusAfterRefund(collected, succeededAfter int64) order.Status {
+	if succeededAfter >= collected {
 		return order.StatusRefunded
 	}
 	return order.StatusPartiallyRefunded
+}
+
+// An order that collected nothing can't measure completion in money.
+func orderStatusAfterLineRefund(collected, succeededAfter int64, unitsOut int) order.Status {
+	if collected <= 0 && unitsOut > 0 {
+		return order.StatusPartiallyRefunded
+	}
+	return orderStatusAfterRefund(collected, succeededAfter)
 }
 
 func cappedArbitraryAmount(requested, refundable int64) int64 {
