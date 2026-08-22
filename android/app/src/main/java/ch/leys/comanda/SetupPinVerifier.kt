@@ -56,7 +56,7 @@ object SetupPinVerifier {
             return when (conn.responseCode) {
                 200 -> Result.Ok
                 401 -> Result.Rejected("Falsche PIN.")
-                429 -> Result.Rejected("Zu viele Versuche. Bitte später erneut versuchen.")
+                429 -> Result.Rejected("Zu viele Fehlversuche. Bitte später erneut versuchen.")
                 501 -> Result.Unreachable("Auf dem Server ist keine Setup-PIN hinterlegt.")
                 else -> Result.Unreachable("Server-Fehler (${conn.responseCode}).")
             }

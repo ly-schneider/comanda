@@ -76,8 +76,8 @@ export default async function InstallPage({ searchParams }: { searchParams: Sear
           <div className="flex gap-3">
             <Download className="mt-0.5 size-4 shrink-0" />
             <p>
-              Auf «App herunterladen» tippen. Android fragt einmalig, ob dieser Browser Apps installieren darf —
-              erlauben und danach auf die heruntergeladene Datei tippen.
+              Auf «App herunterladen» tippen. Android fragt einmalig, ob dieser Browser Apps installieren darf. Erlauben
+              und danach auf die heruntergeladene Datei tippen.
             </p>
           </div>
           <div className="flex gap-3">

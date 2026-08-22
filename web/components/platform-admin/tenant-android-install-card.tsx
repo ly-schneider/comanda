@@ -125,11 +125,11 @@ export function TenantAndroidInstallCard({
               {info?.versionName ? (
                 <code>{info.versionName}</code>
               ) : (
-                <span className="text-destructive">noch kein Build — diesen Tenant beim nächsten Release mitgeben</span>
+                <span className="text-destructive">noch kein Build, diesen Tenant beim nächsten Release mitgeben</span>
               )}
               .
               {info?.token
-                ? " Der Link enthält das Download-Token — wie ein Passwort behandeln."
+                ? " Der Link enthält das Download-Token: wie ein Passwort behandeln."
                 : " Kein Download-Token konfiguriert; der Download ist offen erreichbar."}
             </p>
           </>
