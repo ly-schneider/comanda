@@ -200,7 +200,6 @@ export default function AdminProductsPage() {
     })
     if (!res.ok) {
       const err = await readApiError(res)
-      if (err.raw === "jeton_required") throw new Error("Bitte zuerst einen Jeton zuweisen.")
       throw new Error(err.messageDe)
     }
   }
@@ -260,7 +259,6 @@ export default function AdminProductsPage() {
     })
     if (!res.ok) {
       const err = await readApiError(res)
-      if (err.raw === "jeton_required") throw new Error("Im Jeton-Modus ist ein Jeton Pflicht.")
       throw new Error(err.messageDe)
     }
   }
@@ -535,7 +533,7 @@ function ProductCardEditable({
   const parsedDelta = deltaInput.trim() === "" ? 0 : parseInt(deltaInput, 10)
   const deltaValid = deltaInput.trim() === "" || !isNaN(parsedDelta)
   const newStock = currentStockValue + (deltaValid ? parsedDelta : 0)
-  const jetonRequired = product.type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
+  const jetonMissing = product.type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
 
   const priceDirty = parsedPrice != null ? parsedPrice !== product.priceCents : priceInput !== initialPrice
   const depositDirty =
@@ -582,7 +580,6 @@ function ProductCardEditable({
     (product.type !== "simple" || (parsedDeposit != null && parsedDeposit >= 0)) &&
     deltaValid &&
     newStock >= 0 &&
-    (!jetonRequired || !!jetonId) &&
     !variantsHaveErrors
 
   function onPriceBlur() {
@@ -603,12 +600,6 @@ function ProductCardEditable({
     if (!valid) {
       setStatus("error")
       setFieldError("Bitte Eingaben prüfen.")
-      return
-    }
-    if (jetonRequired) {
-      setStatus("error")
-      setFieldError("Im Jeton-Modus benötigen aktive Produkte einen Jeton.")
-      onError("Im Jeton-Modus benötigen aktive Produkte einen Jeton.")
       return
     }
     setStatus("saving")
@@ -814,7 +805,7 @@ function ProductCardEditable({
             idPrefix={`edit-${product.id}`}
           />
 
-          {posMode !== "QR_CODE" && (
+          {
             <div className="space-y-1">
               <Label id={jetonLabelId} htmlFor={`jeton-${product.id}`}>
                 Jeton
@@ -844,9 +835,13 @@ function ProductCardEditable({
                   ))}
                 </SelectContent>
               </Select>
-              {jetonRequired && <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>}
+              {jetonMissing && (
+                <p className="text-muted-foreground text-xs">
+                  Ohne Jeton erscheint dieses Produkt nicht in der Jeton-Übersicht.
+                </p>
+              )}
             </div>
-          )}
+          }
           {product.type === "simple" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -1212,7 +1207,7 @@ function CreateProductCard({
   const parsedDeposit = depositInput.trim() === "" ? 0 : parsePrice(depositInput)
   const depositValid = parsedDeposit != null && parsedDeposit >= 0
   const trimmedName = name.trim()
-  const jetonRequired = type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
+  const jetonMissing = type === "simple" && posMode !== "QR_CODE" && isActive && !jetonId
   const stockValid = initialStock === "" || initialStock >= 0
   const valid =
     trimmedName.length > 0 &&
@@ -1220,7 +1215,6 @@ function CreateProductCard({
     parsedPrice >= 0 &&
     depositValid &&
     !!categoryId &&
-    !jetonRequired &&
     stockValid &&
     (type === "simple" || type === "bundle")
 
@@ -1295,8 +1289,6 @@ function CreateProductCard({
         } catch {
           // ignore jeton assignment error for now; surfaced via onError already
         }
-      } else if (!jetonId && res?.id && posMode !== "QR_CODE" && isActive && type === "simple") {
-        setError("Im Jeton-Modus benötigen aktive Produkte einen Jeton.")
       }
       onCreated(created)
       onOpenChange(false)
@@ -1398,7 +1390,7 @@ function CreateProductCard({
               />
               <p className="text-muted-foreground text-xs">{description.length}/500</p>
             </div>
-            {posMode !== "QR_CODE" && (
+            {
               <div className="space-y-1">
                 <Label htmlFor="new-jeton">Jeton</Label>
                 <Select
@@ -1422,11 +1414,13 @@ function CreateProductCard({
                     ))}
                   </SelectContent>
                 </Select>
-                {submitted && jetonRequired && (
-                  <p className="text-destructive text-xs">Jeton ist Pflicht im Jeton-Modus.</p>
+                {jetonMissing && (
+                  <p className="text-muted-foreground text-xs">
+                    Ohne Jeton erscheint dieses Produkt nicht in der Jeton-Übersicht.
+                  </p>
                 )}
               </div>
-            )}
+            }
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Label htmlFor="new-active" className="text-sm font-medium">

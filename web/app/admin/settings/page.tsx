@@ -62,10 +62,6 @@ export default function AdminSettingsPage() {
           message?: string
           detail?: string
         }
-        if (j.error === "missing_jetons") {
-          setMissingJetons(j.missing ?? missingJetons)
-          throw new Error(`Jeton-Modus kann nicht aktiviert werden. ${j.missing} aktive Produkte haben keinen Jeton.`)
-        }
         throw new Error(j.detail || j.message || `Error ${res.status}`)
       }
       const updated = (await res.json()) as SettingsResponse
@@ -169,9 +165,10 @@ export default function AdminSettingsPage() {
           </div>
           {missingJetons > 0 && posMode !== "QR_CODE" && (
             <div className="text-sm text-amber-700">
-              {missingJetons} aktive Produkte haben keinen Jeton.{" "}
-              <Link href="/admin/jetons" className="underline">
-                Jetons verwalten
+              {missingJetons} aktive Produkte haben keinen Jeton. Sie lassen sich weiterhin verkaufen, erscheinen aber
+              nicht in der Jeton-Übersicht.{" "}
+              <Link href="/admin/products" className="underline">
+                Produkte zuweisen
               </Link>
             </div>
           )}

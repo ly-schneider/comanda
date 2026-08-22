@@ -58,18 +58,20 @@ func TestSettingsService_SetPosMode(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("SetPosMode to JETON fails when active products lack jetons", func(t *testing.T) {
+	// The jeton picker only appears once a jeton mode is active, so blocking the
+	// switch on products that lack one left no way to ever enable it.
+	t.Run("SetPosMode to JETON succeeds even when active products lack jetons", func(t *testing.T) {
 		tdb.Cleanup(t)
 
 		category := fixtures.CreateCategory("Drinks", 1, true)
 		fixtures.CreateProduct("Cola", category.ID, 350, product.TypeSimple, nil)
 
 		err := svc.SetPosMode(ctx, settings.PosModeJETON)
-		require.Error(t, err)
+		require.NoError(t, err)
 
-		var missingErr service.MissingJetonForActiveProductsError
-		require.ErrorAs(t, err, &missingErr)
-		require.EqualValues(t, 1, missingErr.Count)
+		s, err := svc.GetSettings(ctx)
+		require.NoError(t, err)
+		require.Equal(t, settings.PosModeJETON, s.PosMode)
 	})
 
 	t.Run("SetPosMode to JETON succeeds when all active products have jetons", func(t *testing.T) {
@@ -256,7 +258,7 @@ func TestSettingsService_SetProductJeton(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("SetProductJeton fails to remove jeton in JETON mode for active simple product", func(t *testing.T) {
+	t.Run("SetProductJeton can clear a jeton in JETON mode", func(t *testing.T) {
 		tdb.Cleanup(t)
 
 		repos := NewRepositories(tdb.Client)
@@ -270,8 +272,6 @@ func TestSettingsService_SetProductJeton(t *testing.T) {
 		err := svc.SetPosMode(ctx, settings.PosModeJETON)
 		require.NoError(t, err)
 
-		err = svc.SetProductJeton(ctx, p.ID, nil)
-		require.Error(t, err)
-		require.Equal(t, service.ErrJetonRequired, err)
+		require.NoError(t, svc.SetProductJeton(ctx, p.ID, nil))
 	})
 }

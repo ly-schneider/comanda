@@ -57,15 +57,6 @@ func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	if body.PosMode != nil {
 		if err := h.settings.SetPosMode(ctx, settings.PosMode(*body.PosMode)); err != nil {
-			var missingErr service.MissingJetonForActiveProductsError
-			if errors.As(err, &missingErr) {
-				response.WriteJSON(w, http.StatusBadRequest, map[string]any{
-					"error":   "missing_jetons",
-					"message": "Active products missing jeton",
-					"missing": missingErr.Count,
-				})
-				return
-			}
 			writeError(w, http.StatusBadRequest, "update_failed", err.Error())
 			return
 		}

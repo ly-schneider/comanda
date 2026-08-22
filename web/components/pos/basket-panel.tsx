@@ -153,6 +153,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
     orderId?: string
     payment?: PosPaymentMethod
     receiptPayload?: Receipt & { orderTimestamp?: number }
+    missingJeton?: boolean
   } | null>(null)
   const [showGratisDialog, setShowGratisDialog] = useState(false)
   const [pluginDiscount, setPluginDiscount] = useState<PluginDiscount | null>(null)
@@ -416,7 +417,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
 
           if (jetonMode && queued) {
             setShowCard(false)
-            setJetonSummary({ items: jetons, orderId: queued.localId, payment: "card" })
+            setJetonSummary({ items: jetons, orderId: queued.localId, payment: "card", missingJeton: hasMissingJeton })
           }
 
           clearCart()
@@ -523,10 +524,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
 
   const startCashPayment = useCallback(async () => {
     if (busy) return
-    if (jetonMode && hasMissingJeton) {
-      setError("Im Jeton-Modus benötigt jedes Produkt einen Jeton.")
-      return
-    }
     setBusy(true)
     setError(null)
 
@@ -557,7 +554,7 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       })
     }
     if (jetonMode && queued) {
-      setJetonSummary({ items: jetons, orderId: queued.localId, payment: "cash" })
+      setJetonSummary({ items: jetons, orderId: queued.localId, payment: "cash", missingJeton: hasMissingJeton })
     }
 
     clearCart()
@@ -585,10 +582,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
 
   const startTwintPayment = useCallback(async () => {
     if (busy) return
-    if (jetonMode && hasMissingJeton) {
-      setError("Im Jeton-Modus benötigt jedes Produkt einen Jeton.")
-      return
-    }
     setBusy(true)
     setError(null)
 
@@ -606,9 +599,20 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
       pluginPayment,
       takeCheckoutOrder()
     )
-    // TWINT is fully digital — no pickup ticket is printed.
+    if (shouldPrint && canPrint && queued) {
+      pendingPrintsRef.current.set(queued.localId, {
+        template: {
+          method: "twint",
+          totalCents: payableTotal,
+          depositCents: depositCents > 0 ? depositCents : undefined,
+          items: printItems,
+          orderTimestamp: Date.now(),
+          branding: receiptBranding,
+        },
+      })
+    }
     if (jetonMode && queued) {
-      setJetonSummary({ items: jetons, orderId: queued.localId, payment: "twint" })
+      setJetonSummary({ items: jetons, orderId: queued.localId, payment: "twint", missingJeton: hasMissingJeton })
     }
 
     clearCart()
@@ -630,10 +634,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   ])
 
   const startCardPayment = useCallback(() => {
-    if (jetonMode && hasMissingJeton) {
-      setError("Im Jeton-Modus benötigt jedes Produkt einen Jeton.")
-      return
-    }
     const bridge = getBridge()
     if (bridge && typeof bridge.payWithCard === "function") {
       const ref = `pos_${Date.now()}`
@@ -717,11 +717,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
 
   const completeGratisPayment = useCallback(
     (paymentMethod: PosPaymentMethod, gratisInfo?: GratisInfo, plugin?: PluginPayment) => {
-      if (jetonMode && hasMissingJeton) {
-        setError("Im Jeton-Modus benötigt jedes Produkt einen Jeton.")
-        return
-      }
-
       const items = buildOrderItems(cart.items)
       // Gratis comps stay product-only (totalCents: total), so don't print a
       // Depot line the flow never collects.
@@ -750,7 +745,12 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
         })
       }
       if (jetonMode && queued) {
-        setJetonSummary({ items: jetons, orderId: queued.localId, payment: paymentMethod })
+        setJetonSummary({
+          items: jetons,
+          orderId: queued.localId,
+          payment: paymentMethod,
+          missingJeton: hasMissingJeton,
+        })
       }
 
       clearCart()
@@ -789,10 +789,6 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
   // sold-out shows at the counter (no payment taken) instead of failing at sync.
   const handleStartCheckout = useCallback(async () => {
     if (startingCheckout) return
-    if (jetonMode && hasMissingJeton) {
-      setError("Bitte weise allen Produkten einen Jeton zu.")
-      return
-    }
     setError(null)
     setSoldOut(new Map())
     transferringRef.current = false
@@ -1369,6 +1365,11 @@ export function BasketPanel({ mode = "QR_CODE", submitOrder, createOrder, discar
                   <div className="text-muted-foreground text-sm">Keine Jetons berechnet.</div>
                 )}
               </div>
+              {jetonSummary.missingJeton && (
+                <p className="text-muted-foreground text-sm">
+                  Einzelne Artikel haben keinen Jeton und sind hier nicht aufgeführt.
+                </p>
+              )}
             </div>
           )}
           <DialogFooter className="w-full">

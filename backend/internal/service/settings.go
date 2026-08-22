@@ -23,7 +23,6 @@ type systemEnabledCache struct {
 }
 
 var (
-	ErrJetonRequired = errors.New("jeton_required")
 	// ErrInvalidBranding signals a 400 to the handler (invalid hex / currency).
 	ErrInvalidBranding = errors.New("invalid_branding")
 )
@@ -107,14 +106,6 @@ type BrandingInput struct {
 	SumupMerchantCode *string
 }
 
-type MissingJetonForActiveProductsError struct {
-	Count int64
-}
-
-func (e MissingJetonForActiveProductsError) Error() string {
-	return "active_products_missing_jeton"
-}
-
 type JetonInUseError struct {
 	Count int64
 }
@@ -185,13 +176,10 @@ func (s *settingsService) SetPosMode(ctx context.Context, mode settings.PosMode)
 	if mode != settings.PosModeQR_CODE && mode != settings.PosModeJETON && mode != settings.PosModeHYBRID {
 		return fmt.Errorf("invalid_mode")
 	}
-	if mode == settings.PosModeJETON || mode == settings.PosModeHYBRID {
-		if missing, err := s.products.CountActiveWithoutJeton(ctx); err == nil && missing > 0 {
-			return MissingJetonForActiveProductsError{Count: missing}
-		} else if err != nil {
-			return err
-		}
-	}
+	// Products without a jeton do not block the switch: the jeton picker is only
+	// reachable once a jeton mode is active, so blocking here left no way in. The
+	// count still ships in the settings response as a warning, and the POS simply
+	// omits jeton-less items from the jeton summary.
 	return s.settings.Upsert(ctx, mode)
 }
 
@@ -374,23 +362,15 @@ func (s *settingsService) DeleteJeton(ctx context.Context, id string) error {
 	return s.jetons.Delete(ctx, id)
 }
 
+// Clearing a jeton is allowed in every mode. An active product without one is a
+// warning, not an error: the POS orders it and leaves it out of the jeton summary.
 func (s *settingsService) SetProductJeton(ctx context.Context, productID string, jetonID *string) error {
-	p, err := s.products.GetByID(ctx, productID)
-	if err != nil {
+	if _, err := s.products.GetByID(ctx, productID); err != nil {
 		return err
 	}
 	if jetonID != nil {
 		if _, err := s.jetons.GetByID(ctx, *jetonID); err != nil {
 			return err
-		}
-	}
-	settingsData, err := s.settings.Get(ctx)
-	if err != nil {
-		return err
-	}
-	if settingsData != nil && (settingsData.PosMode == settings.PosModeJETON || settingsData.PosMode == settings.PosModeHYBRID) && p.IsActive && jetonID == nil {
-		if p.Type == "simple" {
-			return ErrJetonRequired
 		}
 	}
 	return s.products.UpdateJeton(ctx, productID, jetonID)
