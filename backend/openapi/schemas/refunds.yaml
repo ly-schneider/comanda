@@ -86,6 +86,7 @@ RefundViewLine:
       productId,
       title,
       unitPriceCents,
+      refundableUnitCents,
       boughtQuantity,
       refundedQuantity,
       refundableQuantity,
@@ -101,6 +102,11 @@ RefundViewLine:
     unitPriceCents:
       type: integer
       format: int64
+      description: The price the line was sold at.
+    refundableUnitCents:
+      type: integer
+      format: int64
+      description: What a refund gives back per unit — zero on a comped order, which collected nothing.
     boughtQuantity:
       type: integer
     refundedQuantity:
@@ -120,6 +126,7 @@ RefundViewDeposit:
       productId,
       title,
       unitPriceCents,
+      refundableUnitCents,
       boughtQuantity,
       returnedQuantity,
       outstandingQuantity,
@@ -134,6 +141,11 @@ RefundViewDeposit:
     unitPriceCents:
       type: integer
       format: int64
+      description: The deposit charged per unit.
+    refundableUnitCents:
+      type: integer
+      format: int64
+      description: What a return gives back per unit — zero on a comped order, which never collected the deposit.
     boughtQuantity:
       type: integer
     returnedQuantity:

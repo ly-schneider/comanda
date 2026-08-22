@@ -6,6 +6,7 @@ import (
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/order"
 	"backend/internal/generated/ent/orderline"
+	"backend/internal/generated/ent/orderpayment"
 	"backend/internal/generated/ent/refund"
 )
 
@@ -46,6 +47,89 @@ func TestOrderStatusAfterRefund(t *testing.T) {
 	}
 	if got := orderStatusAfterRefund(1000, 600); got != order.StatusPartiallyRefunded {
 		t.Fatalf("partial must be partially_refunded, got %s", got)
+	}
+}
+
+func gratisOrderFixture(method orderpayment.Method) *ent.Order {
+	parent := "p1"
+	ord := &ent.Order{TotalCents: 1100, Edges: ent.OrderEdges{Lines: []*ent.OrderLine{
+		{ID: "p1", LineType: orderline.LineTypeSimple, Quantity: 2, UnitPriceCents: 350},
+		{ID: "d1", LineType: orderline.LineTypeDeposit, Quantity: 2, UnitPriceCents: 200, ParentLineID: &parent},
+	}}}
+	ord.Edges.Payments = []*ent.OrderPayment{{Method: method, AmountCents: ord.TotalCents}}
+	return ord
+}
+
+func TestCollectedCents(t *testing.T) {
+	paid := gratisOrderFixture(orderpayment.MethodCASH)
+	if got := collectedCents(paid); got != 1100 {
+		t.Fatalf("a paid order collected its total, got %d", got)
+	}
+	if got := refundUnitPrice(paid, paid.Edges.Lines[0]); got != 350 {
+		t.Fatalf("a paid line refunds its price, got %d", got)
+	}
+
+	for _, method := range []orderpayment.Method{
+		orderpayment.MethodGRATIS_GUEST,
+		orderpayment.MethodGRATIS_VIP,
+		orderpayment.MethodGRATIS_STAFF,
+		orderpayment.MethodGRATIS_PLUGIN,
+	} {
+		comp := gratisOrderFixture(method)
+		if got := collectedCents(comp); got != 0 {
+			t.Fatalf("%s took no money, got %d", method, got)
+		}
+		if got := refundUnitPrice(comp, comp.Edges.Lines[0]); got != 0 {
+			t.Fatalf("%s refunds nothing per unit, got %d", method, got)
+		}
+		// The deposit is never collected on a comp either, so it holds nothing back.
+		if got := outstandingDepositCents(comp, map[string]int{}); got != 0 {
+			t.Fatalf("%s holds no deposit balance, got %d", method, got)
+		}
+	}
+
+	// An order with no payment row yet (still pending) keeps its nominal total.
+	if got := collectedCents(&ent.Order{TotalCents: 500}); got != 500 {
+		t.Fatalf("an unpaid order is not a comp, got %d", got)
+	}
+}
+
+func TestOrderStatusAfterLineRefund(t *testing.T) {
+	if got := orderStatusAfterLineRefund(1000, 600, 1); got != order.StatusPartiallyRefunded {
+		t.Fatalf("a paid order still follows the money, got %s", got)
+	}
+	if got := orderStatusAfterLineRefund(1000, 1000, 3); got != order.StatusRefunded {
+		t.Fatalf("money back settles a paid order even with units out, got %s", got)
+	}
+	// A comp moves no money, so only the units returned can complete it.
+	if got := orderStatusAfterLineRefund(0, 0, 1); got != order.StatusPartiallyRefunded {
+		t.Fatalf("a comp with a unit still out is partial, got %s", got)
+	}
+	if got := orderStatusAfterLineRefund(0, 0, 0); got != order.StatusRefunded {
+		t.Fatalf("a comp with every unit back is refunded, got %s", got)
+	}
+}
+
+func TestUnitsOutstanding(t *testing.T) {
+	parent := "b1"
+	ord := &ent.Order{Edges: ent.OrderEdges{Lines: []*ent.OrderLine{
+		{ID: "p1", LineType: orderline.LineTypeSimple, Quantity: 2},
+		{ID: "b1", LineType: orderline.LineTypeBundle, Quantity: 1},
+		{ID: "c1", LineType: orderline.LineTypeComponent, Quantity: 1, ParentLineID: &parent},
+		{ID: "d1", LineType: orderline.LineTypeDeposit, Quantity: 2, ParentLineID: &parent},
+	}}}
+
+	if got := unitsOutstanding(ord, map[string]int{}); got != 3 {
+		t.Fatalf("only top-level product units count, got %d", got)
+	}
+	if got := unitsOutstanding(ord, map[string]int{"p1": 1}); got != 2 {
+		t.Fatalf("refunded units drop out, got %d", got)
+	}
+	if got := unitsOutstanding(ord, map[string]int{"p1": 2, "b1": 1}); got != 0 {
+		t.Fatalf("everything back leaves nothing outstanding, got %d", got)
+	}
+	if got := unitsOutstanding(ord, map[string]int{"p1": 5}); got != 1 {
+		t.Fatalf("an over-refunded line must not go negative, got %d", got)
 	}
 }
 
