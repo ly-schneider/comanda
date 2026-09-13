@@ -27,30 +27,32 @@ const (
 	VoucherMinCount     = 1
 	VoucherMaxCount     = 500
 
-	// Fixed artist-badge credential size, so slips cut out to a consistent size.
-	voucherBadgeWidthMM  = 76.2  // 3 in
-	voucherBadgeHeightMM = 127.0 // 5 in
-	voucherBadgePadMM    = 8.0
+	voucherBadgeWidthMM  = 48.0
+	voucherBadgeHeightMM = 60.0
+	voucherBadgePadMM    = 2.0
+	voucherPageMarginMM  = 3.0
+	voucherSlipGapMM     = 1.5
 
 	voucherQRPixels     = 1024
-	voucherBrandIconMM  = 12.0
-	voucherBrandFont    = 10.0
-	voucherBrandLH      = 4.5
-	voucherGapBrandIcon = 2.0
-	voucherGapBrand     = 4.0
+	voucherQRSizeMM     = 28.0
+	voucherBrandIconMM  = 6.0
+	voucherBrandFont    = 7.0
+	voucherBrandLH      = 3.2
+	voucherGapBrandIcon = 1.0
+	voucherGapBrand     = 1.5
 
-	voucherLabelFont = 11.0
-	voucherLabelLH   = 4.5
-	voucherCatFont   = 8.0
-	voucherCatLH     = 3.4
-	voucherHintFont  = 6.0
-	voucherHintLH    = 2.6
+	voucherLabelFont = 8.0
+	voucherLabelLH   = 3.4
+	voucherCatFont   = 6.0
+	voucherCatLH     = 2.6
+	voucherHintFont  = 5.0
+	voucherHintLH    = 2.1
 	voucherHintText  = "An der Station vorzeigen"
 	voucherCatPrefix = "Gültig für: "
 
-	voucherGapQR    = 2.5
-	voucherGapLabel = 2.0
-	voucherGapCat   = 1.5
+	voucherGapQR    = 1.2
+	voucherGapLabel = 1.2
+	voucherGapCat   = 0.8
 )
 
 type renderedVoucher struct {
@@ -111,8 +113,8 @@ type registeredIcon struct {
 
 func newVoucherSheet() *voucherSheet {
 	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(pageMarginMM, pageMarginMM, pageMarginMM)
-	pdf.SetAutoPageBreak(false, pageMarginMM)
+	pdf.SetMargins(voucherPageMarginMM, voucherPageMarginMM, voucherPageMarginMM)
+	pdf.SetAutoPageBreak(false, voucherPageMarginMM)
 	pdf.SetTextColor(20, 20, 20)
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 	textWidth := voucherBadgeWidthMM - 2*voucherBadgePadMM
@@ -167,12 +169,12 @@ func (s *voucherSheet) brandImage(png []byte) (registeredIcon, bool) {
 }
 
 func (s *voucherSheet) render(badges []renderedVoucher) ([]byte, error) {
-	qrSize := s.textWidth
+	qrSize := voucherQRSizeMM
 
-	cellW := voucherBadgeWidthMM + slipHGap
-	cellH := voucherBadgeHeightMM + slipVGap
-	cols := int((pageWidth - 2*pageMarginMM + slipHGap) / cellW)
-	rows := int((pageHeight - 2*pageMarginMM + slipVGap) / cellH)
+	cellW := voucherBadgeWidthMM + voucherSlipGapMM
+	cellH := voucherBadgeHeightMM + voucherSlipGapMM
+	cols := int((pageWidth - 2*voucherPageMarginMM + voucherSlipGapMM) / cellW)
+	rows := int((pageHeight - 2*voucherPageMarginMM + voucherSlipGapMM) / cellH)
 	if cols < 1 {
 		cols = 1
 	}
@@ -181,8 +183,8 @@ func (s *voucherSheet) render(badges []renderedVoucher) ([]byte, error) {
 	}
 	perPage := cols * rows
 
-	gridW := float64(cols)*voucherBadgeWidthMM + float64(cols-1)*slipHGap
-	gridH := float64(rows)*voucherBadgeHeightMM + float64(rows-1)*slipVGap
+	gridW := float64(cols)*voucherBadgeWidthMM + float64(cols-1)*voucherSlipGapMM
+	gridH := float64(rows)*voucherBadgeHeightMM + float64(rows-1)*voucherSlipGapMM
 	offsetX := (pageWidth - gridW) / 2
 	offsetY := (pageHeight - gridH) / 2
 
@@ -193,8 +195,8 @@ func (s *voucherSheet) render(badges []renderedVoucher) ([]byte, error) {
 			pageSlips = remaining
 		}
 		for slot := 0; slot < pageSlips; slot++ {
-			x := offsetX + float64(slot%cols)*(voucherBadgeWidthMM+slipHGap)
-			y := offsetY + float64(slot/cols)*(voucherBadgeHeightMM+slipVGap)
+			x := offsetX + float64(slot%cols)*(voucherBadgeWidthMM+voucherSlipGapMM)
+			y := offsetY + float64(slot/cols)*(voucherBadgeHeightMM+voucherSlipGapMM)
 			drawVoucherBadge(s.pdf, x, y, qrSize, badges[printed+slot], s.hintLines)
 		}
 		printed += pageSlips
@@ -203,11 +205,32 @@ func (s *voucherSheet) render(badges []renderedVoucher) ([]byte, error) {
 	return output(s.pdf)
 }
 
+// The badge is a fixed size, so a long "oder" list has to be trimmed rather than
+// allowed to run into the slip below it.
+func fitCatLines(lines []string, v renderedVoucher, qrSize float64, hintLines []string) []string {
+	fixed := brandHeaderHeight(v) + qrSize + voucherGapQR +
+		float64(len(hintLines))*voucherHintLH + voucherGapLabel +
+		float64(len(v.labelLines))*voucherLabelLH + voucherGapCat
+	budget := voucherBadgeHeightMM - 2*voucherBadgePadMM - fixed
+	maxLines := int(budget / voucherCatLH)
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	if len(lines) <= maxLines {
+		return lines
+	}
+	trimmed := append([]string(nil), lines[:maxLines]...)
+	trimmed[maxLines-1] += " …"
+	return trimmed
+}
+
 func drawVoucherBadge(pdf *fpdf.Fpdf, x, y, qrSize float64, v renderedVoucher, hintLines []string) {
 	drawVoucherBorder(pdf, x, y)
 
 	innerX := x + voucherBadgePadMM
 	innerW := voucherBadgeWidthMM - 2*voucherBadgePadMM
+
+	v.catLines = fitCatLines(v.catLines, v, qrSize, hintLines)
 
 	contentH := brandHeaderHeight(v) + qrSize + voucherGapQR +
 		float64(len(hintLines))*voucherHintLH + voucherGapLabel +

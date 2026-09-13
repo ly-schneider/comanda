@@ -138,3 +138,22 @@ func TestRenderVoucherBatchSlipsPaginates(t *testing.T) {
 		t.Fatal("output is not a PDF")
 	}
 }
+
+func TestVoucherSlipFitsALongChoiceList(t *testing.T) {
+	long := make([]string, 0, 12)
+	for i := 0; i < 12; i++ {
+		long = append(long, "1× Ein ziemlich langer Produktname")
+	}
+
+	body, err := RenderVoucherBatchSlips([]VoucherSlip{{
+		Label:   "Strassenaktion",
+		Details: long,
+		QRBytes: []byte("token-bytes"),
+	}})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if len(body) == 0 {
+		t.Fatal("expected a PDF")
+	}
+}
