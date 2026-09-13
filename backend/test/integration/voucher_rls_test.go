@@ -117,7 +117,7 @@ func TestVoucherService_DeleteExpiryGate(t *testing.T) {
 
 	ctx, client, cleanup := env.appRequestTx(t, tenantID)
 	defer cleanup()
-	svc := artistvoucher.NewService(artistvoucher.NewVoucherRepository(client), nil, nil, nil, nil, nil, nil)
+	svc := artistvoucher.NewService(artistvoucher.NewVoucherRepository(client), nil, nil, nil, nil, nil, nil, nil)
 
 	err := svc.Delete(ctx, liveID)
 	require.Truef(t, errors.Is(err, artistvoucher.ErrNotExpired), "live voucher must not be deletable, got %v", err)

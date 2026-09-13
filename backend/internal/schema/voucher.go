@@ -62,6 +62,8 @@ func (Voucher) Fields() []ent.Field {
 		field.Time("redeemed_at").
 			Optional().
 			Nillable(),
+		field.JSON("redeemed_positions", json.RawMessage{}).
+			Optional(),
 		field.String("redeemed_order_id").
 			MaxLen(12).
 			Optional(),

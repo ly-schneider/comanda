@@ -107,6 +107,7 @@ func productFixtures() map[string]*ent.Product {
 		"prod_burger1": {ID: "prod_burger1", Name: "Hamburger", Type: product.TypeSimple},
 		"prod_cheese1": {ID: "prod_cheese1", Name: "Cheeseburger", Type: product.TypeSimple},
 		"prod_pommes1": {ID: "prod_pommes1", Name: "Pommes", Type: product.TypeSimple},
+		"prod_fanta01": {ID: "prod_fanta01", Name: "Fanta", Type: product.TypeSimple},
 		"prod_cola001": {ID: "prod_cola001", Name: "Cola", Type: product.TypeSimple},
 		"prod_menu001": {ID: "prod_menu001", Name: "Menü", Type: product.TypeBundle},
 		"prod_shirt01": withVariants,
@@ -331,16 +332,75 @@ func TestRedeemIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 
 	env.minter.nextID = "order_secnd1"
-	second, err := env.svc.Redeem(tenantCtx(), vid, "dev_station2", nil)
+	retry, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 	require.NoError(t, err)
 
-	require.True(t, second.AlreadyRedeemed)
-	require.Equal(t, first.OrderID, second.OrderID)
-	require.Equal(t, first.RedeemedAt.UnixNano(), second.RedeemedAt.UnixNano())
-	require.Empty(t, second.Items)
-	require.Len(t, env.minter.minted, 1, "a retry must not mint a second order")
+	require.True(t, retry.AlreadyRedeemed)
+	require.Equal(t, first.OrderID, retry.OrderID)
+	require.Equal(t, first.RedeemedAt.UnixNano(), retry.RedeemedAt.UnixNano())
+	require.Len(t, env.minter.minted, 1, "a replayed upload must not mint a second order")
 	require.Len(t, env.settler.calls, 1)
-	require.Equal(t, 1, env.repo.redeemCalls)
+}
+
+func TestRedeemRefusesAStationWithNothingLeft(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch := issueBatch(t, env, nil)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
+	require.NoError(t, err)
+
+	_, err = env.svc.Redeem(tenantCtx(), vid, "dev_station2", nil)
+
+	require.ErrorIs(t, err, ErrNothingForThisStation,
+		"another stand must not re-hand out a position that is already gone")
+	require.Len(t, env.minter.minted, 1)
+}
+
+func TestEachStationRedeemsOnlyItsOwnPositions(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	in := validBatchInput()
+	in.Products = []BatchProductInput{
+		{ProductID: "prod_pommes1", Quantity: 1},
+		{ProductID: "prod_burger1", Quantity: 1},
+		{ProductID: "prod_cola001", Quantity: 1, ChoiceGroup: 1},
+		{ProductID: "prod_fanta01", Quantity: 1, ChoiceGroup: 1},
+	}
+	batch, err := env.svc.CreateBatch(tenantCtx(), in)
+	require.NoError(t, err)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	env.stations.serves = []string{"prod_pommes1"}
+	fries, err := env.svc.Redeem(tenantCtx(), vid, "dev_pommes001", nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"prod_pommes1"}, ids(fries.Items))
+	require.False(t, fries.FullyRedeemed)
+
+	env.stations.serves = []string{"prod_cola001", "prod_fanta01"}
+	_, err = env.svc.Redeem(tenantCtx(), vid, "dev_drinks001", nil)
+	var needsChoice *ChoiceRequiredError
+	require.ErrorAs(t, err, &needsChoice)
+	require.Len(t, needsChoice.Groups, 1)
+
+	drink, err := env.svc.Redeem(tenantCtx(), vid, "dev_drinks001",
+		[]ChoiceSelection{{ChoiceGroup: 1, ProductID: "prod_fanta01"}})
+	require.NoError(t, err)
+	require.Equal(t, []string{"prod_fanta01"}, ids(drink.Items))
+	require.False(t, drink.FullyRedeemed, "the burger is still out there")
+
+	env.stations.serves = []string{"prod_burger1"}
+	burger, err := env.svc.Redeem(tenantCtx(), vid, "dev_burger001", nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"prod_burger1"}, ids(burger.Items))
+	require.True(t, burger.FullyRedeemed, "the last position spends the slip")
+}
+
+func ids(items []Product) []string {
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		out = append(out, it.ID)
+	}
+	return out
 }
 
 func TestRedeemRejectsUnredeemableVouchers(t *testing.T) {

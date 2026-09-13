@@ -28,22 +28,23 @@ const (
 )
 
 var (
-	ErrNoProducts          = errors.New("artistvoucher: at least one product is required")
-	ErrTooManyProducts     = errors.New("artistvoucher: too many products")
-	ErrDuplicateProduct    = errors.New("artistvoucher: product listed more than once")
-	ErrUnknownProduct      = errors.New("artistvoucher: unknown product")
-	ErrProductNotSimple    = errors.New("artistvoucher: only simple products can be issued")
-	ErrProductHasVariants  = errors.New("artistvoucher: product has variants")
-	ErrProductUnavailable  = errors.New("artistvoucher: product is not available for sale")
-	ErrInvalidChoiceGroup  = errors.New("artistvoucher: choice group is out of range")
-	ErrChoiceGroupTooSmall = errors.New("artistvoucher: a choice group needs at least two products")
-	ErrInvalidSelection    = errors.New("artistvoucher: selection does not match the voucher")
-	ErrInvalidQuantity     = errors.New("artistvoucher: quantity out of range")
-	ErrInvalidCount        = errors.New("artistvoucher: count out of range")
-	ErrNotEntitlement      = errors.New("artistvoucher: voucher is not single-use")
-	ErrRevoked             = errors.New("artistvoucher: voucher is revoked")
-	ErrNotYetValid         = errors.New("artistvoucher: voucher is not valid yet")
-	ErrExpired             = errors.New("artistvoucher: voucher has expired")
+	ErrNoProducts            = errors.New("artistvoucher: at least one product is required")
+	ErrTooManyProducts       = errors.New("artistvoucher: too many products")
+	ErrDuplicateProduct      = errors.New("artistvoucher: product listed more than once")
+	ErrUnknownProduct        = errors.New("artistvoucher: unknown product")
+	ErrProductNotSimple      = errors.New("artistvoucher: only simple products can be issued")
+	ErrProductHasVariants    = errors.New("artistvoucher: product has variants")
+	ErrProductUnavailable    = errors.New("artistvoucher: product is not available for sale")
+	ErrInvalidChoiceGroup    = errors.New("artistvoucher: choice group is out of range")
+	ErrChoiceGroupTooSmall   = errors.New("artistvoucher: a choice group needs at least two products")
+	ErrInvalidSelection      = errors.New("artistvoucher: selection does not match the voucher")
+	ErrNothingForThisStation = errors.New("artistvoucher: this station serves nothing left on the voucher")
+	ErrInvalidQuantity       = errors.New("artistvoucher: quantity out of range")
+	ErrInvalidCount          = errors.New("artistvoucher: count out of range")
+	ErrNotEntitlement        = errors.New("artistvoucher: voucher is not single-use")
+	ErrRevoked               = errors.New("artistvoucher: voucher is revoked")
+	ErrNotYetValid           = errors.New("artistvoucher: voucher is not valid yet")
+	ErrExpired               = errors.New("artistvoucher: voucher has expired")
 )
 
 type Product struct {
@@ -106,6 +107,7 @@ type RedeemResult struct {
 	RedeemedAt      time.Time
 	AlreadyRedeemed bool
 	Items           []Product
+	FullyRedeemed   bool
 }
 
 func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, error) {
@@ -389,14 +391,29 @@ func EntitlementLines(products []Product) []string {
 	return out
 }
 
-func resolveSelection(products []Product, selections []ChoiceSelection) ([]Product, error) {
+type Position struct {
+	Key      string
+	Products []Product
+}
+
+type RedeemedPosition struct {
+	Key        string    `json:"key"`
+	ProductID  string    `json:"productId"`
+	Name       string    `json:"name"`
+	Quantity   int       `json:"quantity"`
+	OrderID    string    `json:"orderId"`
+	DeviceID   string    `json:"deviceId"`
+	RedeemedAt time.Time `json:"redeemedAt"`
+}
+
+func positionsOf(products []Product) []Position {
 	groups := make(map[int][]Product)
 	order := make([]int, 0, len(products))
-	out := make([]Product, 0, len(products))
+	out := make([]Position, 0, len(products))
 
 	for _, p := range products {
 		if p.ChoiceGroup <= 0 {
-			out = append(out, p)
+			out = append(out, Position{Key: "p:" + p.ID, Products: []Product{p}})
 			continue
 		}
 		if _, seen := groups[p.ChoiceGroup]; !seen {
@@ -405,52 +422,57 @@ func resolveSelection(products []Product, selections []ChoiceSelection) ([]Produ
 		groups[p.ChoiceGroup] = append(groups[p.ChoiceGroup], p)
 	}
 	sort.Ints(order)
-
-	picked := make(map[int]string, len(selections))
-	for _, sel := range selections {
-		if _, ok := groups[sel.ChoiceGroup]; !ok {
-			return nil, ErrInvalidSelection
-		}
-		if prev, ok := picked[sel.ChoiceGroup]; ok && prev != sel.ProductID {
-			return nil, ErrInvalidSelection
-		}
-		picked[sel.ChoiceGroup] = sel.ProductID
-	}
-
-	var pending []ChoiceGroupView
 	for _, g := range order {
-		options := groups[g]
-		productID, chosen := picked[g]
-		if !chosen {
-			if len(options) == 1 {
-				out = append(out, options[0])
-				continue
-			}
-			pending = append(pending, ChoiceGroupView{ChoiceGroup: g, Options: options})
-			continue
-		}
-		idx := -1
-		for i, o := range options {
-			if o.ID == productID {
-				idx = i
-				break
-			}
-		}
-		if idx < 0 {
-			return nil, ErrInvalidSelection
-		}
-		out = append(out, options[idx])
+		out = append(out, Position{Key: fmt.Sprintf("g:%d", g), Products: groups[g]})
 	}
-	if len(pending) > 0 {
-		return nil, &ChoiceRequiredError{Groups: pending}
+	return out
+}
+
+func (p Position) choiceGroup() int {
+	var g int
+	if _, err := fmt.Sscanf(p.Key, "g:%d", &g); err == nil {
+		return g
+	}
+	return 0
+}
+
+func (p Position) servableBy(serves map[string]struct{}) []Product {
+	out := make([]Product, 0, len(p.Products))
+	for _, prod := range p.Products {
+		if _, ok := serves[prod.ID]; ok {
+			out = append(out, prod)
+		}
+	}
+	return out
+}
+
+func decodeRedeemedPositions(row *ent.Voucher) ([]RedeemedPosition, error) {
+	if len(row.RedeemedPositions) == 0 {
+		return nil, nil
+	}
+	var out []RedeemedPosition
+	if err := json.Unmarshal(row.RedeemedPositions, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal redeemed positions: %w", err)
+	}
+	return out, nil
+}
+
+func (s *service) stationProducts(ctx context.Context, deviceID string) (map[string]struct{}, error) {
+	if deviceID == "" {
+		return nil, ErrNothingForThisStation
+	}
+	ids, err := s.stations.ListStationProductIDs(ctx, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("list station products: %w", err)
+	}
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
 	}
 	return out, nil
 }
 
 func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, selections []ChoiceSelection) (RedeemResult, error) {
-	// Serializes concurrent redemptions of the same slip: without it two requests
-	// both read redeemed_at as nil and both mint an order. The station's own
-	// flusher races its interactive POST, so this is reachable from one device.
 	if err := s.repo.LockByID(ctx, voucherID); err != nil {
 		return RedeemResult{}, err
 	}
@@ -461,20 +483,33 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, select
 	if row.Kind != voucher.KindEntitlement {
 		return RedeemResult{}, ErrNotEntitlement
 	}
-	items, err := decodeProducts(row)
+	products, err := decodeProducts(row)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+	if len(products) == 0 {
+		return RedeemResult{}, ErrNoProducts
+	}
+	done, err := decodeRedeemedPositions(row)
 	if err != nil {
 		return RedeemResult{}, err
 	}
 
-	if row.RedeemedAt != nil {
-		return RedeemResult{
-			VoucherID:       row.ID,
-			Label:           row.Label,
-			OrderID:         row.RedeemedOrderID,
-			RedeemedAt:      *row.RedeemedAt,
-			AlreadyRedeemed: true,
-		}, nil
+	positions := positionsOf(products)
+	spent := make(map[string]RedeemedPosition, len(done))
+	for _, d := range done {
+		spent[d.Key] = d
 	}
+
+	serves, err := s.stationProducts(ctx, deviceID)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+
+	if prev := priorRedemption(positions, spent, serves, deviceID); prev != nil {
+		return *prev, nil
+	}
+
 	if row.RevokedAt != nil {
 		return RedeemResult{}, ErrRevoked
 	}
@@ -485,17 +520,59 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, select
 	if !now.Before(row.ValidUntil) {
 		return RedeemResult{}, ErrExpired
 	}
-	if len(items) == 0 {
-		return RedeemResult{}, ErrNoProducts
+
+	picked := make(map[int]string, len(selections))
+	for _, sel := range selections {
+		picked[sel.ChoiceGroup] = sel.ProductID
 	}
 
-	items, err = resolveSelection(items, selections)
-	if err != nil {
-		return RedeemResult{}, err
+	var (
+		take    []Product
+		keys    []string
+		pending []ChoiceGroupView
+	)
+	for _, pos := range positions {
+		if _, gone := spent[pos.Key]; gone {
+			continue
+		}
+		options := pos.servableBy(serves)
+		if len(options) == 0 {
+			continue
+		}
+		if len(options) == 1 {
+			take = append(take, options[0])
+			keys = append(keys, pos.Key)
+			continue
+		}
+		group := pos.choiceGroup()
+		choice, ok := picked[group]
+		if !ok {
+			pending = append(pending, ChoiceGroupView{ChoiceGroup: group, Options: options})
+			continue
+		}
+		idx := -1
+		for i, o := range options {
+			if o.ID == choice {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return RedeemResult{}, ErrInvalidSelection
+		}
+		take = append(take, options[idx])
+		keys = append(keys, pos.Key)
 	}
 
-	checkout := make([]coreservice.CheckoutItemInput, 0, len(items))
-	for _, it := range items {
+	if len(pending) > 0 {
+		return RedeemResult{}, &ChoiceRequiredError{Groups: pending}
+	}
+	if len(take) == 0 {
+		return RedeemResult{}, ErrNothingForThisStation
+	}
+
+	checkout := make([]coreservice.CheckoutItemInput, 0, len(take))
+	for _, it := range take {
 		checkout = append(checkout, coreservice.CheckoutItemInput{ProductID: it.ID, Quantity: it.Quantity})
 	}
 	prep, err := s.orders.PrepareAndCreateOrder(ctx, coreservice.CreateCheckoutInput{
@@ -514,18 +591,72 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, select
 		return RedeemResult{}, fmt.Errorf("settle voucher order: %w", err)
 	}
 
-	updated, err := s.repo.SetRedeemed(ctx, row.ID, RedeemParams{At: now, OrderID: prep.OrderID, DeviceID: deviceID})
+	for i, it := range take {
+		done = append(done, RedeemedPosition{
+			Key:        keys[i],
+			ProductID:  it.ID,
+			Name:       it.Name,
+			Quantity:   it.Quantity,
+			OrderID:    prep.OrderID,
+			DeviceID:   deviceID,
+			RedeemedAt: now,
+		})
+	}
+	logJSON, err := json.Marshal(done)
 	if err != nil {
+		return RedeemResult{}, fmt.Errorf("marshal redeemed positions: %w", err)
+	}
+
+	fully := len(done) >= len(positions)
+	if _, err := s.repo.SetPartiallyRedeemed(ctx, row.ID, logJSON, fully, RedeemParams{
+		At: now, OrderID: prep.OrderID, DeviceID: deviceID,
+	}); err != nil {
 		return RedeemResult{}, err
 	}
 
 	return RedeemResult{
-		VoucherID:  updated.ID,
-		Label:      updated.Label,
-		OrderID:    prep.OrderID,
-		RedeemedAt: now,
-		Items:      items,
+		VoucherID:     row.ID,
+		Label:         row.Label,
+		OrderID:       prep.OrderID,
+		RedeemedAt:    now,
+		Items:         take,
+		FullyRedeemed: fully,
 	}, nil
+}
+
+func priorRedemption(positions []Position, spent map[string]RedeemedPosition, serves map[string]struct{}, deviceID string) *RedeemResult {
+	if deviceID == "" {
+		return nil
+	}
+	var (
+		items   []Product
+		orderID string
+		at      time.Time
+	)
+	for _, pos := range positions {
+		if len(pos.servableBy(serves)) == 0 {
+			continue
+		}
+		d, gone := spent[pos.Key]
+		if !gone {
+			return nil
+		}
+		if d.DeviceID != deviceID {
+			continue
+		}
+		items = append(items, Product{ID: d.ProductID, Name: d.Name, Quantity: d.Quantity})
+		orderID = d.OrderID
+		at = d.RedeemedAt
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return &RedeemResult{
+		OrderID:         orderID,
+		RedeemedAt:      at,
+		AlreadyRedeemed: true,
+		Items:           items,
+	}
 }
 
 func (s *service) currentStock(ctx context.Context, productIDs []string) (map[string]int, error) {

@@ -116,15 +116,15 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
   if (nowSec < payload.validFrom) return { kind: "scheduled", validFrom: payload.validFrom }
   if (nowSec >= payload.validUntil) return { kind: "expired", validUntil: payload.validUntil }
 
-  const servesAll = payload.lines.every((line) => deps.assignedProductIds.has(line.productId))
-  if (!servesAll) return { kind: "not-for-stand", lines }
+  const mine = lines.filter((line) => deps.assignedProductIds.has(line.productId))
+  if (mine.length === 0) return { kind: "not-for-stand", lines }
 
   const groupOf = new Map(payload.lines.map((l) => [l.productId, l.choiceGroup]))
-  const { resolved, pending } = resolveVoucherSelection(lines, groupOf, deps.selections ?? [])
-  if (pending.length > 0) return { kind: "choice-required", groups: pending, lines }
+  const { resolved, pending } = resolveVoucherSelection(mine, groupOf, deps.selections ?? [])
+  if (pending.length > 0) return { kind: "choice-required", groups: pending, lines: mine }
 
   const existing = await deps.ledger.get(payload.voucherId)
-  if (existing) return { kind: "already-redeemed", redeemedAt: existing.redeemedAt, lines }
+  if (existing) return { kind: "already-redeemed", redeemedAt: existing.redeemedAt, lines: mine }
 
   const redeemedAt = deps.now()
   const outcome = await deps.ledger.claim({
@@ -137,7 +137,7 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
   })
   if (outcome === "duplicate") {
     const row = await deps.ledger.get(payload.voucherId)
-    return { kind: "already-redeemed", redeemedAt: row?.redeemedAt ?? redeemedAt, lines }
+    return { kind: "already-redeemed", redeemedAt: row?.redeemedAt ?? redeemedAt, lines: mine }
   }
 
   const server = await deps.redeemOnServer(payload.voucherId, deps.selections ?? [])
@@ -146,21 +146,21 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
     // The server owns the cross-device answer: this slip was already spent at
     // another stand, and handing out a second meal is the one thing single-use
     // must prevent.
-    if (server.alreadyRedeemed) return { kind: "already-redeemed", redeemedAt: redeemedAt, lines }
+    if (server.alreadyRedeemed) return { kind: "already-redeemed", redeemedAt: redeemedAt, lines: mine }
     return { kind: "redeemed", lines: resolved, pending: false }
   }
   // Nothing was handed out yet, so release the claim rather than burning the
   // slip on a station that cannot talk to the server.
   if (server.reason === "auth") {
     await deps.ledger.remove(payload.voucherId)
-    return { kind: "auth-failed", lines }
+    return { kind: "auth-failed", lines: mine }
   }
   if (server.reason === "refused") {
     await deps.ledger.remove(payload.voucherId)
     if (server.soldOut) {
-      return { kind: "sold-out", message: server.message ?? "Produkt ausverkauft", lines }
+      return { kind: "sold-out", message: server.message ?? "Produkt ausverkauft", lines: mine }
     }
-    if (server.message) return { kind: "refused", message: server.message, lines }
+    if (server.message) return { kind: "refused", message: server.message, lines: mine }
     return { kind: "revoked" }
   }
 

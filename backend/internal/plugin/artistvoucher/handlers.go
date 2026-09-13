@@ -397,6 +397,9 @@ func (h *handlers) writeRedeemError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "Dieser Gutschein ist unbekannt.")
+	case errors.Is(err, ErrNothingForThisStation):
+		writeError(w, http.StatusConflict, "voucher_nothing_for_station",
+			"Für diese Station ist auf dem Gutschein nichts mehr offen.")
 	case errors.Is(err, ErrInvalidSelection):
 		writeError(w, http.StatusBadRequest, "voucher_invalid_selection",
 			"Die getroffene Auswahl passt nicht zu diesem Gutschein.")

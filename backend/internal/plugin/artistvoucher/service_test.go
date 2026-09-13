@@ -98,6 +98,22 @@ func (f *fakeRepo) SetRedeemed(_ context.Context, id string, p RedeemParams) (*e
 	return v, nil
 }
 
+func (f *fakeRepo) SetPartiallyRedeemed(_ context.Context, id string, log json.RawMessage, fully bool, p RedeemParams) (*ent.Voucher, error) {
+	v, ok := f.rows[id]
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	v.RedeemedPositions = log
+	if fully {
+		at := p.At
+		v.RedeemedAt = &at
+		v.RedeemedOrderID = p.OrderID
+		v.RedeemedDeviceID = p.DeviceID
+	}
+	f.redeemCalls++
+	return v, nil
+}
+
 func (f *fakeRepo) RevokeBatchOutstanding(_ context.Context, batchID string, at time.Time) (int, error) {
 	n := 0
 	for _, id := range f.order {
@@ -194,6 +210,7 @@ type testEnv struct {
 	minter   *fakeMinter
 	settler  *fakeSettler
 	stock    *fakeStock
+	stations *fakeStations
 }
 
 func newTestEnv(t *testing.T, cats map[string]*ent.Category) *testEnv {
@@ -207,8 +224,9 @@ func newTestEnv(t *testing.T, cats map[string]*ent.Category) *testEnv {
 		minter:   &fakeMinter{},
 		settler:  &fakeSettler{},
 		stock:    &fakeStock{levels: map[string]int{}},
+		stations: &fakeStations{},
 	}
-	env.svc = NewService(env.repo, &fakeCategories{byID: cats}, env.products, env.keys, env.minter, env.settler, env.stock).(*service)
+	env.svc = NewService(env.repo, &fakeCategories{byID: cats}, env.products, env.keys, env.minter, env.settler, env.stock, env.stations).(*service)
 	return env
 }
 
@@ -448,4 +466,19 @@ func TestCreateRequiresTenant(t *testing.T) {
 	svc, _, _ := newTestService(t, categoryFixtures())
 	_, err := svc.Create(context.Background(), validCreateInput())
 	require.True(t, errors.Is(err, ErrNoTenant))
+}
+
+type fakeStations struct {
+	serves []string
+}
+
+func (f *fakeStations) ListStationProductIDs(_ context.Context, _ string) ([]string, error) {
+	if f.serves != nil {
+		return f.serves, nil
+	}
+	out := make([]string, 0, len(productFixtures()))
+	for id := range productFixtures() {
+		out = append(out, id)
+	}
+	return out, nil
 }

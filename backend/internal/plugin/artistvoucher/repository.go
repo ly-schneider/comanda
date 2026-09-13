@@ -39,6 +39,7 @@ type VoucherRepository interface {
 	ListByBatch(ctx context.Context, batchID string) ([]*ent.Voucher, error)
 	SetRevoked(ctx context.Context, id string, at time.Time) (*ent.Voucher, error)
 	SetRedeemed(ctx context.Context, id string, p RedeemParams) (*ent.Voucher, error)
+	SetPartiallyRedeemed(ctx context.Context, id string, log json.RawMessage, fully bool, p RedeemParams) (*ent.Voucher, error)
 	RevokeBatchOutstanding(ctx context.Context, batchID string, at time.Time) (int, error)
 	ListActiveRevoked(ctx context.Context, now time.Time) ([]*ent.Voucher, error)
 	Delete(ctx context.Context, id string) error
@@ -167,6 +168,21 @@ func (r *voucherRepo) SetRedeemed(ctx context.Context, id string, p RedeemParams
 		SetRedeemedOrderID(p.OrderID)
 	if p.DeviceID != "" {
 		b.SetRedeemedDeviceID(p.DeviceID)
+	}
+	e, err := b.Save(ctx)
+	if err != nil {
+		return nil, repository.TranslateError(err)
+	}
+	return e, nil
+}
+
+func (r *voucherRepo) SetPartiallyRedeemed(ctx context.Context, id string, log json.RawMessage, fully bool, p RedeemParams) (*ent.Voucher, error) {
+	b := r.ec(ctx).Voucher.UpdateOneID(id).SetRedeemedPositions(log)
+	if fully {
+		b.SetRedeemedAt(p.At).SetRedeemedOrderID(p.OrderID)
+		if p.DeviceID != "" {
+			b.SetRedeemedDeviceID(p.DeviceID)
+		}
 	}
 	e, err := b.Save(ctx)
 	if err != nil {

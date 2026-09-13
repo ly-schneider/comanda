@@ -37,6 +37,7 @@ func (p *Plugin) Module() fx.Option {
 			func(r repository.CategoryRepository) CategoryLookup { return r },
 			func(s coreservice.ProductService) ProductLookup { return s },
 			func(s coreservice.QRKeyService) KeyProvider { return s },
+			func(s coreservice.StationService) StationProducts { return s },
 			func(s coreservice.PaymentService) OrderMinter { return s },
 			func(r repository.OrderRepository) OrderSettler { return r },
 			func(r repository.InventoryLedgerRepository) StockLookup { return r },

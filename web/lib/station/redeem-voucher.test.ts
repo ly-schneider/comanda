@@ -247,7 +247,7 @@ describe("redeemVoucherScan", () => {
     expect(result).toEqual({ kind: "expired", validUntil: payload.validUntil })
   })
 
-  it("refuses a stand that serves only part of the entitlement", async () => {
+  it("hands out only the lines this stand serves, leaving the rest of the slip alive", async () => {
     const twoLines: EntitlementPayload = {
       ...payload,
       lines: [
@@ -257,6 +257,19 @@ describe("redeemVoucherScan", () => {
     }
 
     const result = await redeemVoucherScan("tok", deps({ verify: () => ({ ok: true, payload: twoLines }) }))
+
+    expect(result).toMatchObject({ kind: "redeemed" })
+    if (result.kind !== "redeemed") return
+    expect(result.lines.map((l) => l.productId)).toEqual([BURGER])
+  })
+
+  it("refuses a slip with nothing this stand serves", async () => {
+    const otherStand: EntitlementPayload = {
+      ...payload,
+      lines: [{ productId: DRINK, quantity: 1, choiceGroup: 0 }],
+    }
+
+    const result = await redeemVoucherScan("tok", deps({ verify: () => ({ ok: true, payload: otherStand }) }))
 
     expect(result).toMatchObject({ kind: "not-for-stand" })
     expect(server).not.toHaveBeenCalled()

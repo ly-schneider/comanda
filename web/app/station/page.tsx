@@ -1698,7 +1698,9 @@ function EntitlementScanCard({ scan }: { scan: EntitlementScanResult }) {
         </p>
       )}
       {scan.verdict === "not-for-stand" && (
-        <p className="text-muted-foreground mt-3 text-sm">Dieser Stand führt nicht alle Artikel des Gutscheins.</p>
+        <p className="text-muted-foreground mt-3 text-sm">
+          Auf diesem Gutschein steht nichts, was dieser Stand ausgibt.
+        </p>
       )}
       {scan.verdict === "scheduled" && scan.validFrom != null && (
         <p className="text-muted-foreground mt-3 text-sm">Gültig ab {formatVoucherTime(scan.validFrom)}</p>

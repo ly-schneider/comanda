@@ -127,6 +127,10 @@ type OrderSettler interface {
 	SetPosPaymentGratisPlugin(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey string) error
 }
 
+type StationProducts interface {
+	ListStationProductIDs(ctx context.Context, stationID string) ([]string, error)
+}
+
 type StockLookup interface {
 	GetCurrentStockBatch(ctx context.Context, productIDs []string) (map[string]int, error)
 }
@@ -154,6 +158,7 @@ type service struct {
 	orders     OrderMinter
 	settle     OrderSettler
 	stock      StockLookup
+	stations   StationProducts
 }
 
 func NewService(
@@ -164,6 +169,7 @@ func NewService(
 	orders OrderMinter,
 	settle OrderSettler,
 	stock StockLookup,
+	stations StationProducts,
 ) Service {
 	return &service{
 		repo:       repo,
@@ -173,6 +179,7 @@ func NewService(
 		orders:     orders,
 		settle:     settle,
 		stock:      stock,
+		stations:   stations,
 	}
 }
 
