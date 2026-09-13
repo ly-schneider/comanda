@@ -46,8 +46,6 @@ var (
 	ErrExpired             = errors.New("artistvoucher: voucher has expired")
 )
 
-// ChoiceGroup 0 is always handed out; every other group hands out exactly one of
-// its products, picked at the stand.
 type Product struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -150,8 +148,6 @@ func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, 
 		ids = append(ids, p.ProductID)
 	}
 
-	// A group of one is not a choice; it would silently behave like an always-on
-	// line and read as "oder" on the printed slip with nothing to choose from.
 	for group, n := range groupSizes {
 		if group > 0 && n < 2 {
 			return Batch{}, fmt.Errorf("%w: %d", ErrChoiceGroupTooSmall, group)
@@ -358,8 +354,6 @@ type ChoiceGroupView struct {
 	Options     []Product
 }
 
-// ChoiceRequiredError carries the open groups so the stand can show a picker
-// without a second round-trip.
 type ChoiceRequiredError struct {
 	Groups []ChoiceGroupView
 }
@@ -368,12 +362,6 @@ func (e *ChoiceRequiredError) Error() string {
 	return fmt.Sprintf("artistvoucher: %d choice group(s) need a selection", len(e.Groups))
 }
 
-// resolveSelection reduces a slip's products to the ones actually handed out:
-// group 0 always, and exactly one product from every other group. A group with
-// no selection is reported back rather than guessed at.
-// EntitlementLines renders a slip's positions for printing: always-on products
-// first, then each choice group as its options joined by "oder", so the holder
-// reads what they get and what they pick.
 func EntitlementLines(products []Product) []string {
 	groups := make(map[int][]Product)
 	order := make([]int, 0, len(products))
@@ -448,8 +436,6 @@ func resolveSelection(products []Product, selections []ChoiceSelection) ([]Produ
 				break
 			}
 		}
-		// A selection naming a product outside its group would hand out something
-		// the slip never promised.
 		if idx < 0 {
 			return nil, ErrInvalidSelection
 		}
@@ -481,8 +467,6 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, select
 	}
 
 	if row.RedeemedAt != nil {
-		// What was actually picked lives on the order, not here, so a spent slip
-		// reports no line items rather than listing every option it offered.
 		return RedeemResult{
 			VoucherID:       row.ID,
 			Label:           row.Label,
@@ -505,9 +489,6 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, select
 		return RedeemResult{}, ErrNoProducts
 	}
 
-	// Resolved server-side even though the stand already picked: a selection is
-	// client input, and an unchecked one would hand out a product the slip never
-	// promised.
 	items, err = resolveSelection(items, selections)
 	if err != nil {
 		return RedeemResult{}, err

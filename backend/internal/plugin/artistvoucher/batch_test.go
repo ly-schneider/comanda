@@ -337,8 +337,6 @@ func TestRedeemIsIdempotent(t *testing.T) {
 	require.True(t, second.AlreadyRedeemed)
 	require.Equal(t, first.OrderID, second.OrderID)
 	require.Equal(t, first.RedeemedAt.UnixNano(), second.RedeemedAt.UnixNano())
-	// What was picked lives on the order, so a spent slip reports no line items
-	// rather than listing every option it offered.
 	require.Empty(t, second.Items)
 	require.Len(t, env.minter.minted, 1, "a retry must not mint a second order")
 	require.Len(t, env.settler.calls, 1)

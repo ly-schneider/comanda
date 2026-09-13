@@ -189,7 +189,6 @@ const ENTITLEMENT_LINE_LEN = ID_LEN + 2 // product + qty + choice group
 export interface EntitlementLine {
   productId: string
   quantity: number
-  /** 0 is always handed out; other groups hand out exactly one of their lines. */
   choiceGroup: number
 }
 

@@ -79,7 +79,6 @@ export interface ArtistVoucherBatchProduct {
   name: string
   quantity: number
   stock: number
-  /** 0 is always handed out; other groups hand out exactly one of their products. */
   choiceGroup?: number
 }
 

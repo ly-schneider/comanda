@@ -19,10 +19,6 @@ export interface VoucherChoiceSelection {
   productId: string
 }
 
-/**
- * Splits a slip into what is always handed out and the groups the operator still
- * has to choose from. Mirrors the server's rules so the stand can ask offline.
- */
 export function resolveVoucherSelection(
   lines: VoucherLineView[],
   groupOf: Map<string, number>,
@@ -72,7 +68,6 @@ export type VoucherRedeemResult =
   | { kind: "sold-out"; message: string; lines: VoucherLineView[] }
   | { kind: "refused"; message: string; lines: VoucherLineView[] }
   | { kind: "auth-failed"; lines: VoucherLineView[] }
-  /** The stand must pick one product per group before anything is handed out. */
   | { kind: "choice-required"; groups: VoucherChoiceGroup[]; lines: VoucherLineView[] }
   | { kind: "redeemed"; lines: VoucherLineView[]; pending: boolean }
 
@@ -91,7 +86,6 @@ export interface VoucherRedeemDeps {
   revoked: (voucherId: string) => boolean
   redeemOnServer: (voucherId: string, selections: VoucherChoiceSelection[]) => Promise<ServerRedeemResult>
   now: () => number
-  /** Answers already given for this slip's choice groups. */
   selections?: VoucherChoiceSelection[]
 }
 
@@ -127,8 +121,6 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
 
   const groupOf = new Map(payload.lines.map((l) => [l.productId, l.choiceGroup]))
   const { resolved, pending } = resolveVoucherSelection(lines, groupOf, deps.selections ?? [])
-  // Asked before the claim: an unanswered slip must stay untouched so the
-  // operator can cancel the picker without burning it.
   if (pending.length > 0) return { kind: "choice-required", groups: pending, lines }
 
   const existing = await deps.ledger.get(payload.voucherId)

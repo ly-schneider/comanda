@@ -905,9 +905,6 @@ export default function StationPage() {
     [scheduleResume, updateScan]
   )
 
-  // Runs (or re-runs, once the operator has picked) a single-use voucher scan.
-  // A slip with an open choice group stops here and opens the picker instead of
-  // being claimed, so cancelling leaves it untouched.
   const runEntitlementScan = useCallback(
     async (token: string, selections: VoucherChoiceSelection[]) => {
       const offline = offlineRef.current
@@ -932,8 +929,6 @@ export default function StationPage() {
         playScanSound(entitlementSound(result.kind))
         if (result.kind === "redeemed" && result.pending) triggerFlush()
       } catch {
-        // An IndexedDB abort must not strand the scanner paused: without this
-        // the camera never resumes and the stand is dead until a reload.
         setError("Gutschein konnte nicht gelesen werden")
         playScanSound("error")
       }

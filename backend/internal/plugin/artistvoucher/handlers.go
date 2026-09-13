@@ -305,8 +305,6 @@ func (h *handlers) ArtistVoucherRedeem(w http.ResponseWriter, r *http.Request, v
 	}
 	deviceID, _ := auth.GetDeviceID(r.Context())
 
-	// The body is optional: a slip without choice groups is redeemed by scanning
-	// alone, and the station posts nothing.
 	var body generated.ArtistVoucherRedeemRequest
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body)

@@ -16,8 +16,6 @@ const (
 	maxChoiceGrp = math.MaxUint8
 )
 
-// EntitlementLine is one position on the slip. ChoiceGroup 0 is always handed
-// out; every other group hands out exactly one of its lines, picked at the stand.
 type EntitlementLine struct {
 	ProductID   string
 	Quantity    int
