@@ -132,6 +132,7 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
     tenantId: payload.tenantId,
     label: payload.label,
     lines: resolved.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+    selections: deps.selections ?? [],
     redeemedAt,
     attempts: 0,
   })

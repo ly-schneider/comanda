@@ -11,6 +11,7 @@ function row(voucherId: string, overrides: Partial<VoucherRedemption> = {}): Vou
     tenantId: TENANT,
     label: "Outreach",
     lines: [{ productId: "prod_burger1", quantity: 1 }],
+    selections: [],
     redeemedAt: NOW - 60_000,
     attempts: 0,
     ...overrides,
@@ -92,6 +93,18 @@ describe("flushVoucherRedemptions", () => {
 
     const init = fetchMock.mock.calls[0]![1] as RequestInit
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("Vch000000001")
+  })
+
+  it("replays the choice made at the stand, so the server resolves the same group", async () => {
+    const ledger = memoryLedger([row("Vch000000001", { selections: [{ choiceGroup: 1, productId: "prod_veggie1" }] })])
+    fetchMock.mockResolvedValue(res(200, { orderId: "ord_00000001" }))
+
+    await flushVoucherRedemptions(deps(ledger))
+
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(JSON.parse(String(init.body))).toEqual({
+      selections: [{ choiceGroup: 1, productId: "prod_veggie1" }],
+    })
   })
 
   it("keeps a row pending and backs off on a server error", async () => {

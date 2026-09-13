@@ -10,6 +10,7 @@ export interface VoucherRedemption {
   tenantId: string
   label: string
   lines: VoucherRedemptionLine[]
+  selections: { choiceGroup: number; productId: string }[]
   redeemedAt: number
   syncedAt?: number
   orderId?: string

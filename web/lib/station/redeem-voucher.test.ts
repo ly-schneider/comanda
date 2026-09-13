@@ -220,6 +220,7 @@ describe("redeemVoucherScan", () => {
     if (result.kind !== "redeemed") return
     expect(result.lines.map((l) => l.productId)).toEqual([DRINK])
     expect(server).toHaveBeenCalledWith(VOUCHER, [{ choiceGroup: 1, productId: DRINK }])
+    expect(await ledger.get(VOUCHER)).toMatchObject({ selections: [{ choiceGroup: 1, productId: DRINK }] })
   })
 
   it("rejects a slip signed for another tenant", async () => {

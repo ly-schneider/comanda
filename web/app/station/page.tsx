@@ -717,36 +717,40 @@ export default function StationPage() {
     })
   }, [])
 
-  const redeemVoucherOnServer = useCallback(async (voucherId: string): Promise<ServerRedeemResult> => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, reason: "unreachable" }
+  const redeemVoucherOnServer = useCallback(
+    async (voucherId: string, selections: VoucherChoiceSelection[]): Promise<ServerRedeemResult> => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, reason: "unreachable" }
 
-    let res: Response
-    try {
-      res = await deviceFetchRef.current(voucherRedeemEndpoint(voucherId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": voucherId },
-      })
-    } catch {
-      return { ok: false, reason: "unreachable" }
-    }
+      let res: Response
+      try {
+        res = await deviceFetchRef.current(voucherRedeemEndpoint(voucherId), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": voucherId },
+          body: JSON.stringify({ selections }),
+        })
+      } catch {
+        return { ok: false, reason: "unreachable" }
+      }
 
-    if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { orderId?: string; alreadyRedeemed?: boolean } | null
-      return body?.orderId
-        ? { ok: true, orderId: body.orderId, alreadyRedeemed: body.alreadyRedeemed === true }
-        : { ok: false, reason: "unreachable" }
-    }
-    if (res.status === 401 || res.status === 403) return { ok: false, reason: "auth" }
-    if (res.status >= 500 || res.status === 408 || res.status === 429) return { ok: false, reason: "unreachable" }
+      if (res.ok) {
+        const body = (await res.json().catch(() => null)) as { orderId?: string; alreadyRedeemed?: boolean } | null
+        return body?.orderId
+          ? { ok: true, orderId: body.orderId, alreadyRedeemed: body.alreadyRedeemed === true }
+          : { ok: false, reason: "unreachable" }
+      }
+      if (res.status === 401 || res.status === 403) return { ok: false, reason: "auth" }
+      if (res.status >= 500 || res.status === 408 || res.status === 429) return { ok: false, reason: "unreachable" }
 
-    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null
-    return {
-      ok: false,
-      reason: "refused",
-      soldOut: body?.code === "voucher_product_sold_out",
-      message: body?.message,
-    }
-  }, [])
+      const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null
+      return {
+        ok: false,
+        reason: "refused",
+        soldOut: body?.code === "voucher_product_sold_out",
+        message: body?.message,
+      }
+    },
+    []
+  )
 
   // Queue first (durable before we report success), then flush — immediate when
   // online, deferred to a later trigger when offline.

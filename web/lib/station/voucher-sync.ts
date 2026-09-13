@@ -97,16 +97,18 @@ async function upload(
   deps: VoucherFlushDeps,
   url: string,
   token: string,
-  item: Pick<VoucherRedemption, "voucherId">
+  item: Pick<VoucherRedemption, "voucherId" | "selections">
 ): Promise<UploadOutcome> {
   let res: Response
   try {
     res = await deps.fetch(url, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
         "Idempotency-Key": item.voucherId,
       },
+      body: JSON.stringify({ selections: item.selections ?? [] }),
     })
   } catch {
     return { kind: "transient" }
