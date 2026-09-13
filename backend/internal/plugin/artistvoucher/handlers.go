@@ -144,10 +144,11 @@ func toAPIBatch(b Batch) generated.ArtistVoucherBatch {
 	products := make([]generated.ArtistVoucherBatchProduct, 0, len(b.Products))
 	for _, p := range b.Products {
 		products = append(products, generated.ArtistVoucherBatchProduct{
-			ProductId: p.ID,
-			Name:      p.Name,
-			Quantity:  p.Quantity,
-			Stock:     p.Stock,
+			ProductId:   p.ID,
+			Name:        p.Name,
+			Quantity:    p.Quantity,
+			ChoiceGroup: &p.ChoiceGroup,
+			Stock:       p.Stock,
 		})
 	}
 	return generated.ArtistVoucherBatch{
@@ -186,9 +187,13 @@ func batchErrorResponse(err error) (status int, code, message string, ok bool) {
 	case errors.Is(err, ErrInvalidQuantity):
 		return http.StatusBadRequest, "invalid_quantity", fmt.Sprintf("Die Menge muss zwischen 1 und %d liegen.", maxBatchQuantity), true
 	case errors.Is(err, ErrProductNotSimple):
-		return http.StatusBadRequest, "product_not_simple", "Nur einfache Produkte können als Gutschein ausgegeben werden — Menüs nicht.", true
+		return http.StatusBadRequest, "product_not_simple", "Für Gutscheine lassen sich nur einfache Produkte auswählen, keine Menüs.", true
 	case errors.Is(err, ErrProductHasVariants):
 		return http.StatusBadRequest, "product_has_variants", "Produkte mit Varianten können nicht als Gutschein ausgegeben werden, weil auf dem Gutschein keine Variante steht.", true
+	case errors.Is(err, ErrInvalidChoiceGroup):
+		return http.StatusBadRequest, "invalid_choice_group", "Die Auswahlgruppe liegt ausserhalb des gültigen Bereichs.", true
+	case errors.Is(err, ErrChoiceGroupTooSmall):
+		return http.StatusBadRequest, "choice_group_too_small", "Eine Auswahl braucht mindestens zwei Produkte, sonst gibt es nichts zu wählen.", true
 	case errors.Is(err, ErrProductUnavailable):
 		return http.StatusBadRequest, "product_unavailable", "Das Produkt ist nicht im Verkauf. Aktiviere es zuerst, sonst lassen sich die Gutscheine am Stand nicht einlösen.", true
 	case errors.Is(err, ErrInvalidToken):
@@ -234,7 +239,11 @@ func (h *handlers) ArtistVoucherBatchCreate(w http.ResponseWriter, r *http.Reque
 			writeError(w, http.StatusBadRequest, "invalid_id", "Invalid product id")
 			return
 		}
-		products = append(products, BatchProductInput{ProductID: p.ProductId, Quantity: p.Quantity})
+		group := 0
+		if p.ChoiceGroup != nil {
+			group = *p.ChoiceGroup
+		}
+		products = append(products, BatchProductInput{ProductID: p.ProductId, Quantity: p.Quantity, ChoiceGroup: group})
 	}
 
 	batch, err := h.rt.svc.CreateBatch(r.Context(), CreateBatchInput{
@@ -296,7 +305,18 @@ func (h *handlers) ArtistVoucherRedeem(w http.ResponseWriter, r *http.Request, v
 	}
 	deviceID, _ := auth.GetDeviceID(r.Context())
 
-	result, err := h.rt.svc.Redeem(r.Context(), voucherId, deviceID)
+	var body generated.ArtistVoucherRedeemRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+	var selections []ChoiceSelection
+	if body.Selections != nil {
+		for _, sel := range *body.Selections {
+			selections = append(selections, ChoiceSelection{ChoiceGroup: sel.ChoiceGroup, ProductID: sel.ProductId})
+		}
+	}
+
+	result, err := h.rt.svc.Redeem(r.Context(), voucherId, deviceID, selections)
 	if err != nil {
 		h.writeRedeemError(w, err)
 		return
@@ -322,6 +342,25 @@ func (h *handlers) ArtistVoucherRedeem(w http.ResponseWriter, r *http.Request, v
 }
 
 func (h *handlers) writeRedeemError(w http.ResponseWriter, err error) {
+	var needsChoice *ChoiceRequiredError
+	if errors.As(err, &needsChoice) {
+		groups := make([]map[string]any, 0, len(needsChoice.Groups))
+		for _, g := range needsChoice.Groups {
+			options := make([]map[string]any, 0, len(g.Options))
+			for _, o := range g.Options {
+				options = append(options, map[string]any{"productId": o.ID, "name": o.Name, "quantity": o.Quantity})
+			}
+			groups = append(groups, map[string]any{"choiceGroup": g.ChoiceGroup, "options": options})
+		}
+		details := map[string]any{"groups": groups}
+		response.WriteJSON(w, http.StatusConflict, generated.Error{
+			Code:    "voucher_choice_required",
+			Message: "Für diesen Gutschein muss noch eine Auswahl getroffen werden.",
+			Details: &details,
+		})
+		return
+	}
+
 	var soldOut *coreservice.InsufficientInventoryError
 	if errors.As(err, &soldOut) {
 		items := make([]map[string]any, 0, len(soldOut.Items))
@@ -338,7 +377,7 @@ func (h *handlers) writeRedeemError(w http.ResponseWriter, err error) {
 		details := map[string]any{"items": items}
 		response.WriteJSON(w, http.StatusConflict, generated.Error{
 			Code:    "voucher_product_sold_out",
-			Message: "Gutschein gültig — ausverkauft: " + strings.Join(names, ", "),
+			Message: "Der Gutschein ist gültig, aber ausverkauft ist: " + strings.Join(names, ", "),
 			Details: &details,
 		})
 		return
@@ -351,13 +390,16 @@ func (h *handlers) writeRedeemError(w http.ResponseWriter, err error) {
 			names = append(names, it.Name)
 		}
 		writeError(w, http.StatusConflict, "voucher_product_unavailable",
-			"Gutschein gültig — nicht mehr im Sortiment: "+strings.Join(names, ", "))
+			"Der Gutschein ist gültig, aber nicht mehr im Sortiment ist: "+strings.Join(names, ", "))
 		return
 	}
 
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "Dieser Gutschein ist unbekannt.")
+	case errors.Is(err, ErrInvalidSelection):
+		writeError(w, http.StatusBadRequest, "voucher_invalid_selection",
+			"Die getroffene Auswahl passt nicht zu diesem Gutschein.")
 	case errors.Is(err, ErrNotEntitlement):
 		writeError(w, http.StatusBadRequest, "voucher_not_single_use", "Dieser Gutschein kann nicht eingelöst werden.")
 	case errors.Is(err, ErrRevoked):

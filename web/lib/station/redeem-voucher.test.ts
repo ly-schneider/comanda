@@ -15,7 +15,7 @@ const payload: EntitlementPayload = {
   validFrom: 1_700_000_000,
   validUntil: 1_700_086_400,
   label: "Outreach",
-  lines: [{ productId: BURGER, quantity: 1 }],
+  lines: [{ productId: BURGER, quantity: 1, choiceGroup: 0 }],
 }
 
 function memoryLedger(): VoucherLedger {
@@ -90,7 +90,7 @@ describe("redeemVoucherScan", () => {
       pending: false,
       lines: [{ productId: BURGER, title: "Burger", productImage: null, quantity: 1 }],
     })
-    expect(server).toHaveBeenCalledWith(VOUCHER)
+    expect(server).toHaveBeenCalledWith(VOUCHER, [])
     expect(await ledger.get(VOUCHER)).toMatchObject({ orderId: "ord_00000001", syncedAt: NOW })
   })
 
@@ -169,6 +169,59 @@ describe("redeemVoucherScan", () => {
     expect(await ledger.get(VOUCHER)).toBeNull()
   })
 
+  it("asks for a choice before claiming, so cancelling leaves the slip untouched", async () => {
+    const choice: EntitlementPayload = {
+      ...payload,
+      lines: [
+        { productId: BURGER, quantity: 1, choiceGroup: 1 },
+        { productId: DRINK, quantity: 1, choiceGroup: 1 },
+      ],
+    }
+
+    const result = await redeemVoucherScan(
+      "tok",
+      deps({
+        verify: () => ({ ok: true, payload: choice }),
+        assignedProductIds: new Set([BURGER, DRINK]),
+      })
+    )
+
+    expect(result).toMatchObject({ kind: "choice-required" })
+    if (result.kind !== "choice-required") return
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]!.options).toHaveLength(2)
+    expect(server).not.toHaveBeenCalled()
+    expect(await ledger.get(VOUCHER)).toBeNull()
+  })
+
+  it("hands out only the picked option, never both", async () => {
+    const choice: EntitlementPayload = {
+      ...payload,
+      lines: [
+        { productId: BURGER, quantity: 1, choiceGroup: 1 },
+        { productId: DRINK, quantity: 1, choiceGroup: 1 },
+      ],
+    }
+
+    const result = await redeemVoucherScan(
+      "tok",
+      deps({
+        verify: () => ({ ok: true, payload: choice }),
+        assignedProductIds: new Set([BURGER, DRINK]),
+        catalog: new Map([
+          [BURGER, { name: "Burger" }],
+          [DRINK, { name: "Cola" }],
+        ]),
+        selections: [{ choiceGroup: 1, productId: DRINK }],
+      })
+    )
+
+    expect(result).toMatchObject({ kind: "redeemed" })
+    if (result.kind !== "redeemed") return
+    expect(result.lines.map((l) => l.productId)).toEqual([DRINK])
+    expect(server).toHaveBeenCalledWith(VOUCHER, [{ choiceGroup: 1, productId: DRINK }])
+  })
+
   it("rejects a slip signed for another tenant", async () => {
     const result = await redeemVoucherScan("tok", deps({ stationTenantId: "tenant_other" }))
 
@@ -198,8 +251,8 @@ describe("redeemVoucherScan", () => {
     const twoLines: EntitlementPayload = {
       ...payload,
       lines: [
-        { productId: BURGER, quantity: 1 },
-        { productId: DRINK, quantity: 1 },
+        { productId: BURGER, quantity: 1, choiceGroup: 0 },
+        { productId: DRINK, quantity: 1, choiceGroup: 0 },
       ],
     }
 

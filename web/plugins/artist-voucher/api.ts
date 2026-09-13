@@ -79,6 +79,7 @@ export interface ArtistVoucherBatchProduct {
   name: string
   quantity: number
   stock: number
+  choiceGroup?: number
 }
 
 export interface ArtistVoucherBatch {
@@ -111,7 +112,7 @@ export interface CreateBatchInput {
   label: string
   validFrom: string
   validUntil: string
-  products: { productId: string; quantity: number }[]
+  products: { productId: string; quantity: number; choiceGroup: number }[]
   count: number
 }
 

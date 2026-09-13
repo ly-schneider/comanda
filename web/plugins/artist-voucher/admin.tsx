@@ -198,7 +198,7 @@ export default function ArtistVoucherAdmin() {
                     Gültig für: {v.categories.map((c) => c.name).join(", ") || "—"}
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {fmtDateTime(v.validFrom)} – {fmtDateTime(v.validUntil)}
+                    {fmtDateTime(v.validFrom)} bis {fmtDateTime(v.validUntil)}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -335,8 +335,8 @@ export default function ArtistVoucherAdmin() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">
-              Druckt den QR-Code im Badge-Format (7,6 × 12,7 cm) zum Ausschneiden und Aufkleben – so oft, wie die
-              Artists mit ihrer Crew unterwegs sind.
+              Druckt den QR-Code im Badge-Format (7,6 × 12,7 cm) zum Ausschneiden und Aufkleben, so oft, wie die Artists
+              mit ihrer Crew unterwegs sind.
             </p>
             <div className="space-y-1">
               <Label htmlFor="voucher-count">Anzahl</Label>

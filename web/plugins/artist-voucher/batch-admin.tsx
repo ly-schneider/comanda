@@ -77,8 +77,9 @@ export default function VoucherBatchAdmin() {
         <div>
           <CardTitle>Gutschein-Serien</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Einzeln nummerierte Gutscheine zum Verteilen – jeder Slip wird genau einmal eingelöst. Der Lagerbestand
-            sinkt erst beim Einlösen am Stand, nicht beim Drucken.
+            Jeder Gutschein bekommt einen eigenen QR-Code und lässt sich genau einmal einlösen. Der Lagerbestand sinkt
+            erst, wenn ein Gutschein am Stand eingescannt wird, und nicht schon beim Drucken. Darum stehen hier beide
+            Zahlen nebeneinander.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -93,7 +94,7 @@ export default function VoucherBatchAdmin() {
         )}
 
         {batches.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Noch keine Serien ausgegeben.</p>
+          <p className="text-muted-foreground text-sm">Es wurde noch keine Serie erstellt.</p>
         ) : (
           <ul className="divide-y rounded-xl border">
             {batches.map((b) => {
@@ -108,7 +109,7 @@ export default function VoucherBatchAdmin() {
                     <p className="text-base font-semibold">{outstandingStockText(b)}</p>
                     <p className="text-muted-foreground text-sm">{entitlementText(b.products)}</p>
                     <p className="text-muted-foreground text-xs">
-                      {fmtDateTime(b.validFrom)} – {fmtDateTime(b.validUntil)}
+                      {fmtDateTime(b.validFrom)} bis {fmtDateTime(b.validUntil)}
                     </p>
                     <p className="text-muted-foreground text-xs">
                       {b.issued} ausgegeben · {b.redeemed} eingelöst · {b.revoked} widerrufen
@@ -154,10 +155,10 @@ export default function VoucherBatchAdmin() {
             <AlertDialogDescription>
               {revokeTarget && (
                 <>
-                  Die {revokeTarget.outstanding} noch offenen Slips von «{revokeTarget.label}» werden ungültig, bereits
-                  eingelöste bleiben unverändert. Offline-Stationen akzeptieren sie möglicherweise weiterhin, bis sie
-                  sich wieder verbinden oder die Serie am {fmtDateTime(revokeTarget.validUntil)} abläuft. Diese Aktion
-                  kann nicht rückgängig gemacht werden.
+                  Die {revokeTarget.outstanding} noch offenen Gutscheine von «{revokeTarget.label}» werden ungültig.
+                  Bereits eingelöste bleiben davon unberührt. Stationen ohne Internetverbindung akzeptieren die
+                  Gutscheine unter Umständen weiter, bis sie wieder online sind oder die Serie am{" "}
+                  {fmtDateTime(revokeTarget.validUntil)} abläuft. Rückgängig machen lässt sich das nicht.
                 </>
               )}
             </AlertDialogDescription>

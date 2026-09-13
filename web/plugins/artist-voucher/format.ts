@@ -13,7 +13,29 @@ export function fmtDateTime(iso: string): string {
 }
 
 export function entitlementText(products: ArtistVoucherBatchProduct[]): string {
-  return products.map((p) => `${p.quantity}× ${p.name}`).join(", ")
+  const groups = new Map<number, ArtistVoucherBatchProduct[]>()
+  const parts: string[] = []
+
+  for (const p of products) {
+    const group = p.choiceGroup ?? 0
+    if (group <= 0) {
+      parts.push(`${p.quantity}× ${p.name}`)
+      continue
+    }
+    const bucket = groups.get(group)
+    if (bucket) bucket.push(p)
+    else groups.set(group, [p])
+  }
+
+  for (const group of Array.from(groups.keys()).sort((a, b) => a - b)) {
+    parts.push(
+      groups
+        .get(group)!
+        .map((p) => `${p.quantity}× ${p.name}`)
+        .join(" oder ")
+    )
+  }
+  return parts.join(", ")
 }
 
 export function outstandingStockText(batch: ArtistVoucherBatch): string {

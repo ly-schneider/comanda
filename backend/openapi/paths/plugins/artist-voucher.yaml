@@ -474,6 +474,12 @@ redeem:
     operationId: artistVoucherRedeem
     security:
       - deviceAuth: []
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherRedeemRequest"
     responses:
       "200":
         description: Voucher redeemed

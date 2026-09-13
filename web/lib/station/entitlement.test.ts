@@ -11,9 +11,9 @@ const GOLDEN = {
   seedHex: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
   pubB64Url: "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
   token:
-    "EXRlbmFudF9zZWVkMUVudDdBYjJDZDlFZmVT8QBlVUKADlN0cmFzc2VuYWt0aW9uAnByb2RfYnVyZ2VyMQJwcm9kX2NvbGEwMDEBNyeWMz-nngXnxaing0Xb2R9bgcpZ2DxaBU5PnS4gn4eaCL_ugE8WJ0WnadMiMZfAa3d6yUAttvWfIBVvOAMWAQ",
+    "EXRlbmFudF9zZWVkMUVudDdBYjJDZDlFZmVT8QBlVUKADlN0cmFzc2VuYWt0aW9uA3Byb2RfcG9tbWVzMQEAcHJvZF9idXJnZXIxAQFwcm9kX2NoZWVzZTEBAdPsxohp6QXgYcD6rGBQ6Kx6EcFufqcWSgdetV4pzr-mLD_ZBu7yXd_9uWl8ZTJsVGY_99TamduToPpXOjFAfgI",
   bodyHex:
-    "1174656e616e745f7365656431456e743741623243643945666553f100655542800e537472617373656e616b74696f6e0270726f645f627572676572310270726f645f636f6c6130303101",
+    "1174656e616e745f7365656431456e743741623243643945666553f100655542800e537472617373656e616b74696f6e0370726f645f706f6d6d657331010070726f645f62757267657231010170726f645f636865657365310101",
 }
 
 const goldenPayload: EntitlementPayload = {
@@ -23,8 +23,9 @@ const goldenPayload: EntitlementPayload = {
   validUntil: 1_700_086_400,
   label: "Strassenaktion",
   lines: [
-    { productId: "prod_burger1", quantity: 2 },
-    { productId: "prod_cola001", quantity: 1 },
+    { productId: "prod_pommes1", quantity: 1, choiceGroup: 0 },
+    { productId: "prod_burger1", quantity: 1, choiceGroup: 1 },
+    { productId: "prod_cheese1", quantity: 1, choiceGroup: 1 },
   ],
 }
 
@@ -71,7 +72,7 @@ describe("verifyEntitlementToken", () => {
 
   it("rejects a tampered quantity", () => {
     const raw = base64UrlToBytes(GOLDEN.token)!
-    raw[raw.length - 65] = 9
+    raw[raw.length - 66] = 9
     expect(verifyEntitlementToken(bytesToBase64Url(raw), publicKey)).toEqual({ ok: false, reason: "bad-signature" })
   })
 
@@ -86,7 +87,10 @@ describe("verifyEntitlementToken", () => {
   })
 
   it("round-trips a single-line slip", () => {
-    const single: EntitlementPayload = { ...goldenPayload, lines: [{ productId: "prod_burger1", quantity: 1 }] }
+    const single: EntitlementPayload = {
+      ...goldenPayload,
+      lines: [{ productId: "prod_burger1", quantity: 1, choiceGroup: 0 }],
+    }
     expect(verifyEntitlementToken(sign(single), publicKey)).toEqual({ ok: true, payload: single })
   })
 
