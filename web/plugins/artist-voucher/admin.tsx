@@ -20,50 +20,10 @@ import { useAuth } from "@/contexts/auth-context"
 import { apiRequest, isApiError } from "@/lib/api"
 import type { CategoryLike } from "@/lib/categories"
 import type { CategoryDTO } from "@/types/category"
-import {
-  type ArtistVoucher,
-  createVoucher,
-  deleteVoucher,
-  listVouchers,
-  revokeVoucher,
-  voucherPrintUrl,
-  type VoucherStatus,
-} from "./api"
+import { type ArtistVoucher, createVoucher, deleteVoucher, listVouchers, revokeVoucher, voucherPrintUrl } from "./api"
 import { CategoryMultiSelect } from "./category-multi-select"
-
-const STATUS_LABEL: Record<VoucherStatus, string> = {
-  scheduled: "Geplant",
-  active: "Aktiv",
-  expired: "Abgelaufen",
-  revoked: "Widerrufen",
-}
-
-const STATUS_CLASS: Record<VoucherStatus, string> = {
-  scheduled: "bg-amber-100 text-amber-900",
-  active: "bg-emerald-100 text-emerald-900",
-  expired: "bg-muted text-muted-foreground",
-  revoked: "bg-destructive/10 text-destructive",
-}
-
-const dtf = new Intl.DateTimeFormat("de-CH", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-})
-
-function fmtDateTime(iso: string): string {
-  return dtf.format(new Date(iso))
-}
-
-function StatusBadge({ status }: { status: VoucherStatus }) {
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[status]}`}>
-      {STATUS_LABEL[status]}
-    </span>
-  )
-}
+import { fmtDateTime } from "./format"
+import { StatusBadge } from "./status"
 
 export default function ArtistVoucherAdmin() {
   const { getToken } = useAuth()
@@ -206,7 +166,7 @@ export default function ArtistVoucherAdmin() {
     <Card className="rounded-2xl">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle>Artist Voucher</CardTitle>
+          <CardTitle>Artist-Pässe</CardTitle>
           <p className="text-muted-foreground text-sm">
             Erstelle Gutscheine für Artists und Gäste. Sie werden als A4-Bogen gedruckt und an der Station offline
             geprüft.

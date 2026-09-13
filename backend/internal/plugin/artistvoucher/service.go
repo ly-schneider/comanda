@@ -10,9 +10,11 @@ import (
 	"unicode/utf8"
 
 	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/voucher"
 	"backend/internal/id"
 	"backend/internal/qrsign"
 	"backend/internal/repository"
+	coreservice "backend/internal/service"
 )
 
 const Key = "artist-voucher"
@@ -50,6 +52,16 @@ func IsValidation(err error) bool {
 	return false
 }
 
+func validateLabel(label string) error {
+	if utf8.RuneCountInString(label) == 0 {
+		return ErrEmptyLabel
+	}
+	if utf8.RuneCountInString(label) > maxLabelRunes || len(label) > maxLabelBytes {
+		return ErrLabelTooLong
+	}
+	return nil
+}
+
 type Status string
 
 const (
@@ -57,6 +69,7 @@ const (
 	StatusActive    Status = "active"
 	StatusExpired   Status = "expired"
 	StatusRevoked   Status = "revoked"
+	StatusRedeemed  Status = "redeemed"
 )
 
 type Category struct {
@@ -101,6 +114,22 @@ type KeyProvider interface {
 	EnsureTenantKey(ctx context.Context) (ed25519.PrivateKey, ed25519.PublicKey, error)
 }
 
+type ProductLookup interface {
+	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
+}
+
+type OrderMinter interface {
+	PrepareAndCreateOrder(ctx context.Context, in coreservice.CreateCheckoutInput, userID *string, attemptID *string) (*coreservice.CheckoutPreparation, error)
+}
+
+type OrderSettler interface {
+	SetPosPaymentGratisPlugin(ctx context.Context, orderID string, deviceID *string, amountCents int64, pluginKey string) error
+}
+
+type StockLookup interface {
+	GetCurrentStockBatch(ctx context.Context, productIDs []string) (map[string]int, error)
+}
+
 type Service interface {
 	List(ctx context.Context) ([]Voucher, error)
 	Get(ctx context.Context, id string) (Voucher, error)
@@ -108,16 +137,42 @@ type Service interface {
 	Revoke(ctx context.Context, id string) (Voucher, error)
 	Delete(ctx context.Context, id string) error
 	Revocations(ctx context.Context) (Feed, error)
+
+	CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, error)
+	ListBatches(ctx context.Context) ([]Batch, error)
+	GetBatch(ctx context.Context, batchID string) (BatchDetail, error)
+	RevokeBatch(ctx context.Context, batchID string) (Batch, error)
+	Redeem(ctx context.Context, voucherID, deviceID string) (RedeemResult, error)
 }
 
 type service struct {
 	repo       VoucherRepository
 	categories CategoryLookup
+	products   ProductLookup
 	keys       KeyProvider
+	orders     OrderMinter
+	settle     OrderSettler
+	stock      StockLookup
 }
 
-func NewService(repo VoucherRepository, categories CategoryLookup, keys KeyProvider) Service {
-	return &service{repo: repo, categories: categories, keys: keys}
+func NewService(
+	repo VoucherRepository,
+	categories CategoryLookup,
+	products ProductLookup,
+	keys KeyProvider,
+	orders OrderMinter,
+	settle OrderSettler,
+	stock StockLookup,
+) Service {
+	return &service{
+		repo:       repo,
+		categories: categories,
+		products:   products,
+		keys:       keys,
+		orders:     orders,
+		settle:     settle,
+		stock:      stock,
+	}
 }
 
 func (s *service) List(ctx context.Context) ([]Voucher, error) {
@@ -138,11 +193,8 @@ func (s *service) List(ctx context.Context) ([]Voucher, error) {
 }
 
 func (s *service) Create(ctx context.Context, in CreateInput) (Voucher, error) {
-	if utf8.RuneCountInString(in.Label) == 0 {
-		return Voucher{}, ErrEmptyLabel
-	}
-	if utf8.RuneCountInString(in.Label) > maxLabelRunes || len(in.Label) > maxLabelBytes {
-		return Voucher{}, ErrLabelTooLong
+	if err := validateLabel(in.Label); err != nil {
+		return Voucher{}, err
 	}
 	if !in.ValidUntil.After(in.ValidFrom) {
 		return Voucher{}, ErrInvalidWindow
@@ -198,6 +250,7 @@ func (s *service) Create(ctx context.Context, in CreateInput) (Voucher, error) {
 
 	row, err := s.repo.Create(ctx, CreateParams{
 		ID:         vid,
+		Kind:       voucher.KindPass,
 		Label:      in.Label,
 		ValidFrom:  in.ValidFrom,
 		ValidUntil: in.ValidUntil,
@@ -261,6 +314,9 @@ func (s *service) Revocations(ctx context.Context) (Feed, error) {
 }
 
 func computeStatus(now time.Time, v *ent.Voucher) Status {
+	if v.RedeemedAt != nil {
+		return StatusRedeemed
+	}
 	if v.RevokedAt != nil {
 		return StatusRevoked
 	}

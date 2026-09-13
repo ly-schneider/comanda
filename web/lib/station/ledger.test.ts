@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { beforeEach, describe, expect, it } from "vitest"
 import { idbLedger, type LedgerEntry, memoryLedger, type StationLedger } from "./ledger"
+import { DB_NAME, DB_VERSION } from "./offline-db"
 
 function entry(orderId: string, productId: string, variantId = "", overrides: Partial<LedgerEntry> = {}): LedgerEntry {
   return { orderId, productId, variantId, quantity: 1, tenantId: "tenant_seed1", redeemedAt: 1000, ...overrides }
@@ -68,7 +69,7 @@ describe("idbLedger persistence", () => {
     // Open an independent connection, bypassing the module's cached handle, to
     // prove the entry is durably in IndexedDB and not just in process memory.
     const fromDisk = await new Promise<LedgerEntry | undefined>((resolve, reject) => {
-      const req = indexedDB.open("comanda-station", 4)
+      const req = indexedDB.open(DB_NAME, DB_VERSION)
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("ledger", "readonly")

@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -10,8 +11,8 @@ import (
 )
 
 type VoucherSlip struct {
-	Label      string
-	Categories []string
+	Label   string
+	Details []string
 	// QRBytes are the raw decoded token bytes (not the base64url string), rendered
 	// byte-mode so the station reads back the exact bytes it verifies offline.
 	QRBytes []byte
@@ -70,35 +71,103 @@ func RenderVoucherSlips(slip VoucherSlip, count int) ([]byte, error) {
 		count = VoucherMaxCount
 	}
 
+	sheet := newVoucherSheet()
+	rv, err := sheet.add("vqr", slip)
+	if err != nil {
+		return nil, err
+	}
+	badges := make([]renderedVoucher, count)
+	for i := range badges {
+		badges[i] = rv
+	}
+	return sheet.render(badges)
+}
+
+func RenderVoucherBatchSlips(slips []VoucherSlip) ([]byte, error) {
+	sheet := newVoucherSheet()
+	badges := make([]renderedVoucher, 0, len(slips))
+	for i, slip := range slips {
+		rv, err := sheet.add(fmt.Sprintf("vqr%d", i), slip)
+		if err != nil {
+			return nil, err
+		}
+		badges = append(badges, rv)
+	}
+	return sheet.render(badges)
+}
+
+type voucherSheet struct {
+	pdf        *fpdf.Fpdf
+	tr         func(string) string
+	textWidth  float64
+	hintLines  []string
+	brandIcons map[string]registeredIcon
+}
+
+type registeredIcon struct {
+	name   string
+	aspect float64
+}
+
+func newVoucherSheet() *voucherSheet {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(pageMarginMM, pageMarginMM, pageMarginMM)
 	pdf.SetAutoPageBreak(false, pageMarginMM)
 	pdf.SetTextColor(20, 20, 20)
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
+	textWidth := voucherBadgeWidthMM - 2*voucherBadgePadMM
+	return &voucherSheet{
+		pdf:        pdf,
+		tr:         tr,
+		textWidth:  textWidth,
+		hintLines:  wrapTextLines(tr(voucherHintText), textWidth, voucherHintFont, pdf, "I"),
+		brandIcons: map[string]registeredIcon{},
+	}
+}
 
+func (s *voucherSheet) add(qrName string, slip VoucherSlip) (renderedVoucher, error) {
 	png, err := qrcode.Encode(string(slip.QRBytes), qrcode.Medium, voucherQRPixels)
 	if err != nil {
-		return nil, fmt.Errorf("encode voucher qr: %w", err)
+		return renderedVoucher{}, fmt.Errorf("encode voucher qr: %w", err)
 	}
-	pdf.RegisterImageOptionsReader("vqr", fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
+	s.pdf.RegisterImageOptionsReader(qrName, fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
 
-	textWidth := voucherBadgeWidthMM - 2*voucherBadgePadMM
-	qrSize := textWidth
 	rv := renderedVoucher{
-		qrName:     "vqr",
-		labelLines: wrapTextLines(tr(slip.Label), textWidth, voucherLabelFont, pdf, "B"),
-		catLines:   wrapTextLines(tr(voucherCatPrefix+strings.Join(slip.Categories, ", ")), textWidth, voucherCatFont, pdf, ""),
+		qrName:     qrName,
+		labelLines: wrapTextLines(s.tr(slip.Label), s.textWidth, voucherLabelFont, s.pdf, "B"),
+		catLines:   wrapTextLines(s.tr(voucherCatPrefix+strings.Join(slip.Details, ", ")), s.textWidth, voucherCatFont, s.pdf, ""),
 	}
-	if len(slip.BrandIconPNG) > 0 {
-		if info := pdf.RegisterImageOptionsReader("vbrand", fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(slip.BrandIconPNG)); info != nil && info.Height() > 0 {
-			rv.brandIcon = "vbrand"
-			rv.brandAspect = info.Width() / info.Height()
-		}
+	if icon, ok := s.brandImage(slip.BrandIconPNG); ok {
+		rv.brandIcon = icon.name
+		rv.brandAspect = icon.aspect
 	}
 	if name := strings.TrimSpace(slip.BrandName); name != "" {
-		rv.brandLines = wrapTextLines(tr(name), textWidth, voucherBrandFont, pdf, "B")
+		rv.brandLines = wrapTextLines(s.tr(name), s.textWidth, voucherBrandFont, s.pdf, "B")
 	}
-	hintLines := wrapTextLines(tr(voucherHintText), textWidth, voucherHintFont, pdf, "I")
+	return rv, nil
+}
+
+func (s *voucherSheet) brandImage(png []byte) (registeredIcon, bool) {
+	if len(png) == 0 {
+		return registeredIcon{}, false
+	}
+	sum := sha256.Sum256(png)
+	key := string(sum[:])
+	if icon, ok := s.brandIcons[key]; ok {
+		return icon, true
+	}
+	name := fmt.Sprintf("vbrand%d", len(s.brandIcons))
+	info := s.pdf.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
+	if info == nil || info.Height() <= 0 {
+		return registeredIcon{}, false
+	}
+	icon := registeredIcon{name: name, aspect: info.Width() / info.Height()}
+	s.brandIcons[key] = icon
+	return icon, true
+}
+
+func (s *voucherSheet) render(badges []renderedVoucher) ([]byte, error) {
+	qrSize := s.textWidth
 
 	cellW := voucherBadgeWidthMM + slipHGap
 	cellH := voucherBadgeHeightMM + slipVGap
@@ -117,21 +186,21 @@ func RenderVoucherSlips(slip VoucherSlip, count int) ([]byte, error) {
 	offsetX := (pageWidth - gridW) / 2
 	offsetY := (pageHeight - gridH) / 2
 
-	for printed := 0; printed < count; {
-		pdf.AddPage()
+	for printed := 0; printed < len(badges); {
+		s.pdf.AddPage()
 		pageSlips := perPage
-		if remaining := count - printed; remaining < pageSlips {
+		if remaining := len(badges) - printed; remaining < pageSlips {
 			pageSlips = remaining
 		}
 		for slot := 0; slot < pageSlips; slot++ {
 			x := offsetX + float64(slot%cols)*(voucherBadgeWidthMM+slipHGap)
 			y := offsetY + float64(slot/cols)*(voucherBadgeHeightMM+slipVGap)
-			drawVoucherBadge(pdf, x, y, qrSize, rv, hintLines)
+			drawVoucherBadge(s.pdf, x, y, qrSize, badges[printed+slot], s.hintLines)
 		}
 		printed += pageSlips
 	}
 
-	return output(pdf)
+	return output(s.pdf)
 }
 
 func drawVoucherBadge(pdf *fpdf.Fpdf, x, y, qrSize float64, v renderedVoucher, hintLines []string) {

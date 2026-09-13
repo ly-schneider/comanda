@@ -53,9 +53,14 @@
 // binary layout without the per-line variant id.)
 //
 // Discriminator allocation: the pickup-order token owns the low range — 0x03
-// today, with 0x04..0x0F reserved for future pickup versions. The artist
-// voucher token (see voucher.go) is a distinct format and starts a separate
-// range at 0x10; the two verifiers mutually reject each other's discriminator.
+// today, with 0x04..0x0F reserved for future pickup versions. The voucher family
+// starts a separate range at 0x10:
+//
+//	0x10  artist pass          (voucher.go)     — unlimited display pass, categories
+//	0x11  single-use voucher   (entitlement.go) — named products, one order on redeem
+//
+// Every verifier rejects a discriminator that is not its own, so the formats
+// never decode as one another.
 //
 // # Verification
 //

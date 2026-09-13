@@ -7,14 +7,16 @@
  * touches. The KV store holds the signed-QR public key and the lightweight
  * catalog; the ledger holds the append-only (orderId, productId, variantId)
  * redemptions; the outbox holds redemptions still pending an idempotent server
- * write. Product image bytes go to the SW cache instead (see the precache ritual).
+ * write; the voucher store holds single-use voucher redemptions. Product image
+ * bytes go to the SW cache instead (see the precache ritual).
  */
 
-const DB_NAME = "comanda-station"
-const DB_VERSION = 4
+export const DB_NAME = "comanda-station"
+export const DB_VERSION = 5
 const KV_STORE = "kv"
 export const LEDGER_STORE = "ledger"
 export const OUTBOX_STORE = "outbox"
+export const VOUCHER_STORE = "voucherRedemptions"
 
 export interface StationKVStore {
   get<T>(key: string): Promise<T | null>
@@ -48,6 +50,9 @@ function openDB(): Promise<IDBDatabase> {
         // order in one idempotent call, so there is at most one outbox row per
         // order and re-enqueueing the same order coalesces rather than duplicates.
         db.createObjectStore(OUTBOX_STORE, { keyPath: "orderId" })
+      }
+      if (!db.objectStoreNames.contains(VOUCHER_STORE)) {
+        db.createObjectStore(VOUCHER_STORE, { keyPath: "voucherId" })
       }
     }
     req.onsuccess = () => resolve(req.result)

@@ -1,4 +1,4 @@
-h1:exSA0MJzZO/RdpaxTLTvqxuTCp6u6fPEbxUb8Z5JMFA=
+h1:lOsSbiknhsZ1h5t6nW3KcFVflJkmzd+dZtqsPBscxJ4=
 20250101000000_baseline.sql h1:UaCPXHYo8TCzj4dXSw8LwKTfkSI/yiGsQ2+Nl8ma6Sk=
 20260221000000_add_system_enabled.sql h1:b7+V+WheCmPNla5XeM/7I9MPKSzXLVkl9R06PB+MTns=
 20260329000000_add_hybrid_pos_mode.sql h1:Wggvgrmia6vp4tKJGebzznPc8luH38nMd+jJJ1ogifU=
@@ -46,3 +46,4 @@ h1:exSA0MJzZO/RdpaxTLTvqxuTCp6u6fPEbxUb8Z5JMFA=
 20260719000000_staff_perk_choice_groups.sql h1:CIyYbIM6p+ddrd7h+QWO1CS9zDhxyjRgzIFvwHzjr5U=
 20260720000000_staff_perk_option_groups.sql h1:vNuQrItYDCgicr6lXYDgeu5ep6jG94Q1q85MuWQyF3Y=
 20260721000000_tenant_android_package_id.sql h1:SVJXQ4QRHtJn1E9/ghQo+oFhr1sg+q7rlVCgfQfkV7M=
+20260913000000_voucher_entitlement.sql h1:C6tDYmepfTiRx/iHGZam5hun3htd5gVoWei3oWNOThE=

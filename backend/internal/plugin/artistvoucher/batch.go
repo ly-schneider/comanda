@@ -1,0 +1,471 @@
+package artistvoucher
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/order"
+	"backend/internal/generated/ent/product"
+	"backend/internal/generated/ent/voucher"
+	"backend/internal/id"
+	"backend/internal/qrsign"
+	"backend/internal/repository"
+	coreservice "backend/internal/service"
+)
+
+const (
+	minBatchCount    = 1
+	maxBatchCount    = 500
+	maxBatchProducts = 255
+	maxBatchQuantity = 255
+)
+
+var (
+	ErrNoProducts         = errors.New("artistvoucher: at least one product is required")
+	ErrTooManyProducts    = errors.New("artistvoucher: too many products")
+	ErrDuplicateProduct   = errors.New("artistvoucher: product listed more than once")
+	ErrUnknownProduct     = errors.New("artistvoucher: unknown product")
+	ErrProductNotSimple   = errors.New("artistvoucher: only simple products can be issued")
+	ErrProductHasVariants = errors.New("artistvoucher: product has variants")
+	ErrInvalidQuantity    = errors.New("artistvoucher: quantity out of range")
+	ErrInvalidCount       = errors.New("artistvoucher: count out of range")
+	ErrNotEntitlement     = errors.New("artistvoucher: voucher is not single-use")
+	ErrRevoked            = errors.New("artistvoucher: voucher is revoked")
+	ErrNotYetValid        = errors.New("artistvoucher: voucher is not valid yet")
+	ErrExpired            = errors.New("artistvoucher: voucher has expired")
+)
+
+type Product struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Quantity int    `json:"quantity"`
+}
+
+type BatchProduct struct {
+	Product
+	Stock int
+}
+
+type Batch struct {
+	ID          string
+	Label       string
+	ValidFrom   time.Time
+	ValidUntil  time.Time
+	Products    []BatchProduct
+	Issued      int
+	Redeemed    int
+	Revoked     int
+	Outstanding int
+	Status      Status
+	CreatedAt   time.Time
+}
+
+type BatchVoucher struct {
+	ID         string
+	Status     Status
+	RedeemedAt *time.Time
+	RevokedAt  *time.Time
+	Token      string
+}
+
+type BatchDetail struct {
+	Batch
+	Vouchers []BatchVoucher
+}
+
+type BatchProductInput struct {
+	ProductID string
+	Quantity  int
+}
+
+type CreateBatchInput struct {
+	Label      string
+	ValidFrom  time.Time
+	ValidUntil time.Time
+	Products   []BatchProductInput
+	Count      int
+}
+
+type RedeemResult struct {
+	VoucherID       string
+	Label           string
+	OrderID         string
+	RedeemedAt      time.Time
+	AlreadyRedeemed bool
+	Items           []Product
+}
+
+func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, error) {
+	if err := validateLabel(in.Label); err != nil {
+		return Batch{}, err
+	}
+	if !in.ValidUntil.After(in.ValidFrom) {
+		return Batch{}, ErrInvalidWindow
+	}
+	if in.Count < minBatchCount || in.Count > maxBatchCount {
+		return Batch{}, fmt.Errorf("%w: %d is outside [%d,%d]", ErrInvalidCount, in.Count, minBatchCount, maxBatchCount)
+	}
+	if len(in.Products) == 0 {
+		return Batch{}, ErrNoProducts
+	}
+	if len(in.Products) > maxBatchProducts {
+		return Batch{}, ErrTooManyProducts
+	}
+
+	tenantID, ok := repository.TenantIDFromContext(ctx)
+	if !ok || tenantID == "" {
+		return Batch{}, ErrNoTenant
+	}
+
+	ids := make([]string, 0, len(in.Products))
+	seen := make(map[string]struct{}, len(in.Products))
+	for _, p := range in.Products {
+		if p.Quantity < 1 || p.Quantity > maxBatchQuantity {
+			return Batch{}, fmt.Errorf("%w: %d", ErrInvalidQuantity, p.Quantity)
+		}
+		if _, dup := seen[p.ProductID]; dup {
+			return Batch{}, fmt.Errorf("%w: %s", ErrDuplicateProduct, p.ProductID)
+		}
+		seen[p.ProductID] = struct{}{}
+		ids = append(ids, p.ProductID)
+	}
+
+	rows, err := s.products.GetByIDs(ctx, ids)
+	if err != nil {
+		return Batch{}, fmt.Errorf("load products: %w", err)
+	}
+	byID := make(map[string]*ent.Product, len(rows))
+	for _, p := range rows {
+		byID[p.ID] = p
+	}
+
+	snapshot := make([]Product, 0, len(in.Products))
+	lines := make([]qrsign.EntitlementLine, 0, len(in.Products))
+	for _, p := range in.Products {
+		prod, ok := byID[p.ProductID]
+		if !ok {
+			return Batch{}, fmt.Errorf("%w: %s", ErrUnknownProduct, p.ProductID)
+		}
+		if prod.Type != product.TypeSimple {
+			return Batch{}, fmt.Errorf("%w: %s", ErrProductNotSimple, prod.Name)
+		}
+		if len(prod.Edges.Variants) > 0 {
+			return Batch{}, fmt.Errorf("%w: %s", ErrProductHasVariants, prod.Name)
+		}
+		snapshot = append(snapshot, Product{ID: prod.ID, Name: prod.Name, Quantity: p.Quantity})
+		lines = append(lines, qrsign.EntitlementLine{ProductID: prod.ID, Quantity: p.Quantity})
+	}
+
+	productsJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		return Batch{}, fmt.Errorf("marshal products: %w", err)
+	}
+
+	priv, _, err := s.keys.EnsureTenantKey(ctx)
+	if err != nil {
+		return Batch{}, fmt.Errorf("ensure tenant key: %w", err)
+	}
+
+	batchID := id.New()
+	params := make([]CreateParams, 0, in.Count)
+	for i := 0; i < in.Count; i++ {
+		vid := id.New()
+		token, err := qrsign.SignEntitlement(priv, qrsign.EntitlementPayload{
+			TenantID:   tenantID,
+			VoucherID:  vid,
+			ValidFrom:  in.ValidFrom.Unix(),
+			ValidUntil: in.ValidUntil.Unix(),
+			Label:      in.Label,
+			Lines:      lines,
+		})
+		if err != nil {
+			if errors.Is(err, qrsign.ErrBadPayload) {
+				return Batch{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+			}
+			return Batch{}, fmt.Errorf("sign entitlement: %w", err)
+		}
+		params = append(params, CreateParams{
+			ID:         vid,
+			Kind:       voucher.KindEntitlement,
+			Label:      in.Label,
+			ValidFrom:  in.ValidFrom,
+			ValidUntil: in.ValidUntil,
+			Products:   productsJSON,
+			BatchID:    batchID,
+			Token:      token,
+		})
+	}
+
+	created, err := s.repo.CreateMany(ctx, params)
+	if err != nil {
+		return Batch{}, err
+	}
+
+	stock, err := s.currentStock(ctx, ids)
+	if err != nil {
+		return Batch{}, err
+	}
+	batch, err := toBatch(created, stock, time.Now())
+	if err != nil {
+		return Batch{}, err
+	}
+	return batch, nil
+}
+
+func (s *service) ListBatches(ctx context.Context) ([]Batch, error) {
+	rows, err := s.repo.ListByKind(ctx, voucher.KindEntitlement)
+	if err != nil {
+		return nil, err
+	}
+
+	grouped, batchIDs := groupByBatch(rows)
+	productIDs := make([]string, 0, len(batchIDs))
+	seen := make(map[string]struct{})
+	for _, batchRows := range grouped {
+		snapshot, err := decodeProducts(batchRows[0])
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range snapshot {
+			if _, ok := seen[p.ID]; ok {
+				continue
+			}
+			seen[p.ID] = struct{}{}
+			productIDs = append(productIDs, p.ID)
+		}
+	}
+	stock, err := s.currentStock(ctx, productIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	out := make([]Batch, 0, len(batchIDs))
+	for _, batchID := range batchIDs {
+		batch, err := toBatch(grouped[batchID], stock, now)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, batch)
+	}
+	return out, nil
+}
+
+func (s *service) GetBatch(ctx context.Context, batchID string) (BatchDetail, error) {
+	rows, err := s.repo.ListByBatch(ctx, batchID)
+	if err != nil {
+		return BatchDetail{}, err
+	}
+	if len(rows) == 0 {
+		return BatchDetail{}, repository.ErrNotFound
+	}
+
+	snapshot, err := decodeProducts(rows[0])
+	if err != nil {
+		return BatchDetail{}, err
+	}
+	ids := make([]string, 0, len(snapshot))
+	for _, p := range snapshot {
+		ids = append(ids, p.ID)
+	}
+	stock, err := s.currentStock(ctx, ids)
+	if err != nil {
+		return BatchDetail{}, err
+	}
+
+	now := time.Now()
+	batch, err := toBatch(rows, stock, now)
+	if err != nil {
+		return BatchDetail{}, err
+	}
+	vouchers := make([]BatchVoucher, 0, len(rows))
+	for _, row := range rows {
+		vouchers = append(vouchers, BatchVoucher{
+			ID:         row.ID,
+			Status:     computeStatus(now, row),
+			RedeemedAt: row.RedeemedAt,
+			RevokedAt:  row.RevokedAt,
+			Token:      row.Token,
+		})
+	}
+	return BatchDetail{Batch: batch, Vouchers: vouchers}, nil
+}
+
+func (s *service) RevokeBatch(ctx context.Context, batchID string) (Batch, error) {
+	rows, err := s.repo.ListByBatch(ctx, batchID)
+	if err != nil {
+		return Batch{}, err
+	}
+	if len(rows) == 0 {
+		return Batch{}, repository.ErrNotFound
+	}
+	if _, err := s.repo.RevokeBatchOutstanding(ctx, batchID, time.Now()); err != nil {
+		return Batch{}, err
+	}
+	detail, err := s.GetBatch(ctx, batchID)
+	if err != nil {
+		return Batch{}, err
+	}
+	return detail.Batch, nil
+}
+
+func (s *service) Redeem(ctx context.Context, voucherID, deviceID string) (RedeemResult, error) {
+	row, err := s.repo.GetByID(ctx, voucherID)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+	if row.Kind != voucher.KindEntitlement {
+		return RedeemResult{}, ErrNotEntitlement
+	}
+	items, err := decodeProducts(row)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+
+	if row.RedeemedAt != nil {
+		return RedeemResult{
+			VoucherID:       row.ID,
+			Label:           row.Label,
+			OrderID:         row.RedeemedOrderID,
+			RedeemedAt:      *row.RedeemedAt,
+			AlreadyRedeemed: true,
+			Items:           items,
+		}, nil
+	}
+	if row.RevokedAt != nil {
+		return RedeemResult{}, ErrRevoked
+	}
+	now := time.Now()
+	if now.Before(row.ValidFrom) {
+		return RedeemResult{}, ErrNotYetValid
+	}
+	if !now.Before(row.ValidUntil) {
+		return RedeemResult{}, ErrExpired
+	}
+	if len(items) == 0 {
+		return RedeemResult{}, ErrNoProducts
+	}
+
+	checkout := make([]coreservice.CheckoutItemInput, 0, len(items))
+	for _, it := range items {
+		checkout = append(checkout, coreservice.CheckoutItemInput{ProductID: it.ID, Quantity: it.Quantity})
+	}
+	prep, err := s.orders.PrepareAndCreateOrder(ctx, coreservice.CreateCheckoutInput{
+		Items:  checkout,
+		Origin: order.OriginPos,
+	}, nil, nil)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+
+	var devicePtr *string
+	if deviceID != "" {
+		devicePtr = &deviceID
+	}
+	if err := s.settle.SetPosPaymentGratisPlugin(ctx, prep.OrderID, devicePtr, prep.TotalCents, Key); err != nil {
+		return RedeemResult{}, fmt.Errorf("settle voucher order: %w", err)
+	}
+
+	updated, err := s.repo.SetRedeemed(ctx, row.ID, RedeemParams{At: now, OrderID: prep.OrderID, DeviceID: deviceID})
+	if err != nil {
+		return RedeemResult{}, err
+	}
+
+	return RedeemResult{
+		VoucherID:  updated.ID,
+		Label:      updated.Label,
+		OrderID:    prep.OrderID,
+		RedeemedAt: now,
+		Items:      items,
+	}, nil
+}
+
+func (s *service) currentStock(ctx context.Context, productIDs []string) (map[string]int, error) {
+	if len(productIDs) == 0 {
+		return map[string]int{}, nil
+	}
+	stock, err := s.stock.GetCurrentStockBatch(ctx, productIDs)
+	if err != nil {
+		return nil, fmt.Errorf("load stock: %w", err)
+	}
+	return stock, nil
+}
+
+func decodeProducts(row *ent.Voucher) ([]Product, error) {
+	if len(row.Products) == 0 {
+		return nil, nil
+	}
+	var out []Product
+	if err := json.Unmarshal(row.Products, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal products: %w", err)
+	}
+	return out, nil
+}
+
+func groupByBatch(rows []*ent.Voucher) (map[string][]*ent.Voucher, []string) {
+	grouped := make(map[string][]*ent.Voucher)
+	batchIDs := make([]string, 0)
+	for _, row := range rows {
+		if row.BatchID == "" {
+			continue
+		}
+		if _, ok := grouped[row.BatchID]; !ok {
+			batchIDs = append(batchIDs, row.BatchID)
+		}
+		grouped[row.BatchID] = append(grouped[row.BatchID], row)
+	}
+	return grouped, batchIDs
+}
+
+func toBatch(rows []*ent.Voucher, stock map[string]int, now time.Time) (Batch, error) {
+	head := rows[0]
+	snapshot, err := decodeProducts(head)
+	if err != nil {
+		return Batch{}, err
+	}
+	products := make([]BatchProduct, 0, len(snapshot))
+	for _, p := range snapshot {
+		products = append(products, BatchProduct{Product: p, Stock: stock[p.ID]})
+	}
+
+	batch := Batch{
+		ID:         head.BatchID,
+		Label:      head.Label,
+		ValidFrom:  head.ValidFrom,
+		ValidUntil: head.ValidUntil,
+		Products:   products,
+		Issued:     len(rows),
+		CreatedAt:  head.CreatedAt,
+	}
+	for _, row := range rows {
+		switch {
+		case row.RedeemedAt != nil:
+			batch.Redeemed++
+		case row.RevokedAt != nil:
+			batch.Revoked++
+		}
+		if row.CreatedAt.Before(batch.CreatedAt) {
+			batch.CreatedAt = row.CreatedAt
+		}
+	}
+	batch.Outstanding = batch.Issued - batch.Redeemed - batch.Revoked
+	batch.Status = batchStatus(now, head, batch)
+	return batch, nil
+}
+
+func batchStatus(now time.Time, head *ent.Voucher, b Batch) Status {
+	if b.Revoked > 0 && b.Outstanding == 0 {
+		return StatusRevoked
+	}
+	if !now.Before(head.ValidUntil) {
+		return StatusExpired
+	}
+	if now.Before(head.ValidFrom) {
+		return StatusScheduled
+	}
+	return StatusActive
+}

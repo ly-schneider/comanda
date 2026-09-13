@@ -31,8 +31,14 @@ import {
   refreshCatalog,
   runOfflineSetup,
 } from "@/lib/station/offline-setup"
-import { verifyQrToken } from "@/lib/station/qr-verify"
+import { verifyEntitlementToken, verifyQrToken } from "@/lib/station/qr-verify"
 import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/station/redeem"
+import {
+  redeemVoucherScan,
+  type ServerRedeemResult,
+  type VoucherLineView,
+  type VoucherRedeemResult,
+} from "@/lib/station/redeem-voucher"
 import {
   EMPTY_REVOCATIONS,
   loadRevocations,
@@ -45,6 +51,8 @@ import { flushOutbox } from "@/lib/station/sync"
 import { idbOutbox, type StationOutbox } from "@/lib/station/sync-queue"
 import { useStationSession } from "@/lib/station/use-station-session"
 import { ARTIST_VOUCHER_PLUGIN_KEY, evaluateVoucher, type VoucherVerdict } from "@/lib/station/voucher"
+import { idbVoucherLedger, type VoucherLedger } from "@/lib/station/voucher-ledger"
+import { flushVoucherRedemptions, voucherRedeemEndpoint } from "@/lib/station/voucher-sync"
 import { parseScan } from "@/lib/station-scan"
 
 const SCAN_RESUME_DELAY_MS = 1400
@@ -100,7 +108,23 @@ type VoucherScanResult = {
   syncedAt: number | null
 }
 
-type ScanResult = OrderScanResult | VoucherScanResult
+type EntitlementVerdictKind = VoucherRedeemResult["kind"]
+
+type EntitlementScanResult = {
+  key: string
+  scanId: string
+  kind: "entitlement"
+  verdict: EntitlementVerdictKind
+  message?: string
+  scannedAt: Date
+  lines: VoucherLineView[]
+  redeemedAt?: number
+  validFrom?: number // Unix seconds
+  validUntil?: number // Unix seconds
+  pending?: boolean
+}
+
+type ScanResult = OrderScanResult | VoucherScanResult | EntitlementScanResult
 
 type CampaignChoiceOption = {
   productId: string
@@ -308,6 +332,101 @@ function voucherSound(kind: VoucherVerdictKind): "success" | "warning" | "error"
   return "warning"
 }
 
+const ENTITLEMENT_STYLES: Record<EntitlementVerdictKind, VoucherMeta> = {
+  redeemed: { label: "Ausgegeben", text: "text-success", bg: "bg-success/10", dot: "bg-success", icon: CheckCircle2 },
+  "already-redeemed": {
+    label: "Bereits eingelöst",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: AlertCircle,
+  },
+  "sold-out": {
+    label: "Ausverkauft",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: PackageOpen,
+  },
+  refused: {
+    label: "Abgelehnt",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: AlertCircle,
+  },
+  "not-for-stand": {
+    label: "Anderer Stand",
+    text: "text-muted-foreground",
+    bg: "bg-card",
+    dot: "bg-muted-foreground/50",
+    icon: AlertCircle,
+  },
+  scheduled: {
+    label: "Noch nicht gültig",
+    text: "text-muted-foreground",
+    bg: "bg-card",
+    dot: "bg-muted-foreground/50",
+    icon: Clock,
+  },
+  expired: {
+    label: "Abgelaufen",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: AlertCircle,
+  },
+  revoked: { label: "Gesperrt", text: "text-destructive", bg: "bg-destructive/10", dot: "bg-destructive", icon: Ban },
+  "wrong-event": {
+    label: "Falscher Event",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: XCircle,
+  },
+  invalid: {
+    label: "Ungültig",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: XCircle,
+  },
+}
+
+function entitlementScanResult(key: string, token: string, result: VoucherRedeemResult): EntitlementScanResult {
+  const base: EntitlementScanResult = {
+    key,
+    scanId: token,
+    kind: "entitlement",
+    verdict: result.kind,
+    scannedAt: new Date(),
+    lines: "lines" in result ? result.lines : [],
+  }
+  switch (result.kind) {
+    case "redeemed":
+      return { ...base, pending: result.pending }
+    case "already-redeemed":
+      return { ...base, redeemedAt: result.redeemedAt }
+    case "sold-out":
+    case "refused":
+      return { ...base, message: result.message }
+    case "scheduled":
+      return { ...base, validFrom: result.validFrom }
+    case "expired":
+      return { ...base, validUntil: result.validUntil }
+    case "invalid":
+      return { ...base, message: result.reason === "not-ready" ? "Offline-Einrichtung erforderlich" : undefined }
+    default:
+      return base
+  }
+}
+
+function entitlementSound(kind: EntitlementVerdictKind): "success" | "warning" | "error" {
+  if (kind === "redeemed") return "success"
+  if (kind === "invalid" || kind === "wrong-event" || kind === "revoked" || kind === "expired") return "error"
+  return "warning"
+}
+
 function formatVoucherTime(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })
 }
@@ -377,6 +496,8 @@ export default function StationPage() {
   if (!ledgerRef.current) ledgerRef.current = idbLedger()
   const outboxRef = useRef<StationOutbox | null>(null)
   if (!outboxRef.current) outboxRef.current = idbOutbox()
+  const voucherLedgerRef = useRef<VoucherLedger | null>(null)
+  if (!voucherLedgerRef.current) voucherLedgerRef.current = idbVoucherLedger()
   // Read through a ref so a token refresh never rebuilds the scan callbacks
   // (which would restart the camera); the sync flush reads the latest value.
   const tokenRef = useRef(bearerToken)
@@ -550,9 +671,11 @@ export default function StationPage() {
     setScans((prev) => [scan, ...prev].slice(0, HISTORY_LIMIT))
   }, [])
 
-  // Voucher verdicts are pushed final; only order/campaign scans get patched.
+  // Voucher and entitlement verdicts are pushed final; only order/campaign scans get patched.
   const updateScan = useCallback((key: string, patch: Partial<OrderScanResult>) => {
-    setScans((prev) => prev.map((s) => (s.key === key && s.kind !== "voucher" ? { ...s, ...patch } : s)))
+    setScans((prev) =>
+      prev.map((s) => (s.key === key && (s.kind === "order" || s.kind === "campaign") ? { ...s, ...patch } : s))
+    )
   }, [])
 
   // Drains queued redemptions to the server. A no-op when offline; the flush
@@ -566,6 +689,41 @@ export default function StationPage() {
       token: () => tokenRef.current || null,
       now: () => Date.now(),
     })
+    void flushVoucherRedemptions({
+      ledger: voucherLedgerRef.current!,
+      fetch: (input, init) => deviceFetchRef.current(input, init),
+      token: () => tokenRef.current || null,
+      now: () => Date.now(),
+    })
+  }, [])
+
+  const redeemVoucherOnServer = useCallback(async (voucherId: string): Promise<ServerRedeemResult> => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, terminal: false }
+
+    let res: Response
+    try {
+      res = await deviceFetchRef.current(voucherRedeemEndpoint(voucherId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": voucherId },
+      })
+    } catch {
+      return { ok: false, terminal: false }
+    }
+
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { orderId?: string } | null
+      return body?.orderId ? { ok: true, orderId: body.orderId } : { ok: false, terminal: false }
+    }
+    if (res.status === 401 || res.status === 403) return { ok: false, terminal: false }
+    if (res.status >= 500 || res.status === 408 || res.status === 429) return { ok: false, terminal: false }
+
+    const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null
+    return {
+      ok: false,
+      terminal: true,
+      soldOut: body?.code === "voucher_product_sold_out",
+      message: body?.message,
+    }
   }, [])
 
   // Queue first (durable before we report success), then flush — immediate when
@@ -788,6 +946,36 @@ export default function StationPage() {
         return
       }
 
+      if (parsed.kind === "entitlement") {
+        const offline = offlineRef.current
+        if (!offline.voucherEnabled) {
+          playScanSound("error")
+          if (!offline.publicKey || !offline.tenantId) {
+            pushScan(entitlementScanResult(key, parsed.token, { kind: "invalid", reason: "not-ready" }))
+          } else {
+            setError("Ungültiger QR-Code")
+          }
+          scheduleResume()
+          return
+        }
+
+        const result = await redeemVoucherScan(parsed.token, {
+          verify: (t) => verifyEntitlementToken(t, offline.publicKey),
+          stationTenantId: offline.tenantId,
+          assignedProductIds,
+          catalog: offline.catalog,
+          ledger: voucherLedgerRef.current!,
+          revoked: (id) => revokedIdsRef.current.has(id),
+          redeemOnServer: redeemVoucherOnServer,
+          now: () => Date.now(),
+        })
+        pushScan(entitlementScanResult(key, parsed.token, result))
+        playScanSound(entitlementSound(result.kind))
+        if (result.kind === "redeemed" && result.pending) triggerFlush()
+        scheduleResume()
+        return
+      }
+
       pushScan({
         key,
         scanId: parsed.token,
@@ -878,7 +1066,16 @@ export default function StationPage() {
         scheduleResume()
       }
     },
-    [assignedProductIds, handleEnqueue, pushScan, redeemCampaign, scheduleResume, updateScan]
+    [
+      assignedProductIds,
+      handleEnqueue,
+      pushScan,
+      redeemCampaign,
+      redeemVoucherOnServer,
+      scheduleResume,
+      triggerFlush,
+      updateScan,
+    ]
   )
 
   const handleResult = useCallback(
@@ -1180,6 +1377,7 @@ function CampaignChoiceDialog({
 
 function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
   if (scan.kind === "voucher") return <VoucherScanCard scan={scan} />
+  if (scan.kind === "entitlement") return <EntitlementScanCard scan={scan} />
   const meta = STATUS_STYLES[scan.status]
   const Icon = meta.icon
   const matched = scan.lines
@@ -1262,6 +1460,7 @@ function ScanCard({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (sc
 
 function ScanRow({ scan, onOpenDetail }: { scan: ScanResult; onOpenDetail?: (scan: OrderScanResult) => void }) {
   if (scan.kind === "voucher") return <VoucherScanRow scan={scan} />
+  if (scan.kind === "entitlement") return <EntitlementScanRow scan={scan} />
   const meta = STATUS_STYLES[scan.status]
   const itemCount = scan.lines.reduce((acc, l) => acc + l.quantity, 0)
   const canOpenDetail = !!scan.orderId && !!onOpenDetail
@@ -1340,6 +1539,64 @@ function VoucherScanRow({ scan }: { scan: VoucherScanResult }) {
         <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
         <span className={`font-primary shrink-0 text-xs leading-none font-medium ${meta.text}`}>{meta.label}</span>
         {scan.label && <span className="text-muted-foreground truncate text-xs">{scan.label}</span>}
+      </div>
+      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        {scan.scannedAt.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}
+      </span>
+    </li>
+  )
+}
+
+function EntitlementScanCard({ scan }: { scan: EntitlementScanResult }) {
+  const meta = ENTITLEMENT_STYLES[scan.verdict]
+  const Icon = meta.icon
+  return (
+    <div className={`${meta.bg} animate-in fade-in slide-in-from-bottom-1 rounded-2xl p-5 duration-300 ease-out`}>
+      <div className={`flex items-center gap-2.5 ${meta.text}`}>
+        <Icon className="h-8 w-8 shrink-0" aria-hidden />
+        <span className="text-2xl leading-tight font-semibold">{meta.label}</span>
+      </div>
+
+      {scan.lines.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {scan.lines.map((line) => (
+            <li key={line.productId} className="text-foreground flex items-baseline gap-2 text-lg leading-snug">
+              <span className="font-primary shrink-0 font-semibold tabular-nums">{line.quantity}×</span>
+              <span className="font-medium">{line.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {scan.verdict === "already-redeemed" && scan.redeemedAt != null && (
+        <p className="text-muted-foreground mt-3 text-sm">
+          Eingelöst um {new Date(scan.redeemedAt).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })}
+        </p>
+      )}
+      {scan.verdict === "not-for-stand" && (
+        <p className="text-muted-foreground mt-3 text-sm">Dieser Stand führt nicht alle Artikel des Gutscheins.</p>
+      )}
+      {scan.verdict === "scheduled" && scan.validFrom != null && (
+        <p className="text-muted-foreground mt-3 text-sm">Gültig ab {formatVoucherTime(scan.validFrom)}</p>
+      )}
+      {scan.verdict === "expired" && scan.validUntil != null && (
+        <p className="text-muted-foreground mt-3 text-sm">Abgelaufen am {formatVoucherTime(scan.validUntil)}</p>
+      )}
+      {scan.pending && <p className="text-muted-foreground mt-3 text-sm">Offline erfasst — wird synchronisiert.</p>}
+      {scan.message && <p className={`mt-3 text-sm ${meta.text}`}>{scan.message}</p>}
+    </div>
+  )
+}
+
+function EntitlementScanRow({ scan }: { scan: EntitlementScanResult }) {
+  const meta = ENTITLEMENT_STYLES[scan.verdict]
+  const summary = scan.lines.map((l) => `${l.quantity}× ${l.title}`).join(", ")
+  return (
+    <li className={`${meta.bg} flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm`}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden />
+        <span className={`font-primary shrink-0 text-xs leading-none font-medium ${meta.text}`}>{meta.label}</span>
+        {summary && <span className="text-muted-foreground truncate text-xs">{summary}</span>}
       </div>
       <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
         {scan.scannedAt.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}
