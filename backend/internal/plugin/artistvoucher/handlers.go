@@ -189,6 +189,8 @@ func batchErrorResponse(err error) (status int, code, message string, ok bool) {
 		return http.StatusBadRequest, "product_not_simple", "Nur einfache Produkte können als Gutschein ausgegeben werden — Menüs nicht.", true
 	case errors.Is(err, ErrProductHasVariants):
 		return http.StatusBadRequest, "product_has_variants", "Produkte mit Varianten können nicht als Gutschein ausgegeben werden, weil auf dem Gutschein keine Variante steht.", true
+	case errors.Is(err, ErrProductUnavailable):
+		return http.StatusBadRequest, "product_unavailable", "Das Produkt ist nicht im Verkauf. Aktiviere es zuerst, sonst lassen sich die Gutscheine am Stand nicht einlösen.", true
 	case errors.Is(err, ErrInvalidToken):
 		return http.StatusBadRequest, "invalid_voucher", "Der Gutschein passt nicht in das QR-Format.", true
 	case errors.Is(err, repository.ErrNotFound):

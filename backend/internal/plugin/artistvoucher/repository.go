@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+
 	"backend/internal/generated/ent"
 	"backend/internal/generated/ent/voucher"
 	"backend/internal/repository"
@@ -32,7 +34,7 @@ type VoucherRepository interface {
 	Create(ctx context.Context, p CreateParams) (*ent.Voucher, error)
 	CreateMany(ctx context.Context, params []CreateParams) ([]*ent.Voucher, error)
 	GetByID(ctx context.Context, id string) (*ent.Voucher, error)
-	List(ctx context.Context) ([]*ent.Voucher, error)
+	LockByID(ctx context.Context, id string) error
 	ListByKind(ctx context.Context, kind voucher.Kind) ([]*ent.Voucher, error)
 	ListByBatch(ctx context.Context, batchID string) ([]*ent.Voucher, error)
 	SetRevoked(ctx context.Context, id string, at time.Time) (*ent.Voucher, error)
@@ -104,15 +106,27 @@ func (r *voucherRepo) GetByID(ctx context.Context, id string) (*ent.Voucher, err
 	return e, nil
 }
 
-func (r *voucherRepo) List(ctx context.Context) ([]*ent.Voucher, error) {
-	rows, err := r.ec(ctx).Voucher.Query().
-		Where(voucher.KindEQ(voucher.KindPass)).
-		Order(ent.Desc(voucher.FieldCreatedAt)).
-		All(ctx)
-	if err != nil {
-		return nil, repository.TranslateError(err)
+// LockByID takes a FOR UPDATE row lock on the voucher within the request tx, so
+// two concurrent redemptions of the same slip serialize: the second blocks here,
+// then sees redeemed_at already set and returns the original order instead of
+// minting a second one.
+func (r *voucherRepo) LockByID(ctx context.Context, id string) error {
+	var rows []struct {
+		ID string `json:"id"`
 	}
-	return rows, nil
+	err := r.ec(ctx).Voucher.Query().
+		Where(voucher.ID(id)).
+		Modify(func(s *sql.Selector) {
+			s.Select(s.C(voucher.FieldID)).ForUpdate()
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return repository.TranslateError(err)
+	}
+	if len(rows) == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
 }
 
 func (r *voucherRepo) ListByKind(ctx context.Context, kind voucher.Kind) ([]*ent.Voucher, error) {

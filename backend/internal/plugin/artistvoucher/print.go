@@ -131,6 +131,11 @@ func (h *handlers) ArtistVoucherBatchPrint(w http.ResponseWriter, r *http.Reques
 
 	slips := make([]pdf.VoucherSlip, 0, len(detail.Vouchers))
 	for _, v := range detail.Vouchers {
+		// A spent or revoked slip would be refused at the stand, so reprinting a
+		// batch must not put one back in someone's hand.
+		if v.Status != StatusActive && v.Status != StatusScheduled {
+			continue
+		}
 		raw, err := base64.RawURLEncoding.DecodeString(v.Token)
 		if err != nil {
 			h.rt.logger.Error("artist voucher token decode failed", zap.String("voucher_id", v.ID), zap.Error(err))
@@ -144,6 +149,11 @@ func (h *handlers) ArtistVoucherBatchPrint(w http.ResponseWriter, r *http.Reques
 			BrandName:    brandName,
 			BrandIconPNG: brandIcon,
 		})
+	}
+
+	if len(slips) == 0 {
+		writeError(w, http.StatusConflict, "no_printable_vouchers", "Alle Gutscheine dieser Charge sind eingelöst oder widerrufen.")
+		return
 	}
 
 	body, err := pdf.RenderVoucherBatchSlips(slips)

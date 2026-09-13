@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"backend/internal/generated/ent/voucher"
 	"backend/internal/plugin/artistvoucher"
 	pgRepo "backend/internal/repository"
 
@@ -46,7 +47,7 @@ func TestVoucherRLS_CrossTenantRejected(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "Live Band", row.Label)
 
-		all, err := repo.List(ctx)
+		all, err := repo.ListByKind(ctx, voucher.KindPass)
 		require.NoError(t, err)
 		require.Len(t, all, 1)
 	})
@@ -59,7 +60,7 @@ func TestVoucherRLS_CrossTenantRejected(t *testing.T) {
 		_, err := repo.GetByID(ctx, voucherID)
 		require.Truef(t, errors.Is(err, pgRepo.ErrNotFound), "cross-tenant voucher must be invisible, got %v", err)
 
-		all, err := repo.List(ctx)
+		all, err := repo.ListByKind(ctx, voucher.KindPass)
 		require.NoError(t, err)
 		require.Empty(t, all)
 	})

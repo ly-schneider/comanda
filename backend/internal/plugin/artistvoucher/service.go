@@ -116,6 +116,7 @@ type KeyProvider interface {
 
 type ProductLookup interface {
 	GetByIDs(ctx context.Context, ids []string) ([]*ent.Product, error)
+	FilterBuyable(ctx context.Context, ids []string) (map[string]struct{}, error)
 }
 
 type OrderMinter interface {
@@ -177,7 +178,7 @@ func NewService(
 
 func (s *service) List(ctx context.Context) ([]Voucher, error) {
 	now := time.Now()
-	rows, err := s.repo.List(ctx)
+	rows, err := s.repo.ListByKind(ctx, voucher.KindPass)
 	if err != nil {
 		return nil, err
 	}
@@ -263,8 +264,22 @@ func (s *service) Create(ctx context.Context, in CreateInput) (Voucher, error) {
 	return toVoucher(row, time.Now())
 }
 
-func (s *service) Get(ctx context.Context, id string) (Voucher, error) {
+// getPass loads a voucher through the pass endpoints, refusing a batch slip: it
+// is owned by its batch, and revoking or deleting it individually would desync
+// the batch counts from what was printed.
+func (s *service) getPass(ctx context.Context, id string) (*ent.Voucher, error) {
 	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if row.Kind != voucher.KindPass {
+		return nil, repository.ErrNotFound
+	}
+	return row, nil
+}
+
+func (s *service) Get(ctx context.Context, id string) (Voucher, error) {
+	row, err := s.getPass(ctx, id)
 	if err != nil {
 		return Voucher{}, err
 	}
@@ -273,7 +288,7 @@ func (s *service) Get(ctx context.Context, id string) (Voucher, error) {
 
 func (s *service) Revoke(ctx context.Context, id string) (Voucher, error) {
 	now := time.Now()
-	row, err := s.repo.GetByID(ctx, id)
+	row, err := s.getPass(ctx, id)
 	if err != nil {
 		return Voucher{}, err
 	}
@@ -290,7 +305,7 @@ func (s *service) Revoke(ctx context.Context, id string) (Voucher, error) {
 // Only expired vouchers may be deleted: removing a still-live one would drop it
 // from the revocation feed and un-block it at offline stations.
 func (s *service) Delete(ctx context.Context, id string) error {
-	row, err := s.repo.GetByID(ctx, id)
+	row, err := s.getPass(ctx, id)
 	if err != nil {
 		return err
 	}

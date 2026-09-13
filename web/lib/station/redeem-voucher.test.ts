@@ -30,11 +30,15 @@ function memoryLedger(): VoucherLedger {
       return "claimed"
     },
     async pending() {
-      return Array.from(rows.values()).filter((r) => r.syncedAt == null)
+      return Array.from(rows.values()).filter((r) => r.syncedAt == null && r.failedAt == null)
     },
     async markSynced(id, orderId, at) {
       const row = rows.get(id)
       if (row) rows.set(id, { ...row, orderId, syncedAt: at })
+    },
+    async markFailed(id, reason, at) {
+      const existing = rows.get(id)
+      if (existing) rows.set(id, { ...existing, failedAt: at, failedReason: reason })
     },
     async remove(id) {
       rows.delete(id)
@@ -56,7 +60,11 @@ let server: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   ledger = memoryLedger()
-  server = vi.fn(async (): Promise<ServerRedeemResult> => ({ ok: true, orderId: "ord_00000001" }))
+  server = vi.fn(async (): Promise<ServerRedeemResult> => ({
+    ok: true,
+    orderId: "ord_00000001",
+    alreadyRedeemed: false,
+  }))
 })
 
 function deps(overrides: Partial<VoucherRedeemDeps> = {}): VoucherRedeemDeps {
@@ -97,7 +105,7 @@ describe("redeemVoucherScan", () => {
   })
 
   it("records the redemption as pending when the server is unreachable", async () => {
-    server.mockResolvedValue({ ok: false, terminal: false })
+    server.mockResolvedValue({ ok: false, reason: "unreachable" })
 
     const result = await redeemVoucherScan("tok", deps())
 
@@ -106,7 +114,7 @@ describe("redeemVoucherScan", () => {
   })
 
   it("releases the claim when the product is sold out, so the slip stays alive", async () => {
-    server.mockResolvedValue({ ok: false, terminal: true, soldOut: true, message: "Burger ausverkauft" })
+    server.mockResolvedValue({ ok: false, reason: "refused", soldOut: true, message: "Burger ausverkauft" })
 
     const result = await redeemVoucherScan("tok", deps())
 
@@ -115,10 +123,10 @@ describe("redeemVoucherScan", () => {
   })
 
   it("re-redeems after a sold-out release once stock is back", async () => {
-    server.mockResolvedValueOnce({ ok: false, terminal: true, soldOut: true })
+    server.mockResolvedValueOnce({ ok: false, reason: "refused", soldOut: true })
     await redeemVoucherScan("tok", deps())
 
-    server.mockResolvedValueOnce({ ok: true, orderId: "ord_00000002" })
+    server.mockResolvedValueOnce({ ok: true, orderId: "ord_00000002", alreadyRedeemed: false })
     const retry = await redeemVoucherScan("tok", deps())
 
     expect(retry).toMatchObject({ kind: "redeemed", pending: false })
@@ -127,7 +135,7 @@ describe("redeemVoucherScan", () => {
   it("shows the server's reason verbatim rather than claiming the slip is blocked", async () => {
     server.mockResolvedValue({
       ok: false,
-      terminal: true,
+      reason: "refused",
       message: "Gutschein gültig — nicht mehr im Sortiment: Burger",
     })
 
@@ -138,9 +146,27 @@ describe("redeemVoucherScan", () => {
   })
 
   it("falls back to revoked only when the server gives no reason", async () => {
-    server.mockResolvedValue({ ok: false, terminal: true })
+    server.mockResolvedValue({ ok: false, reason: "refused" })
 
     expect(await redeemVoucherScan("tok", deps())).toEqual({ kind: "revoked" })
+  })
+
+  it("refuses a slip the server says was already spent at another stand", async () => {
+    server.mockResolvedValue({ ok: true, orderId: "ord_00000001", alreadyRedeemed: true })
+
+    const result = await redeemVoucherScan("tok", deps())
+
+    expect(result).toMatchObject({ kind: "already-redeemed" })
+    expect(result.kind).not.toBe("redeemed")
+  })
+
+  it("does not report a redemption when the device is not authenticated", async () => {
+    server.mockResolvedValue({ ok: false, reason: "auth" })
+
+    const result = await redeemVoucherScan("tok", deps())
+
+    expect(result).toMatchObject({ kind: "auth-failed" })
+    expect(await ledger.get(VOUCHER)).toBeNull()
   })
 
   it("rejects a slip signed for another tenant", async () => {

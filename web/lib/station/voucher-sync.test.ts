@@ -29,11 +29,15 @@ function memoryLedger(seed: VoucherRedemption[] = []): VoucherLedger {
       return "claimed"
     },
     async pending() {
-      return Array.from(rows.values()).filter((r) => r.syncedAt == null)
+      return Array.from(rows.values()).filter((r) => r.syncedAt == null && r.failedAt == null)
     },
     async markSynced(id, orderId, at) {
       const existing = rows.get(id)
       if (existing) rows.set(id, { ...existing, orderId, syncedAt: at })
+    },
+    async markFailed(id, reason, at) {
+      const existing = rows.get(id)
+      if (existing) rows.set(id, { ...existing, failedAt: at, failedReason: reason })
     },
     async remove(id) {
       rows.delete(id)
@@ -76,7 +80,7 @@ describe("flushVoucherRedemptions", () => {
 
     const summary = await flushVoucherRedemptions(deps(ledger))
 
-    expect(summary).toMatchObject({ synced: 1, failed: 0, released: 0 })
+    expect(summary).toMatchObject({ synced: 1, failed: 0, abandoned: 0 })
     expect(await ledger.get("Vch000000001")).toMatchObject({ orderId: "ord_00000001", syncedAt: NOW })
     expect(await ledger.list()).toHaveLength(1)
   })
@@ -113,14 +117,29 @@ describe("flushVoucherRedemptions", () => {
     expect(await ledger.pending()).toHaveLength(1)
   })
 
-  it("releases the claim when the server terminally refuses it", async () => {
+  it("keeps a terminally refused redemption instead of deleting it", async () => {
     const ledger = memoryLedger([row("Vch000000001")])
     fetchMock.mockResolvedValue(res(409, { code: "voucher_product_sold_out" }))
 
     const summary = await flushVoucherRedemptions(deps(ledger))
 
-    expect(summary).toMatchObject({ released: 1, synced: 0 })
-    expect(await ledger.get("Vch000000001")).toBeNull()
+    expect(summary).toMatchObject({ abandoned: 1, synced: 0 })
+    // The food already went out: dropping the row would lose the redemption and
+    // hand the slip back for a second meal.
+    expect(await ledger.get("Vch000000001")).toMatchObject({
+      failedAt: NOW,
+      failedReason: "voucher_product_sold_out",
+    })
+    expect(await ledger.pending()).toHaveLength(0)
+  })
+
+  it("stops retrying a row it has abandoned", async () => {
+    const ledger = memoryLedger([row("Vch000000001", { failedAt: NOW - 1000, failedReason: "voucher_expired" })])
+
+    const summary = await flushVoucherRedemptions(deps(ledger))
+
+    expect(summary).toMatchObject({ synced: 0, abandoned: 0, remaining: 0 })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("treats a rate limit as transient, not terminal", async () => {
@@ -129,7 +148,7 @@ describe("flushVoucherRedemptions", () => {
 
     const summary = await flushVoucherRedemptions(deps(ledger))
 
-    expect(summary).toMatchObject({ released: 0, failed: 1 })
+    expect(summary).toMatchObject({ abandoned: 0, failed: 1 })
     expect(await ledger.get("Vch000000001")).not.toBeNull()
   })
 

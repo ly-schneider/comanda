@@ -16,6 +16,13 @@ export interface VoucherRedemption {
   attempts: number
   lastAttemptAt?: number
   nextAttemptAt?: number
+  /**
+   * Set when the server refused the upload for good. The goods were already
+   * handed over, so the row stays as this device's dedup record and stops
+   * retrying; it is surfaced instead of silently dropped.
+   */
+  failedAt?: number
+  failedReason?: string
 }
 
 export type ClaimOutcome = "claimed" | "duplicate"
@@ -25,6 +32,7 @@ export interface VoucherLedger {
   claim(entry: VoucherRedemption): Promise<ClaimOutcome>
   pending(): Promise<VoucherRedemption[]>
   markSynced(voucherId: string, orderId: string, at: number): Promise<void>
+  markFailed(voucherId: string, reason: string, at: number): Promise<void>
   remove(voucherId: string): Promise<void>
   put(entry: VoucherRedemption): Promise<void>
   list(): Promise<VoucherRedemption[]>
@@ -61,7 +69,7 @@ export function idbVoucherLedger(): VoucherLedger {
 
     async pending() {
       const all = await this.list()
-      return all.filter((e) => e.syncedAt == null)
+      return all.filter((e) => e.syncedAt == null && e.failedAt == null)
     },
 
     async markSynced(voucherId, orderId, at) {
@@ -74,6 +82,23 @@ export function idbVoucherLedger(): VoucherLedger {
         existing.onsuccess = () => {
           const row = existing.result as VoucherRedemption | undefined
           if (row) store.put({ ...row, syncedAt: at, orderId })
+        }
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    },
+
+    async markFailed(voucherId, reason, at) {
+      if (!stationHasIndexedDB()) return
+      const db = await getStationDB()
+      return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(VOUCHER_STORE, "readwrite")
+        const store = tx.objectStore(VOUCHER_STORE)
+        const existing = store.get(voucherId)
+        existing.onsuccess = () => {
+          const row = existing.result as VoucherRedemption | undefined
+          if (row) store.put({ ...row, failedAt: at, failedReason: reason })
         }
         tx.oncomplete = () => resolve()
         tx.onerror = () => reject(tx.error)

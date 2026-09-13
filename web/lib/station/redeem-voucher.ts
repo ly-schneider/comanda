@@ -19,12 +19,14 @@ export type VoucherRedeemResult =
   | { kind: "already-redeemed"; redeemedAt: number; lines: VoucherLineView[] }
   | { kind: "sold-out"; message: string; lines: VoucherLineView[] }
   | { kind: "refused"; message: string; lines: VoucherLineView[] }
+  | { kind: "auth-failed"; lines: VoucherLineView[] }
   | { kind: "redeemed"; lines: VoucherLineView[]; pending: boolean }
 
 export type ServerRedeemResult =
-  | { ok: true; orderId: string }
-  | { ok: false; terminal: true; soldOut?: boolean; message?: string }
-  | { ok: false; terminal: false }
+  | { ok: true; orderId: string; alreadyRedeemed: boolean }
+  | { ok: false; reason: "auth" }
+  | { ok: false; reason: "refused"; soldOut?: boolean; message?: string }
+  | { ok: false; reason: "unreachable" }
 
 export interface VoucherRedeemDeps {
   verify: (token: string) => { ok: true; payload: EntitlementPayload } | { ok: false; reason: VerifyFailure }
@@ -87,9 +89,19 @@ export async function redeemVoucherScan(token: string, deps: VoucherRedeemDeps):
   const server = await deps.redeemOnServer(payload.voucherId)
   if (server.ok) {
     await deps.ledger.markSynced(payload.voucherId, server.orderId, deps.now())
+    // The server owns the cross-device answer: this slip was already spent at
+    // another stand, and handing out a second meal is the one thing single-use
+    // must prevent.
+    if (server.alreadyRedeemed) return { kind: "already-redeemed", redeemedAt: redeemedAt, lines }
     return { kind: "redeemed", lines, pending: false }
   }
-  if (server.terminal) {
+  // Nothing was handed out yet, so release the claim rather than burning the
+  // slip on a station that cannot talk to the server.
+  if (server.reason === "auth") {
+    await deps.ledger.remove(payload.voucherId)
+    return { kind: "auth-failed", lines }
+  }
+  if (server.reason === "refused") {
     await deps.ledger.remove(payload.voucherId)
     if (server.soldOut) {
       return { kind: "sold-out", message: server.message ?? "Produkt ausverkauft", lines }

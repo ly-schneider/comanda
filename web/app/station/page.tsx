@@ -348,6 +348,13 @@ const ENTITLEMENT_STYLES: Record<EntitlementVerdictKind, VoucherMeta> = {
     dot: "bg-destructive",
     icon: PackageOpen,
   },
+  "auth-failed": {
+    label: "Station nicht angemeldet",
+    text: "text-destructive",
+    bg: "bg-destructive/10",
+    dot: "bg-destructive",
+    icon: XCircle,
+  },
   refused: {
     label: "Abgelehnt",
     text: "text-destructive",
@@ -414,6 +421,8 @@ function entitlementScanResult(key: string, token: string, result: VoucherRedeem
       return { ...base, validFrom: result.validFrom }
     case "expired":
       return { ...base, validUntil: result.validUntil }
+    case "auth-failed":
+      return { ...base, message: "Station neu anmelden — der Gutschein bleibt gültig." }
     case "invalid":
       return { ...base, message: result.reason === "not-ready" ? "Offline-Einrichtung erforderlich" : undefined }
     default:
@@ -424,6 +433,7 @@ function entitlementScanResult(key: string, token: string, result: VoucherRedeem
 function entitlementSound(kind: EntitlementVerdictKind): "success" | "warning" | "error" {
   if (kind === "redeemed") return "success"
   if (kind === "invalid" || kind === "wrong-event" || kind === "revoked" || kind === "expired") return "error"
+  if (kind === "auth-failed") return "error"
   return "warning"
 }
 
@@ -698,7 +708,7 @@ export default function StationPage() {
   }, [])
 
   const redeemVoucherOnServer = useCallback(async (voucherId: string): Promise<ServerRedeemResult> => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, terminal: false }
+    if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, reason: "unreachable" }
 
     let res: Response
     try {
@@ -707,20 +717,22 @@ export default function StationPage() {
         headers: { "Content-Type": "application/json", "Idempotency-Key": voucherId },
       })
     } catch {
-      return { ok: false, terminal: false }
+      return { ok: false, reason: "unreachable" }
     }
 
     if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { orderId?: string } | null
-      return body?.orderId ? { ok: true, orderId: body.orderId } : { ok: false, terminal: false }
+      const body = (await res.json().catch(() => null)) as { orderId?: string; alreadyRedeemed?: boolean } | null
+      return body?.orderId
+        ? { ok: true, orderId: body.orderId, alreadyRedeemed: body.alreadyRedeemed === true }
+        : { ok: false, reason: "unreachable" }
     }
-    if (res.status === 401 || res.status === 403) return { ok: false, terminal: false }
-    if (res.status >= 500 || res.status === 408 || res.status === 429) return { ok: false, terminal: false }
+    if (res.status === 401 || res.status === 403) return { ok: false, reason: "auth" }
+    if (res.status >= 500 || res.status === 408 || res.status === 429) return { ok: false, reason: "unreachable" }
 
     const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null
     return {
       ok: false,
-      terminal: true,
+      reason: "refused",
       soldOut: body?.code === "voucher_product_sold_out",
       message: body?.message,
     }
@@ -959,19 +971,26 @@ export default function StationPage() {
           return
         }
 
-        const result = await redeemVoucherScan(parsed.token, {
-          verify: (t) => verifyEntitlementToken(t, offline.publicKey),
-          stationTenantId: offline.tenantId,
-          assignedProductIds,
-          catalog: offline.catalog,
-          ledger: voucherLedgerRef.current!,
-          revoked: (id) => revokedIdsRef.current.has(id),
-          redeemOnServer: redeemVoucherOnServer,
-          now: () => Date.now(),
-        })
-        pushScan(entitlementScanResult(key, parsed.token, result))
-        playScanSound(entitlementSound(result.kind))
-        if (result.kind === "redeemed" && result.pending) triggerFlush()
+        try {
+          const result = await redeemVoucherScan(parsed.token, {
+            verify: (t) => verifyEntitlementToken(t, offline.publicKey),
+            stationTenantId: offline.tenantId,
+            assignedProductIds,
+            catalog: offline.catalog,
+            ledger: voucherLedgerRef.current!,
+            revoked: (id) => revokedIdsRef.current.has(id),
+            redeemOnServer: redeemVoucherOnServer,
+            now: () => Date.now(),
+          })
+          pushScan(entitlementScanResult(key, parsed.token, result))
+          playScanSound(entitlementSound(result.kind))
+          if (result.kind === "redeemed" && result.pending) triggerFlush()
+        } catch {
+          // An IndexedDB abort must not strand the scanner paused: without this
+          // the camera never resumes and the stand is dead until a reload.
+          setError("Gutschein konnte nicht gelesen werden")
+          playScanSound("error")
+        }
         scheduleResume()
         return
       }

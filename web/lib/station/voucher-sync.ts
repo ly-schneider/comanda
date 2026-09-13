@@ -1,7 +1,5 @@
+import { backoffMs } from "@/lib/station/backoff"
 import type { VoucherLedger, VoucherRedemption } from "@/lib/station/voucher-ledger"
-
-const BASE_BACKOFF_MS = 2000
-const MAX_BACKOFF_MS = 60_000
 
 export function voucherRedeemEndpoint(voucherId: string): string {
   return `/api/v1/plugins/artist-voucher/vouchers/${encodeURIComponent(voucherId)}/redeem`
@@ -19,12 +17,9 @@ export interface VoucherFlushSummary {
   synced: number
   failed: number
   skipped: number
-  released: number
+  /** Refused for good by the server; the goods were already handed over. */
+  abandoned: number
   remaining: number
-}
-
-function backoffMs(attempts: number): number {
-  return Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS)
 }
 
 function isTerminal(status: number): boolean {
@@ -47,11 +42,11 @@ async function run(deps: VoucherFlushDeps): Promise<VoucherFlushSummary> {
   let synced = 0
   let failed = 0
   let skipped = 0
-  let released = 0
+  let abandoned = 0
 
   const token = deps.token()
   if (!token) {
-    return { synced: 0, failed: 0, skipped: items.length, released: 0, remaining: items.length }
+    return { synced: 0, failed: 0, skipped: items.length, abandoned: 0, remaining: items.length }
   }
 
   let authRejected = false
@@ -75,8 +70,11 @@ async function run(deps: VoucherFlushDeps): Promise<VoucherFlushSummary> {
       authRejected = true
       failed++
     } else if (outcome.kind === "terminal") {
-      await deps.ledger.remove(item.voucherId)
-      released++
+      // Unlike the interactive path, the food for this row is already in
+      // someone's hands. Deleting it would lose the redemption AND hand the slip
+      // back for a second meal, so it is kept and flagged instead.
+      await deps.ledger.markFailed(item.voucherId, outcome.reason, deps.now())
+      abandoned++
     } else {
       const attempts = item.attempts + 1
       await deps.ledger.put({
@@ -89,10 +87,11 @@ async function run(deps: VoucherFlushDeps): Promise<VoucherFlushSummary> {
     }
   }
 
-  return { synced, failed, skipped, released, remaining: failed + skipped }
+  return { synced, failed, skipped, abandoned, remaining: failed + skipped }
 }
 
-type UploadOutcome = { kind: "ok"; orderId: string } | { kind: "auth" } | { kind: "terminal" } | { kind: "transient" }
+type UploadOutcome =
+  { kind: "ok"; orderId: string } | { kind: "auth" } | { kind: "terminal"; reason: string } | { kind: "transient" }
 
 async function upload(
   deps: VoucherFlushDeps,
@@ -118,5 +117,7 @@ async function upload(
     const body = (await res.json().catch(() => null)) as { orderId?: string } | null
     return body?.orderId ? { kind: "ok", orderId: body.orderId } : { kind: "transient" }
   }
-  return isTerminal(res.status) ? { kind: "terminal" } : { kind: "transient" }
+  if (!isTerminal(res.status)) return { kind: "transient" }
+  const body = (await res.json().catch(() => null)) as { code?: string } | null
+  return { kind: "terminal", reason: body?.code ?? `http_${res.status}` }
 }

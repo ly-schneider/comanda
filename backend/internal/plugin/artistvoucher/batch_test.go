@@ -17,7 +17,21 @@ import (
 )
 
 type fakeProducts struct {
-	byID map[string]*ent.Product
+	byID      map[string]*ent.Product
+	unbuyable map[string]struct{}
+}
+
+func (f *fakeProducts) FilterBuyable(_ context.Context, ids []string) (map[string]struct{}, error) {
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, unavailable := f.unbuyable[id]; unavailable {
+			continue
+		}
+		if _, ok := f.byID[id]; ok {
+			out[id] = struct{}{}
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeProducts) GetByIDs(_ context.Context, ids []string) ([]*ent.Product, error) {
@@ -242,6 +256,14 @@ func issueBatch(t *testing.T, env *testEnv, mutate func(CreateBatchInput) Create
 	batch, err := env.svc.CreateBatch(tenantCtx(), in)
 	require.NoError(t, err)
 	return batch
+}
+
+func listBatchVouchers(t *testing.T, env *testEnv, batchID string) []*ent.Voucher {
+	t.Helper()
+	rows, err := env.repo.ListByBatch(tenantCtx(), batchID)
+	require.NoError(t, err)
+	require.NotEmpty(t, rows)
+	return rows
 }
 
 func firstVoucherID(t *testing.T, env *testEnv, batchID string) string {
@@ -474,4 +496,60 @@ func TestGetBatchListsItsVouchers(t *testing.T) {
 		require.NotEmpty(t, v.Token)
 		require.Nil(t, v.RedeemedAt)
 	}
+}
+
+func TestRedeemLocksTheVoucherRow(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch := issueBatch(t, env, nil)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+	require.NoError(t, err)
+
+	require.Contains(t, env.repo.locked, vid,
+		"without the row lock two concurrent redemptions both mint an order and both move stock")
+}
+
+func TestCreateBatchRejectsUnbuyableProduct(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	in := validBatchInput()
+	env.products.unbuyable = map[string]struct{}{in.Products[0].ProductID: {}}
+
+	_, err := env.svc.CreateBatch(tenantCtx(), in)
+
+	require.ErrorIs(t, err, ErrProductUnavailable,
+		"slips are printed long before redemption, so an unsellable product must fail at issue time")
+}
+
+func TestBatchStatusExhaustedWhenAllRedeemed(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	in := validBatchInput()
+	in.Count = 2
+	batch, err := env.svc.CreateBatch(tenantCtx(), in)
+	require.NoError(t, err)
+
+	for _, v := range listBatchVouchers(t, env, batch.ID) {
+		_, err := env.svc.Redeem(tenantCtx(), v.ID, "dev_station1")
+		require.NoError(t, err)
+	}
+
+	got, err := env.svc.GetBatch(tenantCtx(), batch.ID)
+	require.NoError(t, err)
+	require.Equal(t, 0, got.Outstanding)
+	require.NotEqual(t, StatusActive, got.Status, "a batch with nothing left in the field is not active")
+}
+
+func TestPassEndpointsRejectBatchSlips(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch := issueBatch(t, env, nil)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	_, err := env.svc.Get(tenantCtx(), vid)
+	require.ErrorIs(t, err, repository.ErrNotFound)
+
+	_, err = env.svc.Revoke(tenantCtx(), vid)
+	require.ErrorIs(t, err, repository.ErrNotFound,
+		"revoking one slip outside its batch would desync the batch counts")
+
+	require.ErrorIs(t, env.svc.Delete(tenantCtx(), vid), repository.ErrNotFound)
 }

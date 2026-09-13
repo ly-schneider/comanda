@@ -31,6 +31,7 @@ var (
 	ErrUnknownProduct     = errors.New("artistvoucher: unknown product")
 	ErrProductNotSimple   = errors.New("artistvoucher: only simple products can be issued")
 	ErrProductHasVariants = errors.New("artistvoucher: product has variants")
+	ErrProductUnavailable = errors.New("artistvoucher: product is not available for sale")
 	ErrInvalidQuantity    = errors.New("artistvoucher: quantity out of range")
 	ErrInvalidCount       = errors.New("artistvoucher: count out of range")
 	ErrNotEntitlement     = errors.New("artistvoucher: voucher is not single-use")
@@ -143,6 +144,14 @@ func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, 
 		byID[p.ID] = p
 	}
 
+	// A slip is printed long before it is redeemed, so an unsellable product has
+	// to be refused here; at redemption it would fail the whole batch in the
+	// field, after the slips are handed out.
+	buyable, err := s.products.FilterBuyable(ctx, ids)
+	if err != nil {
+		return Batch{}, fmt.Errorf("filter buyable: %w", err)
+	}
+
 	snapshot := make([]Product, 0, len(in.Products))
 	lines := make([]qrsign.EntitlementLine, 0, len(in.Products))
 	for _, p := range in.Products {
@@ -155,6 +164,9 @@ func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, 
 		}
 		if len(prod.Edges.Variants) > 0 {
 			return Batch{}, fmt.Errorf("%w: %s", ErrProductHasVariants, prod.Name)
+		}
+		if _, ok := buyable[prod.ID]; !ok {
+			return Batch{}, fmt.Errorf("%w: %s", ErrProductUnavailable, prod.Name)
 		}
 		snapshot = append(snapshot, Product{ID: prod.ID, Name: prod.Name, Quantity: p.Quantity})
 		lines = append(lines, qrsign.EntitlementLine{ProductID: prod.ID, Quantity: p.Quantity})
@@ -314,6 +326,12 @@ func (s *service) RevokeBatch(ctx context.Context, batchID string) (Batch, error
 }
 
 func (s *service) Redeem(ctx context.Context, voucherID, deviceID string) (RedeemResult, error) {
+	// Serializes concurrent redemptions of the same slip: without it two requests
+	// both read redeemed_at as nil and both mint an order. The station's own
+	// flusher races its interactive POST, so this is reachable from one device.
+	if err := s.repo.LockByID(ctx, voucherID); err != nil {
+		return RedeemResult{}, err
+	}
 	row, err := s.repo.GetByID(ctx, voucherID)
 	if err != nil {
 		return RedeemResult{}, err
@@ -422,6 +440,9 @@ func groupByBatch(rows []*ent.Voucher) (map[string][]*ent.Voucher, []string) {
 }
 
 func toBatch(rows []*ent.Voucher, stock map[string]int, now time.Time) (Batch, error) {
+	if len(rows) == 0 {
+		return Batch{}, repository.ErrNotFound
+	}
 	head := rows[0]
 	snapshot, err := decodeProducts(head)
 	if err != nil {
@@ -458,8 +479,13 @@ func toBatch(rows []*ent.Voucher, stock map[string]int, now time.Time) (Batch, e
 }
 
 func batchStatus(now time.Time, head *ent.Voucher, b Batch) Status {
-	if b.Revoked > 0 && b.Outstanding == 0 {
-		return StatusRevoked
+	// Nothing left in the field ends the batch whether the slips were redeemed
+	// or revoked; only a batch with outstanding slips defers to the window.
+	if b.Outstanding == 0 {
+		if b.Revoked > 0 {
+			return StatusRevoked
+		}
+		return StatusExpired
 	}
 	if !now.Before(head.ValidUntil) {
 		return StatusExpired
