@@ -58,7 +58,7 @@ export function BatchDetailDialog({
               <p className="font-semibold">{outstandingStockText(detail.batch)}</p>
               <p className="text-muted-foreground text-sm">{entitlementText(detail.batch.products)}</p>
               <p className="text-muted-foreground text-xs">
-                {fmtDateTime(detail.batch.validFrom)} – {fmtDateTime(detail.batch.validUntil)}
+                {fmtDateTime(detail.batch.validFrom)} bis {fmtDateTime(detail.batch.validUntil)}
               </p>
             </div>
             <Table>

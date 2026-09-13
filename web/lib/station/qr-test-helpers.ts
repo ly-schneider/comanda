@@ -42,7 +42,7 @@ export function signV3(p: QrPayload, sk: Uint8Array): string {
 export function encodeEntitlement(p: EntitlementPayload): Uint8Array {
   const enc = new TextEncoder()
   const label = enc.encode(p.label)
-  const out = new Uint8Array(33 + 1 + label.length + 1 + p.lines.length * 13)
+  const out = new Uint8Array(33 + 1 + label.length + 1 + p.lines.length * 14)
   out[0] = 0x11
   out.set(enc.encode(p.tenantId), 1)
   out.set(enc.encode(p.voucherId), 13)
@@ -57,7 +57,8 @@ export function encodeEntitlement(p: EntitlementPayload): Uint8Array {
   for (const line of p.lines) {
     out.set(enc.encode(line.productId), off)
     out[off + 12] = line.quantity
-    off += 13
+    out[off + 13] = line.choiceGroup
+    off += 14
   }
   return out
 }

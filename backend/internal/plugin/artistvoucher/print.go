@@ -123,10 +123,11 @@ func (h *handlers) ArtistVoucherBatchPrint(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	details := make([]string, 0, len(detail.Products))
+	snapshot := make([]Product, 0, len(detail.Products))
 	for _, p := range detail.Products {
-		details = append(details, fmt.Sprintf("%d× %s", p.Quantity, p.Name))
+		snapshot = append(snapshot, p.Product)
 	}
+	details := EntitlementLines(snapshot)
 	brandName, brandIcon := h.brandHeader(r.Context())
 
 	slips := make([]pdf.VoucherSlip, 0, len(detail.Vouchers))

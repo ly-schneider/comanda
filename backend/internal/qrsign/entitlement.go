@@ -11,13 +11,17 @@ import (
 const verEntitlement = 0x11
 
 const (
-	entLineLen  = idLen + 1 // product id + qty(u8)
-	maxEntLines = math.MaxUint8
+	entLineLen   = idLen + 2 // product id + qty(u8) + choice group(u8)
+	maxEntLines  = math.MaxUint8
+	maxChoiceGrp = math.MaxUint8
 )
 
+// EntitlementLine is one position on the slip. ChoiceGroup 0 is always handed
+// out; every other group hands out exactly one of its lines, picked at the stand.
 type EntitlementLine struct {
-	ProductID string
-	Quantity  int
+	ProductID   string
+	Quantity    int
+	ChoiceGroup int
 }
 
 type EntitlementPayload struct {
@@ -77,8 +81,12 @@ func encodeEntitlement(p EntitlementPayload) ([]byte, error) {
 		if l.Quantity < 1 || l.Quantity > maxQty {
 			return nil, fmt.Errorf("%w: quantity %d out of range [1,%d]", ErrBadPayload, l.Quantity, maxQty)
 		}
+		if l.ChoiceGroup < 0 || l.ChoiceGroup > maxChoiceGrp {
+			return nil, fmt.Errorf("%w: choice group %d out of range [0,%d]", ErrBadPayload, l.ChoiceGroup, maxChoiceGrp)
+		}
 		body = append(body, l.ProductID...)
 		body = append(body, byte(l.Quantity))
+		body = append(body, byte(l.ChoiceGroup))
 	}
 	return body, nil
 }
@@ -131,8 +139,9 @@ func decodeEntitlement(body []byte) (EntitlementPayload, error) {
 			return EntitlementPayload{}, ErrBadPayload
 		}
 		lines[i] = EntitlementLine{
-			ProductID: string(body[off : off+idLen]),
-			Quantity:  qty,
+			ProductID:   string(body[off : off+idLen]),
+			Quantity:    qty,
+			ChoiceGroup: int(body[off+idLen+1]),
 		}
 		off += entLineLen
 	}

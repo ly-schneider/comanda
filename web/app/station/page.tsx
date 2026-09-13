@@ -36,6 +36,8 @@ import { type CatalogProduct, type RedeemLineView, redeemScan } from "@/lib/stat
 import {
   redeemVoucherScan,
   type ServerRedeemResult,
+  type VoucherChoiceGroup,
+  type VoucherChoiceSelection,
   type VoucherLineView,
   type VoucherRedeemResult,
 } from "@/lib/station/redeem-voucher"
@@ -355,6 +357,13 @@ const ENTITLEMENT_STYLES: Record<EntitlementVerdictKind, VoucherMeta> = {
     dot: "bg-destructive",
     icon: XCircle,
   },
+  "choice-required": {
+    label: "Auswahl treffen",
+    text: "text-muted-foreground",
+    bg: "bg-card",
+    dot: "bg-muted-foreground/50",
+    icon: AlertCircle,
+  },
   refused: {
     label: "Abgelehnt",
     text: "text-destructive",
@@ -422,7 +431,7 @@ function entitlementScanResult(key: string, token: string, result: VoucherRedeem
     case "expired":
       return { ...base, validUntil: result.validUntil }
     case "auth-failed":
-      return { ...base, message: "Station neu anmelden — der Gutschein bleibt gültig." }
+      return { ...base, message: "Die Station muss neu angemeldet werden. Der Gutschein bleibt gültig." }
     case "invalid":
       return { ...base, message: result.reason === "not-ready" ? "Offline-Einrichtung erforderlich" : undefined }
     default:
@@ -476,6 +485,7 @@ export default function StationPage() {
   const [scans, setScans] = useState<ScanResult[]>([])
   const [detailScan, setDetailScan] = useState<OrderScanResult | null>(null)
   const [choicePrompt, setChoicePrompt] = useState<ChoicePrompt | null>(null)
+  const [voucherPrompt, setVoucherPrompt] = useState<{ token: string; groups: VoucherChoiceGroup[] } | null>(null)
   const [cameraPermission, setCameraPermission] = useState<"idle" | "pending" | "granted" | "denied">("idle")
   const [scannerActive, setScannerActive] = useState(false)
   const [scannerKey, setScannerKey] = useState(0)
@@ -895,6 +905,43 @@ export default function StationPage() {
     [scheduleResume, updateScan]
   )
 
+  // Runs (or re-runs, once the operator has picked) a single-use voucher scan.
+  // A slip with an open choice group stops here and opens the picker instead of
+  // being claimed, so cancelling leaves it untouched.
+  const runEntitlementScan = useCallback(
+    async (token: string, selections: VoucherChoiceSelection[]) => {
+      const offline = offlineRef.current
+      const key = `entitlement-${Date.now()}`
+      try {
+        const result = await redeemVoucherScan(token, {
+          verify: (t) => verifyEntitlementToken(t, offline.publicKey),
+          stationTenantId: offline.tenantId,
+          assignedProductIds,
+          catalog: offline.catalog,
+          ledger: voucherLedgerRef.current!,
+          revoked: (id) => revokedIdsRef.current.has(id),
+          redeemOnServer: redeemVoucherOnServer,
+          now: () => Date.now(),
+          selections,
+        })
+        if (result.kind === "choice-required") {
+          setVoucherPrompt({ token, groups: result.groups })
+          return
+        }
+        pushScan(entitlementScanResult(key, token, result))
+        playScanSound(entitlementSound(result.kind))
+        if (result.kind === "redeemed" && result.pending) triggerFlush()
+      } catch {
+        // An IndexedDB abort must not strand the scanner paused: without this
+        // the camera never resumes and the stand is dead until a reload.
+        setError("Gutschein konnte nicht gelesen werden")
+        playScanSound("error")
+      }
+      scheduleResume()
+    },
+    [assignedProductIds, pushScan, redeemVoucherOnServer, scheduleResume, triggerFlush]
+  )
+
   const handleScanned = useCallback(
     async (scan: QrScanResult) => {
       const parsed = parseScan(scan.text, scan.bytes)
@@ -971,27 +1018,7 @@ export default function StationPage() {
           return
         }
 
-        try {
-          const result = await redeemVoucherScan(parsed.token, {
-            verify: (t) => verifyEntitlementToken(t, offline.publicKey),
-            stationTenantId: offline.tenantId,
-            assignedProductIds,
-            catalog: offline.catalog,
-            ledger: voucherLedgerRef.current!,
-            revoked: (id) => revokedIdsRef.current.has(id),
-            redeemOnServer: redeemVoucherOnServer,
-            now: () => Date.now(),
-          })
-          pushScan(entitlementScanResult(key, parsed.token, result))
-          playScanSound(entitlementSound(result.kind))
-          if (result.kind === "redeemed" && result.pending) triggerFlush()
-        } catch {
-          // An IndexedDB abort must not strand the scanner paused: without this
-          // the camera never resumes and the stand is dead until a reload.
-          setError("Gutschein konnte nicht gelesen werden")
-          playScanSound("error")
-        }
-        scheduleResume()
+        await runEntitlementScan(parsed.token, [])
         return
       }
 
@@ -1090,7 +1117,7 @@ export default function StationPage() {
       handleEnqueue,
       pushScan,
       redeemCampaign,
-      redeemVoucherOnServer,
+      runEntitlementScan,
       scheduleResume,
       triggerFlush,
       updateScan,
@@ -1301,8 +1328,91 @@ export default function StationPage() {
         onConfirm={resolveChoice}
         onCancel={cancelChoice}
       />
+      <VoucherChoiceDialog
+        prompt={voucherPrompt}
+        onConfirm={(selections) => {
+          const token = voucherPrompt?.token
+          setVoucherPrompt(null)
+          if (token) void runEntitlementScan(token, selections)
+        }}
+        onCancel={() => {
+          setVoucherPrompt(null)
+          scheduleResume()
+        }}
+      />
       <InstallHintDrawer />
     </div>
+  )
+}
+
+function VoucherChoiceDialog({
+  prompt,
+  onConfirm,
+  onCancel,
+}: {
+  prompt: { token: string; groups: VoucherChoiceGroup[] } | null
+  onConfirm: (selections: VoucherChoiceSelection[]) => void
+  onCancel: () => void
+}) {
+  const [picked, setPicked] = useState<Record<number, string>>({})
+
+  useEffect(() => {
+    setPicked({})
+  }, [prompt])
+
+  if (!prompt) return null
+
+  const selections = prompt.groups
+    .map((g) => ({ choiceGroup: g.choiceGroup, productId: picked[g.choiceGroup] }))
+    .filter((s): s is VoucherChoiceSelection => !!s.productId)
+  const complete = selections.length === prompt.groups.length
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-center text-xl font-semibold">Auswahl treffen</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-5">
+          {prompt.groups.map((group) => (
+            <div key={group.choiceGroup} className="flex flex-col gap-2">
+              <div className="text-muted-foreground text-xs font-medium">Eines auswählen</div>
+              {group.options.map((option, idx) => {
+                const active = picked[group.choiceGroup] === option.productId
+                return (
+                  <div key={option.productId} className="flex flex-col gap-2">
+                    {idx > 0 && (
+                      <span className="text-muted-foreground text-center text-[11px] font-medium tracking-wide">
+                        ODER
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPicked((p) => ({ ...p, [group.choiceGroup]: option.productId }))}
+                      aria-pressed={active}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition active:scale-[0.99] ${
+                        active ? "border-primary bg-primary/5" : "border-border bg-background"
+                      }`}
+                    >
+                      <span className="min-w-0 truncate font-medium">{option.title}</span>
+                      <span className="text-muted-foreground shrink-0 text-sm tabular-nums">×{option.quantity}</span>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={onCancel}>
+              Abbrechen
+            </Button>
+            <Button className="flex-1" disabled={!complete} onClick={() => onConfirm(selections)}>
+              Einlösen
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1601,7 +1711,11 @@ function EntitlementScanCard({ scan }: { scan: EntitlementScanResult }) {
       {scan.verdict === "expired" && scan.validUntil != null && (
         <p className="text-muted-foreground mt-3 text-sm">Abgelaufen am {formatVoucherTime(scan.validUntil)}</p>
       )}
-      {scan.pending && <p className="text-muted-foreground mt-3 text-sm">Offline erfasst — wird synchronisiert.</p>}
+      {scan.pending && (
+        <p className="text-muted-foreground mt-3 text-sm">
+          Offline erfasst. Wird übermittelt, sobald die Station wieder online ist.
+        </p>
+      )}
       {scan.message && <p className={`mt-3 text-sm ${meta.text}`}>{scan.message}</p>}
     </div>
   )

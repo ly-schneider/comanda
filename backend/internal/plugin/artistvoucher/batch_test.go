@@ -105,6 +105,8 @@ func productFixtures() map[string]*ent.Product {
 	withVariants.Edges.Variants = []*ent.ProductVariant{{ID: "vrnt_size_xl", Value: "XL"}}
 	return map[string]*ent.Product{
 		"prod_burger1": {ID: "prod_burger1", Name: "Hamburger", Type: product.TypeSimple},
+		"prod_cheese1": {ID: "prod_cheese1", Name: "Cheeseburger", Type: product.TypeSimple},
+		"prod_pommes1": {ID: "prod_pommes1", Name: "Pommes", Type: product.TypeSimple},
 		"prod_cola001": {ID: "prod_cola001", Name: "Cola", Type: product.TypeSimple},
 		"prod_menu001": {ID: "prod_menu001", Name: "Menü", Type: product.TypeBundle},
 		"prod_shirt01": withVariants,
@@ -287,7 +289,7 @@ func TestRedeemMintsGratisOrderAtNominalTotal(t *testing.T) {
 	})
 	vid := firstVoucherID(t, env, batch.ID)
 
-	result, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+	result, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 	require.NoError(t, err)
 	require.False(t, result.AlreadyRedeemed)
 	require.Equal(t, "order_abc123", result.OrderID)
@@ -325,17 +327,19 @@ func TestRedeemIsIdempotent(t *testing.T) {
 	batch := issueBatch(t, env, nil)
 	vid := firstVoucherID(t, env, batch.ID)
 
-	first, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+	first, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 	require.NoError(t, err)
 
 	env.minter.nextID = "order_secnd1"
-	second, err := env.svc.Redeem(tenantCtx(), vid, "dev_station2")
+	second, err := env.svc.Redeem(tenantCtx(), vid, "dev_station2", nil)
 	require.NoError(t, err)
 
 	require.True(t, second.AlreadyRedeemed)
 	require.Equal(t, first.OrderID, second.OrderID)
 	require.Equal(t, first.RedeemedAt.UnixNano(), second.RedeemedAt.UnixNano())
-	require.Equal(t, first.Items, second.Items)
+	// What was picked lives on the order, so a spent slip reports no line items
+	// rather than listing every option it offered.
+	require.Empty(t, second.Items)
 	require.Len(t, env.minter.minted, 1, "a retry must not mint a second order")
 	require.Len(t, env.settler.calls, 1)
 	require.Equal(t, 1, env.repo.redeemCalls)
@@ -370,7 +374,7 @@ func TestRedeemRejectsUnredeemableVouchers(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+			_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 			require.ErrorIs(t, err, tc.want)
 			require.Empty(t, env.minter.minted, "a rejected voucher must not mint an order")
 		})
@@ -382,14 +386,14 @@ func TestRedeemRejectsPassVoucher(t *testing.T) {
 	pass, err := env.svc.Create(tenantCtx(), validCreateInput())
 	require.NoError(t, err)
 
-	_, err = env.svc.Redeem(tenantCtx(), pass.ID, "dev_station1")
+	_, err = env.svc.Redeem(tenantCtx(), pass.ID, "dev_station1", nil)
 	require.ErrorIs(t, err, ErrNotEntitlement)
 	require.Empty(t, env.minter.minted)
 }
 
 func TestRedeemNotFound(t *testing.T) {
 	env := newTestEnv(t, categoryFixtures())
-	_, err := env.svc.Redeem(tenantCtx(), "missing12345", "dev_station1")
+	_, err := env.svc.Redeem(tenantCtx(), "missing12345", "dev_station1", nil)
 	require.ErrorIs(t, err, repository.ErrNotFound)
 }
 
@@ -403,7 +407,7 @@ func TestRedeemSurfacesSoldOut(t *testing.T) {
 	batch := issueBatch(t, env, nil)
 	vid := firstVoucherID(t, env, batch.ID)
 
-	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 	var soldOut *coreservice.InsufficientInventoryError
 	require.True(t, errors.As(err, &soldOut))
 	require.Equal(t, "Hamburger", soldOut.Items[0].Name)
@@ -421,7 +425,7 @@ func TestListBatchesReportsCountsAndStock(t *testing.T) {
 
 	rows, err := env.repo.ListByBatch(tenantCtx(), batch.ID)
 	require.NoError(t, err)
-	_, err = env.svc.Redeem(tenantCtx(), rows[0].ID, "dev_station1")
+	_, err = env.svc.Redeem(tenantCtx(), rows[0].ID, "dev_station1", nil)
 	require.NoError(t, err)
 	_, err = env.repo.SetRevoked(tenantCtx(), rows[1].ID, time.Now())
 	require.NoError(t, err)
@@ -456,7 +460,7 @@ func TestRevokeBatchSparesRedeemedVouchers(t *testing.T) {
 	batch := issueBatch(t, env, func(in CreateBatchInput) CreateBatchInput { in.Count = 3; return in })
 	rows, err := env.repo.ListByBatch(tenantCtx(), batch.ID)
 	require.NoError(t, err)
-	_, err = env.svc.Redeem(tenantCtx(), rows[0].ID, "dev_station1")
+	_, err = env.svc.Redeem(tenantCtx(), rows[0].ID, "dev_station1", nil)
 	require.NoError(t, err)
 
 	revoked, err := env.svc.RevokeBatch(tenantCtx(), batch.ID)
@@ -503,7 +507,7 @@ func TestRedeemLocksTheVoucherRow(t *testing.T) {
 	batch := issueBatch(t, env, nil)
 	vid := firstVoucherID(t, env, batch.ID)
 
-	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1")
+	_, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
 	require.NoError(t, err)
 
 	require.Contains(t, env.repo.locked, vid,
@@ -529,7 +533,7 @@ func TestBatchStatusExhaustedWhenAllRedeemed(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, v := range listBatchVouchers(t, env, batch.ID) {
-		_, err := env.svc.Redeem(tenantCtx(), v.ID, "dev_station1")
+		_, err := env.svc.Redeem(tenantCtx(), v.ID, "dev_station1", nil)
 		require.NoError(t, err)
 	}
 
@@ -552,4 +556,80 @@ func TestPassEndpointsRejectBatchSlips(t *testing.T) {
 		"revoking one slip outside its batch would desync the batch counts")
 
 	require.ErrorIs(t, env.svc.Delete(tenantCtx(), vid), repository.ErrNotFound)
+}
+
+func choiceBatchInput() CreateBatchInput {
+	in := validBatchInput()
+	in.Products = []BatchProductInput{
+		{ProductID: "prod_pommes1", Quantity: 1, ChoiceGroup: 0},
+		{ProductID: "prod_burger1", Quantity: 1, ChoiceGroup: 1},
+		{ProductID: "prod_cheese1", Quantity: 1, ChoiceGroup: 1},
+	}
+	return in
+}
+
+func TestRedeemRequiresAChoiceBeforeMinting(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch, err := env.svc.CreateBatch(tenantCtx(), choiceBatchInput())
+	require.NoError(t, err)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	_, err = env.svc.Redeem(tenantCtx(), vid, "dev_station1", nil)
+
+	var needsChoice *ChoiceRequiredError
+	require.ErrorAs(t, err, &needsChoice)
+	require.Len(t, needsChoice.Groups, 1)
+	require.Len(t, needsChoice.Groups[0].Options, 2)
+	require.Empty(t, env.minter.minted, "an unresolved choice must not mint an order")
+}
+
+func TestRedeemHandsOutOnlyThePickedOption(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch, err := env.svc.CreateBatch(tenantCtx(), choiceBatchInput())
+	require.NoError(t, err)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	result, err := env.svc.Redeem(tenantCtx(), vid, "dev_station1",
+		[]ChoiceSelection{{ChoiceGroup: 1, ProductID: "prod_cheese1"}})
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(result.Items))
+	for _, it := range result.Items {
+		ids = append(ids, it.ID)
+	}
+	require.ElementsMatch(t, []string{"prod_pommes1", "prod_cheese1"}, ids,
+		"the always-on line plus exactly one option, never both burgers")
+}
+
+func TestRedeemRejectsASelectionOutsideItsGroup(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	batch, err := env.svc.CreateBatch(tenantCtx(), choiceBatchInput())
+	require.NoError(t, err)
+	vid := firstVoucherID(t, env, batch.ID)
+
+	_, err = env.svc.Redeem(tenantCtx(), vid, "dev_station1",
+		[]ChoiceSelection{{ChoiceGroup: 1, ProductID: "prod_pommes1"}})
+
+	require.ErrorIs(t, err, ErrInvalidSelection,
+		"a forged selection must not hand out something the slip never promised")
+}
+
+func TestCreateBatchRejectsChoiceGroupOfOne(t *testing.T) {
+	env := newTestEnv(t, categoryFixtures())
+	in := validBatchInput()
+	in.Products = []BatchProductInput{{ProductID: "prod_burger1", Quantity: 1, ChoiceGroup: 1}}
+
+	_, err := env.svc.CreateBatch(tenantCtx(), in)
+
+	require.ErrorIs(t, err, ErrChoiceGroupTooSmall)
+}
+
+func TestEntitlementLinesJoinsGroupsWithOder(t *testing.T) {
+	got := EntitlementLines([]Product{
+		{ID: "prod_pommes1", Name: "Pommes", Quantity: 1},
+		{ID: "prod_burger1", Name: "Hamburger", Quantity: 1, ChoiceGroup: 1},
+		{ID: "prod_cheese1", Name: "Cheeseburger", Quantity: 1, ChoiceGroup: 1},
+	})
+
+	require.Equal(t, []string{"1× Pommes", "1× Hamburger oder 1× Cheeseburger"}, got)
 }

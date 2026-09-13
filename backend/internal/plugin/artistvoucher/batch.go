@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"backend/internal/generated/ent"
@@ -22,28 +24,35 @@ const (
 	maxBatchCount    = 500
 	maxBatchProducts = 255
 	maxBatchQuantity = 255
+	maxChoiceGroup   = 255
 )
 
 var (
-	ErrNoProducts         = errors.New("artistvoucher: at least one product is required")
-	ErrTooManyProducts    = errors.New("artistvoucher: too many products")
-	ErrDuplicateProduct   = errors.New("artistvoucher: product listed more than once")
-	ErrUnknownProduct     = errors.New("artistvoucher: unknown product")
-	ErrProductNotSimple   = errors.New("artistvoucher: only simple products can be issued")
-	ErrProductHasVariants = errors.New("artistvoucher: product has variants")
-	ErrProductUnavailable = errors.New("artistvoucher: product is not available for sale")
-	ErrInvalidQuantity    = errors.New("artistvoucher: quantity out of range")
-	ErrInvalidCount       = errors.New("artistvoucher: count out of range")
-	ErrNotEntitlement     = errors.New("artistvoucher: voucher is not single-use")
-	ErrRevoked            = errors.New("artistvoucher: voucher is revoked")
-	ErrNotYetValid        = errors.New("artistvoucher: voucher is not valid yet")
-	ErrExpired            = errors.New("artistvoucher: voucher has expired")
+	ErrNoProducts          = errors.New("artistvoucher: at least one product is required")
+	ErrTooManyProducts     = errors.New("artistvoucher: too many products")
+	ErrDuplicateProduct    = errors.New("artistvoucher: product listed more than once")
+	ErrUnknownProduct      = errors.New("artistvoucher: unknown product")
+	ErrProductNotSimple    = errors.New("artistvoucher: only simple products can be issued")
+	ErrProductHasVariants  = errors.New("artistvoucher: product has variants")
+	ErrProductUnavailable  = errors.New("artistvoucher: product is not available for sale")
+	ErrInvalidChoiceGroup  = errors.New("artistvoucher: choice group is out of range")
+	ErrChoiceGroupTooSmall = errors.New("artistvoucher: a choice group needs at least two products")
+	ErrInvalidSelection    = errors.New("artistvoucher: selection does not match the voucher")
+	ErrInvalidQuantity     = errors.New("artistvoucher: quantity out of range")
+	ErrInvalidCount        = errors.New("artistvoucher: count out of range")
+	ErrNotEntitlement      = errors.New("artistvoucher: voucher is not single-use")
+	ErrRevoked             = errors.New("artistvoucher: voucher is revoked")
+	ErrNotYetValid         = errors.New("artistvoucher: voucher is not valid yet")
+	ErrExpired             = errors.New("artistvoucher: voucher has expired")
 )
 
+// ChoiceGroup 0 is always handed out; every other group hands out exactly one of
+// its products, picked at the stand.
 type Product struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Quantity    int    `json:"quantity"`
+	ChoiceGroup int    `json:"choiceGroup,omitempty"`
 }
 
 type BatchProduct struct {
@@ -79,8 +88,9 @@ type BatchDetail struct {
 }
 
 type BatchProductInput struct {
-	ProductID string
-	Quantity  int
+	ProductID   string
+	Quantity    int
+	ChoiceGroup int
 }
 
 type CreateBatchInput struct {
@@ -124,15 +134,28 @@ func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, 
 
 	ids := make([]string, 0, len(in.Products))
 	seen := make(map[string]struct{}, len(in.Products))
+	groupSizes := make(map[int]int, len(in.Products))
 	for _, p := range in.Products {
 		if p.Quantity < 1 || p.Quantity > maxBatchQuantity {
 			return Batch{}, fmt.Errorf("%w: %d", ErrInvalidQuantity, p.Quantity)
 		}
+		if p.ChoiceGroup < 0 || p.ChoiceGroup > maxChoiceGroup {
+			return Batch{}, fmt.Errorf("%w: %d", ErrInvalidChoiceGroup, p.ChoiceGroup)
+		}
+		groupSizes[p.ChoiceGroup]++
 		if _, dup := seen[p.ProductID]; dup {
 			return Batch{}, fmt.Errorf("%w: %s", ErrDuplicateProduct, p.ProductID)
 		}
 		seen[p.ProductID] = struct{}{}
 		ids = append(ids, p.ProductID)
+	}
+
+	// A group of one is not a choice; it would silently behave like an always-on
+	// line and read as "oder" on the printed slip with nothing to choose from.
+	for group, n := range groupSizes {
+		if group > 0 && n < 2 {
+			return Batch{}, fmt.Errorf("%w: %d", ErrChoiceGroupTooSmall, group)
+		}
 	}
 
 	rows, err := s.products.GetByIDs(ctx, ids)
@@ -168,8 +191,8 @@ func (s *service) CreateBatch(ctx context.Context, in CreateBatchInput) (Batch, 
 		if _, ok := buyable[prod.ID]; !ok {
 			return Batch{}, fmt.Errorf("%w: %s", ErrProductUnavailable, prod.Name)
 		}
-		snapshot = append(snapshot, Product{ID: prod.ID, Name: prod.Name, Quantity: p.Quantity})
-		lines = append(lines, qrsign.EntitlementLine{ProductID: prod.ID, Quantity: p.Quantity})
+		snapshot = append(snapshot, Product{ID: prod.ID, Name: prod.Name, Quantity: p.Quantity, ChoiceGroup: p.ChoiceGroup})
+		lines = append(lines, qrsign.EntitlementLine{ProductID: prod.ID, Quantity: p.Quantity, ChoiceGroup: p.ChoiceGroup})
 	}
 
 	productsJSON, err := json.Marshal(snapshot)
@@ -325,7 +348,120 @@ func (s *service) RevokeBatch(ctx context.Context, batchID string) (Batch, error
 	return detail.Batch, nil
 }
 
-func (s *service) Redeem(ctx context.Context, voucherID, deviceID string) (RedeemResult, error) {
+type ChoiceSelection struct {
+	ChoiceGroup int
+	ProductID   string
+}
+
+type ChoiceGroupView struct {
+	ChoiceGroup int
+	Options     []Product
+}
+
+// ChoiceRequiredError carries the open groups so the stand can show a picker
+// without a second round-trip.
+type ChoiceRequiredError struct {
+	Groups []ChoiceGroupView
+}
+
+func (e *ChoiceRequiredError) Error() string {
+	return fmt.Sprintf("artistvoucher: %d choice group(s) need a selection", len(e.Groups))
+}
+
+// resolveSelection reduces a slip's products to the ones actually handed out:
+// group 0 always, and exactly one product from every other group. A group with
+// no selection is reported back rather than guessed at.
+// EntitlementLines renders a slip's positions for printing: always-on products
+// first, then each choice group as its options joined by "oder", so the holder
+// reads what they get and what they pick.
+func EntitlementLines(products []Product) []string {
+	groups := make(map[int][]Product)
+	order := make([]int, 0, len(products))
+	out := make([]string, 0, len(products))
+
+	for _, p := range products {
+		if p.ChoiceGroup <= 0 {
+			out = append(out, fmt.Sprintf("%d× %s", p.Quantity, p.Name))
+			continue
+		}
+		if _, seen := groups[p.ChoiceGroup]; !seen {
+			order = append(order, p.ChoiceGroup)
+		}
+		groups[p.ChoiceGroup] = append(groups[p.ChoiceGroup], p)
+	}
+	sort.Ints(order)
+
+	for _, g := range order {
+		parts := make([]string, 0, len(groups[g]))
+		for _, o := range groups[g] {
+			parts = append(parts, fmt.Sprintf("%d× %s", o.Quantity, o.Name))
+		}
+		out = append(out, strings.Join(parts, " oder "))
+	}
+	return out
+}
+
+func resolveSelection(products []Product, selections []ChoiceSelection) ([]Product, error) {
+	groups := make(map[int][]Product)
+	order := make([]int, 0, len(products))
+	out := make([]Product, 0, len(products))
+
+	for _, p := range products {
+		if p.ChoiceGroup <= 0 {
+			out = append(out, p)
+			continue
+		}
+		if _, seen := groups[p.ChoiceGroup]; !seen {
+			order = append(order, p.ChoiceGroup)
+		}
+		groups[p.ChoiceGroup] = append(groups[p.ChoiceGroup], p)
+	}
+	sort.Ints(order)
+
+	picked := make(map[int]string, len(selections))
+	for _, sel := range selections {
+		if _, ok := groups[sel.ChoiceGroup]; !ok {
+			return nil, ErrInvalidSelection
+		}
+		if prev, ok := picked[sel.ChoiceGroup]; ok && prev != sel.ProductID {
+			return nil, ErrInvalidSelection
+		}
+		picked[sel.ChoiceGroup] = sel.ProductID
+	}
+
+	var pending []ChoiceGroupView
+	for _, g := range order {
+		options := groups[g]
+		productID, chosen := picked[g]
+		if !chosen {
+			if len(options) == 1 {
+				out = append(out, options[0])
+				continue
+			}
+			pending = append(pending, ChoiceGroupView{ChoiceGroup: g, Options: options})
+			continue
+		}
+		idx := -1
+		for i, o := range options {
+			if o.ID == productID {
+				idx = i
+				break
+			}
+		}
+		// A selection naming a product outside its group would hand out something
+		// the slip never promised.
+		if idx < 0 {
+			return nil, ErrInvalidSelection
+		}
+		out = append(out, options[idx])
+	}
+	if len(pending) > 0 {
+		return nil, &ChoiceRequiredError{Groups: pending}
+	}
+	return out, nil
+}
+
+func (s *service) Redeem(ctx context.Context, voucherID, deviceID string, selections []ChoiceSelection) (RedeemResult, error) {
 	// Serializes concurrent redemptions of the same slip: without it two requests
 	// both read redeemed_at as nil and both mint an order. The station's own
 	// flusher races its interactive POST, so this is reachable from one device.
@@ -345,13 +481,14 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string) (Redee
 	}
 
 	if row.RedeemedAt != nil {
+		// What was actually picked lives on the order, not here, so a spent slip
+		// reports no line items rather than listing every option it offered.
 		return RedeemResult{
 			VoucherID:       row.ID,
 			Label:           row.Label,
 			OrderID:         row.RedeemedOrderID,
 			RedeemedAt:      *row.RedeemedAt,
 			AlreadyRedeemed: true,
-			Items:           items,
 		}, nil
 	}
 	if row.RevokedAt != nil {
@@ -366,6 +503,14 @@ func (s *service) Redeem(ctx context.Context, voucherID, deviceID string) (Redee
 	}
 	if len(items) == 0 {
 		return RedeemResult{}, ErrNoProducts
+	}
+
+	// Resolved server-side even though the stand already picked: a selection is
+	// client input, and an unchecked one would hand out a product the slip never
+	// promised.
+	items, err = resolveSelection(items, selections)
+	if err != nil {
+		return RedeemResult{}, err
 	}
 
 	checkout := make([]coreservice.CheckoutItemInput, 0, len(items))

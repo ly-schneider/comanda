@@ -143,7 +143,7 @@ type Service interface {
 	ListBatches(ctx context.Context) ([]Batch, error)
 	GetBatch(ctx context.Context, batchID string) (BatchDetail, error)
 	RevokeBatch(ctx context.Context, batchID string) (Batch, error)
-	Redeem(ctx context.Context, voucherID, deviceID string) (RedeemResult, error)
+	Redeem(ctx context.Context, voucherID, deviceID string, selections []ChoiceSelection) (RedeemResult, error)
 }
 
 type service struct {

@@ -92,6 +92,9 @@ ArtistVoucherBatchProduct:
     quantity:
       type: integer
       description: Units of this product one voucher entitles the holder to
+    choiceGroup:
+      type: integer
+      description: 0 is always handed out; other groups hand out exactly one of their products
     stock:
       type: integer
       description: Current stock of the product, so the admin can compare it against the outstanding slips
@@ -162,6 +165,14 @@ ArtistVoucherBatchCreateProduct:
       type: integer
       minimum: 1
       maximum: 255
+    choiceGroup:
+      type: integer
+      minimum: 0
+      maximum: 255
+      default: 0
+      description: >
+        0 is always handed out. Every other group hands out exactly one of its
+        products, chosen at the stand, and needs at least two products.
 
 ArtistVoucherBatchCreateRequest:
   type: object
@@ -249,3 +260,58 @@ ArtistVoucherRedeemResponse:
       type: array
       items:
         $ref: "#/ArtistVoucherRedeemItem"
+
+ArtistVoucherChoiceSelection:
+  type: object
+  required: [choiceGroup, productId]
+  properties:
+    choiceGroup:
+      type: integer
+      minimum: 1
+    productId:
+      type: string
+
+ArtistVoucherRedeemRequest:
+  type: object
+  properties:
+    selections:
+      type: array
+      description: One entry per choice group, naming the product picked at the stand
+      items:
+        $ref: "#/ArtistVoucherChoiceSelection"
+
+ArtistVoucherChoiceOption:
+  type: object
+  required: [productId, name, quantity]
+  properties:
+    productId:
+      type: string
+    name:
+      type: string
+    quantity:
+      type: integer
+
+ArtistVoucherChoiceGroup:
+  type: object
+  required: [choiceGroup, options]
+  properties:
+    choiceGroup:
+      type: integer
+    options:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherChoiceOption"
+
+ArtistVoucherChoiceRequired:
+  type: object
+  required: [code, message, groups]
+  properties:
+    code:
+      type: string
+      enum: [voucher_choice_required]
+    message:
+      type: string
+    groups:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherChoiceGroup"

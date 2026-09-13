@@ -38,7 +38,7 @@ const menu: ProductSummaryDTO = { ...burger, id: "prod_menu", name: "Menü", typ
 
 const batch: ArtistVoucherBatch = {
   id: "batch_1",
-  label: "Aktion Bahnhofstrasse",
+  label: "Verteilaktion Oktober",
   validFrom: "2026-09-20T08:00:00Z",
   validUntil: "2026-09-27T20:00:00Z",
   products: [{ productId: "prod_burger", name: "Burger", quantity: 2, stock: 200 }],
@@ -85,13 +85,13 @@ async function openCreateDialog() {
   mockApi()
   render(<VoucherBatchAdmin />)
   fireEvent.click(await screen.findByRole("button", { name: "Neue Serie" }))
-  fireEvent.change(screen.getByLabelText("Bezeichnung"), { target: { value: "Aktion Bahnhofstrasse" } })
+  fireEvent.change(screen.getByLabelText("Bezeichnung"), { target: { value: "Verteilaktion Oktober" } })
   fireEvent.change(screen.getByLabelText("Gültig ab"), { target: { value: "2026-09-20T10:00" } })
   fireEvent.change(screen.getByLabelText("Gültig bis"), { target: { value: "2026-09-27T22:00" } })
 }
 
 async function pickProduct(name: string) {
-  fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" })
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Produkt" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("option", { name }))
 }
 
@@ -161,18 +161,34 @@ describe("VoucherBatchAdmin create form", () => {
 
     await waitFor(() => expect(postBody()).toBeTruthy())
     expect(postBody()).toEqual({
-      label: "Aktion Bahnhofstrasse",
+      label: "Verteilaktion Oktober",
       validFrom: new Date("2026-09-20T10:00").toISOString(),
       validUntil: new Date("2026-09-27T22:00").toISOString(),
-      products: [{ productId: "prod_burger", quantity: 2 }],
+      products: [{ productId: "prod_burger", quantity: 2, choiceGroup: 0 }],
       count: 120,
     })
     expect(await screen.findByText("120 ausgegeben · 130 eingelöst · 2 widerrufen")).toBeInTheDocument()
   })
 
+  it("renders a choice group as alternatives joined by oder", async () => {
+    mockApi([
+      {
+        ...batch,
+        products: [
+          { productId: "prod_pommes", name: "Pommes", quantity: 1, stock: 90, choiceGroup: 0 },
+          { productId: "prod_burger", name: "Hamburger", quantity: 1, stock: 40, choiceGroup: 1 },
+          { productId: "prod_cheese", name: "Cheeseburger", quantity: 1, stock: 35, choiceGroup: 1 },
+        ],
+      },
+    ])
+    render(<VoucherBatchAdmin />)
+
+    expect(await screen.findByText("1× Pommes, 1× Hamburger oder 1× Cheeseburger")).toBeInTheDocument()
+  })
+
   it("offers only products a slip can carry", async () => {
     await openCreateDialog()
-    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" })
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Produkt" }), { key: "ArrowDown" })
 
     expect(await screen.findByRole("option", { name: "Burger" })).toBeInTheDocument()
     expect(screen.queryByRole("option", { name: "T-Shirt" })).not.toBeInTheDocument()
@@ -224,7 +240,7 @@ describe("VoucherBatchAdmin revoke", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Widerrufen" }))
     const confirm = await screen.findByRole("alertdialog")
-    expect(confirm).toHaveTextContent("bereits eingelöste bleiben unverändert")
+    expect(confirm).toHaveTextContent("Bereits eingelöste bleiben davon unberührt")
     fireEvent.click(within(confirm).getByRole("button", { name: "Widerrufen" }))
 
     await waitFor(() =>

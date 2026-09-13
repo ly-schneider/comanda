@@ -12,8 +12,8 @@ import (
 // PDF generator and the web/Android readers reproduce these exact bytes; any
 // change here is a coordinated wire-format change for every reader.
 const (
-	goldenEntitlementBodyHex = "1174656e616e745f7365656431456e743741623243643945666553f100655542800e537472617373656e616b74696f6e0270726f645f627572676572310270726f645f636f6c6130303101"
-	goldenEntitlementToken   = "EXRlbmFudF9zZWVkMUVudDdBYjJDZDlFZmVT8QBlVUKADlN0cmFzc2VuYWt0aW9uAnByb2RfYnVyZ2VyMQJwcm9kX2NvbGEwMDEBNyeWMz-nngXnxaing0Xb2R9bgcpZ2DxaBU5PnS4gn4eaCL_ugE8WJ0WnadMiMZfAa3d6yUAttvWfIBVvOAMWAQ"
+	goldenEntitlementBodyHex = "1174656e616e745f7365656431456e743741623243643945666553f100655542800e537472617373656e616b74696f6e0370726f645f706f6d6d657331010070726f645f62757267657231010170726f645f636865657365310101"
+	goldenEntitlementToken   = "EXRlbmFudF9zZWVkMUVudDdBYjJDZDlFZmVT8QBlVUKADlN0cmFzc2VuYWt0aW9uA3Byb2RfcG9tbWVzMQEAcHJvZF9idXJnZXIxAQFwcm9kX2NoZWVzZTEBAdPsxohp6QXgYcD6rGBQ6Kx6EcFufqcWSgdetV4pzr-mLD_ZBu7yXd_9uWl8ZTJsVGY_99TamduToPpXOjFAfgI"
 )
 
 func goldenEntitlement() EntitlementPayload {
@@ -24,8 +24,9 @@ func goldenEntitlement() EntitlementPayload {
 		ValidUntil: 1_700_086_400,
 		Label:      "Strassenaktion",
 		Lines: []EntitlementLine{
-			{ProductID: "prod_burger1", Quantity: 2},
-			{ProductID: "prod_cola001", Quantity: 1},
+			{ProductID: "prod_pommes1", Quantity: 1, ChoiceGroup: 0},
+			{ProductID: "prod_burger1", Quantity: 1, ChoiceGroup: 1},
+			{ProductID: "prod_cheese1", Quantity: 1, ChoiceGroup: 1},
 		},
 	}
 }
@@ -249,7 +250,7 @@ func TestEntitlementDecodeRejectsDegenerateLines(t *testing.T) {
 
 	t.Run("zero quantity", func(t *testing.T) {
 		forged := append([]byte(nil), body...)
-		forged[len(forged)-1] = 0
+		forged[len(forged)-2] = 0
 		token := append(forged, ed25519.Sign(priv, forged)...)
 		if _, err := VerifyEntitlement(pub, base64.RawURLEncoding.EncodeToString(token)); err != ErrBadPayload {
 			t.Fatalf("expected ErrBadPayload, got %v", err)

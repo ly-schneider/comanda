@@ -184,11 +184,13 @@ export function verifyVoucherToken(token: string, publicKeyB64Url: string | null
 
 export const VER_ENTITLEMENT = 0x11
 const ENTITLEMENT_HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 4
-const ENTITLEMENT_LINE_LEN = ID_LEN + 1 // product + qty
+const ENTITLEMENT_LINE_LEN = ID_LEN + 2 // product + qty + choice group
 
 export interface EntitlementLine {
   productId: string
   quantity: number
+  /** 0 is always handed out; other groups hand out exactly one of their lines. */
+  choiceGroup: number
 }
 
 export interface EntitlementPayload {
@@ -219,7 +221,11 @@ function parseEntitlement(body: Uint8Array): EntitlementPayload | null {
   for (let k = 0; k < count; k++) {
     const quantity = body[off + ID_LEN]!
     if (quantity === 0) return null
-    lines.push({ productId: asciiOf(body.subarray(off, off + ID_LEN)), quantity })
+    lines.push({
+      productId: asciiOf(body.subarray(off, off + ID_LEN)),
+      quantity,
+      choiceGroup: body[off + ID_LEN + 1]!,
+    })
     off += ENTITLEMENT_LINE_LEN
   }
 
