@@ -79,3 +79,173 @@ ArtistVoucherRevocations:
     asOf:
       type: string
       format: date-time
+
+ArtistVoucherBatchProduct:
+  type: object
+  required: [productId, name, quantity, stock]
+  properties:
+    productId:
+      type: string
+    name:
+      type: string
+      description: Product name snapshotted when the batch was issued
+    quantity:
+      type: integer
+      description: Units of this product one voucher entitles the holder to
+    stock:
+      type: integer
+      description: Current stock of the product, so the admin can compare it against the outstanding slips
+
+ArtistVoucherBatch:
+  type: object
+  required:
+    [
+      id,
+      label,
+      validFrom,
+      validUntil,
+      products,
+      issued,
+      redeemed,
+      revoked,
+      outstanding,
+      status,
+      createdAt,
+    ]
+  properties:
+    id:
+      type: string
+    label:
+      type: string
+    validFrom:
+      type: string
+      format: date-time
+    validUntil:
+      type: string
+      format: date-time
+    products:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherBatchProduct"
+    issued:
+      type: integer
+    redeemed:
+      type: integer
+    revoked:
+      type: integer
+    outstanding:
+      type: integer
+      description: issued − redeemed − revoked, i.e. slips that can still be handed in
+    status:
+      type: string
+      enum: [scheduled, active, expired, revoked]
+    createdAt:
+      type: string
+      format: date-time
+
+ArtistVoucherBatchListResponse:
+  type: object
+  required: [batches]
+  properties:
+    batches:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherBatch"
+
+ArtistVoucherBatchCreateProduct:
+  type: object
+  required: [productId, quantity]
+  properties:
+    productId:
+      type: string
+    quantity:
+      type: integer
+      minimum: 1
+      maximum: 255
+
+ArtistVoucherBatchCreateRequest:
+  type: object
+  required: [label, validFrom, validUntil, products, count]
+  properties:
+    label:
+      type: string
+      minLength: 1
+      maxLength: 80
+    validFrom:
+      type: string
+      format: date-time
+    validUntil:
+      type: string
+      format: date-time
+    products:
+      type: array
+      minItems: 1
+      items:
+        $ref: "#/ArtistVoucherBatchCreateProduct"
+    count:
+      type: integer
+      minimum: 1
+      maximum: 500
+      description: How many single-use vouchers to mint
+
+ArtistVoucherBatchVoucher:
+  type: object
+  required: [id, status]
+  properties:
+    id:
+      type: string
+    status:
+      type: string
+      enum: [scheduled, active, expired, revoked, redeemed]
+    redeemedAt:
+      type: string
+      format: date-time
+      nullable: true
+    revokedAt:
+      type: string
+      format: date-time
+      nullable: true
+
+ArtistVoucherBatchDetail:
+  type: object
+  required: [batch, vouchers]
+  properties:
+    batch:
+      $ref: "#/ArtistVoucherBatch"
+    vouchers:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherBatchVoucher"
+
+ArtistVoucherRedeemItem:
+  type: object
+  required: [productId, name, quantity]
+  properties:
+    productId:
+      type: string
+    name:
+      type: string
+    quantity:
+      type: integer
+
+ArtistVoucherRedeemResponse:
+  type: object
+  required: [voucherId, label, orderId, redeemedAt, alreadyRedeemed, items]
+  properties:
+    voucherId:
+      type: string
+    label:
+      type: string
+    orderId:
+      type: string
+      description: The gratis order minted for this voucher
+    redeemedAt:
+      type: string
+      format: date-time
+    alreadyRedeemed:
+      type: boolean
+      description: True when the voucher was already spent; the original order is returned unchanged
+    items:
+      type: array
+      items:
+        $ref: "#/ArtistVoucherRedeemItem"

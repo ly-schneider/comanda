@@ -1,10 +1,11 @@
 /**
  * Offline verification of the signed station QR tokens — the sole forgery
- * barrier on the station's offline path. Two token families share the Ed25519
- * scheme and the tenant's key: the pickup-order token (0x03, `verifyQrToken`)
- * and the artist-voucher token (0x10, `verifyVoucherToken`). Wire format:
- * `internal/qrsign` doc.go + voucher.go. Pure-JS (@noble/ed25519), not
- * WebCrypto — Safari has no Ed25519 in SubtleCrypto.
+ * barrier on the station's offline path. Three token families share the Ed25519
+ * scheme and the tenant's key: the pickup-order token (0x03, `verifyQrToken`),
+ * the artist-voucher pass (0x10, `verifyVoucherToken`) and the single-use
+ * entitlement voucher (0x11, `verifyEntitlementToken`). Wire format:
+ * `internal/qrsign` doc.go, voucher.go and entitlement.go. Pure-JS
+ * (@noble/ed25519), not WebCrypto — Safari has no Ed25519 in SubtleCrypto.
  */
 
 import * as ed from "@noble/ed25519"
@@ -82,9 +83,10 @@ function parseV3(body: Uint8Array): QrPayload | null {
   return { v: 3, t, o, i, l }
 }
 
-// A valid signature alone is never enough — the caller must still enforce tenant
-// scoping (a valid sig only proves *some* tenant signed it).
-export function verifyQrToken(token: string, publicKeyB64Url: string | null | undefined): VerifyResult {
+function verifiedBody(
+  token: string,
+  publicKeyB64Url: string | null | undefined
+): { ok: true; body: Uint8Array } | { ok: false; reason: VerifyFailure } {
   if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
   const pub = base64UrlToBytes(publicKeyB64Url)
   if (!pub || pub.length !== PUBLIC_KEY_SIZE) return { ok: false, reason: "bad-signature" }
@@ -94,19 +96,25 @@ export function verifyQrToken(token: string, publicKeyB64Url: string | null | un
 
   const split = raw.length - SIGNATURE_SIZE
   const body = raw.subarray(0, split)
-  const sig = raw.subarray(split)
 
   let valid: boolean
   try {
-    valid = ed.verify(sig, body, pub)
+    valid = ed.verify(raw.subarray(split), body, pub)
   } catch {
     // noble throws on structurally invalid points/signatures — same outcome.
     return { ok: false, reason: "bad-signature" }
   }
-  if (!valid) return { ok: false, reason: "bad-signature" }
+  return valid ? { ok: true, body } : { ok: false, reason: "bad-signature" }
+}
 
-  if (body[0] !== VER_V3) return { ok: false, reason: "unsupported-version" }
-  const payload = parseV3(body)
+// A valid signature alone is never enough — the caller must still enforce tenant
+// scoping (a valid sig only proves *some* tenant signed it).
+export function verifyQrToken(token: string, publicKeyB64Url: string | null | undefined): VerifyResult {
+  const verified = verifiedBody(token, publicKeyB64Url)
+  if (!verified.ok) return verified
+
+  if (verified.body[0] !== VER_V3) return { ok: false, reason: "unsupported-version" }
+  const payload = parseV3(verified.body)
   return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
 }
 
@@ -166,26 +174,73 @@ function parseVoucher(body: Uint8Array): VoucherPayload | null {
 // enforce tenant scoping and the validity window (see evaluateVoucher). Rejects
 // a 0x03 pickup token as unsupported-version.
 export function verifyVoucherToken(token: string, publicKeyB64Url: string | null | undefined): VoucherVerifyResult {
-  if (!publicKeyB64Url) return { ok: false, reason: "bad-signature" }
-  const pub = base64UrlToBytes(publicKeyB64Url)
-  if (!pub || pub.length !== PUBLIC_KEY_SIZE) return { ok: false, reason: "bad-signature" }
+  const verified = verifiedBody(token, publicKeyB64Url)
+  if (!verified.ok) return verified
 
-  const raw = base64UrlToBytes(token.trim())
-  if (!raw || raw.length <= SIGNATURE_SIZE) return { ok: false, reason: "malformed" }
+  if (verified.body[0] !== VER_VOUCHER) return { ok: false, reason: "unsupported-version" }
+  const payload = parseVoucher(verified.body)
+  return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
+}
 
-  const split = raw.length - SIGNATURE_SIZE
-  const body = raw.subarray(0, split)
-  const sig = raw.subarray(split)
+export const VER_ENTITLEMENT = 0x11
+const ENTITLEMENT_HEADER_LEN = 1 + ID_LEN + ID_LEN + 4 + 4
+const ENTITLEMENT_LINE_LEN = ID_LEN + 1 // product + qty
 
-  let valid: boolean
-  try {
-    valid = ed.verify(sig, body, pub)
-  } catch {
-    return { ok: false, reason: "bad-signature" }
+export interface EntitlementLine {
+  productId: string
+  quantity: number
+}
+
+export interface EntitlementPayload {
+  tenantId: string
+  voucherId: string
+  validFrom: number // Unix seconds
+  validUntil: number // Unix seconds
+  label: string
+  lines: EntitlementLine[]
+}
+
+export type EntitlementVerifyResult = { ok: true; payload: EntitlementPayload } | { ok: false; reason: VerifyFailure }
+
+function parseEntitlement(body: Uint8Array): EntitlementPayload | null {
+  if (body.length < ENTITLEMENT_HEADER_LEN + 1) return null
+  const labelLen = body[ENTITLEMENT_HEADER_LEN]!
+  let off = ENTITLEMENT_HEADER_LEN + 1
+  if (body.length < off + labelLen + 1) return null
+  const label = utf8.decode(body.subarray(off, off + labelLen))
+  off += labelLen
+
+  const count = body[off]!
+  off += 1
+  if (count === 0) return null
+  if (body.length !== off + count * ENTITLEMENT_LINE_LEN) return null
+
+  const lines: EntitlementLine[] = []
+  for (let k = 0; k < count; k++) {
+    const quantity = body[off + ID_LEN]!
+    if (quantity === 0) return null
+    lines.push({ productId: asciiOf(body.subarray(off, off + ID_LEN)), quantity })
+    off += ENTITLEMENT_LINE_LEN
   }
-  if (!valid) return { ok: false, reason: "bad-signature" }
 
-  if (body[0] !== VER_VOUCHER) return { ok: false, reason: "unsupported-version" }
-  const payload = parseVoucher(body)
+  return {
+    tenantId: asciiOf(body.subarray(1, 1 + ID_LEN)),
+    voucherId: asciiOf(body.subarray(1 + ID_LEN, 1 + 2 * ID_LEN)),
+    validFrom: readU32BE(body, 1 + 2 * ID_LEN),
+    validUntil: readU32BE(body, 1 + 2 * ID_LEN + 4),
+    label,
+    lines,
+  }
+}
+
+export function verifyEntitlementToken(
+  token: string,
+  publicKeyB64Url: string | null | undefined
+): EntitlementVerifyResult {
+  const verified = verifiedBody(token, publicKeyB64Url)
+  if (!verified.ok) return verified
+
+  if (verified.body[0] !== VER_ENTITLEMENT) return { ok: false, reason: "unsupported-version" }
+  const payload = parseEntitlement(verified.body)
   return payload ? { ok: true, payload } : { ok: false, reason: "bad-payload" }
 }

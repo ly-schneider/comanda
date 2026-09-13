@@ -271,8 +271,18 @@ paths:
     $ref: "paths/plugins/artist-voucher.yaml#/print"
   /plugins/artist-voucher/vouchers/{voucherId}/revoke:
     $ref: "paths/plugins/artist-voucher.yaml#/revoke"
+  /plugins/artist-voucher/vouchers/{voucherId}/redeem:
+    $ref: "paths/plugins/artist-voucher.yaml#/redeem"
   /plugins/artist-voucher/revocations:
     $ref: "paths/plugins/artist-voucher.yaml#/revocations"
+  /plugins/artist-voucher/batches:
+    $ref: "paths/plugins/artist-voucher.yaml#/batches"
+  /plugins/artist-voucher/batches/{batchId}:
+    $ref: "paths/plugins/artist-voucher.yaml#/batch"
+  /plugins/artist-voucher/batches/{batchId}/print.pdf:
+    $ref: "paths/plugins/artist-voucher.yaml#/batch-print"
+  /plugins/artist-voucher/batches/{batchId}/revoke:
+    $ref: "paths/plugins/artist-voucher.yaml#/batch-revoke"
 
   /plugins/staff-perks/campaigns:
     $ref: "paths/plugins/staff-perks.yaml#/collection"

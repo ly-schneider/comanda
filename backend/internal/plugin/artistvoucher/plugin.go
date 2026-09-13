@@ -29,13 +29,17 @@ func New() *Plugin {
 }
 
 func (p *Plugin) Key() string  { return Key }
-func (p *Plugin) Name() string { return "Artist Voucher" }
+func (p *Plugin) Name() string { return "Gutscheine" }
 
 func (p *Plugin) Module() fx.Option {
 	return fx.Options(
 		fx.Provide(
 			func(r repository.CategoryRepository) CategoryLookup { return r },
+			func(s coreservice.ProductService) ProductLookup { return s },
 			func(s coreservice.QRKeyService) KeyProvider { return s },
+			func(s coreservice.PaymentService) OrderMinter { return s },
+			func(r repository.OrderRepository) OrderSettler { return r },
+			func(r repository.InventoryLedgerRepository) StockLookup { return r },
 			NewVoucherRepository,
 			NewService,
 		),
@@ -61,10 +65,16 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
 			gr.Post("/vouchers", w.ArtistVoucherCreate)
 			gr.Post("/vouchers/{voucherId}/revoke", w.ArtistVoucherRevoke)
 			gr.Delete("/vouchers/{voucherId}", w.ArtistVoucherDelete)
+			gr.Get("/batches", w.ArtistVoucherBatchList)
+			gr.Post("/batches", w.ArtistVoucherBatchCreate)
+			gr.Get("/batches/{batchId}", w.ArtistVoucherBatchGet)
+			gr.Get("/batches/{batchId}/print.pdf", w.ArtistVoucherBatchPrint)
+			gr.Post("/batches/{batchId}/revoke", w.ArtistVoucherBatchRevoke)
 		})
 		r.Group(func(gr chi.Router) {
 			gr.Use(mw.RequireDevice(auth.DeviceTypeStation))
 			gr.Get("/revocations", w.ArtistVoucherRevocations)
+			gr.Post("/vouchers/{voucherId}/redeem", w.ArtistVoucherRedeem)
 		})
 	}
 }

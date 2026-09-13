@@ -87,7 +87,7 @@ export function AdminSidebar({ badges, version }: { badges?: Partial<Record<stri
     },
     {
       href: "/admin/artist-voucher",
-      label: "Artist Voucher",
+      label: "Gutscheine",
       icon: <Sparkles className="size-5" />,
       requiredTier: "staff",
       requiredPlugin: "artist-voucher",

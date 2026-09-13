@@ -21,6 +21,7 @@ import * as ed from "@noble/ed25519"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { bytesToBase64Url } from "@/lib/base64url"
 import { idbLedger } from "./ledger"
+import { DB_NAME, DB_VERSION } from "./offline-db"
 import { signV3 } from "./qr-test-helpers"
 import { type QrPayload, verifyQrToken } from "./qr-verify"
 import { type RedeemDeps, redeemScan } from "./redeem"
@@ -150,7 +151,7 @@ describe("offline redemption flow (integration)", () => {
     // Open a raw IDB connection that bypasses the module's cached handle to
     // confirm the entry is durably stored, not just in process memory.
     const fromDisk = await new Promise<unknown>((resolve, reject) => {
-      const req = indexedDB.open("comanda-station", 4)
+      const req = indexedDB.open(DB_NAME, DB_VERSION)
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("ledger", "readonly")

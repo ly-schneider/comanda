@@ -245,3 +245,269 @@ revocations:
           application/json:
             schema:
               $ref: "../../schemas/common.yaml#/Error"
+
+batches:
+  get:
+    tags: [Plugins]
+    summary: List single-use voucher batches
+    description: >
+      Returns every batch of single-use vouchers with its issue/redeem/outstanding
+      counts and the current stock of each entitled product, so the admin can see
+      what is still in the field against what is left to hand out.
+    operationId: artistVoucherBatchList
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Batches
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherBatchListResponse"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  post:
+    tags: [Plugins]
+    summary: Issue a batch of single-use vouchers
+    description: >
+      Mints `count` independent vouchers that share a label, validity window and
+      product snapshot. Each carries its own signed token and redeems exactly
+      once. Only simple products without variants can be entitled — the token
+      carries no variant id, and only a simple product moves inventory.
+    operationId: artistVoucherBatchCreate
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherBatchCreateRequest"
+    responses:
+      "201":
+        description: Batch issued
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherBatch"
+      "400":
+        description: Invalid batch input
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+batch:
+  parameters:
+    - name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Plugins]
+    summary: Get a voucher batch
+    description: Returns the batch together with every voucher in it and its individual status.
+    operationId: artistVoucherBatchGet
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Batch
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherBatchDetail"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Batch not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+batch-print:
+  parameters:
+    - name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Plugins]
+    summary: Print a voucher batch
+    description: >
+      Streams a printable PDF with one badge-sized slip per voucher, each
+      carrying its own byte-mode QR, so every slip handed out redeems exactly once.
+    operationId: artistVoucherBatchPrint
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: PDF document of voucher slips
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      "400":
+        description: Invalid batch id
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Batch not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+batch-revoke:
+  parameters:
+    - name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Plugins]
+    summary: Revoke a voucher batch
+    description: >
+      Revokes every voucher in the batch that has not been redeemed yet; already
+      redeemed ones are history and stay untouched. Idempotent.
+    operationId: artistVoucherBatchRevoke
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Updated batch
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherBatch"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Batch not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+redeem:
+  parameters:
+    - name: voucherId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Plugins]
+    summary: Redeem a single-use voucher
+    description: |
+      Mints the gratis order behind a single-use voucher and stamps it redeemed.
+      The order runs through the normal checkout path, so stock moves through
+      `inventory_ledger` exactly as it does for a paid order, and settles as
+      `GRATIS_PLUGIN` at its full nominal total.
+
+      Idempotent on the voucher id: a retried upload returns the original order
+      with `alreadyRedeemed: true` instead of minting a second one.
+
+      A sold-out product returns `409 voucher_product_sold_out` with the product
+      names in `details.items` — the voucher itself is fine, the food is gone.
+    operationId: artistVoucherRedeem
+    security:
+      - deviceAuth: []
+    responses:
+      "200":
+        description: Voucher redeemed
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/artist-voucher.yaml#/ArtistVoucherRedeemResponse"
+      "400":
+        description: Invalid voucher id, or the voucher is not single-use
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Wrong device type
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "404":
+        description: Voucher not found
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "409":
+        description: Voucher revoked, outside its validity window, or its product is sold out
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"

@@ -12,11 +12,10 @@
  * with exponential backoff — never dropped — so no redemption is lost.
  */
 
+import { backoffMs } from "@/lib/station/backoff"
 import type { StationOutbox } from "@/lib/station/sync-queue"
 
 const REDEEM_ENDPOINT = "/api/v1/stations/redeem"
-const BASE_BACKOFF_MS = 2000
-const MAX_BACKOFF_MS = 60_000
 
 export interface FlushDeps {
   outbox: StationOutbox
@@ -34,10 +33,6 @@ export interface FlushSummary {
   skipped: number
   /** Items remaining in the outbox after this pass. */
   remaining: number
-}
-
-function backoffMs(attempts: number): number {
-  return Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS)
 }
 
 let inFlight: Promise<FlushSummary> | null = null

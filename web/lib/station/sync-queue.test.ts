@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto"
 import { beforeEach, describe, expect, it } from "vitest"
+import { DB_NAME, DB_VERSION } from "./offline-db"
 import { idbOutbox, memoryOutbox, type StationOutbox } from "./sync-queue"
 
 // Both implementations satisfy the same contract; run the suite against each.
@@ -79,7 +80,7 @@ describe("idbOutbox persistence", () => {
     await outbox.enqueue({ orderId: "order_persist", tenantId: "tenant_seed1", productIds: ["pX"] }, 4242)
 
     const fromDisk = await new Promise<unknown>((resolve, reject) => {
-      const req = indexedDB.open("comanda-station", 4)
+      const req = indexedDB.open(DB_NAME, DB_VERSION)
       req.onsuccess = () => {
         const db = req.result
         const tx = db.transaction("outbox", "readonly")

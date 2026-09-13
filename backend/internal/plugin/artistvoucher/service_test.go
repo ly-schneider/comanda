@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"backend/internal/generated/ent"
+	"backend/internal/generated/ent/voucher"
 	"backend/internal/qrsign"
 	"backend/internal/repository"
 
@@ -22,19 +23,28 @@ const testTenantID = "tenant_test1"
 type fakeRepo struct {
 	rows        map[string]*ent.Voucher
 	order       []string
+	locked      []string
 	revokeCalls int
 	deleteCalls int
+	redeemCalls int
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[string]*ent.Voucher{}} }
 
 func (f *fakeRepo) Create(_ context.Context, p CreateParams) (*ent.Voucher, error) {
+	kind := p.Kind
+	if kind == "" {
+		kind = voucher.KindPass
+	}
 	v := &ent.Voucher{
 		ID:         p.ID,
+		Kind:       kind,
 		Label:      p.Label,
 		ValidFrom:  p.ValidFrom,
 		ValidUntil: p.ValidUntil,
 		Categories: p.Categories,
+		Products:   p.Products,
+		BatchID:    p.BatchID,
 		Token:      p.Token,
 		CreatedAt:  time.Now(),
 	}
@@ -43,20 +53,79 @@ func (f *fakeRepo) Create(_ context.Context, p CreateParams) (*ent.Voucher, erro
 	return v, nil
 }
 
+func (f *fakeRepo) CreateMany(ctx context.Context, params []CreateParams) ([]*ent.Voucher, error) {
+	out := make([]*ent.Voucher, 0, len(params))
+	for _, p := range params {
+		row, err := f.Create(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListByKind(_ context.Context, kind voucher.Kind) ([]*ent.Voucher, error) {
+	out := make([]*ent.Voucher, 0)
+	for i := len(f.order) - 1; i >= 0; i-- {
+		if row := f.rows[f.order[i]]; row.Kind == kind {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListByBatch(_ context.Context, batchID string) ([]*ent.Voucher, error) {
+	out := make([]*ent.Voucher, 0)
+	for _, id := range f.order {
+		if row := f.rows[id]; row.BatchID == batchID {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) SetRedeemed(_ context.Context, id string, p RedeemParams) (*ent.Voucher, error) {
+	v, ok := f.rows[id]
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	f.redeemCalls++
+	at := p.At
+	v.RedeemedAt = &at
+	v.RedeemedOrderID = p.OrderID
+	v.RedeemedDeviceID = p.DeviceID
+	return v, nil
+}
+
+func (f *fakeRepo) RevokeBatchOutstanding(_ context.Context, batchID string, at time.Time) (int, error) {
+	n := 0
+	for _, id := range f.order {
+		v := f.rows[id]
+		if v.BatchID != batchID || v.RevokedAt != nil || v.RedeemedAt != nil {
+			continue
+		}
+		t := at
+		v.RevokedAt = &t
+		n++
+	}
+	return n, nil
+}
+
+func (f *fakeRepo) LockByID(_ context.Context, id string) error {
+	if _, ok := f.rows[id]; !ok {
+		return repository.ErrNotFound
+	}
+	f.locked = append(f.locked, id)
+	return nil
+}
+
 func (f *fakeRepo) GetByID(_ context.Context, id string) (*ent.Voucher, error) {
 	v, ok := f.rows[id]
 	if !ok {
 		return nil, repository.ErrNotFound
 	}
 	return v, nil
-}
-
-func (f *fakeRepo) List(_ context.Context) ([]*ent.Voucher, error) {
-	out := make([]*ent.Voucher, 0, len(f.order))
-	for i := len(f.order) - 1; i >= 0; i-- {
-		out = append(out, f.rows[f.order[i]])
-	}
-	return out, nil
 }
 
 func (f *fakeRepo) SetRevoked(_ context.Context, id string, at time.Time) (*ent.Voucher, error) {
@@ -117,14 +186,36 @@ func (f *fakeKeys) EnsureTenantKey(context.Context) (ed25519.PrivateKey, ed25519
 	return f.priv, f.pub, nil
 }
 
-func newTestService(t *testing.T, cats map[string]*ent.Category) (*service, *fakeRepo, *fakeKeys) {
+type testEnv struct {
+	svc      *service
+	repo     *fakeRepo
+	keys     *fakeKeys
+	products *fakeProducts
+	minter   *fakeMinter
+	settler  *fakeSettler
+	stock    *fakeStock
+}
+
+func newTestEnv(t *testing.T, cats map[string]*ent.Category) *testEnv {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	repo := newFakeRepo()
-	keys := &fakeKeys{priv: priv, pub: pub}
-	svc := NewService(repo, &fakeCategories{byID: cats}, keys).(*service)
-	return svc, repo, keys
+	env := &testEnv{
+		repo:     newFakeRepo(),
+		keys:     &fakeKeys{priv: priv, pub: pub},
+		products: &fakeProducts{byID: productFixtures()},
+		minter:   &fakeMinter{},
+		settler:  &fakeSettler{},
+		stock:    &fakeStock{levels: map[string]int{}},
+	}
+	env.svc = NewService(env.repo, &fakeCategories{byID: cats}, env.products, env.keys, env.minter, env.settler, env.stock).(*service)
+	return env
+}
+
+func newTestService(t *testing.T, cats map[string]*ent.Category) (*service, *fakeRepo, *fakeKeys) {
+	t.Helper()
+	env := newTestEnv(t, cats)
+	return env.svc, env.repo, env.keys
 }
 
 func tenantCtx() context.Context {
@@ -256,7 +347,7 @@ func TestRevokeNotFound(t *testing.T) {
 func seedVoucher(repo *fakeRepo, id string, revoked bool, validUntil time.Time) {
 	now := time.Now()
 	cats, _ := json.Marshal([]Category{{ID: "cat_food0001", Name: "Food"}})
-	v := &ent.Voucher{ID: id, Label: "x", ValidFrom: now.Add(-2 * time.Hour), ValidUntil: validUntil, Categories: cats, CreatedAt: now}
+	v := &ent.Voucher{ID: id, Kind: voucher.KindPass, Label: "x", ValidFrom: now.Add(-2 * time.Hour), ValidUntil: validUntil, Categories: cats, CreatedAt: now}
 	if revoked {
 		r := now.Add(-time.Minute)
 		v.RevokedAt = &r
