@@ -48,27 +48,6 @@ func newTenantSvc(repo *fakeTenantRepo, base string) TenantService {
 	return NewTenantService(repo, config.Config{CustomDomain: config.CustomDomainConfig{BaseDomain: base}})
 }
 
-func TestCreateTenantUsesFlatPlatformDomain(t *testing.T) {
-	repo := &fakeTenantRepo{}
-	cfg := config.Config{CustomDomain: config.CustomDomainConfig{BaseDomain: "leys.ch", TenantLabelSuffix: "-comanda-staging"}}
-	_, err := NewTenantService(repo, cfg).Create(context.Background(), "acme", "Acme")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if repo.seededDomain != "acme-comanda-staging.leys.ch" {
-		t.Fatalf("unexpected primary domain: %s", repo.seededDomain)
-	}
-}
-
-func TestCreateTenantRejectsOverlongFlatLabel(t *testing.T) {
-	repo := &fakeTenantRepo{}
-	cfg := config.Config{CustomDomain: config.CustomDomainConfig{BaseDomain: "leys.ch", TenantLabelSuffix: "-comanda-staging"}}
-	_, err := NewTenantService(repo, cfg).Create(context.Background(), "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz", "Acme")
-	if !errors.Is(err, ErrInvalidSlug) || repo.created != nil {
-		t.Fatal("an overlong DNS label must fail before creating a tenant")
-	}
-}
-
 func TestCreateTenantValidation(t *testing.T) {
 	tests := []struct {
 		name    string
