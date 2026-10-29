@@ -63,7 +63,8 @@ type PaymentReconcileConfig struct {
 type CustomDomainConfig struct {
 	// BaseDomain is the platform's own apex (e.g. comanda.leys.ch). Hostnames at
 	// or under it are platform subdomains, not BYO domains, and are rejected.
-	BaseDomain string
+	BaseDomain        string
+	TenantLabelSuffix string
 	// CNAMETarget is the value tenants point their custom domain's CNAME at, and
 	// the host the ownership check requires the CNAME to resolve to.
 	CNAMETarget string
@@ -289,13 +290,14 @@ func Load() Config {
 			RequireDownloadToken: getEnvBoolOptional("ANDROID_REQUIRE_DOWNLOAD_TOKEN"),
 		},
 		CustomDomain: CustomDomainConfig{
-			BaseDomain:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
-			CNAMETarget:      strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_CNAME_TARGET"))),
-			OriginHost:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_ORIGIN_HOST"))),
-			VerifyInterval:   getEnvDurationWithDefault("CUSTOM_DOMAIN_VERIFY_INTERVAL", 60*time.Second),
-			UnverifiedTTL:    getEnvDurationWithDefault("CUSTOM_DOMAIN_UNVERIFIED_TTL", 7*24*time.Hour),
-			SweepInterval:    getEnvDurationWithDefault("CUSTOM_DOMAIN_SWEEP_INTERVAL", time.Hour),
-			InternalAPIToken: getEnvOptional("INTERNAL_API_TOKEN"),
+			BaseDomain:        strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_BASE"))),
+			TenantLabelSuffix: strings.ToLower(strings.TrimSpace(getEnvOptional("TENANT_LABEL_SUFFIX"))),
+			CNAMETarget:       strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_CNAME_TARGET"))),
+			OriginHost:        strings.ToLower(strings.TrimSpace(getEnvOptional("CUSTOM_DOMAIN_ORIGIN_HOST"))),
+			VerifyInterval:    getEnvDurationWithDefault("CUSTOM_DOMAIN_VERIFY_INTERVAL", 60*time.Second),
+			UnverifiedTTL:     getEnvDurationWithDefault("CUSTOM_DOMAIN_UNVERIFIED_TTL", 7*24*time.Hour),
+			SweepInterval:     getEnvDurationWithDefault("CUSTOM_DOMAIN_SWEEP_INTERVAL", time.Hour),
+			InternalAPIToken:  getEnvOptional("INTERNAL_API_TOKEN"),
 		},
 		Inventory: InventoryConfig{
 			PendingOrderTTL:      getEnvDurationWithDefault("INVENTORY_PENDING_TTL", 30*time.Minute),

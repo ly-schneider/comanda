@@ -305,6 +305,7 @@ func TestArticleAggregationSplitsDirectFromBundleSales(t *testing.T) {
 	}
 	if shirtArticle == nil {
 		t.Fatal("no aggregated row for the shirt")
+		return
 	}
 	if shirtArticle.Quantity != 3 {
 		t.Fatalf("shirt quantity = %d, want 3 (2 direct + 1 via bundle)", shirtArticle.Quantity)
