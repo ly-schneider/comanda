@@ -64,14 +64,6 @@ func (s *tenantService) Create(ctx context.Context, slug, name string) (*ent.Ten
 	if _, reserved := reservedSlugs[slug]; reserved {
 		return nil, ErrReservedSlug
 	}
-	hostname := ""
-	if base := s.cfg.CustomDomain.BaseDomain; base != "" {
-		label := slug + s.cfg.CustomDomain.TenantLabelSuffix
-		if len(label) > 63 {
-			return nil, ErrInvalidSlug
-		}
-		hostname = label + "." + base
-	}
 
 	created, err := s.tenants.Create(ctx, slug, name)
 	if err != nil {
@@ -82,8 +74,8 @@ func (s *tenantService) Create(ctx context.Context, slug, name string) (*ent.Ten
 	if err := s.tenants.SeedSettings(ctx, created.ID); err != nil {
 		return nil, err
 	}
-	if hostname != "" {
-		if err := s.tenants.SeedPrimaryDomain(ctx, created.ID, hostname); err != nil {
+	if base := s.cfg.CustomDomain.BaseDomain; base != "" {
+		if err := s.tenants.SeedPrimaryDomain(ctx, created.ID, slug+"."+base); err != nil {
 			return nil, err
 		}
 	}
