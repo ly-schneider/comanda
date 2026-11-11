@@ -1,4 +1,6 @@
-export const CONTACT_EMAIL = "levyn.schneider@leys.ch"
+import { PLATFORM_OPERATOR } from "@/lib/legal"
+
+export const CONTACT_EMAIL = PLATFORM_OPERATOR.email
 export const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=Comanda`
 
 export const LINKS = {
