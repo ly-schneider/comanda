@@ -138,7 +138,7 @@ Comanda is source-available under the [Business Source License 1.1](LICENSE), no
 
 - **Free** for individuals, non-profits, schools, and organizations with fewer than 50 people and less than USD 5M annual revenue, including self-hosting it for your own organization and events in production.
 - **Not allowed** without a commercial license: offering Comanda to others as a hosted or managed service, or embedding it in a product you sell.
-- **Larger organizations** need a commercial license for production use. Contact levyn.schneider@leys.ch.
+- **Larger organizations** need a commercial license for production use. Contact contact@leys.ch.
 - Each version converts to the GNU AGPL v3.0 or later four years after it is published.
 
 Reading, modifying and running Comanda for development, testing and evaluation is always allowed.
