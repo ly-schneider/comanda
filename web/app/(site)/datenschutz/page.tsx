@@ -1,9 +1,17 @@
 import { Metadata } from "next"
 import { OperatorBlock } from "@/components/legal/operator-block"
+import { PlatformPrivacy } from "@/components/marketing/platform-privacy"
 import { FOREIGN_TRANSFERS, SUBPROCESSORS } from "@/lib/legal"
 import { getBranding } from "@/lib/server/branding"
+import { isPlatformRequest } from "@/lib/server/host"
 
 export async function generateMetadata(): Promise<Metadata> {
+  if (await isPlatformRequest()) {
+    return {
+      title: "Datenschutz",
+      description: "Welche Daten auf comanda.leys.ch anfallen und was damit passiert, nach dem Schweizer nDSG.",
+    }
+  }
   const branding = await getBranding()
   return {
     title: "Datenschutzerklärung",
@@ -12,6 +20,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PrivacyPolicyPage() {
+  if (await isPlatformRequest()) return <PlatformPrivacy />
+
   const branding = await getBranding()
   const entityName = branding.legal.name || branding.displayName
   const address = branding.legal.address

@@ -1,5 +1,5 @@
 import { headers } from "next/headers"
-import { normalizeHost } from "@/lib/tenant"
+import { normalizeHost, parseTenantHost } from "@/lib/tenant"
 
 /**
  * Returns the canonical public host for the current server-side request.
@@ -13,4 +13,8 @@ import { normalizeHost } from "@/lib/tenant"
 export async function getRequestHost(): Promise<string> {
   const hdrs = await headers()
   return normalizeHost(hdrs.get("x-comanda-host") || hdrs.get("x-forwarded-host") || hdrs.get("host"))
+}
+
+export async function isPlatformRequest(): Promise<boolean> {
+  return parseTenantHost(await getRequestHost()).type === "platform"
 }
