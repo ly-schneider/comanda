@@ -1,7 +1,7 @@
 import { Metadata } from "next"
 import { FloatingBottomNav } from "@/components/cart/floating-bottom-nav"
 import { CatalogGridLive } from "@/components/catalog/catalog-grid-live"
-import { PlatformLanding } from "@/components/landing/platform-landing"
+import { MarketingLanding } from "@/components/marketing/marketing-landing"
 import { listCategories } from "@/lib/api/categories"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
@@ -13,7 +13,17 @@ import { CategoryDTO, ListResponse, ProductDTO } from "@/types"
 export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost()
   if (parseTenantHost(host).type === "platform") {
-    return {}
+    return {
+      title: { absolute: "Comanda – Kasse und Handy-Bestellung für Stände" },
+      description:
+        "Comanda ist Kasse und Handy-Bestellung für Stände an Anlässen und Festivals. Bestellen am Handy, zahlen mit TWINT, abholen per Code.",
+      openGraph: {
+        title: "Comanda – Kasse und Handy-Bestellung für Stände",
+        description: "Damit die Schlange am Stand kürzer wird. Gebaut und eingerichtet von Levyn Schneider.",
+        url: "/",
+        images: [{ url: "/assets/images/marketing/kasse-festival.jpg", width: 2000, height: 1333 }],
+      },
+    }
   }
   return {
     title: "Sortiment",
@@ -31,7 +41,7 @@ export const dynamic = "force-dynamic"
 export default async function HomePage() {
   const host = await getRequestHost()
   if (parseTenantHost(host).type === "platform") {
-    return <PlatformLanding />
+    return <MarketingLanding />
   }
 
   const hostHeaders: Record<string, string> = host ? { "X-Forwarded-Host": host } : {}

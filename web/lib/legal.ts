@@ -19,6 +19,7 @@ export const SUBPROCESSORS: readonly SubProcessor[] = [
   { name: "Scaleway SAS", location: "Frankreich, Paris (EU)", purpose: "Datenbank sowie Datei- und Objektspeicher" },
   { name: "Cloudflare, Inc.", location: "USA", purpose: "CDN und Proxy für die Auslieferung von Inhalten" },
   { name: "Sentry", location: "EU (EU-Datenhaltung)", purpose: "Fehler- und Betriebsüberwachung der Plattform" },
+  { name: "Umami Software, Inc.", location: "USA", purpose: "Besucherstatistik ohne Cookies und ohne Personendaten" },
   { name: "Payrexx AG", location: "Thun, Schweiz", purpose: "Zahlungsabwicklung (TWINT)" },
   { name: "Plunk (Amazon SES)", location: "USA", purpose: "Versand transaktionaler E-Mails" },
   { name: "Google LLC", location: "USA", purpose: "Anmeldung via Google (nur bei Wahl dieser Anmeldemethode)" },
@@ -26,4 +27,4 @@ export const SUBPROCESSORS: readonly SubProcessor[] = [
 
 // Countries without a Federal-Council adequacy decision that data may reach via
 // the providers above. EU/EEA transfers are not listed (recognised as adequate).
-export const FOREIGN_TRANSFERS = [{ country: "USA", parties: "Google, Plunk (Amazon SES), Cloudflare" }] as const
+export const FOREIGN_TRANSFERS = [{ country: "USA", parties: "Google, Plunk (Amazon SES), Cloudflare, Umami" }] as const
