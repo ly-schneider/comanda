@@ -16,13 +16,13 @@ const SUMMARY = [
     icon: Check,
     tone: "bg-success/10 text-success",
     title: "Erlaubt",
-    text: "Selber betreiben, wenn ihr ein Verein, eine Non-Profit oder eine kleine Organisation seid.",
+    text: "Vereine, Non-Profit-Organisationen und kleine Organisationen dürfen Comanda selber betreiben.",
   },
   {
     icon: X,
     tone: "bg-destructive/10 text-destructive",
     title: "Nicht erlaubt",
-    text: "Comanda als gehosteten Dienst anbieten oder in ein Produkt einbauen, das du verkaufst.",
+    text: "Du darfst Comanda nicht als gehosteten Dienst anbieten oder in ein Produkt einbauen, das du verkaufst.",
   },
   {
     icon: Mail,
@@ -73,7 +73,7 @@ export default async function LizenzPage() {
                 ]}
               />
               <LegalText>
-                Selber betreiben heisst: für deine eigene Organisation, deine Mitglieder und eure Gäste.
+                Selber betreiben heisst: für deine eigene Organisation, deine Mitglieder und deine Gäste.
               </LegalText>
             </>
           ),
@@ -83,8 +83,9 @@ export default async function LizenzPage() {
           title: "Was nicht erlaubt ist",
           content: (
             <LegalText>
-              Comanda oder eine veränderte Version davon anderen als gehosteten oder verwalteten Dienst anbieten. Und es
-              in ein Produkt oder einen Dienst einbauen, den du an Dritte verkaufst oder lizenzierst.
+              Du darfst Comanda oder eine veränderte Version davon nicht anderen als gehosteten oder verwalteten Dienst
+              anbieten. Du darfst es auch nicht in ein Produkt oder einen Dienst einbauen, den du an Dritte verkaufst
+              oder lizenzierst.
             </LegalText>
           ),
         },
@@ -93,11 +94,12 @@ export default async function LizenzPage() {
           title: "Für grössere Organisationen",
           content: (
             <LegalText>
-              Liegt ihr über diesen Grenzen, braucht ihr für den Live-Betrieb eine kommerzielle Lizenz. Schreib mir an{" "}
+              Liegt deine Organisation über diesen Grenzen, braucht sie für den Live-Betrieb eine kommerzielle Lizenz.
+              Schreib mir dafür an{" "}
               <a href={`mailto:${CONTACT_EMAIL}?subject=Comanda-Lizenz`} className="underline underline-offset-4">
                 {CONTACT_EMAIL}
               </a>
-              , dann finden wir eine Lösung.
+              .
             </LegalText>
           ),
         },
@@ -116,8 +118,8 @@ export default async function LizenzPage() {
           title: "Ausprobieren ist immer erlaubt",
           content: (
             <LegalText>
-              Lesen, verändern und zum Entwickeln, Testen oder Ausprobieren laufen lassen darfst du Comanda in jedem
-              Fall.
+              Du darfst den Code immer lesen und verändern. Du darfst Comanda auch laufen lassen, um daran zu entwickeln
+              oder es auszuprobieren.
             </LegalText>
           ),
         },
