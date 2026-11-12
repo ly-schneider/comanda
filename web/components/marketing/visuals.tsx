@@ -42,7 +42,7 @@ export function OrderingVisual() {
     <Stage className="items-start pt-8">
       <div className={cn("bg-background w-[280px] rounded-t-[var(--radius-surface)] p-5", shadow)}>
         <p className="text-[15px] font-semibold">Kaffeebar</p>
-        <p className="text-muted-foreground text-[13px]">Bestellen und am Fenster abholen</p>
+        <p className="text-muted-foreground text-[13px]">Abholen am Ausgabefenster</p>
         <div className="mt-3.5 grid grid-cols-2 gap-2">
           {items.map(([name, price]) => (
             <div key={name} className="bg-secondary rounded-[var(--radius-control)] p-3">
@@ -73,7 +73,7 @@ export function PickupVisual() {
         <Pill tone="success">Bereit zur Abholung</Pill>
         <p className="text-[22px] leading-7 font-semibold tracking-tight">Bestellung 142</p>
         <QRCode value="https://comanda.leys.ch" size={130} />
-        <p className="text-muted-foreground text-center text-[13px]">Zeig diesen Code am Ausgabefenster.</p>
+        <p className="text-muted-foreground text-center text-[13px]">Zeig diesen Abholcode am Ausgabefenster.</p>
       </div>
     </Stage>
   )

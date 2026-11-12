@@ -33,12 +33,12 @@ function Hero() {
     <section className="pt-16 pb-24 sm:pt-24 sm:pb-32">
       <div className={`${container} flex flex-col items-center text-center`}>
         <h1 className="text-[44px] leading-[1.05] font-semibold tracking-[-0.035em] text-balance sm:text-6xl lg:text-[76px] lg:leading-[78px]">
-          Damit die Schlange
-          <br className="hidden sm:block" /> am Stand kürzer wird.
+          Comanda ist Kasse und
+          <br className="hidden sm:block" /> Handy-Bestellung
+          <br className="hidden sm:block" /> für deinen Stand.
         </h1>
         <p className={`${lead} mt-6 max-w-[560px] text-pretty`}>
-          Comanda ist Kasse und Handy-Bestellung für Stände an Anlässen und Festivals. Ich habe es gebaut, und ich
-          richte es für dich ein.
+          Gäste bestellen am Handy oder an der Kasse. Ich habe Comanda gebaut, und ich richte es für deinen Anlass ein.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button asChild variant="primary" size="lg">
@@ -116,17 +116,17 @@ function InUse() {
         <div
           className={`bg-secondary flex min-h-[360px] flex-col justify-between gap-10 p-8 sm:p-10 lg:min-h-[440px] ${surface}`}
         >
-          <h2 className={h2}>Zweimal im Einsatz, beide Male mit langer Schlange.</h2>
+          <h2 className={h2}>Bisher lief Comanda an zwei Anlässen.</h2>
           <div>
             <p className="text-muted-foreground max-w-[440px] text-[15px] leading-6">
-              Zuerst an einem Jugendanlass mit 800 Gästen, jeden Monat. Dann fünf Tage an einem Festival mit Essen,
-              Kaffee und einem Merch-Stand.
+              Zuerst lief es an einem monatlichen Jugendanlass mit 800 Gästen. Im Juli 2026 lief es dann fünf Tage an
+              einem Festival, auch am Merch-Stand.
             </p>
             <a
               href={LINKS.blogSecond}
               className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
             >
-              Wie es dort lief
+              Wie es am Festival lief
               <ArrowRight className="size-3.5" />
             </a>
           </div>
@@ -150,35 +150,41 @@ function InUse() {
 const FEATURES = [
   {
     visual: <OrderingVisual />,
-    title: "Bestellen, ohne anzustehen",
-    text: "Gäste scannen den QR-Code am Stand, wählen am Handy und zahlen mit TWINT. Eine App brauchen sie dafür nicht.",
+    title: "Gäste bestellen am Handy",
+    text: "Sie scannen den QR-Code am Stand, wählen aus und zahlen mit TWINT. Eine App brauchen sie dafür nicht.",
   },
   {
     visual: <PickupVisual />,
-    title: "Abholen, sobald es bereit ist",
-    text: "Nach dem Bezahlen hat jeder Gast einen Abholcode auf dem Handy. Am Ausgabefenster wird er gescannt. Das klappt auch, wenn das Festival-WLAN gerade streikt.",
+    title: "Gäste holen mit einem Abholcode ab",
+    text: "Nach dem Bezahlen hat jeder Gast einen Abholcode auf dem Handy. Am Ausgabefenster scannt ihn dein Team mit dem eigenen Handy. Das klappt auch, wenn das Festival-WLAN gerade streikt.",
   },
   {
     visual: <TillVisual />,
-    title: "Eine Kasse für alle anderen",
-    text: "Wer lieber bar oder mit Karte zahlt, geht an die Kasse: ein Tablet, ein SumUp-Leser und ein kleiner Bon-Drucker. Die ganze Hardware für zwei Kassen kostete unter 1'000 Franken.",
+    title: "Wer bar oder mit Karte zahlt, geht an die Kasse",
+    text: "Die Kasse ist ein Tablet mit einem SumUp-Kartenleser und einem kleinen Bon-Drucker. Die Hardware für zwei Kassen kostete unter 1'000 Franken.",
   },
   {
     visual: <StockVisual />,
     title: "Du weisst, was noch da ist",
-    text: "Ist der letzte Burger weg, können ihn die Gäste nicht mehr bestellen. Nach dem Anlass siehst du, was wann verkauft wurde, und planst den Einkauf fürs nächste Mal danach.",
+    text: "Ist der letzte Burger weg, können ihn die Gäste nicht mehr bestellen. Nach dem Anlass siehst du, was wann verkauft wurde. Damit planst du den Einkauf fürs nächste Mal.",
   },
   {
     visual: <BrandingVisual />,
-    title: "Mit deinem Namen drauf",
-    text: "Deine Gäste sehen dein Logo und deine Farben unter deiner eigenen Adresse. Von Comanda merken sie nichts.",
+    title: "Der Bestellshop trägt deinen Namen",
+    text: "Deine Gäste sehen dein Logo und deine Farben unter deiner eigenen Adresse. Der Name Comanda erscheint im Shop nicht.",
   },
 ]
 
 const EXTRAS = [
-  ["Depot auf Becher", "Mehrwegbecher mit zwei Franken Depot. Zurück geht das Geld über die TWINT-Zahlung."],
-  ["Gutscheine für Artists", "Gedruckte Gutscheine, die Artists gegen Essen und Getränke eintauschen."],
-  ["Essen fürs Team", "Helferinnen und Helfer bekommen ihr Essen gratis, und es ist trotzdem verbucht."],
+  [
+    "Depot auf Becher",
+    "Du legst ein Depot fest. Am Festival waren es zwei Franken pro Mehrwegbecher. Bei der Rückgabe geht das Geld über die TWINT-Zahlung zurück.",
+  ],
+  [
+    "Gutscheine für Artists",
+    "Artists bekommen gedruckte Gutscheine und tauschen sie am Stand gegen Essen und Getränke ein.",
+  ],
+  ["Essen fürs Team", "Dein Team bekommt sein Essen gratis, und es ist trotzdem verbucht."],
   ["Export für die Buchhaltung", "Nach dem Anlass bekommst du alle Verkäufe als Excel-Datei."],
 ]
 
@@ -188,7 +194,7 @@ function HowItWorks() {
       <div className={container}>
         <h2 className={h2}>So funktioniert&apos;s.</h2>
         <p className={`${lead} mt-4 max-w-[640px]`}>
-          Fast alles hier kam aus Gesprächen mit den Leuten hinter dem Stand.
+          Die meisten Funktionen gibt es, weil Leute hinter dem Stand danach gefragt haben.
         </p>
         <div className="mt-12">
           {FEATURES.map((feature) => (
@@ -207,7 +213,7 @@ function HowItWorks() {
           ))}
         </div>
         <div className="pt-12">
-          <h3 className="text-[22px] leading-7 font-semibold tracking-[-0.015em]">Und was sonst noch dazugehört</h3>
+          <h3 className="text-[22px] leading-7 font-semibold tracking-[-0.015em]">Was sonst noch dazugehört</h3>
           <div className="mt-6 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {EXTRAS.map(([title, text]) => (
               <div key={title} className="border-border border-t pt-5">
@@ -217,6 +223,14 @@ function HowItWorks() {
             ))}
           </div>
         </div>
+        <div className="pt-12">
+          <h3 className="text-[22px] leading-7 font-semibold tracking-[-0.015em]">Was Comanda nicht kann</h3>
+          <p className={`${lead} mt-4 max-w-[720px]`}>
+            Comanda ist für Stände gebaut, die ein paar Stunden oder Tage verkaufen. Tische, offene Rechnungen und
+            Reservationen gibt es nicht, und die Kasse läuft nur auf Android. Für ein Restaurant sind SumUp POS oder
+            Lightspeed die bessere Wahl, und beide haben ein Support-Team, das ich nicht habe.
+          </p>
+        </div>
       </div>
     </section>
   )
@@ -225,12 +239,12 @@ function HowItWorks() {
 const POSTS = [
   {
     title: "Building a checkout system at 16",
-    text: "Wie alles anfing, mit 1'000 Franken Budget",
+    text: "Angefangen hat es mit 1'000 Franken Budget.",
     href: LINKS.blogFirst,
   },
   {
     title: "The checkout system got a second life",
-    text: "Fünf Tage Festival, und was dabei kaputtging",
+    text: "An fünf Festivaltagen ging auch einiges kaputt.",
     href: LINKS.blogSecond,
   },
 ]
@@ -285,13 +299,13 @@ function Contact() {
         <h2 className={`${h2} text-center`}>Es gibt kein Abo.</h2>
         <p className={`${lead} mt-4 max-w-[600px] text-center`}>
           Comanda kannst du nicht online buchen, und monatlich zahlst du auch nichts. Schreib mir, wenn du es an deinem
-          Anlass brauchen willst. Dann schauen wir zusammen, ob es passt.
+          Anlass einsetzen willst.
         </p>
         <div className="mt-12 grid w-full gap-4 md:grid-cols-2">
           <ContactOption
             icon={<Image src="/assets/images/comanda-logo.png" alt="" width={24} height={24} />}
             title="Ich richte es für dich ein"
-            text="Wir gehen dein Sortiment zusammen durch, verbinden dein Payrexx- und SumUp-Konto, und auf Wunsch stehe ich am Eventtag mit am Stand."
+            text="Wir gehen dein Sortiment zusammen durch und verbinden dein Payrexx- und dein SumUp-Konto. Wenn du willst, stehe ich am Anlass mit am Stand."
             action={
               <Button asChild variant="primary" size="lg">
                 <a href={CONTACT_MAILTO}>
@@ -305,7 +319,7 @@ function Contact() {
           <ContactOption
             icon={<Blocks className="size-6" strokeWidth={1.75} />}
             title="Selber betreiben"
-            text="Der Code ist öffentlich. Vereine und kleine Organisationen dürfen ihn gratis selber betreiben. Grössere Firmen brauchen eine Lizenz."
+            text="Der Code ist öffentlich. Vereine und kleine Organisationen dürfen ihn gratis selber betreiben. Grössere Organisationen brauchen eine Lizenz."
             action={
               <Button asChild variant="outline" size="lg">
                 <Link href="/lizenz">Lizenz lesen</Link>

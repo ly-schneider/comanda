@@ -14,12 +14,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost()
   if (parseTenantHost(host).type === "platform") {
     return {
-      title: { absolute: "Comanda – Kasse und Handy-Bestellung für Stände" },
+      title: { absolute: "Comanda: Kasse und Handy-Bestellung für Stände" },
       description:
-        "Comanda ist Kasse und Handy-Bestellung für Stände an Anlässen und Festivals. Bestellen am Handy, zahlen mit TWINT, abholen per Code.",
+        "Comanda ist Kasse und Handy-Bestellung für Stände an Anlässen und Festivals. Gäste bestellen am Handy und zahlen mit TWINT, oder sie gehen an die Kasse.",
       openGraph: {
-        title: "Comanda – Kasse und Handy-Bestellung für Stände",
-        description: "Damit die Schlange am Stand kürzer wird. Gebaut und eingerichtet von Levyn Schneider.",
+        title: "Comanda: Kasse und Handy-Bestellung für Stände",
+        description: "Gäste bestellen am Handy oder an der Kasse. Gebaut und eingerichtet von Levyn Schneider.",
         url: "/",
         images: [{ url: "/assets/images/marketing/kasse-festival.jpg", width: 2000, height: 1333 }],
       },

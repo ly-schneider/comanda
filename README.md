@@ -1,144 +1,179 @@
-# Comanda
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.png">
+    <img src=".github/assets/logo-light.png" alt="Comanda logo" width="84">
+  </picture>
+</p>
 
-A multi-tenant ordering, payment and point-of-sale platform for food stands and events. It covers the full flow from the customer ordering on their phone, through payment and kitchen pickup, to inventory, refunds and the sales export for the books. Each organisation runs as its own tenant with its own branding, domain, payment accounts and staff.
+<h1 align="center">Comanda</h1>
+
+<p align="center">
+  Comanda is a till and phone ordering system for food stands at events.<br>
+  Guests order and pay with TWINT on their phone, and everyone else pays at a tablet.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-0a0a0a" alt="License: BSL 1.1"></a>
+  <img src="https://img.shields.io/badge/Go-1.26-0a0a0a?logo=go&logoColor=white" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/Next.js-16-0a0a0a?logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/Android-Kotlin-0a0a0a?logo=kotlin&logoColor=white" alt="Android, Kotlin">
+</p>
+
+<p align="center">
+  <a href="https://comanda.leys.ch">Website</a> ·
+  <a href="https://www.leys.ch/blog/building-a-checkout-system-at-16">How it started</a> ·
+  <a href="#run-it-locally">Run it locally</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="web/public/assets/images/marketing/kasse-festival.jpg" alt="The Comanda till at a festival: an Android tablet on a stand, a SumUp card reader and a small receipt printer on a wooden counter" width="100%">
+  <br>
+  <sub>The till at a five-day festival. The printer cost 30 francs and thinks it's printing stickers.</sub>
+</p>
+
+## What it is
+
+A guest scans the QR code at the stand, orders on their phone and pays with TWINT. The order shows up at the stand, and the guest gets a pickup code to show at the window. People who want to pay cash or by card go to the till, which is an Android tablet with a SumUp card reader.
+
+Each organiser has their own shop with their logo, colours and domain, and their own Payrexx and SumUp accounts.
+
+I built it after watching the queue at a monthly youth event grow because the old till app was slow. It ran there first, and in July 2026 it ran a five-day festival.
+
+| Number | From the events so far |
+| --: | :-- |
+| **4,051** | orders in five festival days |
+| **95 %** | paid with TWINT. The card readers were almost decorative. |
+| **0** | burgers sold after they had run out |
+| **415,000** | requests, of which 22 ended in a server error |
+
+## How a stand runs
+
+1. **Ordering.** The guest scans the QR code at the stand, picks from the menu and pays with TWINT. They don't need to install an app.
+2. **Pickup.** After paying, the guest has a pickup code on their phone. The pickup station scans it. The code contains the signed order, so the scan works when the festival Wi-Fi is down.
+3. **The till.** Cash and card payments go through the tablet. Receipts come out of a Bluetooth thermal printer.
+4. **Stock.** When the last burger is sold, guests can't order it anymore. After the event, the organiser downloads every sale as an Excel file.
+
+A few features came from specific events: a deposit on reusable cups that is refunded through the original TWINT payment, printed vouchers for artists, free meals for helpers, and a separate Android build per organiser so two organisers can share one tablet.
+
+## What it doesn't do
+
+Comanda is for stands that sell for a few hours or a few days. It has no tables, tabs or reservations, so a restaurant is better served by a restaurant POS. The till runs on Android only. There is no self-service sign-up: I set up each organiser by hand.
+
+If you want a till you can buy today and run without me, SumUp's own POS and Lightspeed are solid and come with a support team, which Comanda doesn't have. Comanda makes sense when you want phone ordering with TWINT at a stand, under your own name.
 
 ## Architecture
 
-```
-            customers · staff · devices
-                         │
-              ┌──────────▼──────────┐
-              │ Traefik + cert-mgr  │  tenant subdomains + BYO custom domains
-              └────┬───────────┬────┘
-                   │           │
-        ┌──────────▼───┐   ┌───▼─────────────┐      ┌──────────────────┐
-        │  Next.js 16  │──►│   Go backend    │◄─────│   Android POS    │
-        │  React 19    │   │   Chi · Ent     │      │  Kotlin/Compose  │
-        │  Better Auth │   │   Uber FX       │      │  SumUp · printer │
-        └──────────────┘   └───┬─────────┬───┘      └──────────────────┘
-                               │         │
-                   ┌───────────▼──┐   ┌──▼─────────────────────────────┐
-                   │  PostgreSQL  │   │ Payrexx · SumUp · Plunk · R2   │
-                   │  (RLS, per   │   │ (per-tenant credentials,       │
-                   │   tenant)    │   │  AES-256-GCM encrypted)        │
-                   └──────────────┘   └────────────────────────────────┘
-```
+<p align="center">
+  <img src=".github/assets/architecture.png" alt="Overview: guests, organisers and staff use the apps, the apps send orders to the API, the API stores its data in PostgreSQL and uses Payrexx, SumUp and Plunk for payments and email." width="100%">
+</p>
 
-### Multi-tenancy
+<sub>Source: <a href=".github/assets/architecture.drawio"><code>.github/assets/architecture.drawio</code></a>. Open it in draw.io to edit it.</sub>
 
-- **Host-based tenant resolution.** The backend maps the request host (a platform subdomain or a verified custom domain) to a tenant. The web app forwards the host on every server-side call.
-- **Row-Level Security is the isolation boundary.** Every tenant table carries `tenant_id` and an RLS policy. Request traffic runs as an RLS-scoped database role inside one transaction per request with `app.tenant_id` set; migrations run as a separate privileged role. Policy-coverage and cross-tenant tests enforce this.
-- **Bring your own everything.** Each tenant configures its own branding (logo, colours, font), Payrexx account, SumUp merchant, email sender and custom domains. Payment secrets are stored encrypted (AES-256-GCM), and Payrexx webhooks are routed per tenant.
-- **Custom domains.** A tenant adds a domain, points a CNAME at the platform, and the backend verifies it and provisions the Ingress and TLS certificate (HTTP-01) automatically.
+The API decides which organiser a request belongs to from the domain it came in on. PostgreSQL row-level security keeps each organiser's rows apart, so a bug in the app can't show one organiser another organiser's data. Payment credentials are encrypted before they're stored.
 
-## Interfaces
+## Where to find things
 
-| Interface       | Path              | Purpose                                                                 |
-| --------------- | ----------------- | ----------------------------------------------------------------------- |
-| Storefront      | `/`               | Customer menu, cart, checkout (TWINT via Payrexx), orders and pickup QR |
-| Admin           | `/admin`          | Products, bundles, categories, inventory, orders, refunds, sales export |
-| POS             | `/pos`            | Cashier interface for cash, card (SumUp) and TWINT payments             |
-| Station         | `/station`        | Pickup station: scans pickup QR codes and hands out orders              |
-| Account hub     | `/account`, `/t/` | Tenant owners: branding, domains, Payrexx, SumUp, invites               |
-| Platform admin  | `/platform-admin` | Tenant provisioning and QA                                              |
+| Folder | What's inside |
+| :-- | :-- |
+| [`backend/`](backend/README.md) | Go API: tenancy and row-level security, orders, payments, stock, plugins |
+| [`web/`](web/README.md) | Next.js app: storefront, admin, till screens, pickup station, organiser hub, marketing site |
+| [`android/`](android/README.md) | Till app: a WebView shell with SumUp and receipt printing |
+| [`docs/`](docs/README.md) | Documentation site with the admin handbook and developer guide |
 
-The Android app is a native POS for tablets with a SumUp card reader and a thermal receipt printer. It can be built as a per-tenant branded APK so several tenants can share one device.
+<details>
+<summary><b>Routes in the web app</b></summary>
 
-### Plugins
+| Path | Who uses it | What for |
+| :-- | :-- | :-- |
+| `/` | Guests | The organiser's storefront with menu, cart, TWINT checkout and pickup code. On the platform host it's the marketing site. |
+| `/admin` | Organisers | Products, bundles, categories, stock, orders, refunds and the sales export |
+| `/pos` | Cashiers | The till for cash, card and TWINT |
+| `/station` | Helpers | The pickup station, which scans pickup codes |
+| `/account`, `/t/` | Organisers | Branding, domains, Payrexx, SumUp and invites |
+| `/platform-admin` | Platform | Setting up new organisers |
 
-Optional features ship in-tree as plugins that are enabled per tenant (disabled plugins return 404):
+Optional features are plugins in this repo, switched on per organiser: **staff-perks** gives helpers free meals, **artist-voucher** prints vouchers for artists and outreach, **club100** handles member benefits, and **stationqr** sets up a pickup station from a QR code.
 
-- **staff-perks**: free meals and drinks for staff and volunteers
-- **artist-voucher**: offline comp vouchers for artists and single-use outreach vouchers
-- **club100**: member benefits synced from an external membership system
-- **stationqr**: enroll pickup stations by scanning a QR code
+</details>
 
-## Tech Stack
+<details>
+<summary><b>Tech stack</b></summary>
 
-| Component          | Stack                                                                          |
-| ------------------ | ------------------------------------------------------------------------------ |
-| **Backend**        | Go 1.26, Chi, Ent, Atlas migrations, Uber FX, PostgreSQL with RLS, oapi-codegen |
-| **Web App**        | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI, Better Auth        |
-| **Android**        | Kotlin, Jetpack Compose, SumUp SDK, ZXing, ESC/POS thermal printing            |
-| **Auth**           | Better Auth with organizations (email OTP + Google OAuth), JWKS validation      |
-| **Payments**       | Payrexx (TWINT and more), SumUp (card terminal), cash, deposits and refunds    |
-| **Storage & mail** | S3-compatible object storage (Cloudflare R2, MinIO locally), Plunk             |
-| **Infrastructure** | Hetzner K3s, ArgoCD gitops, Scaleway PostgreSQL + PgBouncer, Traefik, Doppler  |
-| **Observability**  | Sentry, OpenTelemetry, Zap                                                     |
+| Part | Built with |
+| :-- | :-- |
+| Backend | Go 1.26, Chi, Ent, Atlas migrations, Uber FX, oapi-codegen |
+| Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI |
+| Android | Kotlin, Jetpack Compose, SumUp SDK, ZXing, Bluetooth thermal printing |
+| Sign-in | Better Auth with organisations, email codes and Google |
+| Payments | Payrexx (TWINT), SumUp (card), cash, deposits and refunds |
+| Data | PostgreSQL with row-level security behind PgBouncer, S3-compatible object storage |
+| Infrastructure | Hetzner K3s, ArgoCD, Traefik, cert-manager, Scaleway, Doppler |
+| Monitoring | Sentry, OpenTelemetry, Zap |
 
-## Repository Structure
+</details>
 
-```
-backend/      Go HTTP API: tenancy + RLS, orders, payments, inventory, plugins
-web/          Next.js app: storefront, admin, POS, station, account hub
-android/      Android POS: SumUp payments, thermal printing, per-tenant builds
-docs/         Documentation site (Fumadocs): admin handbook, developer guide
-```
+## Run it locally
 
-## Quick Start
+You need Go 1.26 or newer, Node.js 22 or newer with pnpm, Docker and [just](https://just.systems/).
 
-### Prerequisites
-
-- Go 1.26+
-- Node.js 22+ with pnpm
-- Docker with Docker Compose
-- [just](https://just.systems/)
-
-### Run locally
+Start the backend in one terminal:
 
 ```bash
-# Terminal 1: backend
 cd backend
 cp .env.example .env
-just up                                 # Postgres, MinIO, Mailpit
-just bootstrap-local you@example.com    # migrations, demo catalog, admin user
-just dev                                # API on http://localhost:8080
-
-# Terminal 2: web app
-cd web
-pnpm install
-pnpm dev                                # app on http://localhost:3000
+just up                                 # starts Postgres, MinIO and Mailpit
+just bootstrap-local you@example.com    # runs migrations, loads a demo catalog, creates your admin user
+just dev                                # serves the API on http://localhost:8080
 ```
 
-Sign in at http://localhost:3000/login with the email you bootstrapped. The one-time code lands in Mailpit at http://localhost:8025.
+Start the web app in a second terminal:
 
-### Tests
+```bash
+cd web
+pnpm install
+pnpm dev                                # serves the app on http://localhost:3000
+```
+
+Open http://localhost:3000/login and sign in with the email address you passed to `bootstrap-local`. The sign-in code arrives in Mailpit at http://localhost:8025.
+
+<details>
+<summary><b>Running the tests</b></summary>
 
 ```bash
 cd backend && just test               # unit tests
-cd backend && just test-integration   # RLS + integration tests (needs Postgres)
+cd backend && just test-integration   # row-level security and integration tests, needs Postgres
 cd web && pnpm typecheck && pnpm lint && pnpm test
 cd web && pnpm e2e:headless           # Playwright
 ```
 
-## Releases and Deployment
+</details>
 
-Releases are driven by [Conventional Commits](https://www.conventionalcommits.org/):
+## Releases
 
-1. A push to `main` runs CI. On success, `semantic-release` computes the next version from the commits since the last tag (`feat` → minor, `fix` → patch, `feat!` → major) and creates the tag and GitHub release.
-2. Images are built and pushed to GHCR, tagged with the commit SHA and the version.
-3. Staging deploys automatically. Production is promoted by pinning the same image SHA in the gitops repository, which ArgoCD syncs to the cluster. A rollback means pinning an earlier SHA.
+Every merge to `main` runs CI. Then `semantic-release` reads the [Conventional Commits](https://www.conventionalcommits.org/) since the last tag and picks the next version: `feat` bumps the minor version, `fix` the patch version and `feat!` the major version. The images go to GHCR, tagged with the commit SHA and the version.
 
-Android builds are released separately through GitHub Releases, and the app updates itself from there.
+Staging deploys automatically. For production, I pin the same image SHA in the gitops repository and ArgoCD rolls it out. To roll back, I pin an earlier SHA. Android builds ship through GitHub Releases, and the app updates itself from there.
 
-## Documentation
+## Contributing and security
 
-- [`backend/README.md`](backend/README.md): API architecture, development setup, testing
-- [`web/README.md`](web/README.md): frontend architecture, routes, components
-- [`android/README.md`](android/README.md): Android POS, build variants, hardware integration
-- [`docs/README.md`](docs/README.md): documentation site
-
-## Contributing and Security
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first, and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Comanda is source-available under the [Business Source License 1.1](LICENSE), not an OSI open source license.
+Comanda is source-available under the [Business Source License 1.1](LICENSE). That is not an OSI open source license.
 
-- **Free** for individuals, non-profits, schools, and organizations with fewer than 50 people and less than USD 5M annual revenue, including self-hosting it for your own organization and events in production.
-- **Not allowed** without a commercial license: offering Comanda to others as a hosted or managed service, or embedding it in a product you sell.
-- **Larger organizations** need a commercial license for production use. Contact contact@leys.ch.
-- Each version converts to the GNU AGPL v3.0 or later four years after it is published.
+- Individuals, non-profits, schools and organisations with fewer than 50 people and less than USD 5M annual revenue can use it for free, including in production at their own events.
+- Nobody can offer Comanda to others as a hosted or managed service, or build it into a product they sell, without a commercial license.
+- Larger organisations need a commercial license for production use. Write to contact@leys.ch.
+- Each version becomes GNU AGPL v3.0 or later four years after it's published.
 
-Reading, modifying and running Comanda for development, testing and evaluation is always allowed.
+You can always read the code, change it and run it to develop, test or try it out.
+
+<br>
+
+<p align="center">
+  <sub>Built by Levyn Schneider in Mühlethurnen, Switzerland. The long version is on the <a href="https://www.leys.ch/blog">blog</a>.</sub>
+</p>

@@ -1,0 +1,52 @@
+<mxfile host="Electron">
+  <diagram id="uWwOKKvG0vjXOAG9dUpf" name="Seite-1">
+    <mxGraphModel dx="1618" dy="1163" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="guests" parent="1" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0a0a0a;strokeWidth=1.5;fontColor=#0a0a0a;fontFamily=Helvetica;fontSize=16;spacing=10;" value="&lt;b&gt;Guests&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#737373&quot;&gt;Order on their phone&lt;/font&gt;" vertex="1">
+          <mxGeometry height="84" width="210" x="40" y="212" as="geometry" />
+        </mxCell>
+        <mxCell id="staff" parent="1" style="rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0a0a0a;strokeWidth=1.5;fontColor=#0a0a0a;fontFamily=Helvetica;fontSize=16;spacing=10;" value="&lt;b&gt;Organisers and staff&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#737373&quot;&gt;Run the stand and the till&lt;/font&gt;" vertex="1">
+          <mxGeometry height="84" width="210" x="40" y="344" as="geometry" />
+        </mxCell>
+        <mxCell id="boundary" parent="1" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#a3a3a3;dashed=1;dashPattern=6 4;fontColor=#737373;fontFamily=Helvetica;fontSize=14;fontStyle=1;align=left;verticalAlign=top;spacingLeft=16;spacingTop=10;container=1;collapsible=0;" value="Comanda" vertex="1">
+          <mxGeometry height="530" width="700" x="380" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="apps" parent="boundary" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#0a0a0a;strokeColor=#0a0a0a;fontColor=#ffffff;fontFamily=Helvetica;fontSize=16;spacing=12;" value="&lt;b&gt;Apps&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;Shop, admin and till&lt;br&gt;Next.js · Android&lt;/font&gt;" vertex="1">
+          <mxGeometry height="220" width="230" x="50" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="api" parent="boundary" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#0a0a0a;strokeColor=#0a0a0a;fontColor=#ffffff;fontFamily=Helvetica;fontSize=16;spacing=12;" value="&lt;b&gt;API&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;Orders, payments, stock&lt;br&gt;Go&lt;/font&gt;" vertex="1">
+          <mxGeometry height="110" width="230" x="410" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="db" parent="boundary" style="shape=datastore;whiteSpace=nowrap;html=1;fillColor=#0a0a0a;strokeColor=#ffffff;strokeWidth=2;fontColor=#0a0a0a;fontFamily=Helvetica;fontSize=16;verticalLabelPosition=bottom;verticalAlign=top;labelPosition=center;align=center;spacingTop=6;" value="&lt;b&gt;Database&lt;/b&gt;&lt;div&gt;&lt;font color=&quot;#737373&quot;&gt;PostgreSQL&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="100" width="100" x="475" y="333" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="boundary" source="apps" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;labelBackgroundColor=#ffffff;strokeColor=#525252;fontColor=#525252;fontSize=13;fontFamily=Helvetica;endArrow=block;endFill=1;" target="api" value="Sends orders">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="boundary" source="api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;labelBackgroundColor=#ffffff;strokeColor=#525252;fontColor=#525252;fontSize=13;fontFamily=Helvetica;endArrow=block;endFill=1;" target="db" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#d4d4d4;fontColor=#525252;fontFamily=Helvetica;fontSize=16;spacing=12;" value="&lt;b&gt;Payments and email&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#737373&quot;&gt;TWINT via Payrexx&lt;br&gt;Card via SumUp&lt;br&gt;Email via Plunk&lt;/font&gt;" vertex="1">
+          <mxGeometry height="130" width="230" x="1250" y="255" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="guests" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;labelBackgroundColor=#ffffff;strokeColor=#525252;fontColor=#525252;fontSize=13;fontFamily=Helvetica;endArrow=block;endFill=1;entryX=0;entryY=0.2;" target="apps" value="Order and pay">
+          <mxGeometry relative="1" x="-0.2436" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="staff" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;labelBackgroundColor=#ffffff;strokeColor=#525252;fontColor=#525252;fontSize=13;fontFamily=Helvetica;endArrow=block;endFill=1;entryX=0;entryY=0.8;" target="apps" value="Manage and sell">
+          <mxGeometry relative="1" x="-0.2357" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;labelBackgroundColor=#ffffff;strokeColor=#525252;fontColor=#525252;fontSize=13;fontFamily=Helvetica;endArrow=block;endFill=1;" target="ext" value="Takes payments,&lt;br&gt;sends receipts">
+          <mxGeometry relative="1" x="0.2187" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
