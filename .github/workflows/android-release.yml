@@ -266,16 +266,18 @@ jobs:
           fi
 
           cd "$APK_DIR"
-          COUNT=$(ls -1 *.apk | wc -l)
-          if [ "$COUNT" -ne 1 ]; then
-            echo "Expected exactly one APK, found $COUNT"; ls -la; exit 1
+          apks=(./*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "Expected exactly one APK, found ${#apks[@]}"; ls -la; exit 1
           fi
-          mv *.apk "$NAME"
+          mv "${apks[0]}" "$NAME"
           sha256sum "$NAME" > "$NAME.sha256"
 
-          echo "dir=$APK_DIR" >> "$GITHUB_OUTPUT"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "artifact=${PKG:-neutral}" >> "$GITHUB_OUTPUT"
+          {
+            echo "dir=$APK_DIR"
+            echo "name=$NAME"
+            echo "artifact=${PKG:-neutral}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -287,24 +289,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Build summary
-        env:
-          PKG: ${{ matrix.build.pkg }}
-          LABEL: ${{ matrix.build.label }}
-          ICON: ${{ steps.icon.outputs.path }}
-          BG: ${{ matrix.build.iconBg }}
-          POS_URL: ${{ matrix.build.posUrl }}
-          APK_NAME: ${{ steps.artifact.outputs.name }}
-        run: |
-          {
-            echo "### ${PKG:-neutral}"
-            echo ""
-            echo "- **APK:** $APK_NAME"
-            echo "- **Label:** ${LABEL:-Comanda POS}"
-            echo "- **applicationId:** ch.leys.comanda${PKG:+.$PKG}"
-            echo "- **POS URL:** ${POS_URL:-(default)}"
-            echo "- **Icon:** ${ICON:+logo}${ICON:-initials} on ${BG:-#1F1F1D}"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Publish GitHub Release
@@ -320,63 +304,17 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Create and publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: android-${{ inputs.environment }}-v${{ needs.version.outputs.version }}
-          TITLE: Android POS - ${{ inputs.environment }} v${{ needs.version.outputs.version }}
-          ENVIRONMENT: ${{ inputs.environment }}
-          VERSION: ${{ needs.version.outputs.version }}
-          BRANCH: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          IS_PRERELEASE: ${{ inputs.environment == 'staging' }}
-        run: |
-          set -euo pipefail
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: android-${{ inputs.environment }}-v${{ needs.version.outputs.version }}
+          name: Android POS ${{ inputs.environment }} v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.environment == 'staging' }}
+          files: |
+            dist/*.apk
+            dist/*.sha256
+          fail_on_unmatched_files: true
+          body: |
+            Android POS for ${{ inputs.environment }}, version ${{ needs.version.outputs.version }}, built from ${{ github.ref_name }} at ${{ github.sha }}.
 
-          ASSETS=$(ls -1 dist/*.apk dist/*.sha256)
-          NOTES=$(cat <<EOF
-          ## Android POS Release
-
-          **Environment:** $ENVIRONMENT
-          **Version:** $VERSION
-          **Branch:** $BRANCH
-          **Commit:** $COMMIT_SHA
-
-          ---
-
-          One APK per tenant package plus the neutral build. Tablets fetch their
-          own asset through the update feed; humans install from the QR code in
-          platform admin.
-          EOF
-          )
-
-          # Draft first so assets can be attached on immutable-release repos.
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            --target "$COMMIT_SHA" \
-            --draft \
-            $ASSETS
-
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
-          else
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
-          fi
-
-      - name: Release summary
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          {
-            echo "## Android Release Created"
-            echo ""
-            echo "- **Environment:** $ENVIRONMENT"
-            echo "- **Version:** $VERSION"
-            echo "- **Tag:** android-$ENVIRONMENT-v$VERSION"
-            echo ""
-            echo "### Assets"
-            ls -1 dist/*.apk | sed 's|dist/|- |'
-          } >> "$GITHUB_STEP_SUMMARY"
+            There is one APK per organiser package plus the neutral build. Tablets download their own APK through the update feed. People install it from the QR code in platform admin.

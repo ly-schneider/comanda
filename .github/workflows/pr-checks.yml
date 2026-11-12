@@ -34,6 +34,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       backend: ${{ steps.filter.outputs.backend }}
       migrations: ${{ steps.filter.outputs.migrations }}
+      new-migrations: ${{ steps.filter.outputs.new_migrations_files }}
       docs: ${{ steps.filter.outputs.docs }}
       android: ${{ steps.filter.outputs.android }}
     steps:
@@ -46,6 +47,7 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          list-files: shell
           filters: |
             web:
               - 'web/**'
@@ -59,6 +61,8 @@ jobs:
             migrations:
               - 'backend/db/migrations/**'
               - 'backend/Dockerfile.migrate'
+            new_migrations:
+              - added: 'backend/db/migrations/*.sql'
             docs:
               - 'docs/**'
               - '.github/workflows/pr-checks.yml'
@@ -116,14 +120,9 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
-      - name: Install Playwright with system packages
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - name: Install Playwright
         working-directory: web
         run: pnpm exec playwright install --with-deps chromium
-      - name: Install Playwright system packages
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: web
-        run: pnpm exec playwright install-deps chromium
       - name: Production build
         working-directory: web
         run: pnpm run build
@@ -194,8 +193,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      POSTGRES_TEST_DSN: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
-      POSTGRES_TEST_DSN_APP: postgres://comanda_app:app@localhost:5432/postgres?sslmode=disable
+      POSTGRES_TEST_DSN: postgres://comanda_privileged:REPLACE_ME_PRIVILEGED_PASSWORD@localhost:5432/postgres?sslmode=disable
+      POSTGRES_TEST_DSN_APP: postgres://comanda_app:REPLACE_ME_APP_PASSWORD@localhost:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -205,15 +204,17 @@ jobs:
           cache-suffix: integration
       - uses: ./.github/actions/generate-backend
       - uses: ariga/setup-atlas@28f0b75814c08b1a265b75713c120cfad46433ae # v0.5
-      - name: Migrate and create the row-level security app role
+      # Same two roles as production: migrations run as the owner, tests use the row-level security role.
+      - name: Create the database roles
         working-directory: backend
-        run: |
-          atlas migrate apply --dir "file://db/migrations" --url "$POSTGRES_TEST_DSN"
-          psql "$POSTGRES_TEST_DSN" -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE comanda_app LOGIN PASSWORD 'app' NOINHERIT;" \
-            -c "GRANT USAGE ON SCHEMA public TO comanda_app;" \
-            -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO comanda_app;" \
-            -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO comanda_app;"
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: just bootstrap-rls
+      - name: Migrate
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.POSTGRES_TEST_DSN }}
+        run: just migrate
       - name: Integration tests
         working-directory: backend
         run: go test -count=1 -timeout=10m ./test/integration/...
@@ -239,8 +240,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
       - uses: ariga/setup-atlas@28f0b75814c08b1a265b75713c120cfad46433ae # v0.5
       - name: Check migration checksums
@@ -250,16 +249,15 @@ jobs:
       - name: Apply all migrations on PostgreSQL 17
         working-directory: backend
         run: atlas migrate apply --dir "file://db/migrations" --url "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
-      - name: Lint new migrations with squawk
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          NEW=$(git diff --name-only --diff-filter=A "$BASE" HEAD -- backend/db/migrations/ | grep '\.sql$' || true)
-          if [ -z "$NEW" ]; then
-            echo "No new migrations"
-            exit 0
-          fi
-          echo "$NEW" | xargs npx --yes squawk-cli@2.72.0
+      - name: Lint new migrations
+        if: needs.changes.outputs.new-migrations != ''
+        uses: sbdchd/squawk-action@f972c01c35289cf7611464dae9a214bb84cce5e4 # v2.2.0
+        with:
+          files: ${{ needs.changes.outputs.new-migrations }}
+          config: .squawk.toml
+          pg-version: "17"
+          fail-on-violations: "true"
+          upload-to-github: "false"
 
   docs:
     name: Docs (lint and build)
@@ -317,11 +315,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Fail if any check failed or was cancelled
-        env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: |
-          echo "Results: $RESULTS"
-          case " $RESULTS " in
-            *" failure "*|*" cancelled "*) exit 1 ;;
-          esac
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
+        with:
+          jobs: ${{ toJSON(needs) }}
+          allowed-skips: web-checks, web-e2e, backend-lint, backend-test, backend-integration, backend-migrations, docs, android

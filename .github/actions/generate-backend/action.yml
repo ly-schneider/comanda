@@ -1,37 +1,18 @@
-name: Generate Backend Code
-description: Run Ent, OpenAPI, and Swagger code generation for the Go backend
+name: Generate backend code
+description: Install just and run the backend's Ent, OpenAPI and Swagger generators
 
 runs:
   using: composite
   steps:
-    - name: Generate Ent
+    - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+
+    - name: Generate code
       shell: bash
       working-directory: backend
-      run: |
-        mkdir -p ./internal/generated/ent
-        echo "package ent" > ./internal/generated/ent/ent.go
-        go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier --feature sql/upsert --feature intercept --feature privacy --target ./internal/generated/ent ./internal/schema
+      run: just generate swag
 
-    - name: Generate OpenAPI
-      shell: bash
-      working-directory: backend
-      run: |
-        npx @redocly/cli bundle openapi/openapi.yaml -o openapi/bundled.yaml
-        go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1
-        oapi-codegen -config oapi-codegen.yaml openapi/bundled.yaml
-
-    # backend/tools.go pins what only generated code imports, so go.mod should
-    # already match once the generated sources exist. Fail loudly rather than
-    # fixing it silently: drift means a dependency escaped that file, and the
-    # PR that caused it should be the thing that goes red.
-    - name: Check go.mod matches generated code
+    # Generated code must not need dependencies that go.mod is missing.
+    - name: Check go.mod
       shell: bash
       working-directory: backend
       run: go mod tidy -diff
-
-    - name: Generate Swagger
-      shell: bash
-      working-directory: backend
-      run: |
-        go install github.com/swaggo/swag/cmd/swag@v1.16.6
-        swag init -g cmd/backend/main.go --parseInternal --parseDependency --generatedTime=false
