@@ -1,0 +1,221 @@
+name: Main
+
+# Every push to main: checks, then images for the parts that changed, then staging.
+# Production waits for approval on the "production" environment. Approve to ship
+# what staging runs, or cancel the run to skip production.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main
+  cancel-in-progress: false
+
+env:
+  IMAGE_PREFIX: ghcr.io/ly-schneider/comanda
+  GITOPS_REPO: ly-schneider/hetzner
+
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/pr-checks.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  plan:
+    name: Plan images
+    needs: checks
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.plan.outputs.images }}
+    steps:
+      - name: Pick images to build
+        id: plan
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          BACKEND: ${{ needs.checks.outputs.backend }}
+          MIGRATIONS: ${{ needs.checks.outputs.migrations }}
+          WEB: ${{ needs.checks.outputs.web }}
+          DOCS: ${{ needs.checks.outputs.docs }}
+        run: |
+          images='[]'
+          add() { images=$(jq -c --arg n "$1" --arg c "$2" --arg f "$3" '. + [{name:$n,context:$c,file:$f}]' <<<"$images"); }
+          [ "$MANUAL" = true ] || [ "$BACKEND" = true ] && add api backend backend/Dockerfile
+          [ "$MANUAL" = true ] || [ "$MIGRATIONS" = true ] && add migrate . backend/Dockerfile.migrate
+          [ "$MANUAL" = true ] || [ "$WEB" = true ] && add web web web/Dockerfile
+          [ "$MANUAL" = true ] || [ "$DOCS" = true ] && add docs docs docs/Dockerfile
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "Images to build: $(jq -r 'map(.name) | join(", ")' <<<"$images")"
+
+  build:
+    name: Build ${{ matrix.image.name }}
+    needs: plan
+    if: needs.plan.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: ${{ fromJson(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max,ignore-error=true
+          provenance: false
+      - name: Save digest
+        env:
+          NAME: ${{ matrix.image.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p digests
+          printf '%s' "$DIGEST" > "digests/$NAME"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.image.name }}
+          path: digests/${{ matrix.image.name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: staging
+      url: https://staging.comanda.leys.ch
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      # The gitops repo's bump-image workflow pins each digest in its staging values and Argo CD syncs it.
+      - name: Send the new digests to the gitops repo
+        env:
+          DISPATCH_TOKEN: ${{ secrets.HETZNER_DISPATCH_PAT }}
+          TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for file in digests/*; do
+            svc=$(basename "$file")
+            digest=$(cat "$file")
+            payload=$(jq -nc --arg service "$svc" --arg digest "$digest" --arg tag "$TAG" --arg image "$IMAGE_PREFIX-$svc" \
+              '{event_type:"bump-image",client_payload:{service:$service,env:"staging",digest:$digest,tag:$tag,image:$image,tenant:"comanda"}}')
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $DISPATCH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITOPS_REPO/dispatches" -d "$payload"
+            echo "staging: $svc -> $digest"
+          done
+
+  deploy-production:
+    name: Deploy to production
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://comanda.leys.ch
+    # A newer run waiting for approval replaces an older one. That is safe because this job
+    # promotes everything staging runs, not only the images from this run.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Without a required-reviewers rule this job would deploy unapproved, so it refuses to run.
+      - name: Make sure production needs an approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rules=$(gh api "repos/$GITHUB_REPOSITORY/environments/production" --jq '[.protection_rules[]?.type] | join(",")')
+          case ",$rules," in
+            *,required_reviewers,*) echo "Production requires approval" ;;
+            *) echo "::error::The production environment has no required reviewers. Add one in Settings > Environments > production."; exit 1 ;;
+          esac
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ly-schneider/hetzner
+          ref: main
+          path: gitops
+          token: ${{ secrets.HETZNER_DISPATCH_PAT }}
+          persist-credentials: false
+      - name: Wait until staging runs this run's images
+        working-directory: gitops
+        run: |
+          set -euo pipefail
+          values=gitops/apps/staging/comanda/values.yaml
+          for _ in $(seq 1 30); do
+            git pull -q --ff-only
+            missing=""
+            for file in ../digests/*; do
+              digest=$(cat "$file")
+              grep -q "$digest" "$values" || missing="$missing $(basename "$file")"
+            done
+            [ -z "$missing" ] && { echo "Staging has all images from this run"; exit 0; }
+            echo "Waiting for staging:$missing"
+            sleep 20
+          done
+          echo "::error::Staging never picked up:$missing"
+          exit 1
+      - name: Promote every image staging runs
+        working-directory: gitops
+        env:
+          DISPATCH_TOKEN: ${{ secrets.HETZNER_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+          values=gitops/apps/staging/comanda/values.yaml
+          for svc in api web docs migrate; do
+            if [ "$svc" = migrate ]; then
+              ref=$(yq '.jobs[] | select(.containerName == "migrate") | .image' "$values")
+            else
+              ref=$(key="comanda-$svc" yq '.services[strenv(key)].image' "$values")
+            fi
+            digest="${ref#*@}"
+            case "$digest" in
+              sha256:0000000000000000000000000000000000000000000000000000000000000000) echo "skip $svc: placeholder digest"; continue ;;
+              sha256:*) ;;
+              *) echo "::error::staging $svc is not pinned by digest: $ref"; exit 1 ;;
+            esac
+            image="${ref%@*}"
+            payload=$(jq -nc --arg service "$svc" --arg digest "$digest" --arg tag "staging-${digest:7:12}" --arg image "$image" \
+              '{event_type:"bump-image",client_payload:{service:$service,env:"prod",digest:$digest,tag:$tag,image:$image,tenant:"comanda"}}')
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $DISPATCH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITOPS_REPO/dispatches" -d "$payload"
+            echo "production: $svc -> $digest"
+          done

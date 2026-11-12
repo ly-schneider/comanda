@@ -32,12 +32,12 @@ emails, and legal/marketing pages — mostly **German**, sometimes English. The 
 
 ## Authoritative humanizer catalog — read it first
 
-The full, canonical catalog of AI-writing patterns lives in the user's **`humanizer-de` skill**.
+The full, canonical catalog of AI-writing patterns lives in the **`humanizer-de` skill**, if it is installed.
 **Read it at the start of every run** so the style pass reasons from the complete list, not memory:
 
 ```
-Read /Users/levyn/.claude/skills/humanizer-de/SKILL.md     # German (primary)
-Read /Users/levyn/.claude/skills/humanizer/SKILL.md        # English (when copy is English)
+Read ~/.claude/skills/humanizer-de/SKILL.md     # German (primary)
+Read ~/.claude/skills/humanizer/SKILL.md        # English (when copy is English)
 ```
 
 Those files are the source of truth for the AI-writing dimension (30 numbered patterns +
@@ -211,9 +211,3 @@ strings — a precise, trustworthy report beats a noisy one.
 When asked to **apply** the fixes, edit each flagged file in place, then report what you changed as
 `file:line` before → after, and re-run the relevant greps to confirm the tells are gone. Skip
 findings the user excluded and any **style** notes that read as intentional (say which you skipped).
-
-## Non-negotiables (repeated here because subagents don't inherit session corrections)
-
-- **No unnecessary comments.** Code speaks for itself; comment only genuinely surprising logic. Never leave ticket-reference comments (LEY-xxx, "DoD") — write it like normal software.
-- **Commits:** terse Conventional Commit subject line, no body, no `Co-Authored-By` or other trailers. Never disable GPG signing.
-- **Never push to origin.** Commit on the task branch only; the human merges and pushes. Never force-push or rewrite history.

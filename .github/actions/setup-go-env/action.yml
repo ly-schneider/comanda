@@ -1,25 +1,22 @@
-name: Setup Go Environment
-description: Install Go (version pinned in backend/go.mod) with module + per-job build caching
+name: Set up Go
+description: Install the Go version from backend/go.mod with module and per-job build caches
 
 inputs:
   cache-suffix:
-    description: >-
-      Distinguishes the build cache per job (lint/test/integration) so each keeps
-      its own warm compile cache instead of racing for one shared key.
+    description: Keeps a separate build cache per job (lint, test, integration)
     default: build
 
 runs:
   using: composite
   steps:
-    - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: backend/go.mod
-        # Managed explicitly below so we can key the build cache per job and fall
-        # back across go.sum churn (setup-go's cache is exact-go.sum-match only).
+        # setup-go's own cache needs an exact go.sum match; the caches below fall back across go.sum changes.
         cache: false
 
-    - name: Cache Go modules + tools
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+    - name: Cache Go modules and tools
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/go/pkg/mod
@@ -29,7 +26,7 @@ runs:
           go-mod-${{ runner.os }}-
 
     - name: Cache Go build
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
         key: go-build-${{ inputs.cache-suffix }}-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}

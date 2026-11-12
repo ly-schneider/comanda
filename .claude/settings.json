@@ -23,7 +23,6 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(git worktree:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
       "Bash(find:*)"
@@ -31,8 +30,6 @@
     "deny": [
       "Bash(docker compose down:*)",
       "Bash(rm -rf:*)",
-      "Bash(terraform apply:*)",
-      "Bash(tofu apply:*)",
       "Bash(kubectl apply:*)",
       "Bash(kubectl delete:*)",
       "Edit(.git/**)",
