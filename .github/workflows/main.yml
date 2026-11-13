@@ -1,8 +1,5 @@
 name: Main
 
-# Every push to main: checks, then images for the parts that changed, then staging.
-# Production waits for one approval on the "production" environment. Approve to ship
-# this run's images, or cancel the run to keep them on staging only.
 on:
   push:
     branches: [main]
