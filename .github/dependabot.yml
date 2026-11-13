@@ -7,6 +7,8 @@ updates:
       cronjob: "0 2 * * fri%2"
       timezone: "Europe/Zurich"
     target-branch: "main"
+    cooldown:
+      default-days: 2
     labels:
       - "dependencies"
       - "area/web-app"
@@ -27,6 +29,8 @@ updates:
       cronjob: "0 2 * * fri%2"
       timezone: "Europe/Zurich"
     target-branch: "main"
+    cooldown:
+      default-days: 2
     labels:
       - "dependencies"
       - "documentation"
@@ -47,6 +51,8 @@ updates:
       cronjob: "0 2 * * fri%2"
       timezone: "Europe/Zurich"
     target-branch: "main"
+    cooldown:
+      default-days: 2
     labels:
       - "dependencies"
       - "area/backend"
@@ -67,6 +73,8 @@ updates:
       cronjob: "0 2 * * fri%2"
       timezone: "Europe/Zurich"
     target-branch: "main"
+    cooldown:
+      default-days: 2
     labels:
       - "dependencies"
       - "area/android-app"
@@ -87,6 +95,8 @@ updates:
       cronjob: "0 2 * * fri%2"
       timezone: "Europe/Zurich"
     target-branch: "main"
+    cooldown:
+      default-days: 2
     labels:
       - "dependencies"
       - "area/ci"

@@ -81,9 +81,9 @@ generate-ent:
 
 # Generate API types from OpenAPI
 [group('generate')]
-generate-api:
-    npx @redocly/cli bundle openapi/openapi.yaml -o openapi/bundled.yaml
-    oapi-codegen -config oapi-codegen.yaml openapi/bundled.yaml
+generate-api: (_go-tool "oapi-codegen" "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.1")
+    npx --yes @redocly/cli@2.77.0 bundle openapi/openapi.yaml -o openapi/bundled.yaml
+    "{{BIN}}/oapi-codegen" -config oapi-codegen.yaml openapi/bundled.yaml
 
 # Generate Swagger docs
 [group('generate')]

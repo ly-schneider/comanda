@@ -4,7 +4,7 @@
 FROM node:22-alpine AS openapi
 WORKDIR /src
 COPY openapi/ openapi/
-RUN npx --yes @redocly/cli bundle openapi/openapi.yaml -o openapi/bundled.yaml
+RUN npx --yes @redocly/cli@2.77.0 bundle openapi/openapi.yaml -o openapi/bundled.yaml
 
 # ── Stage 2: Build Go binary ──
 FROM golang:1.26-alpine AS build

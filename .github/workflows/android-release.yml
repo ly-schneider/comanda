@@ -11,8 +11,9 @@ on:
           - staging
           - production
       version:
-        description: "Version to release (e.g., 1.0.0)"
-        required: true
+        description: "Version, e.g. 1.2.3. Leave empty to use the next patch version after the last release for this environment."
+        required: false
+        default: ""
         type: string
       tenants:
         description: >
@@ -26,7 +27,53 @@ on:
         default: "[]"
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    name: Pick version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - name: Use the given version or suggest the next one
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          prefix="android-$ENVIRONMENT-v"
+          last=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$prefix" --jq '.[].ref' \
+            | sed "s|refs/tags/$prefix||" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ -n "$last" ]; then
+            IFS=. read -r major minor patch <<<"$last"
+            suggested="$major.$minor.$((patch + 1))"
+          else
+            suggested="1.0.0"
+          fi
+          version="${REQUESTED:-$suggested}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 1.2.3, got '$version'"; exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$prefix$version" >/dev/null 2>&1; then
+            echo "::error::$prefix$version already exists. The next free version is $suggested."; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Android $ENVIRONMENT $version"
+            echo ""
+            echo "- Last release: ${last:-none}"
+            echo "- Suggested next version: $suggested"
+            echo "- Building: $version"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   quality-checks:
     name: Android Quality Checks
     runs-on: ubuntu-latest
@@ -35,16 +82,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Setup Gradle cache
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: false
 
@@ -69,7 +116,7 @@ jobs:
   plan:
     name: Plan builds
     runs-on: ubuntu-latest
-    needs: quality-checks
+    needs: [version, quality-checks]
     outputs:
       builds: ${{ steps.plan.outputs.builds }}
     steps:
@@ -108,7 +155,7 @@ jobs:
   build:
     name: Build ${{ matrix.build.pkg == '' && 'neutral' || matrix.build.pkg }}
     runs-on: ubuntu-latest
-    needs: plan
+    needs: [version, plan]
     environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
@@ -120,16 +167,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Setup Gradle cache
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: false
 
@@ -139,15 +186,6 @@ jobs:
         run: |
           echo -n "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/comanda-upload.jks"
           echo "COMANDA_UPLOAD_STORE_FILE=$RUNNER_TEMP/comanda-upload.jks" >> "$GITHUB_ENV"
-
-      - name: Validate version format
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Error: Version must be in format X.Y.Z (e.g., 1.0.0)"
-            exit 1
-          fi
 
       - name: Fetch tenant logo
         id: icon
@@ -186,7 +224,7 @@ jobs:
       - name: Build APK
         working-directory: android
         env:
-          VERSION_TAG: ${{ inputs.version }}
+          VERSION_TAG: ${{ needs.version.outputs.version }}
           SUMUP_AFFILIATE_KEY: ${{ secrets.SUMUP_AFFILIATE_KEY }}
           ORG_GRADLE_PROJECT_sumupAffiliateKey: ${{ secrets.SUMUP_AFFILIATE_KEY }}
           ORG_GRADLE_PROJECT_posUrl: ${{ matrix.build.posUrl != '' && matrix.build.posUrl || secrets.POS_URL }}
@@ -228,19 +266,21 @@ jobs:
           fi
 
           cd "$APK_DIR"
-          COUNT=$(ls -1 *.apk | wc -l)
-          if [ "$COUNT" -ne 1 ]; then
-            echo "Expected exactly one APK, found $COUNT"; ls -la; exit 1
+          apks=(./*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "Expected exactly one APK, found ${#apks[@]}"; ls -la; exit 1
           fi
-          mv *.apk "$NAME"
+          mv "${apks[0]}" "$NAME"
           sha256sum "$NAME" > "$NAME.sha256"
 
-          echo "dir=$APK_DIR" >> "$GITHUB_OUTPUT"
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "artifact=${PKG:-neutral}" >> "$GITHUB_OUTPUT"
+          {
+            echo "dir=$APK_DIR"
+            echo "name=$NAME"
+            echo "artifact=${PKG:-neutral}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apk-${{ steps.artifact.outputs.artifact }}
           path: |
@@ -249,96 +289,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Build summary
-        env:
-          PKG: ${{ matrix.build.pkg }}
-          LABEL: ${{ matrix.build.label }}
-          ICON: ${{ steps.icon.outputs.path }}
-          BG: ${{ matrix.build.iconBg }}
-          POS_URL: ${{ matrix.build.posUrl }}
-          APK_NAME: ${{ steps.artifact.outputs.name }}
-        run: |
-          {
-            echo "### ${PKG:-neutral}"
-            echo ""
-            echo "- **APK:** $APK_NAME"
-            echo "- **Label:** ${LABEL:-Comanda POS}"
-            echo "- **applicationId:** ch.leys.comanda${PKG:+.$PKG}"
-            echo "- **POS URL:** ${POS_URL:-(default)}"
-            echo "- **Icon:** ${ICON:+logo}${ICON:-initials} on ${BG:-#1F1F1D}"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [version, build]
     permissions:
       contents: write
 
     steps:
       - name: Download all APKs
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
 
-      - name: Create and publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: android-${{ inputs.environment }}-v${{ inputs.version }}
-          TITLE: Android POS - ${{ inputs.environment }} v${{ inputs.version }}
-          ENVIRONMENT: ${{ inputs.environment }}
-          VERSION: ${{ inputs.version }}
-          BRANCH: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          IS_PRERELEASE: ${{ inputs.environment == 'staging' }}
-        run: |
-          set -euo pipefail
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: android-${{ inputs.environment }}-v${{ needs.version.outputs.version }}
+          name: Android POS ${{ inputs.environment }} v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.environment == 'staging' }}
+          files: |
+            dist/*.apk
+            dist/*.sha256
+          fail_on_unmatched_files: true
+          body: |
+            Android POS for ${{ inputs.environment }}, version ${{ needs.version.outputs.version }}, built from ${{ github.ref_name }} at ${{ github.sha }}.
 
-          ASSETS=$(ls -1 dist/*.apk dist/*.sha256)
-          NOTES=$(cat <<EOF
-          ## Android POS Release
-
-          **Environment:** $ENVIRONMENT
-          **Version:** $VERSION
-          **Branch:** $BRANCH
-          **Commit:** $COMMIT_SHA
-
-          ---
-
-          One APK per tenant package plus the neutral build. Tablets fetch their
-          own asset through the update feed; humans install from the QR code in
-          platform admin.
-          EOF
-          )
-
-          # Draft first so assets can be attached on immutable-release repos.
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            --target "$COMMIT_SHA" \
-            --draft \
-            $ASSETS
-
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
-          else
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
-          fi
-
-      - name: Release summary
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          {
-            echo "## Android Release Created"
-            echo ""
-            echo "- **Environment:** $ENVIRONMENT"
-            echo "- **Version:** $VERSION"
-            echo "- **Tag:** android-$ENVIRONMENT-v$VERSION"
-            echo ""
-            echo "### Assets"
-            ls -1 dist/*.apk | sed 's|dist/|- |'
-          } >> "$GITHUB_STEP_SUMMARY"
+            There is one APK per organiser package plus the neutral build. Tablets download their own APK through the update feed. People install it from the QR code in platform admin.

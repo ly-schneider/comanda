@@ -153,9 +153,11 @@ cd web && pnpm e2e:headless           # Playwright
 
 ## Releases
 
-Every merge to `main` runs CI. Then `semantic-release` reads the [Conventional Commits](https://www.conventionalcommits.org/) since the last tag and picks the next version: `feat` bumps the minor version, `fix` the patch version and `feat!` the major version. The images go to GHCR, tagged with the commit SHA and the version.
+Pull requests run `pr-checks.yml`, which only checks the parts of the repo that changed and ends in one "All checks" job.
 
-Staging deploys automatically. For production, I pin the same image SHA in the gitops repository and ArgoCD rolls it out. To roll back, I pin an earlier SHA. Android builds ship through GitHub Releases, and the app updates itself from there.
+Every merge to `main` runs `main.yml`. It runs the same checks, builds images for the parts that changed and pushes them to GHCR tagged with the commit SHA. Staging gets the new images right away through the gitops repository, and Argo CD rolls them out. The production job then waits for approval on the `production` environment. Approving it ships whatever staging runs. Cancelling the run skips production. To roll back, pin an earlier digest in the gitops repository.
+
+Android builds are manual. Run `android-release.yml` for staging or production, and leave the version empty to get the next patch version. The release lands on GitHub Releases, and the tablets update themselves from there.
 
 ## Contributing and security
 

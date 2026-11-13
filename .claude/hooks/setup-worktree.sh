@@ -11,8 +11,7 @@ here="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -z "$main" ] && exit 0
 [ "$here" = "$main" ] && exit 0   # main repo, not a linked worktree
 
-# web/node_modules → symlink to the main checkout (same commit base ⇒ deps match;
-# avoids the broken pnpm/corepack shim).
+# web/node_modules → symlink to the main checkout (same commit base, so the dependencies match).
 if [ -d "$main/web/node_modules" ] && [ ! -e "$here/web/node_modules" ]; then
   ln -s "$main/web/node_modules" "$here/web/node_modules" && echo "[setup-worktree] linked web/node_modules"
 fi
