@@ -1,4 +1,4 @@
-package stationqr
+package plugin
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 
 func TestRateLimiterAllowsUpToMaxThenBlocks(t *testing.T) {
 	now := time.Unix(0, 0)
-	l := newRateLimiter(time.Minute, 3)
+	l := NewRateLimiter(time.Minute, 3, "Too many attempts.")
 	l.now = func() time.Time { return now }
 
 	for i := 0; i < 3; i++ {

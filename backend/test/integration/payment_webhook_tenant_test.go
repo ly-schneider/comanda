@@ -129,6 +129,7 @@ func (e *rlsEnv) buildWebhookRouter(t *testing.T, enc *crypto.Encryptor) http.Ha
 		stubResolver{p: &stubRefundProvider{}},
 		nil, // qrKeys: reconcile records a money-only refund, no pickup re-issue
 		nil,
+		nil,
 		zap.NewNop(),
 	)
 

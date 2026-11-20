@@ -1,6 +1,8 @@
 package stationqr
 
 import (
+	"time"
+
 	"backend/internal/auth"
 	"backend/internal/generated/api/generated"
 	"backend/internal/plugin"
@@ -12,9 +14,14 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	enrollRateWindow = time.Minute
+	enrollRateMax    = 10
+)
+
 type Plugin struct {
 	rt      *runtime
-	limiter *rateLimiter
+	limiter *plugin.RateLimiter
 }
 
 type runtime struct {
@@ -25,7 +32,7 @@ type runtime struct {
 func New() *Plugin {
 	return &Plugin{
 		rt:      &runtime{},
-		limiter: newRateLimiter(enrollRateWindow, enrollRateMax),
+		limiter: plugin.NewRateLimiter(enrollRateWindow, enrollRateMax, "Too many enrollment attempts. Try again shortly."),
 	}
 }
 
@@ -64,7 +71,7 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
 			gr.Post("/presets/{presetId}/rotate", w.StationqrRotatePreset)
 		})
 		r.Group(func(gr chi.Router) {
-			gr.Use(p.limiter.middleware)
+			gr.Use(p.limiter.Middleware)
 			gr.Post("/enroll", w.StationqrEnroll)
 		})
 	}

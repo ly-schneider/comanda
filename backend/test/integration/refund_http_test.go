@@ -48,6 +48,7 @@ func newRefundHTTPHarness(t *testing.T, env *rlsEnv) *refundHTTPHarness {
 		stubResolver{p: &stubRefundProvider{}},
 		NewQRKeySvc(repos),
 		nil,
+		nil,
 		zap.NewNop(),
 	)
 	handlers := api.NewRefundHandlers(refundSvc, zap.NewNop())

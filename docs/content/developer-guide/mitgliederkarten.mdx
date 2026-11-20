@@ -1,0 +1,206 @@
+---
+title: Mitgliederkarten-Anbieter
+description: Die fünf Aufrufe, mit denen ein fremdes Mitgliedersystem an Comanda andockt
+---
+
+# Worum es geht
+
+Ein Verein führt seine Mitglieder woanders: in einer Kirchen-Datenbank, einem eigenen Tool, einer
+Mitglieder-App. Diese Systeme wissen, wer Mitglied ist, wie lange noch und wie viel jemandem zusteht.
+Comanda weiss das alles nicht und soll es auch nicht lernen.
+
+Das Plugin **membership** holt diese Auskunft darum dort, wo sie hingehört. Es schickt den Inhalt
+einer gescannten Karte an eine URL, die pro Tenant eingestellt ist, und richtet sich nach der
+Antwort. Was ein Code bedeutet, wie lange eine Mitgliedschaft läuft, wie viele Artikel pro Monat
+frei sind: alles Sache des Anbieters.
+
+| Comanda | Der Anbieter |
+| :-- | :-- |
+| Karte scannen, Korb rechnen, Bestellung und Abholcode | Ist die Karte gültig, und wem gehört sie? |
+| Den eigenen Katalog melden (nur Comanda kennt ihn) | **Welche** Artikel gratis sind – und wie viele |
+| Eine Zeile pro Bezug, um ihn bei einer Rückgabe zurückzugeben | Zählen über alle Kassen und Kanäle hinweg |
+
+«Welche Artikel» ist dieselbe Frage wie «wie viele», darum gehört beides dem Anbieter. Nur den
+Katalog kennt er nicht: Comanda meldet ihn, und bekommt die Auswahl zurück.
+
+Ein Anbieter ist jedes System, das die Aufrufe unten beantwortet.
+
+---
+
+# Einstellungen
+
+- **Platform-Admin** hinterlegt pro Tenant die **Basis-URL** und den **Schlüssel** als Secrets
+  (verschlüsselt, write-only). Die URL muss `https` sein; nur gegen `localhost` geht auch `http`,
+  damit man lokal entwickeln kann.
+- **Tenant-Admin** sieht unter Einstellungen die **Gratis-Produkte** und kann sie ändern – gespeichert
+  werden sie beim Anbieter (`PUT /catalog`), nicht hier. Wer sie lieber dort pflegt, tut das; beide
+  Wege führen an dieselbe Stelle.
+- Den **Namen** des Angebots («100er Club», «Gönnerkarte») liefert der Anbieter mit. Comanda zeigt
+  ihn nur an.
+- Eine Obergrenze stellt Comanda **nicht** ein. Es gäbe sonst zwei Zähler, die sich widersprechen –
+  und aus demselben Grund steht auch die Artikelauswahl nicht hier.
+
+---
+
+# Die Aufrufe
+
+Drei für den Vorgang an der Kasse (`lookup`, `redeem`, `void`) und zwei für die Artikelauswahl
+(`POST` und `PUT` auf `catalog`). JSON in beide Richtungen, mit
+`Authorization: Bearer <Schlüssel>`. Die Pfade hängt Comanda an die Basis-URL an. Eine Entscheidung kommt immer mit **HTTP 200** und einem `status`;
+alles andere (401, 500, Zeitüberschreitung) gilt als «nicht erreichbar» und nie als «nein».
+
+`status` ist eines von:
+
+| `status` | Bedeutung |
+| :-- | :-- |
+| `ok` | Ja: darf einlösen, ist gebucht, ist freigegeben |
+| `exhausted` | Mitglied bekannt, Kontingent für die Periode aufgebraucht |
+| `ineligible` | Mitglied bekannt, darf aber nicht (abgelaufen, gesperrt, kein Kontingent) |
+| `unknown` | Kein Mitglied zu diesem Code – oder keine Buchung zu dieser Referenz |
+| `conflict` | Die Referenz gehört zu einer anderen Buchung (nur bei `redeem`) |
+| `voided` | Die Referenz wurde storniert und kann nicht mehr gebucht werden |
+| `already_voided` | Zweites Storno derselben Referenz (nur bei `void`) |
+
+Warum jemand nicht darf, gehört nicht in die Antwort: an der Kasse steht ein Gast daneben.
+`message` ist der Satz, den die Kasse anzeigt — entschieden wird immer über `status`.
+
+Jede Antwort darf ausserdem `program` tragen:
+
+```json
+"program": { "label": "100er Club", "freeSkus": ["prd_burger01"] }
+```
+
+Das ist der Name des Angebots und die Artikel, die gerade gratis sind. Comanda merkt es sich und
+frischt es bei jedem Scan auf — wer die Auswahl beim Anbieter ändert, braucht hier nichts zu tun.
+
+## 1. `POST {basis}/lookup`
+
+Nach dem Scan. Bucht nichts.
+
+```json
+{ "code": "<Inhalt des QR-Codes, unverändert>" }
+```
+
+```json
+{
+  "status": "ok",
+  "message": "100er Club: noch 1 Artikel diesen Monat",
+  "member": { "ref": "BT00042", "name": "Eva Muster", "groupName": "100er Club" },
+  "entitlement": { "remaining": 1, "max": 1, "period": "Monat" }
+}
+```
+
+`member.ref` ist der Griff des Anbieters auf das Mitglied. Comanda liest ihn nie, es schickt ihn
+beim Buchen zurück. Eine fortlaufende Nummer ist dafür genauso recht wie ein signiertes Token.
+`member.name` erscheint an der Kasse; wer das nicht möchte, schickt etwas Neutrales.
+
+## 2. `POST {basis}/redeem`
+
+Beim Abschluss der Bestellung.
+
+```json
+{
+  "reference": "ord_7Kd92mXa",
+  "memberRef": "BT00042",
+  "quantity": 1,
+  "items": [{ "sku": "prd_burger01", "name": "Chicken Burger", "quantity": 1 }]
+}
+```
+
+```json
+{
+  "status": "ok",
+  "message": "Gebucht. Noch 0 diesen Monat.",
+  "duplicate": false,
+  "entitlement": { "remaining": 0, "max": 1, "period": "Monat" }
+}
+```
+
+- **`reference` ist die Bestell-Nummer** und der Schlüssel für alles Weitere. Kommt derselbe Aufruf
+  zweimal an (Zeitüberschreitung, Wiederholung), wird **einmal** gebucht und die zweite Antwort
+  trägt `"duplicate": true`. Ohne diese Regel kostet ein Netzwerkfehler ein Mitglied sein Kontingent.
+- `items` ist für den Verlauf beim Anbieter gedacht; `sku` ist die Produkt-ID aus Comanda.
+- Passt die Menge nicht mehr, wird **nichts** gebucht und `status` ist `exhausted`.
+
+## 3. `POST {basis}/void`
+
+Wenn die Bestellung storniert oder zurückerstattet wird.
+
+```json
+{ "reference": "ord_7Kd92mXa" }
+```
+
+```json
+{ "status": "ok", "message": "Buchung storniert" }
+```
+
+Das Kontingent geht zurück. Ein zweites Storno antwortet `already_voided`, eine unbekannte Referenz
+`unknown` — beides gilt als erledigt. Antwortet der Anbieter gar nicht, bleibt die Zeile in Comanda
+offen und die nächste Rückgabe derselben Bestellung versucht es erneut; die Rückerstattung selber
+wartet nie darauf.
+
+## 4. `POST {basis}/catalog`
+
+Was dieser Tenant verkauft. Bucht nichts, ändert nichts am Kontingent.
+
+```json
+{
+  "items": [
+    { "sku": "prd_burger01", "name": "Chicken Burger", "priceCents": 950 },
+    { "sku": "prd_pommes01", "name": "Pommes", "priceCents": 450 }
+  ]
+}
+```
+
+```json
+{
+  "status": "ok",
+  "program": { "label": "100er Club", "freeSkus": ["prd_burger01"] }
+}
+```
+
+Comanda schickt das, wenn jemand die Einstellungen öffnet. `sku` ist die Produkt-ID, `name` und
+`priceCents` sind für die Anzeige beim Anbieter: Dort kreuzt ein Admin Artikel mit Namen und Preis
+an, statt IDs abzutippen. Sichtbare, aktive Produkte, nichts Deaktiviertes.
+
+## 5. `PUT {basis}/catalog`
+
+Ein Admin hat die Auswahl in Comanda geändert.
+
+```json
+{ "freeSkus": ["prd_burger01", "prd_veggie01"] }
+```
+
+Antwort wie bei `POST`. Was zurückkommt, gilt — auch wenn es nicht ist, was geschickt wurde: Der
+Anbieter darf die Auswahl ablehnen oder jemand hat sie dort inzwischen geändert.
+
+Ein Anbieter, der die Auswahl nicht hergeben will, antwortet auf `PUT` einfach mit dem
+unveränderten `program`. Comanda übernimmt es, und die Haken springen zurück.
+
+---
+
+# Was Comanda sonst noch macht
+
+- **Zeitüberschreitungen:** 5 Sekunden bei `lookup` (an der Kasse steht jemand), 10 bei `redeem` und
+  `void`.
+- **Wenn eine Buchung ins Leere läuft** — der Anbieter antwortet nicht, oder Comanda kann die Zeile
+  nicht schreiben — schickt Comanda sofort ein `void` auf dieselbe Referenz und lässt die Zahlung
+  scheitern. Lieber keine Gratis-Abgabe als eine, die niemand zurücknehmen kann.
+- **Im Shop** (`/mitglied`) prüft Comanda zuerst und bucht erst, wenn die Bestellung steht. Schlägt
+  das Buchen fehl, wird die ganze Bestellung zurückgerollt.
+- Die beiden Shop-Endpunkte sind pro Absender-Adresse begrenzt (20 Aufrufe pro Minute). Der
+  Karten-Code ist dort der ganze Ausweis: Wer Mitglieder-Nummern tippbar macht, begrenzt besser auch
+  auf der eigenen Seite.
+
+---
+
+# Schnell ausprobieren
+
+```bash
+curl -X POST https://example.org/api/benefits/v1/lookup \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  --data '{"code":"test"}'
+```
+
+Ein Anbieter, der für jeden Code `{"status":"unknown","message":"Karte unbekannt"}` zurückgibt, ist
+schon ein gültiger Anbieter. Von da an baut man nach oben.

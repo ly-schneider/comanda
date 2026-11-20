@@ -21,6 +21,7 @@ var (
 	ErrUnknownPlugin  = errors.New("plugin: unknown plugin key")
 	ErrPluginDisabled = errors.New("plugin: not enabled for tenant")
 	ErrNoPaymentHook  = errors.New("plugin: does not implement PaymentHook")
+	ErrNoRefundHook   = errors.New("plugin: does not implement RefundHook")
 )
 
 const enabledCacheTTL = 5 * time.Second
@@ -49,6 +50,7 @@ type UpdateInput struct {
 type Service interface {
 	Enabled(ctx context.Context, key string) (bool, error)
 	PaymentHook(ctx context.Context, key string) (PaymentHook, error)
+	RefundHook(ctx context.Context, key string) (RefundHook, error)
 	RequirePlugin(key string) func(http.Handler) http.Handler
 	ListPublic(ctx context.Context) ([]PublicPlugin, error)
 	Config(ctx context.Context, key string) (json.RawMessage, error)
@@ -124,6 +126,30 @@ func (s *service) Enabled(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *service) PaymentHook(ctx context.Context, key string) (PaymentHook, error) {
+	p, err := s.enabledPlugin(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	hook, ok := p.(PaymentHook)
+	if !ok {
+		return nil, ErrNoPaymentHook
+	}
+	return hook, nil
+}
+
+func (s *service) RefundHook(ctx context.Context, key string) (RefundHook, error) {
+	p, err := s.enabledPlugin(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	hook, ok := p.(RefundHook)
+	if !ok {
+		return nil, ErrNoRefundHook
+	}
+	return hook, nil
+}
+
+func (s *service) enabledPlugin(ctx context.Context, key string) (Plugin, error) {
 	p, ok := s.registry[key]
 	if !ok {
 		return nil, ErrUnknownPlugin
@@ -135,11 +161,7 @@ func (s *service) PaymentHook(ctx context.Context, key string) (PaymentHook, err
 	if !enabled {
 		return nil, ErrPluginDisabled
 	}
-	hook, ok := p.(PaymentHook)
-	if !ok {
-		return nil, ErrNoPaymentHook
-	}
-	return hook, nil
+	return p, nil
 }
 
 func (s *service) RequirePlugin(key string) func(http.Handler) http.Handler {

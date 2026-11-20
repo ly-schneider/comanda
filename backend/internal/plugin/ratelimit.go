@@ -1,4 +1,4 @@
-package stationqr
+package plugin
 
 import (
 	"net"
@@ -10,16 +10,15 @@ import (
 	"backend/internal/response"
 )
 
-const (
-	enrollRateWindow = time.Minute
-	enrollRateMax    = 10
-)
-
-type rateLimiter struct {
+// RateLimiter keeps a public plugin endpoint — one reachable without a session
+// or a paired device — from being hammered from a single address. It counts per
+// client IP in a fixed window and holds nothing between restarts.
+type RateLimiter struct {
 	mu      sync.Mutex
 	windows map[string]*rateWindow
 	window  time.Duration
 	max     int
+	message string
 	now     func() time.Time
 }
 
@@ -28,16 +27,17 @@ type rateWindow struct {
 	reset time.Time
 }
 
-func newRateLimiter(window time.Duration, max int) *rateLimiter {
-	return &rateLimiter{
+func NewRateLimiter(window time.Duration, max int, message string) *RateLimiter {
+	return &RateLimiter{
 		windows: map[string]*rateWindow{},
 		window:  window,
 		max:     max,
+		message: message,
 		now:     time.Now,
 	}
 }
 
-func (l *rateLimiter) allow(key string) bool {
+func (l *RateLimiter) allow(key string) bool {
 	now := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -55,7 +55,7 @@ func (l *rateLimiter) allow(key string) bool {
 	return true
 }
 
-func (l *rateLimiter) evictExpired(now time.Time) {
+func (l *RateLimiter) evictExpired(now time.Time) {
 	if len(l.windows) < 1024 {
 		return
 	}
@@ -66,12 +66,13 @@ func (l *rateLimiter) evictExpired(now time.Time) {
 	}
 }
 
-func (l *rateLimiter) middleware(next http.Handler) http.Handler {
+// Middleware rejects a client over its limit with 429 before the handler runs.
+func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !l.allow(clientIP(r)) {
 			response.WriteJSON(w, http.StatusTooManyRequests, generated.Error{
 				Code:    "rate_limited",
-				Message: "Too many enrollment attempts. Try again shortly.",
+				Message: l.message,
 			})
 			return
 		}

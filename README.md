@@ -89,13 +89,14 @@ The API decides which organiser a request belongs to from the domain it came in 
 | Path | Who uses it | What for |
 | :-- | :-- | :-- |
 | `/` | Guests | The organiser's storefront with menu, cart, TWINT checkout and pickup code. On the platform host it's the marketing site. |
+| `/mitglied` | Members | Scanning a membership card and picking what it covers (membership plugin) |
 | `/admin` | Organisers | Products, bundles, categories, stock, orders, refunds and the sales export |
 | `/pos` | Cashiers | The till for cash, card and TWINT |
 | `/station` | Helpers | The pickup station, which scans pickup codes |
 | `/account`, `/t/` | Organisers | Branding, domains, Payrexx, SumUp and invites |
 | `/platform-admin` | Platform | Setting up new organisers |
 
-Optional features are plugins in this repo, switched on per organiser: **staff-perks** gives helpers free meals, **artist-voucher** prints vouchers for artists and outreach, **club100** handles member benefits, and **stationqr** sets up a pickup station from a QR code.
+Optional features are plugins in this repo, switched on per organiser: **staff-perks** gives helpers free meals, **artist-voucher** prints vouchers for artists and outreach, **membership** lets a club's members redeem what their own member system grants them, and **stationqr** sets up a pickup station from a QR code.
 
 </details>
 

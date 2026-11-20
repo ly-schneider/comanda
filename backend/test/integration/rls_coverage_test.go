@@ -169,7 +169,7 @@ func TestRLSPlatformOnlyPolicies(t *testing.T) {
 var scopedRLSTables = []string{
 	"product", "category", "jeton", "bundle_slot", "bundle_slot_option", "order",
 	"order_line", "order_payment", "order_line_redemption", "inventory_ledger",
-	"club100_redemption", "settings", "idempotency",
+	"membership_redemption", "settings", "idempotency",
 	"device", "device_binding", "device_product", "admin_invite",
 	"volunteer_campaign", "volunteer_campaign_product", "volunteer_redemption",
 	"tenant", "tenant_domain", "refund", "refund_line", "product_variant",

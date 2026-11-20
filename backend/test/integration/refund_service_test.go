@@ -68,6 +68,7 @@ func newRefundSvc(repos *Repositories, prov *stubRefundProvider) service.RefundS
 		stubResolver{p: prov},
 		NewQRKeySvc(repos),
 		nil,
+		nil, // plugins: no plugin paid these orders
 		zap.NewNop(),
 	)
 }

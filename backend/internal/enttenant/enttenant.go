@@ -52,7 +52,7 @@ var scopedTypes = map[string]struct{}{
 	ent.TypeOrderPayment:             {},
 	ent.TypeOrderLineRedemption:      {},
 	ent.TypeInventoryLedger:          {},
-	ent.TypeClub100Redemption:        {},
+	ent.TypeMembershipRedemption:     {},
 	ent.TypeSettings:                 {},
 	ent.TypeIdempotency:              {},
 	ent.TypeDevice:                   {},

@@ -8,7 +8,7 @@ import (
 	"backend/internal/generated/ent/bundleslot"
 	"backend/internal/generated/ent/bundleslotoption"
 	"backend/internal/generated/ent/category"
-	"backend/internal/generated/ent/club100redemption"
+	"backend/internal/generated/ent/membershipredemption"
 	"backend/internal/generated/ent/device"
 	"backend/internal/generated/ent/devicebinding"
 	"backend/internal/generated/ent/deviceproduct"
@@ -51,7 +51,7 @@ var typeToTable = map[string]string{
 	"OrderPayment":             orderpayment.Table,
 	"OrderLineRedemption":      orderlineredemption.Table,
 	"InventoryLedger":          inventoryledger.Table,
-	"Club100Redemption":        club100redemption.Table,
+	"MembershipRedemption":     membershipredemption.Table,
 	"Settings":                 settings.Table,
 	"Idempotency":              idempotency.Table,
 	"Device":                   device.Table,
