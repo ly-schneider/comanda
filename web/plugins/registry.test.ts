@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest"
 import { getPlatformConfigComponent, getPluginManifest } from "./registry"
 
 describe("plugin registry", () => {
-  it("registers the club100 plugin with its slots", () => {
-    const club100 = getPluginManifest("club100")
-    expect(club100?.name).toBe("100 Club")
-    expect(Object.keys(club100?.slots ?? {}).sort()).toEqual([
+  it("registers the membership plugin with its slots", () => {
+    const membership = getPluginManifest("membership")
+    expect(membership?.name).toBe("Mitgliederkarten")
+    expect(Object.keys(membership?.slots ?? {}).sort()).toEqual([
       "admin.settings.section",
       "platform.plugin.config",
       "pos.gratis.actions",
+      "shop.claim.page",
+      "shop.home.actions",
     ])
   })
 

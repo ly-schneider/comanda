@@ -1,0 +1,193 @@
+lookup:
+  post:
+    tags: [Plugins]
+    summary: Look up a scanned membership card
+    description: >
+      Asks the tenant's membership provider who the card belongs to and how much
+      of their budget is left. Books nothing. The card content is passed through
+      unchanged, so any provider can decide what a code means.
+    operationId: membershipLookup
+    security:
+      - deviceAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/membership.yaml#/MembershipLookupRequest"
+    responses:
+      "200":
+        description: The provider's verdict
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/membership.yaml#/MembershipLookupResult"
+      "400":
+        description: Missing card content
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "502":
+        description: The provider could not be reached
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+claim:
+  post:
+    tags: [Plugins]
+    summary: What a member may claim in the shop
+    description: >
+      Public within the plugin group — the card code is the credential. Returns
+      the member's remaining budget and the products they may pick, filtered to
+      what is active and in stock. Books nothing. Rate-limited per address.
+    operationId: membershipClaimView
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/membership.yaml#/MembershipLookupRequest"
+    responses:
+      "200":
+        description: The member's choices
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/membership.yaml#/MembershipClaimView"
+      "400":
+        description: Missing card content
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "429":
+        description: Too many attempts
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "502":
+        description: The provider could not be reached
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+claimRedeem:
+  post:
+    tags: [Plugins]
+    summary: Claim free items in the shop
+    description: >
+      Books the units with the provider and creates the guest's order, which is
+      paid by the plugin and carries a pickup code like any other. Nothing is
+      booked unless the order is created, and nothing is handed over unless the
+      provider confirmed. Rate-limited per address.
+    operationId: membershipClaimRedeem
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/membership.yaml#/MembershipClaimRedeemRequest"
+    responses:
+      "200":
+        description: The order to pick up
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/membership.yaml#/MembershipClaimResult"
+      "400":
+        description: Nothing claimable in the request
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "409":
+        description: The member may not redeem this
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "429":
+        description: Too many attempts
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "502":
+        description: The provider could not be reached
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+
+settings:
+  get:
+    tags: [Plugins]
+    summary: Get membership settings
+    description: Returns what the benefit is called and which products are free.
+    operationId: membershipGetSettings
+    security:
+      - sessionAuth: []
+    responses:
+      "200":
+        description: Membership settings
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/membership.yaml#/MembershipSettings"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+  put:
+    tags: [Plugins]
+    summary: Update membership settings
+    description: Sets the label and/or the products a member may get for free.
+    operationId: membershipUpdateSettings
+    security:
+      - sessionAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../../schemas/plugins/membership.yaml#/MembershipSettingsUpdate"
+    responses:
+      "200":
+        description: Updated settings
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/plugins/membership.yaml#/MembershipSettings"
+      "400":
+        description: Invalid body
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "401":
+        description: Authentication required
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"
+      "403":
+        description: Insufficient tier
+        content:
+          application/json:
+            schema:
+              $ref: "../../schemas/common.yaml#/Error"

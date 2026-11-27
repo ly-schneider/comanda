@@ -5,7 +5,7 @@ description: "Checkliste zum Bauen eines Plugins: Backend, Web und Tests"
 
 # Konzept
 
-Tenant-optionale Funktionen (z. B. die Club100/Elvanto-Integration, die nur ein Tenant braucht)
+Tenant-optionale Funktionen (z. B. Mitgliederkarten, die nur ein Tenant braucht)
 leben nicht im Core, sondern als **Plugin**: in-tree, mitkompiliert, per-Tenant zur Laufzeit
 aktivierbar. Der Core stellt benannte Extension Points bereit; ein Plugin bringt eigene Schemas,
 Services, Endpoints und UI mit. Deaktiviert = unsichtbar: Routen liefern **404**, keine UI, keine
@@ -22,7 +22,8 @@ Grundregeln:
 - **Kein eigener Payment-Typ.** Ein Plugin trägt keine neue Zahlungsmethode bei; es hängt sich über
   die generische `gratis_plugin`-Methode und den `PaymentHook` ein (siehe unten).
 
-Referenz-Plugins: `internal/plugin/club100/` (Extraktion) und `internal/plugin/stationqr/` (Neubau).
+Referenz-Plugins: `internal/plugin/membership/` (externes System, Payment- und Refund-Hook) und
+`internal/plugin/stationqr/` (Neubau).
 Detail-Conventions stehen in `backend/openapi/README.md` und `web/plugins/README.md`.
 
 ---
@@ -35,7 +36,7 @@ Ein Plugin implementiert `plugin.Plugin` (`internal/plugin/plugin.go`):
 
 ```go
 type Plugin interface {
-    Key() string   // "club100" — stabiler Identifier für URL, DB, Analytics
+    Key() string   // "membership" — stabiler Identifier für URL, DB, Analytics
     Name() string  // Anzeigename für die Platform-Admin-UI
     Module() fx.Option
     Routes(wrapper *generated.ServerInterfaceWrapper, mw Middlewares) func(chi.Router)
@@ -43,7 +44,7 @@ type Plugin interface {
 ```
 
 Deps kommen über fx, dürfen aber erst zur **Request-Zeit** gelesen werden, nicht beim Mount. Muster
-(aus `club100/plugin.go`): das `Plugin`-Struct hält einen `*runtime`-Holder, den `Module()` per
+(aus `membership/plugin.go`): das `Plugin`-Struct hält einen `*runtime`-Holder, den `Module()` per
 `fx.Invoke` beim Start füllt; Handler und `PaymentHook` lesen `p.rt` pro Request.
 
 ```go
@@ -65,7 +66,7 @@ Die Liste lebt in `internal/app/plugins.go` (**nicht** in Package `plugin`; jede
 ```go
 func registeredPlugins() []plugin.Plugin {
     return []plugin.Plugin{
-        club100.New(),
+        membership.New(),
         stationqr.New(),
         // neues Plugin hier
     }
@@ -87,13 +88,13 @@ func (p *Plugin) Routes(wrapper *generated.ServerInterfaceWrapper, mw plugin.Mid
     return func(r chi.Router) {
         r.Group(func(gr chi.Router) {
             gr.Use(mw.RequireDevice(auth.DeviceTypePOS))
-            gr.Get("/people", w.Club100ListPeople)
+            gr.Post("/lookup", w.MembershipLookup)
         })
         r.Group(func(gr chi.Router) {
             gr.Use(mw.RequireAuth())
             gr.Use(mw.RequireTenantRole(auth.TierAppAdmin))
             gr.Use(mw.CSRF)
-            gr.Put("/settings", w.Club100UpdateSettings)
+            gr.Put("/settings", w.MembershipUpdateSettings)
         })
     }
 }
@@ -114,8 +115,8 @@ Auch Plugin-Endpoints laufen durch die oapi-codegen-Pipeline:
 1. Pfade in `openapi/paths/plugins/<key>.yaml`, Schemas in `openapi/schemas/plugins/<key>.yaml`.
 2. In der Root-`openapi.yaml` explizite `/plugins/<key>/…`-Einträge, die diese Dateien `$ref`-en
    (in-tree Plugins ⇒ committete Refs, kein Merge-Tooling).
-3. Jede `operationId` mit dem Plugin-Key prefixen (`club100ListPeople`); kollidiert so nie mit Core
-   oder einem anderen Plugin. Dann `just generate-api`, danach `wrapper.Club100ListPeople` in der
+3. Jede `operationId` mit dem Plugin-Key prefixen (`membershipLookup`); kollidiert so nie mit Core
+   oder einem anderen Plugin. Dann `just generate-api`, danach `wrapper.MembershipLookup` in der
    Plugin-Route-Gruppe verdrahten.
 
 Core-Plugin-Management (`/plugins`, `/platform/tenants/{tenantId}/plugins`) liegt in den normalen
@@ -125,7 +126,7 @@ sind gitignored.
 ## 5. Ent-Schema + RLS-Coverage
 
 Ent generiert aus einem einzigen Schema-Package. Plugin-Entities leben deshalb in
-`internal/schema/`, **key-prefixed** (`club100_redemption.go`, `station_enroll_token.go`), nicht im
+`internal/schema/`, **key-prefixed** (`membership_redemption.go`, `station_enroll_token.go`), nicht im
 Plugin-Verzeichnis. Alles andere (Service, Repo, Handler, Client) bleibt unter
 `internal/plugin/<key>/`.
 
@@ -154,7 +155,7 @@ konsistent auftauchen; sonst schlägt CI fehl oder RLS greift nicht:
    Cross-Tenant-Tests, dass Tenant A Tenant Bs Zeilen nicht sieht.
 
 Ent-Edges zu Core-Entities sind **unidirektional** (`edge.To`): das Core-Schema trägt keinen
-Back-Ref auf ein Plugin (siehe `club100_redemption` → `Order`).
+Back-Ref auf ein Plugin (siehe `membership_redemption` → `Order`).
 
 ## 6. Enablement, Config, Secrets
 
@@ -162,8 +163,9 @@ Aktivierung und Konfiguration liegen in `tenant_plugin` (`TenantMixin`/RLS, uniq
 `(tenant_id, plugin_key)`):
 
 - `enabled` bool
-- `config` jsonb — **nicht-geheime**, tenant-sichtbare Config (z. B. `maxRedemptions`, `freeProductIds`)
-- `secrets_enc` bytea — AES-256-GCM-verschlüsselte JSON-Map (z. B. Elvanto API-Key), Master-Key aus
+- `config` jsonb — **nicht-geheime**, tenant-sichtbare Config (z. B. `label`, `freeProductIds`)
+- `secrets_enc` bytea — AES-256-GCM-verschlüsselte JSON-Map (z. B. die URL und der Schlüssel eines
+  externen Anbieters), Master-Key aus
   Doppler (`PAYMENTS_MASTER_KEY`, gleicher `crypto.Encryptor` wie Payrexx)
 - `secrets_configured_at` — Write-only-Indikator
 
@@ -200,7 +202,19 @@ Per Type-Assertion vom Core erkannt:
   Dispatch `Enabled(ctx, key)`; ein deaktivierter oder unregistrierter Key wird abgelehnt, nie
   einer Zahlung zugeschrieben. Der Hook feuert bei voller Comp (`gratis_plugin`) **und** bei
   gemischten Körben (cash/card/twint mit `plugin`-Feld). Der Core persistiert `plugin_key` neben
-  `method`, damit «bezahlt via Club100» abfragbar bleibt.
+  `method`, damit «bezahlt via Mitgliederkarte» abfragbar bleibt.
+- **`RefundHook`** — zurückgeben, was eine Zahlung bezogen hat:
+
+  ```go
+  OnOrderRefunded(ctx, order *ent.Order, in RefundedOrder) error
+  ```
+
+  Der Refund-Service ruft ihn für **jeden `plugin_key` der Zahlungen der Bestellung** auf, nachdem
+  die Refund-Zeilen geschrieben sind und bevor der Refund auf `succeeded` geht. `RefundedOrder`
+  trägt `Cancelled` und die bisher zurückgegebenen Einheiten pro Order-Line — nur Zeilen, die ein
+  Gast selber gewählt hat (kein Depot, keine Bundle-Komponenten). Ein Fehler wird **geloggt und
+  verschluckt**: eine Rückerstattung an der Kasse darf nie an einem Plugin oder an einem fremden
+  System hängen. Das Plugin merkt sich darum selber, was es noch nicht zurückgeben konnte.
 - **`Starter`** — `Start(ctx) error` für einen langlaufenden Loop (Muster wie der DomainVerifier).
 
 ---
@@ -216,12 +230,14 @@ Jedes Plugin exportiert ein Manifest nach `web/plugins/registry.ts`. Slot-Kompon
 
 ```ts
 const manifest: PluginManifest = {
-  key: "club100",
-  name: "100 Club",
+  key: "membership",
+  name: "Mitgliederkarten",
   slots: {
-    "pos.gratis.actions": dynamic(() => import("./club100/gratis-action")),
-    "admin.settings.section": dynamic(() => import("./club100/admin-settings")),
-    "platform.plugin.config": dynamic(() => import("./club100/platform-config")),
+    "pos.gratis.actions": dynamic(() => import("./membership/gratis-action")),
+    "shop.home.actions": dynamic(() => import("./membership/home-action")),
+    "shop.claim.page": dynamic(() => import("./membership/claim-page")),
+    "admin.settings.section": dynamic(() => import("./membership/admin-settings")),
+    "platform.plugin.config": dynamic(() => import("./membership/platform-config")),
   },
 }
 ```
@@ -229,11 +245,14 @@ const manifest: PluginManifest = {
 ## 2. Slots + Contracts
 
 `<PluginSlot name="…" ctx={…} />` rendert die Slot-Komponente jedes aktivierten Plugins mit typisiertem
-`ctx` plus dessen public `config`. Nichts rendert, wenn kein aktiviertes Plugin den Slot bedient.
+`ctx` plus dessen public `config`. Nichts rendert, wenn kein aktiviertes Plugin den Slot bedient — ausser
+der Slot bekommt ein `fallback`, was eine Slot-Seite wie `/mitglied` braucht, damit sie nicht leer bleibt.
 
 | Slot | Ort | `ctx` |
 | --- | --- | --- |
 | `pos.gratis.actions` | POS-Gratis-Dialog (hinter «Jetzt bezahlen») | `{ cartItems; applyDiscount(d \| null) }` |
+| `shop.home.actions` | Shop-Startseite über dem Katalog | `{}` |
+| `shop.claim.page` | ganze Seite `/mitglied` im Shop | `{}` |
 | `admin.settings.section` | Tenant-Admin-Settings | `{ token: string }` |
 | `device.pairing.actions` | Pairing-Screens `/station` + `/pos` | `{ deviceType }` |
 | `platform.plugin.config` | Platform-Admin-Plugin-Manager | Props (kein `PluginSlot`), s. u. |

@@ -2,6 +2,7 @@ import { Metadata } from "next"
 import { FloatingBottomNav } from "@/components/cart/floating-bottom-nav"
 import { CatalogGridLive } from "@/components/catalog/catalog-grid-live"
 import { MarketingLanding } from "@/components/marketing/marketing-landing"
+import { PluginSlot } from "@/components/plugins/plugin-slot"
 import { listCategories } from "@/lib/api/categories"
 import { listProducts } from "@/lib/api/products"
 import { getSystemStatus } from "@/lib/api/system"
@@ -76,6 +77,7 @@ export default async function HomePage() {
   return (
     <div className="bg-background min-h-screen">
       <main className="container mx-auto p-4">
+        <PluginSlot name="shop.home.actions" ctx={{}} />
         <h2 className="mb-2 text-2xl font-semibold">Alle Produkte</h2>
         <CatalogGridLive initialProducts={products} categories={categories} />
       </main>

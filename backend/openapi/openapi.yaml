@@ -247,12 +247,14 @@ paths:
   /plugins:
     $ref: "paths/plugins.yaml#/collection"
 
-  /plugins/club100/people:
-    $ref: "paths/plugins/club100.yaml#/people"
-  /plugins/club100/remaining/{elvantoPersonId}:
-    $ref: "paths/plugins/club100.yaml#/remaining"
-  /plugins/club100/settings:
-    $ref: "paths/plugins/club100.yaml#/settings"
+  /plugins/membership/lookup:
+    $ref: "paths/plugins/membership.yaml#/lookup"
+  /plugins/membership/claim:
+    $ref: "paths/plugins/membership.yaml#/claim"
+  /plugins/membership/claim/redeem:
+    $ref: "paths/plugins/membership.yaml#/claimRedeem"
+  /plugins/membership/settings:
+    $ref: "paths/plugins/membership.yaml#/settings"
 
   /plugins/stationqr/presets:
     $ref: "paths/plugins/stationqr.yaml#/presets"

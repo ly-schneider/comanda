@@ -273,3 +273,37 @@ func TestRemainingPickupLines(t *testing.T) {
 		}
 	}
 }
+
+func TestPaidWithPlugins(t *testing.T) {
+	key := "membership"
+	empty := ""
+	ord := &ent.Order{Edges: ent.OrderEdges{Payments: []*ent.OrderPayment{
+		{Method: orderpayment.MethodCASH},
+		{Method: orderpayment.MethodGRATIS_PLUGIN, PluginKey: &key},
+		{Method: orderpayment.MethodCASH, PluginKey: &key},
+		{Method: orderpayment.MethodCASH, PluginKey: &empty},
+	}}}
+
+	got := paidWithPlugins(ord)
+	if len(got) != 1 || got[0] != key {
+		t.Fatalf("a plugin is asked once per order, got %v", got)
+	}
+	if len(paidWithPlugins(&ent.Order{})) != 0 {
+		t.Fatalf("an order without plugin payments asks nobody")
+	}
+}
+
+func TestGuestUnitsReturned(t *testing.T) {
+	parent := "b1"
+	ord := &ent.Order{Edges: ent.OrderEdges{Lines: []*ent.OrderLine{
+		{ID: "p1", LineType: orderline.LineTypeSimple, Quantity: 2},
+		{ID: "b1", LineType: orderline.LineTypeBundle, Quantity: 1},
+		{ID: "c1", LineType: orderline.LineTypeComponent, Quantity: 1, ParentLineID: &parent},
+		{ID: "d1", LineType: orderline.LineTypeDeposit, Quantity: 2, ParentLineID: &parent},
+	}}}
+
+	got := guestUnitsReturned(ord, map[string]int{"p1": 1, "c1": 1, "d1": 2})
+	if len(got) != 1 || got["p1"] != 1 {
+		t.Fatalf("only the lines a guest picked count back, got %v", got)
+	}
+}

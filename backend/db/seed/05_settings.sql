@@ -27,10 +27,11 @@ ON CONFLICT (id) DO UPDATE SET
   font_key = EXCLUDED.font_key,
   radius_key = EXCLUDED.radius_key;
 
--- club100 enabled for the dev tenant; Elvanto secrets set via platform-admin.
+-- membership enabled for the dev tenant; the provider's url and key are set
+-- via platform-admin, and without them the plugin simply finds no member.
 INSERT INTO tenant_plugin (id, tenant_id, plugin_key, enabled, config) VALUES (
-  'tplg_seed100', 'tenant_seed1', 'club100', true,
-  '{"maxRedemptions":2,"freeProductIds":["prd_______11","prd_______12"]}'
+  'tplg_seed100', 'tenant_seed1', 'membership', true,
+  '{"label":"100er Club","freeProductIds":["prd_______11","prd_______12"]}'
 )
 ON CONFLICT (tenant_id, plugin_key) DO UPDATE SET
   enabled = EXCLUDED.enabled,

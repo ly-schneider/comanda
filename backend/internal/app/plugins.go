@@ -3,7 +3,7 @@ package app
 import (
 	"backend/internal/plugin"
 	"backend/internal/plugin/artistvoucher"
-	"backend/internal/plugin/club100"
+	"backend/internal/plugin/membership"
 	"backend/internal/plugin/staffperks"
 	"backend/internal/plugin/stationqr"
 
@@ -13,7 +13,7 @@ import (
 // lives here, not in package plugin: each plugin imports plugin, so the list there would cycle
 func registeredPlugins() []plugin.Plugin {
 	return []plugin.Plugin{
-		club100.New(),
+		membership.New(),
 		stationqr.New(),
 		artistvoucher.New(),
 		staffperks.New(),

@@ -242,7 +242,7 @@ func TestPaymentPlugin_Dispatch(t *testing.T) {
 
 	t.Run("OnPaymentRecorded failure rolls the tx back atomically", func(t *testing.T) {
 		st.reset()
-		st.recordedErr = errors.New("elvanto write failed")
+		st.recordedErr = errors.New("provider write failed")
 		orderID := h.newPendingOrder(t)
 
 		rec := h.pay(t, orderID, map[string]any{"method": "gratis_plugin", "plugin": pluginBody})

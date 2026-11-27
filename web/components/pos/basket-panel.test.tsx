@@ -24,7 +24,7 @@ const h = vi.hoisted(() => {
     clearCart: vi.fn(),
     updateQuantity: vi.fn(),
     removeFromCart: vi.fn(),
-    discount: { pluginKey: "club100", label: "100 Club · Testperson", amountCents: 350, paymentData: { p: 1 } },
+    discount: { pluginKey: "membership", label: "100er Club · Testperson", amountCents: 350, paymentData: { p: 1 } },
   }
 })
 
@@ -98,7 +98,7 @@ describe("BasketPanel plugin discount from the Gratis dialog", () => {
     const call = submitOrder.mock.calls[0]!
     expect(call[1]).toBe(0)
     expect(call[2]).toBe("gratis_plugin")
-    expect(call[6]).toEqual({ key: "club100", data: { p: 1 } })
+    expect(call[6]).toEqual({ key: "membership", data: { p: 1 } })
     expect(call[7]).toMatchObject({ serverId: "o1" })
   })
 
@@ -109,7 +109,7 @@ describe("BasketPanel plugin discount from the Gratis dialog", () => {
     await openGratisDialog()
 
     // Once in the basket summary, once in the tender dialog.
-    expect(await screen.findAllByText("100 Club · Testperson")).toHaveLength(2)
+    expect(await screen.findAllByText("100er Club · Testperson")).toHaveLength(2)
     expect(submitOrder).not.toHaveBeenCalled()
 
     fireEvent.click(await screen.findByRole("button", { name: "Mit TWINT bezahlen" }))
@@ -118,7 +118,7 @@ describe("BasketPanel plugin discount from the Gratis dialog", () => {
     await waitFor(() => expect(submitOrder).toHaveBeenCalledTimes(1))
     const call = submitOrder.mock.calls[0]!
     expect(call[2]).toBe("twint")
-    expect(call[6]).toEqual({ key: "club100", data: { p: 1 } })
+    expect(call[6]).toEqual({ key: "membership", data: { p: 1 } })
   })
 })
 

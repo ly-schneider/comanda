@@ -51,6 +51,7 @@ func TestRefundService_ConcurrentRefundSerialized(t *testing.T) {
 			stubResolver{p: prov},
 			nil, // qrKeys: arbitrary refunds do not re-issue the pickup token
 			nil,
+			nil, // plugins: no plugin paid this order
 			zap.NewNop(),
 		)
 		_, err := svc.RefundArbitrary(ctx, service.RefundArbitraryInput{
@@ -141,7 +142,7 @@ func TestRefundService_WebhookReconcileSerializedWithSyncRefund(t *testing.T) {
 			pgRepo.NewRefundRepository(client),
 			pgRepo.NewInventoryLedgerRepository(client),
 			stubResolver{p: prov},
-			nil, nil, zap.NewNop(),
+			nil, nil, nil, zap.NewNop(),
 		)
 		_, syncErr = svc.RefundArbitrary(ctx, service.RefundArbitraryInput{
 			OrderID:     orderID,
@@ -165,7 +166,7 @@ func TestRefundService_WebhookReconcileSerializedWithSyncRefund(t *testing.T) {
 			pgRepo.NewRefundRepository(client),
 			pgRepo.NewInventoryLedgerRepository(client),
 			stubResolver{p: prov},
-			nil, nil, zap.NewNop(),
+			nil, nil, nil, zap.NewNop(),
 		)
 		recErr = svc.ReconcileFromWebhook(ctx, &payment.WebhookResult{
 			ReferenceID:         orderID,

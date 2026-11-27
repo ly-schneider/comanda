@@ -15,6 +15,7 @@ import (
 	"backend/internal/generated/ent/refund"
 	"backend/internal/inventory"
 	"backend/internal/payment"
+	"backend/internal/plugin"
 	"backend/internal/qrsign"
 	"backend/internal/repository"
 
@@ -125,6 +126,7 @@ type refundService struct {
 	providers    RefundProviderResolver
 	qrKeys       QRKeyService
 	inventoryHub inventory.Publisher
+	plugins      plugin.Service
 	logger       *zap.Logger
 }
 
@@ -135,6 +137,7 @@ func NewRefundService(
 	providers RefundProviderResolver,
 	qrKeys QRKeyService,
 	inventoryHub inventory.Publisher,
+	plugins plugin.Service,
 	logger *zap.Logger,
 ) RefundService {
 	return &refundService{
@@ -144,6 +147,7 @@ func NewRefundService(
 		providers:    providers,
 		qrKeys:       qrKeys,
 		inventoryHub: inventoryHub,
+		plugins:      plugins,
 		logger:       logger,
 	}
 }
@@ -645,11 +649,70 @@ func (s *refundService) commitRefund(
 		}
 	}
 
+	s.releasePluginBenefits(ctx, ord, newStatus == order.StatusCancelled, newRefundedQty)
+
 	if err := s.refunds.SetStatus(ctx, created.ID, refund.StatusSucceeded); err != nil {
 		return nil, err
 	}
 	created.Status = refund.StatusSucceeded
 	return created, nil
+}
+
+// releasePluginBenefits tells every plugin the order was paid with that units
+// came back, so a comped item returns to whatever budget it was drawn from.
+// A plugin that is gone, disabled or has no RefundHook is skipped; a hook that
+// fails is logged and leaves the money refund standing, because a plugin — or
+// the system behind it — must never block a refund at the till.
+func (s *refundService) releasePluginBenefits(ctx context.Context, ord *ent.Order, cancelled bool, refundedQty map[string]int) {
+	if s.plugins == nil {
+		return
+	}
+	in := plugin.RefundedOrder{Cancelled: cancelled, RefundedUnits: guestUnitsReturned(ord, refundedQty)}
+	for _, key := range paidWithPlugins(ord) {
+		hook, err := s.plugins.RefundHook(ctx, key)
+		if err != nil {
+			if !errors.Is(err, plugin.ErrNoRefundHook) && !errors.Is(err, plugin.ErrPluginDisabled) && !errors.Is(err, plugin.ErrUnknownPlugin) {
+				s.logger.Warn("plugin refund hook lookup failed", zap.String("plugin", key), zap.Error(err))
+			}
+			continue
+		}
+		if err := hook.OnOrderRefunded(ctx, ord, in); err != nil {
+			s.logger.Error("plugin refund hook failed",
+				zap.String("plugin", key),
+				zap.String("orderId", ord.ID),
+				zap.Error(err),
+			)
+		}
+	}
+}
+
+// guestUnitsReturned keeps the lines a guest actually picked: a deposit moving
+// back is not the comped item coming back, and a bundle's components are
+// counted through their parent.
+func guestUnitsReturned(ord *ent.Order, refundedQty map[string]int) map[string]int {
+	out := make(map[string]int, len(refundedQty))
+	for _, l := range ord.Edges.Lines {
+		if l.LineType == orderline.LineTypeDeposit || l.ParentLineID != nil {
+			continue
+		}
+		if qty := refundedQty[l.ID]; qty > 0 {
+			out[l.ID] = qty
+		}
+	}
+	return out
+}
+
+func paidWithPlugins(ord *ent.Order) []string {
+	var keys []string
+	seen := make(map[string]bool)
+	for _, p := range ord.Edges.Payments {
+		if p.PluginKey == nil || *p.PluginKey == "" || seen[*p.PluginKey] {
+			continue
+		}
+		seen[*p.PluginKey] = true
+		keys = append(keys, *p.PluginKey)
+	}
+	return keys
 }
 
 func (s *refundService) loadRefundableOrder(ctx context.Context, orderID string) (*ent.Order, error) {

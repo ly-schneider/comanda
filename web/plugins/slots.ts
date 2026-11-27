@@ -4,6 +4,8 @@ import type { TenantPluginUpdate } from "@/types/plugin"
 
 export type PluginSlotName =
   | "pos.gratis.actions"
+  | "shop.home.actions"
+  | "shop.claim.page"
   | "admin.settings.section"
   | "admin.stations.actions"
   | "device.pairing.actions"
@@ -20,6 +22,12 @@ export type PosGratisActionsCtx = {
   cartItems: CartItem[]
   applyDiscount: (discount: PluginDiscount | null) => void
 }
+
+// Shop slots render for guests, who bring nothing with them: what a plugin
+// needs there it fetches itself.
+export type ShopHomeActionsCtx = Record<string, never>
+
+export type ShopClaimPageCtx = Record<string, never>
 
 export type AdminSettingsSectionCtx = {
   token: string
@@ -44,6 +52,8 @@ export type PlatformPluginConfigProps = {
 
 export type PluginSlotCtx = {
   "pos.gratis.actions": PosGratisActionsCtx
+  "shop.home.actions": ShopHomeActionsCtx
+  "shop.claim.page": ShopClaimPageCtx
   "admin.settings.section": AdminSettingsSectionCtx
   "admin.stations.actions": AdminStationsActionsCtx
   "device.pairing.actions": DevicePairingActionsCtx

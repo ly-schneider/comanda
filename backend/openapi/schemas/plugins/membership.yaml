@@ -1,0 +1,172 @@
+MembershipStatus:
+  type: string
+  enum: [ok, exhausted, ineligible, unknown]
+  description: |
+    The provider's verdict on a scanned card.
+    - `ok`: a member who may redeem now
+    - `exhausted`: a member whose budget for the period is used up
+    - `ineligible`: a known member who may not redeem (lapsed, no budget)
+    - `unknown`: the code belongs to no member
+
+MembershipMember:
+  type: object
+  required: [name]
+  properties:
+    name:
+      type: string
+      description: The member's name as the provider gives it, for the cashier.
+    groupName:
+      type: string
+      description: What the membership is called, e.g. "100er Club".
+
+MembershipEntitlement:
+  type: object
+  required: [remaining, max]
+  properties:
+    remaining:
+      type: integer
+      description: Units the member may still redeem.
+    max:
+      type: integer
+      description: Units the member gets per period.
+    period:
+      type: string
+      description: The provider's own wording for the period, e.g. "Monat".
+
+MembershipLookupRequest:
+  type: object
+  required: [code]
+  properties:
+    code:
+      type: string
+      maxLength: 512
+      description: The scanned card content, passed through unchanged.
+
+MembershipLookupResult:
+  type: object
+  required: [status, canRedeem, message]
+  properties:
+    status:
+      $ref: "#/MembershipStatus"
+    canRedeem:
+      type: boolean
+      description: Whether something may be handed over right now.
+    message:
+      type: string
+      description: The provider's line for the cashier. Decide on status, not on this.
+    memberRef:
+      type: string
+      description: >-
+        The provider's opaque handle for the member. Present only when the card
+        may redeem; sent back with the payment to book the redemption.
+    member:
+      $ref: "#/MembershipMember"
+    entitlement:
+      $ref: "#/MembershipEntitlement"
+
+MembershipClaimProduct:
+  type: object
+  required: [id, name]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    image:
+      type: string
+      nullable: true
+
+MembershipClaimView:
+  type: object
+  required: [status, canRedeem, message, label, products]
+  properties:
+    status:
+      $ref: "#/MembershipStatus"
+    canRedeem:
+      type: boolean
+    message:
+      type: string
+    label:
+      type: string
+      description: What the tenant calls the benefit, e.g. "100er Club".
+    member:
+      $ref: "#/MembershipMember"
+    entitlement:
+      $ref: "#/MembershipEntitlement"
+    products:
+      type: array
+      description: What the member may pick, already filtered to what is in stock.
+      items:
+        $ref: "#/MembershipClaimProduct"
+
+MembershipClaimRedeemRequest:
+  type: object
+  required: [code, items]
+  properties:
+    code:
+      type: string
+      maxLength: 512
+    items:
+      type: array
+      minItems: 1
+      maxItems: 10
+      items:
+        type: object
+        required: [productId, quantity]
+        properties:
+          productId:
+            type: string
+          quantity:
+            type: integer
+            minimum: 1
+            maximum: 10
+
+MembershipClaimResult:
+  type: object
+  required: [orderId, qrPayload, message]
+  properties:
+    orderId:
+      type: string
+    qrPayload:
+      type: string
+      description: The signed pickup token, shown as the guest's QR code.
+    message:
+      type: string
+    member:
+      $ref: "#/MembershipMember"
+    entitlement:
+      $ref: "#/MembershipEntitlement"
+
+MembershipSettings:
+  type: object
+  required: [label, freeProductIds, synced]
+  properties:
+    label:
+      type: string
+      description: >-
+        What the benefit is called on the till and on the guest's page. The
+        member system decides it, like everything else here.
+    freeProductIds:
+      type: array
+      items:
+        type: string
+      description: >-
+        Products a member may get for free, as the member system answered to
+        this tenant's catalog. Ids it named that no longer exist are left out.
+    synced:
+      type: boolean
+      description: >-
+        False when the member system could not be reached: the values are the
+        last ones it sent, and a change cannot be saved right now.
+
+MembershipSettingsUpdate:
+  type: object
+  required: [freeProductIds]
+  properties:
+    freeProductIds:
+      type: array
+      items:
+        type: string
+      description: >-
+        The selection to hand to the member system. It stores it and answers
+        with what is now true.
