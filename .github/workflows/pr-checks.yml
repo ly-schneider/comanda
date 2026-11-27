@@ -203,7 +203,7 @@ jobs:
         with:
           cache-suffix: integration
       - uses: ./.github/actions/generate-backend
-      - uses: ariga/setup-atlas@28f0b75814c08b1a265b75713c120cfad46433ae # v0.5
+      - uses: ariga/setup-atlas@c2de7bd12ab9f9a143ae5a6280b5b416c7c43021 # v0.6
       # Same two roles as production: migrations run as the owner, tests use the row-level security role.
       - name: Create the database roles
         working-directory: backend
@@ -241,7 +241,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ariga/setup-atlas@28f0b75814c08b1a265b75713c120cfad46433ae # v0.5
+      - uses: ariga/setup-atlas@c2de7bd12ab9f9a143ae5a6280b5b416c7c43021 # v0.6
       - name: Check migration checksums
         working-directory: backend
         run: atlas migrate validate --dir "file://db/migrations"
@@ -289,7 +289,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: "21"
